@@ -1,0 +1,131 @@
+{
+  "results": [
+    {
+      "name": "glm-5.1",
+      "model": "glm-5.1",
+      "provider": "zai",
+      "total_correct": 16,
+      "total_questions": 18,
+      "accuracy": 88.9,
+      "cat_scores": {
+        "MATH": "5/5",
+        "TRADING_REASONING": "4/6",
+        "FACTUAL": "4/4",
+        "INSTRUCTION_FOLLOWING": "3/3"
+      },
+      "total_time_s": 298.6,
+      "avg_latency_s": 16.6,
+      "total_prompt_tokens": 527,
+      "total_completion_tokens": 8978
+    },
+    {
+      "name": "deepseek-v4-flash",
+      "model": "deepseek-v4-flash",
+      "provider": "deepseek",
+      "total_correct": 15,
+      "total_questions": 18,
+      "accuracy": 83.3,
+      "cat_scores": {
+        "MATH": "4/5",
+        "TRADING_REASONING": "4/6",
+        "FACTUAL": "4/4",
+        "INSTRUCTION_FOLLOWING": "3/3"
+      },
+      "total_time_s": 63.8,
+      "avg_latency_s": 3.5,
+      "total_prompt_tokens": 502,
+      "total_completion_tokens": 2997
+    },
+    {
+      "name": "claude-3-haiku",
+      "model": "anthropic/claude-3-haiku",
+      "provider": "openrouter",
+      "total_correct": 15,
+      "total_questions": 18,
+      "accuracy": 83.3,
+      "cat_scores": {
+        "MATH": "4/5",
+        "TRADING_REASONING": "4/6",
+        "FACTUAL": "4/4",
+        "INSTRUCTION_FOLLOWING": "3/3"
+      },
+      "total_time_s": 20.3,
+      "avg_latency_s": 1.1,
+      "total_prompt_tokens": 588,
+      "total_completion_tokens": 1472
+    },
+    {
+      "name": "llama-3.1-8b",
+      "model": "meta-llama/llama-3.1-8b-instruct",
+      "provider": "openrouter",
+      "total_correct": 14,
+      "total_questions": 18,
+      "accuracy": 77.8,
+      "cat_scores": {
+        "MATH": "4/5",
+        "TRADING_REASONING": "3/6",
+        "FACTUAL": "4/4",
+        "INSTRUCTION_FOLLOWING": "3/3"
+      },
+      "total_time_s": 52.2,
+      "avg_latency_s": 2.9,
+      "total_prompt_tokens": 618,
+      "total_completion_tokens": 1143
+    },
+    {
+      "name": "deepseek-v3-0324",
+      "model": "deepseek/deepseek-chat-v3-0324",
+      "provider": "openrouter",
+      "total_correct": 13,
+      "total_questions": 18,
+      "accuracy": 72.2,
+      "cat_scores": {
+        "MATH": "4/5",
+        "TRADING_REASONING": "2/6",
+        "FACTUAL": "4/4",
+        "INSTRUCTION_FOLLOWING": "3/3"
+      },
+      "total_time_s": 80.5,
+      "avg_latency_s": 4.5,
+      "total_prompt_tokens": 488,
+      "total_completion_tokens": 1390
+    },
+    {
+      "name": "gpt-4o-mini",
+      "model": "openai/gpt-4o-mini",
+      "provider": "openrouter",
+      "total_correct": 13,
+      "total_questions": 18,
+      "accuracy": 72.2,
+      "cat_scores": {
+        "MATH": "3/5",
+        "TRADING_REASONING": "3/6",
+        "FACTUAL": "4/4",
+        "INSTRUCTION_FOLLOWING": "3/3"
+      },
+      "total_time_s": 24.9,
+      "avg_latency_s": 1.4,
+      "total_prompt_tokens": 551,
+      "total_completion_tokens": 1448
+    },
+    {
+      "name": "mistral-nemo",
+      "model": "mistralai/mistral-nemo",
+      "provider": "openrouter",
+      "total_correct": 11,
+      "total_questions": 18,
+      "accuracy": 61.1,
+      "cat_scores": {
+        "MATH": "3/5",
+        "TRADING_REASONING": "1/6",
+        "FACTUAL": "4/4",
+        "INSTRUCTION_FOLLOWING": "3/3"
+      },
+      "total_time_s": 31.6,
+      "avg_latency_s": 1.8,
+      "total_prompt_tokens": 555,
+      "total_completion_tokens": 1448
+    }
+  ],
+  "timestamp": "2026-05-10T15:19:27.393783+00:00"
+}

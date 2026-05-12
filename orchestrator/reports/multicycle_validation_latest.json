@@ -1,0 +1,182 @@
+{
+  "version": "0.1.0",
+  "validated_at": "2026-05-08T09:20:58.318424+00:00",
+  "overall_status": "GREEN",
+  "wrapper_runs": {
+    "count": 11,
+    "latest_log": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T091944Z.log",
+    "latest_run_id": "20260508T091944Z",
+    "runs": [
+      {
+        "run_id": "20260508T091944Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T091944Z.log",
+        "start_timestamp": "2026-05-08T09:19:44Z",
+        "exit_status": "success",
+        "log_mtime": "2026-05-08T09:20:58.119000+00:00"
+      },
+      {
+        "run_id": "20260508T061944Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T061944Z.log",
+        "start_timestamp": "2026-05-08T06:19:44Z",
+        "exit_status": "success",
+        "log_mtime": "2026-05-08T06:20:56.340000+00:00"
+      },
+      {
+        "run_id": "20260508T031944Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T031944Z.log",
+        "start_timestamp": "2026-05-08T03:19:44Z",
+        "exit_status": "success",
+        "log_mtime": "2026-05-08T03:21:58.518000+00:00"
+      },
+      {
+        "run_id": "20260508T001944Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T001944Z.log",
+        "start_timestamp": "2026-05-08T00:19:44Z",
+        "exit_status": "success",
+        "log_mtime": "2026-05-08T00:20:33.657000+00:00"
+      },
+      {
+        "run_id": "20260507T211944Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T211944Z.log",
+        "start_timestamp": "2026-05-07T21:19:44Z",
+        "exit_status": "success",
+        "log_mtime": "2026-05-07T21:21:26.838000+00:00"
+      },
+      {
+        "run_id": "20260507T210235Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T210235Z.log",
+        "start_timestamp": "2026-05-07T21:02:35Z",
+        "exit_status": "success",
+        "log_mtime": "2026-05-07T21:04:01.365000+00:00"
+      },
+      {
+        "run_id": "20260507T201616Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T201616Z.log",
+        "start_timestamp": "2026-05-07T20:16:16Z",
+        "exit_status": "success",
+        "log_mtime": "2026-05-07T20:18:58.975000+00:00"
+      },
+      {
+        "run_id": "20260507T201301Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T201301Z.log",
+        "start_timestamp": "2026-05-07T20:13:01Z",
+        "exit_status": "unknown",
+        "log_mtime": "2026-05-07T20:15:57.509000+00:00"
+      },
+      {
+        "run_id": "20260507T195314Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T195314Z.log",
+        "start_timestamp": "2026-05-07T19:53:14Z",
+        "exit_status": "success",
+        "log_mtime": "2026-05-07T19:55:13.399000+00:00"
+      },
+      {
+        "run_id": "20260507T185137Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T185137Z.log",
+        "start_timestamp": "2026-05-07T18:51:37Z",
+        "exit_status": "success",
+        "log_mtime": "2026-05-07T18:51:39.944000+00:00"
+      },
+      {
+        "run_id": "20260507T185124Z",
+        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T185124Z.log",
+        "start_timestamp": "2026-05-07T18:51:24Z",
+        "exit_status": "unknown",
+        "log_mtime": "2026-05-07T18:51:26.535000+00:00"
+      }
+    ]
+  },
+  "riskguard": {
+    "exists": true,
+    "valid_json": true,
+    "total_signals": 7,
+    "accepted_count": 0,
+    "watch_only_count": 7,
+    "blocked_count": 0,
+    "schema_version": null
+  },
+  "shadow": {
+    "exists": true,
+    "total_lines": 70,
+    "valid_json_lines": 10,
+    "latest_entries": [
+      {
+        "run_id": "run_20260508T062056Z_4f180b83",
+        "logged_at": "2026-05-08T06:20:56.001005+00:00",
+        "pairs_count": 0
+      },
+      {
+        "run_id": "run_20260508T062056Z_4f180b83",
+        "logged_at": "2026-05-08T06:20:56.001005+00:00",
+        "pairs_count": 0
+      },
+      {
+        "run_id": "run_20260508T062056Z_4f180b83",
+        "logged_at": "2026-05-08T06:20:56.001005+00:00",
+        "pairs_count": 0
+      }
+    ]
+  },
+  "state_files": {
+    "all_valid": true,
+    "schema_versions": [
+      "0.2"
+    ],
+    "files": [
+      {
+        "path": "/home/hermes/projects/trading/freqtrade/bots/rsi/user_data/primo_signal_state.json",
+        "exists": true,
+        "valid_json": true,
+        "schema_version": "0.2",
+        "bridge_version": "0.2.0-risk-aware",
+        "source_type": "riskguard",
+        "missing_top_fields": [],
+        "pair_issues": [],
+        "pairs_count": 7
+      },
+      {
+        "path": "/home/hermes/projects/trading/freqtrade/bots/momentum/user_data/primo_signal_state.json",
+        "exists": true,
+        "valid_json": true,
+        "schema_version": "0.2",
+        "bridge_version": "0.2.0-risk-aware",
+        "source_type": "riskguard",
+        "missing_top_fields": [],
+        "pair_issues": [],
+        "pairs_count": 7
+      },
+      {
+        "path": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json",
+        "exists": true,
+        "valid_json": true,
+        "schema_version": "0.2",
+        "bridge_version": "0.2.0-risk-aware",
+        "source_type": "riskguard",
+        "missing_top_fields": [],
+        "pair_issues": [],
+        "pairs_count": 7
+      }
+    ]
+  },
+  "fleet_health": {
+    "exists": true,
+    "valid_json": true,
+    "fleet_verdict": "GREEN",
+    "bots_checked": 3,
+    "helper_exists": true,
+    "bot_verdicts": [
+      {
+        "bot": "rsi",
+        "verdict": "GREEN"
+      },
+      {
+        "bot": "momentum",
+        "verdict": "GREEN"
+      },
+      {
+        "bot": "regime-hybrid",
+        "verdict": "GREEN"
+      }
+    ]
+  }
+}

@@ -1,0 +1,414 @@
+{
+  "meta": {
+    "schema_version": "0.3",
+    "generated_at": "2026-05-07T21:04:00.319148+00:00",
+    "source": "PrimoAgent real crypto pipeline",
+    "mode": "dry_run_advisory_only",
+    "asset_class": "crypto",
+    "symbols_analyzed": 7,
+    "symbols_total": 7
+  },
+  "signals": [
+    {
+      "pair": "BTC/USDT",
+      "pair_ccxt": "BTC/USDT",
+      "pair_freqtrade": "BTC/USDT:USDT",
+      "timestamp": "2026-05-07T21:00:00+00:00",
+      "timeframe": "1h",
+      "latest_price": 79853.69,
+      "indicators": {
+        "rsi_14": 34.31,
+        "ema_50": 80800.5,
+        "ema_200": 79501.79,
+        "atr_14": 413.81,
+        "atr_percent": 0.52,
+        "bb_width": 2.77,
+        "volume_sma_20": 166.73,
+        "volume_ratio": 0.08,
+        "adx_14": 25.13,
+        "ema_trend": "bullish"
+      },
+      "news": {
+        "available": false,
+        "sentiment_label": "UNKNOWN",
+        "news_score": 0.0,
+        "source_note": "No validated crypto news provider integrated for BTC/USDT in Phase 2A; sentiment intentionally neutral instead of fabricated."
+      },
+      "deterministic_baseline": {
+        "action": "HOLD",
+        "confidence": 0.25,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 34.31 in neutral zone",
+          "Volume 0.08x SMA20 (low activity)",
+          "ADX 25.13 > 25 (trending)",
+          "BB width 2.77% (squeeze \u2014 breakout imminent)",
+          "EMA50 > EMA200 (bullish structure)"
+        ]
+      },
+      "llm_signal": {
+        "action": "HOLD",
+        "confidence": 0.25,
+        "reasoning_summary": "RSI 34.31 neutral, low volume (0.08x), ADX 25.13 trending but weak, price below EMA50 but above EMA200 (bullish structure), Bollinger squeeze. No news. Mixed signals, no clear directional edge. Baseline HOLD with weak confidence."
+      },
+      "signal": {
+        "action": "HOLD",
+        "confidence": 0.25,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 34.31 in neutral zone",
+          "Volume 0.08x SMA20 (low activity)",
+          "ADX 25.13 > 25 (trending)",
+          "BB width 2.77% (squeeze \u2014 breakout imminent)",
+          "EMA50 > EMA200 (bullish structure)",
+          "LLM advisory action=HOLD, confidence=0.25",
+          "No entry edge confirmed; HOLD."
+        ]
+      }
+    },
+    {
+      "pair": "ETH/USDT",
+      "pair_ccxt": "ETH/USDT",
+      "pair_freqtrade": "ETH/USDT:USDT",
+      "timestamp": "2026-05-07T21:00:00+00:00",
+      "timeframe": "1h",
+      "latest_price": 2290.19,
+      "indicators": {
+        "rsi_14": 29.72,
+        "ema_50": 2334.74,
+        "ema_200": 2330.49,
+        "atr_14": 14.54,
+        "atr_percent": 0.64,
+        "bb_width": 3.16,
+        "volume_sma_20": 6765.02,
+        "volume_ratio": 0.01,
+        "adx_14": 37.57,
+        "ema_trend": "neutral"
+      },
+      "news": {
+        "available": false,
+        "sentiment_label": "UNKNOWN",
+        "news_score": 0.0,
+        "source_note": "No validated crypto news provider integrated for ETH/USDT in Phase 2A; sentiment intentionally neutral instead of fabricated."
+      },
+      "deterministic_baseline": {
+        "action": "BUY",
+        "confidence": 0.6,
+        "signal_quality": "weak",
+        "strategy_fit": "MEAN_REVERSION",
+        "reasons": [
+          "RSI 29.72 < 30 (oversold)",
+          "Volume 0.01x SMA20 (low activity)",
+          "ADX 37.57 > 25 (trending)",
+          "EMA50 \u2248 EMA200 (neutral structure)"
+        ]
+      },
+      "llm_signal": {
+        "action": "WATCH",
+        "confidence": 0.4,
+        "reasoning_summary": "RSI oversold (29.72) suggests potential bounce, but price below both EMAs (bearish), low volume (0.01x) indicates weak conviction, and high ADX (37.57) confirms trending downtrend. No news to support reversal. Mixed signals warrant caution; prefer WATCH over forced BUY."
+      },
+      "signal": {
+        "action": "WATCH",
+        "confidence": 0.55,
+        "signal_quality": "weak",
+        "strategy_fit": "MEAN_REVERSION",
+        "reasons": [
+          "RSI 29.72 < 30 (oversold)",
+          "Volume 0.01x SMA20 (low activity)",
+          "ADX 37.57 > 25 (trending)",
+          "EMA50 \u2248 EMA200 (neutral structure)",
+          "LLM advisory action=WATCH, confidence=0.4",
+          "Baseline entry candidate not confirmed by LLM; downgraded to WATCH."
+        ]
+      }
+    },
+    {
+      "pair": "SOL/USDT",
+      "pair_ccxt": "SOL/USDT",
+      "pair_freqtrade": "SOL/USDT:USDT",
+      "timestamp": "2026-05-07T21:00:00+00:00",
+      "timeframe": "1h",
+      "latest_price": 88.12,
+      "indicators": {
+        "rsi_14": 44.67,
+        "ema_50": 88.12,
+        "ema_200": 85.89,
+        "atr_14": 0.72,
+        "atr_percent": 0.81,
+        "bb_width": 2.93,
+        "volume_sma_20": 12491.54,
+        "volume_ratio": 0.33,
+        "adx_14": 15.99,
+        "ema_trend": "bullish"
+      },
+      "news": {
+        "available": false,
+        "sentiment_label": "UNKNOWN",
+        "news_score": 0.0,
+        "source_note": "No validated crypto news provider integrated for SOL/USDT in Phase 2A; sentiment intentionally neutral instead of fabricated."
+      },
+      "deterministic_baseline": {
+        "action": "HOLD",
+        "confidence": 0.1,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 44.67 in neutral zone",
+          "Volume 0.33x SMA20 (low activity)",
+          "ADX 15.99 < 20 (ranging)",
+          "BB width 2.93% (squeeze \u2014 breakout imminent)",
+          "EMA50 > EMA200 (bullish structure)"
+        ]
+      },
+      "llm_signal": {
+        "action": "HOLD",
+        "confidence": 0.2,
+        "reasoning_summary": "RSI neutral, ADX low (ranging), volume weak, Bollinger squeeze suggests breakout but direction unclear; EMA50>EMA200 gives mild bullish structure but insufficient evidence for directional bias. No news. Baseline HOLD aligns."
+      },
+      "signal": {
+        "action": "HOLD",
+        "confidence": 0.2,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 44.67 in neutral zone",
+          "Volume 0.33x SMA20 (low activity)",
+          "ADX 15.99 < 20 (ranging)",
+          "BB width 2.93% (squeeze \u2014 breakout imminent)",
+          "EMA50 > EMA200 (bullish structure)",
+          "LLM advisory action=HOLD, confidence=0.2",
+          "No entry edge confirmed; HOLD."
+        ]
+      }
+    },
+    {
+      "pair": "AVAX/USDT",
+      "pair_ccxt": "AVAX/USDT",
+      "pair_freqtrade": "AVAX/USDT:USDT",
+      "timestamp": "2026-05-07T21:00:00+00:00",
+      "timeframe": "1h",
+      "latest_price": 9.44,
+      "indicators": {
+        "rsi_14": 41.92,
+        "ema_50": 9.51,
+        "ema_200": 9.34,
+        "atr_14": 0.08,
+        "atr_percent": 0.85,
+        "bb_width": 3.35,
+        "volume_sma_20": 12960.45,
+        "volume_ratio": 0.03,
+        "adx_14": 16.06,
+        "ema_trend": "bullish"
+      },
+      "news": {
+        "available": false,
+        "sentiment_label": "UNKNOWN",
+        "news_score": 0.0,
+        "source_note": "No validated crypto news provider integrated for AVAX/USDT in Phase 2A; sentiment intentionally neutral instead of fabricated."
+      },
+      "deterministic_baseline": {
+        "action": "HOLD",
+        "confidence": 0.1,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 41.92 in neutral zone",
+          "Volume 0.03x SMA20 (low activity)",
+          "ADX 16.06 < 20 (ranging)",
+          "EMA50 > EMA200 (bullish structure)"
+        ]
+      },
+      "llm_signal": {
+        "action": "HOLD",
+        "confidence": 0.15,
+        "reasoning_summary": "RSI neutral (41.92), ADX weak (16.06), volume very low (0.03x). EMA50 > EMA200 but no strong momentum. No news. No clear directional edge for 24h."
+      },
+      "signal": {
+        "action": "HOLD",
+        "confidence": 0.15,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 41.92 in neutral zone",
+          "Volume 0.03x SMA20 (low activity)",
+          "ADX 16.06 < 20 (ranging)",
+          "EMA50 > EMA200 (bullish structure)",
+          "LLM advisory action=HOLD, confidence=0.15",
+          "No entry edge confirmed; HOLD."
+        ]
+      }
+    },
+    {
+      "pair": "NEAR/USDT",
+      "pair_ccxt": "NEAR/USDT",
+      "pair_freqtrade": "NEAR/USDT:USDT",
+      "timestamp": "2026-05-07T21:00:00+00:00",
+      "timeframe": "1h",
+      "latest_price": 1.455,
+      "indicators": {
+        "rsi_14": 45.1,
+        "ema_50": 1.44,
+        "ema_200": 1.36,
+        "atr_14": 0.02,
+        "atr_percent": 1.48,
+        "bb_width": 4.63,
+        "volume_sma_20": 46143.64,
+        "volume_ratio": 0.03,
+        "adx_14": 25.81,
+        "ema_trend": "bullish"
+      },
+      "news": {
+        "available": false,
+        "sentiment_label": "UNKNOWN",
+        "news_score": 0.0,
+        "source_note": "No validated crypto news provider integrated for NEAR/USDT in Phase 2A; sentiment intentionally neutral instead of fabricated."
+      },
+      "deterministic_baseline": {
+        "action": "HOLD",
+        "confidence": 0.25,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 45.1 in neutral zone",
+          "Volume 0.03x SMA20 (low activity)",
+          "ADX 25.81 > 25 (trending)",
+          "EMA50 > EMA200 (bullish structure)"
+        ]
+      },
+      "llm_signal": {
+        "action": "HOLD",
+        "confidence": 0.25,
+        "reasoning_summary": "RSI neutral, EMA bullish but low volume, no news. No clear directional edge."
+      },
+      "signal": {
+        "action": "HOLD",
+        "confidence": 0.25,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 45.1 in neutral zone",
+          "Volume 0.03x SMA20 (low activity)",
+          "ADX 25.81 > 25 (trending)",
+          "EMA50 > EMA200 (bullish structure)",
+          "LLM advisory action=HOLD, confidence=0.25",
+          "No entry edge confirmed; HOLD."
+        ]
+      }
+    },
+    {
+      "pair": "ARB/USDT",
+      "pair_ccxt": "ARB/USDT",
+      "pair_freqtrade": "ARB/USDT:USDT",
+      "timestamp": "2026-05-07T21:00:00+00:00",
+      "timeframe": "1h",
+      "latest_price": 0.1255,
+      "indicators": {
+        "rsi_14": 47.77,
+        "ema_50": 0.12,
+        "ema_200": 0.12,
+        "atr_14": 0.0,
+        "atr_percent": 1.42,
+        "bb_width": 4.85,
+        "volume_sma_20": 186520.54,
+        "volume_ratio": 0.06,
+        "adx_14": 22.87,
+        "ema_trend": "neutral"
+      },
+      "news": {
+        "available": false,
+        "sentiment_label": "UNKNOWN",
+        "news_score": 0.0,
+        "source_note": "No validated crypto news provider integrated for ARB/USDT in Phase 2A; sentiment intentionally neutral instead of fabricated."
+      },
+      "deterministic_baseline": {
+        "action": "HOLD",
+        "confidence": 0.1,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 47.77 in neutral zone",
+          "Volume 0.06x SMA20 (low activity)",
+          "EMA50 \u2248 EMA200 (neutral structure)"
+        ]
+      },
+      "llm_signal": {
+        "action": "HOLD",
+        "confidence": 0.1,
+        "reasoning_summary": "RSI neutral, EMAs flat, ADX weak, volume extremely low, no news. No directional edge."
+      },
+      "signal": {
+        "action": "HOLD",
+        "confidence": 0.1,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 47.77 in neutral zone",
+          "Volume 0.06x SMA20 (low activity)",
+          "EMA50 \u2248 EMA200 (neutral structure)",
+          "LLM advisory action=HOLD, confidence=0.1",
+          "No entry edge confirmed; HOLD."
+        ]
+      }
+    },
+    {
+      "pair": "OP/USDT",
+      "pair_ccxt": "OP/USDT",
+      "pair_freqtrade": "OP/USDT:USDT",
+      "timestamp": "2026-05-07T21:00:00+00:00",
+      "timeframe": "1h",
+      "latest_price": 0.1466,
+      "indicators": {
+        "rsi_14": 58.79,
+        "ema_50": 0.14,
+        "ema_200": 0.13,
+        "atr_14": 0.0,
+        "atr_percent": 2.01,
+        "bb_width": 7.07,
+        "volume_sma_20": 383126.98,
+        "volume_ratio": 0.15,
+        "adx_14": 47.53,
+        "ema_trend": "bullish"
+      },
+      "news": {
+        "available": false,
+        "sentiment_label": "UNKNOWN",
+        "news_score": 0.0,
+        "source_note": "No validated crypto news provider integrated for OP/USDT in Phase 2A; sentiment intentionally neutral instead of fabricated."
+      },
+      "deterministic_baseline": {
+        "action": "HOLD",
+        "confidence": 0.25,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 58.79 in neutral zone",
+          "Volume 0.15x SMA20 (low activity)",
+          "ADX 47.53 > 25 (trending)",
+          "EMA50 > EMA200 (bullish structure)"
+        ]
+      },
+      "llm_signal": {
+        "action": "HOLD",
+        "confidence": 0.25,
+        "reasoning_summary": "RSI neutral, ADX strong trend but volume low, EMA bullish structure, no news. No clear directional edge."
+      },
+      "signal": {
+        "action": "HOLD",
+        "confidence": 0.25,
+        "signal_quality": "weak",
+        "strategy_fit": "UNKNOWN",
+        "reasons": [
+          "RSI 58.79 in neutral zone",
+          "Volume 0.15x SMA20 (low activity)",
+          "ADX 47.53 > 25 (trending)",
+          "EMA50 > EMA200 (bullish structure)",
+          "LLM advisory action=HOLD, confidence=0.25",
+          "No entry edge confirmed; HOLD."
+        ]
+      }
+    }
+  ]
+}

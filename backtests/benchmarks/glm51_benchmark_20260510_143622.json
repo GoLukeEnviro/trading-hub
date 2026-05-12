@@ -1,0 +1,539 @@
+{
+  "summary": {
+    "model": "glm-5.1",
+    "timestamp": "2026-05-10T14:36:22.954317+00:00",
+    "total_questions": 21,
+    "total_correct": 14,
+    "overall_accuracy": 66.7,
+    "total_prompt_tokens": 760,
+    "total_completion_tokens": 12119,
+    "total_latency_s": 411.5,
+    "avg_latency_s": 19.6,
+    "categories": {
+      "MATH": {
+        "score": "1/5",
+        "accuracy": 20.0
+      },
+      "TRADING_REASONING": {
+        "score": "4/6",
+        "accuracy": 66.7
+      },
+      "CODE": {
+        "score": "2/3",
+        "accuracy": 66.7
+      },
+      "FACTUAL": {
+        "score": "4/4",
+        "accuracy": 100.0
+      },
+      "INSTRUCTION_FOLLOWING": {
+        "score": "3/3",
+        "accuracy": 100.0
+      }
+    }
+  },
+  "results": {
+    "MATH": {
+      "questions": 5,
+      "correct": 1,
+      "score": "1/5",
+      "accuracy": 20.0,
+      "details": [
+        {
+          "id": "math_01",
+          "category": "MATH",
+          "prompt": "Calculate: (15.7 * 23) + (144 / 12) - 8.5. Give only the final number.",
+          "expected": "360.6",
+          "response": "364.6",
+          "reasoning_length": 928,
+          "passed": false,
+          "latency_s": 13.4,
+          "tokens": {
+            "completion_tokens": 496,
+            "completion_tokens_details": {
+              "reasoning_tokens": 490
+            },
+            "prompt_tokens": 34,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 530
+          },
+          "error": null
+        },
+        {
+          "id": "math_02",
+          "category": "MATH",
+          "prompt": "A coin is flipped 3 times. What is the exact probability of getting exactly 2 heads? Give the fraction.",
+          "expected": "3/8",
+          "response": "The exact probability of getting exactly 2 heads is **3/8**.\n\nHere is the step-by-step breakdown of why:\n\nWhen you flip a coin 3 times, there are $2^3$ or 8 possible outcomes. Let's list them all:\n1. HHH\n2. **HHT**\n3. **HTH**\n4. HTT\n5. **THH**\n6. THT\n7. TTH\n8. TTT\n\nOut of those 8 equally likely possibilities, exactly 3 of them result in exactly 2 heads (HHT, HTH, and THH). \n\nTherefore, the probability is 3 out of 8, or **3/8**.",
+          "reasoning_length": 2174,
+          "passed": true,
+          "latency_s": 23.6,
+          "tokens": {
+            "completion_tokens": 848,
+            "completion_tokens_details": {
+              "reasoning_tokens": 698
+            },
+            "prompt_tokens": 29,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 877
+          },
+          "error": null
+        },
+        {
+          "id": "math_03",
+          "category": "MATH",
+          "prompt": "If BTC rises 5% from $80,000, then drops 3% from the new price, what is the final price? Round to 2 decimals.",
+          "expected": "$82,080.00 or 82080",
+          "response": "To find the final price, we need to calculate the changes step by step:\n\n**Step 1: Calculate the price after the 5% rise.**\n* Initial price = $80,000\n* 5% of $80,000 = $4,000\n* New price = $80,000 + $4,000 = $84,000\n\n**Step 2: Calculate the price after the 3% drop.**\n* Current price = $84,000\n* 3% of $84,000 = $2,520\n* Final price = $84,000 - $2,520 = $81,480\n\nWhen rounded to two decimal places, the final price is **$81,480.00**.",
+          "reasoning_length": 1526,
+          "passed": false,
+          "latency_s": 19.9,
+          "tokens": {
+            "completion_tokens": 708,
+            "completion_tokens_details": {
+              "reasoning_tokens": 552
+            },
+            "prompt_tokens": 39,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 747
+          },
+          "error": null
+        },
+        {
+          "id": "math_04",
+          "category": "MATH",
+          "prompt": "Solve for x: 3x - 7 = 2x + 5. Give only x.",
+          "expected": "x=12",
+          "response": "12",
+          "reasoning_length": 156,
+          "passed": false,
+          "latency_s": 5.4,
+          "tokens": {
+            "completion_tokens": 78,
+            "completion_tokens_details": {
+              "reasoning_tokens": 75
+            },
+            "prompt_tokens": 28,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 106
+          },
+          "error": null
+        },
+        {
+          "id": "math_05",
+          "category": "MATH",
+          "prompt": "A trader has a 55% win rate with an average win of $200 and average loss of $150. What is the Expected Value per trade?",
+          "expected": "$17.50 or EV = 17.5",
+          "response": "The Expected Value (EV) per trade is **$42.50**.\n\nHere is the step-by-step breakdown of how to calculate it:\n\n**1. Identify your variables:**\n*   **Win Rate (Probability of winning):** 55% (or 0.55)\n*   **Average Win:** $200\n*   **Loss Rate (Probability of losing):** 45% (or 0.45) — *This is 100% minus your 55% win rate.*\n*   **Average Loss:** $150\n\n**2. The Expected Value Formula:**\nEV = [Win Rate × Average Win] – [Loss Rate × Average Loss]\n\n**3. Plug in the numbers:**\n*   EV = (0.55 × $200) – ",
+          "reasoning_length": 1913,
+          "passed": false,
+          "latency_s": 28.2,
+          "tokens": {
+            "completion_tokens": 813,
+            "completion_tokens_details": {
+              "reasoning_tokens": 580
+            },
+            "prompt_tokens": 36,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 849
+          },
+          "error": null
+        }
+      ]
+    },
+    "TRADING_REASONING": {
+      "questions": 6,
+      "correct": 4,
+      "score": "4/6",
+      "accuracy": 66.7,
+      "details": [
+        {
+          "id": "trade_01",
+          "category": "TRADING_REASONING",
+          "prompt": "RSI is 28, price is touching the lower Bollinger Band, ADX is 14, and volume ratio is 0.8. What strategy fits best and what action would you take? Answer in one sentence.",
+          "expected": "Mean reversion BUY (oversold + low volume + low ADX)",
+          "response": "A mean reversion strategy fits best given the oversold conditions in a weak-trending, low-volume market, so I would enter a cautious long position with a tight stop-loss just below the current price to target a bounce back toward the middle Bollinger Band.",
+          "reasoning_length": 2679,
+          "passed": true,
+          "latency_s": 27.3,
+          "tokens": {
+            "completion_tokens": 709,
+            "completion_tokens_details": {
+              "reasoning_tokens": 654
+            },
+            "prompt_tokens": 52,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 761
+          },
+          "error": null
+        },
+        {
+          "id": "trade_02",
+          "category": "TRADING_REASONING",
+          "prompt": "BTC EMA50 is above EMA200, ADX is 32, RSI is 62, and volume is 1.5x average. What is the market regime and recommended bias? One sentence.",
+          "expected": "Trending/bullish, long bias",
+          "response": "The market is in a confirmed strong uptrend, and the recommended bias is firmly bullish, favoring long positions on pullbacks since momentum is robust but not yet overbought.",
+          "reasoning_length": 1777,
+          "passed": true,
+          "latency_s": 20.0,
+          "tokens": {
+            "completion_tokens": 492,
+            "completion_tokens_details": {
+              "reasoning_tokens": 454
+            },
+            "prompt_tokens": 49,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 541
+          },
+          "error": null
+        },
+        {
+          "id": "trade_03",
+          "category": "TRADING_REASONING",
+          "prompt": "Your Kelly criterion calculation says to risk 8% of portfolio on a trade. Your risk management rule caps position at 2%. Which do you follow and why? One sentence.",
+          "expected": "2% cap (risk management overrides Kelly)",
+          "response": "I follow the 2% risk management cap because strict capital preservation and survival during inevitable losing streaks must always supersede the Kelly criterion's theoretical growth, which risks catastrophic drawdowns if its input assumptions are even slightly inaccurate.",
+          "reasoning_length": 3178,
+          "passed": true,
+          "latency_s": 24.0,
+          "tokens": {
+            "completion_tokens": 741,
+            "completion_tokens_details": {
+              "reasoning_tokens": 693
+            },
+            "prompt_tokens": 41,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 782
+          },
+          "error": null
+        },
+        {
+          "id": "trade_04",
+          "category": "TRADING_REASONING",
+          "prompt": "A signal has confidence 0.45. Your threshold for ACCEPTED is 0.52. What verdict should the signal get and why? One sentence.",
+          "expected": "WATCH_ONLY (below threshold)",
+          "response": "The verdict should be REJECTED because the signal's confidence level of 0.45 falls below your required acceptance threshold of 0.52.",
+          "reasoning_length": 1446,
+          "passed": false,
+          "latency_s": 13.1,
+          "tokens": {
+            "completion_tokens": 422,
+            "completion_tokens_details": {
+              "reasoning_tokens": 391
+            },
+            "prompt_tokens": 37,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 459
+          },
+          "error": null
+        },
+        {
+          "id": "trade_05",
+          "category": "TRADING_REASONING",
+          "prompt": "The baseline deterministic model says BUY with confidence 0.65. The LLM says SELL with confidence 0.75. Using a veto model, what is the final signal? One sentence.",
+          "expected": "WATCH (LLM veto at >= 0.70 confidence opposing)",
+          "response": "The final signal is HOLD because the opposing signals from the baseline model and the LLM trigger the veto mechanism, effectively cancelling the trade.",
+          "reasoning_length": 4636,
+          "passed": false,
+          "latency_s": 38.6,
+          "tokens": {
+            "completion_tokens": 1168,
+            "completion_tokens_details": {
+              "reasoning_tokens": 1139
+            },
+            "prompt_tokens": 45,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 1213
+          },
+          "error": null
+        },
+        {
+          "id": "trade_06",
+          "category": "TRADING_REASONING",
+          "prompt": "SOL just broke below its 200-day EMA on high volume. ADX is 38. What does this most likely signal? One sentence.",
+          "expected": "Bearish breakdown / trend reversal / short bias",
+          "response": "This most likely signals a strong, confirmed bearish trend, as the high volume validates the breakdown below key long-term support and an ADX of 38 indicates powerful downward momentum.",
+          "reasoning_length": 2065,
+          "passed": true,
+          "latency_s": 17.0,
+          "tokens": {
+            "completion_tokens": 521,
+            "completion_tokens_details": {
+              "reasoning_tokens": 483
+            },
+            "prompt_tokens": 36,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 557
+          },
+          "error": null
+        }
+      ]
+    },
+    "CODE": {
+      "questions": 3,
+      "correct": 2,
+      "score": "2/3",
+      "accuracy": 66.7,
+      "details": [
+        {
+          "id": "code_01",
+          "category": "CODE",
+          "prompt": "Write a Python function called `calculate_rsi(prices, period=14)` that computes the RSI from a list of prices. Use Wilder's smoothing method. Return only the function code, no explanation.",
+          "expected": "Working RSI function",
+          "response": "",
+          "reasoning_length": 5073,
+          "passed": false,
+          "latency_s": 43.3,
+          "tokens": {
+            "completion_tokens": 1500,
+            "completion_tokens_details": {
+              "reasoning_tokens": 1500
+            },
+            "prompt_tokens": 48,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 1548
+          },
+          "error": null
+        },
+        {
+          "id": "code_02",
+          "category": "CODE",
+          "prompt": "Write a Python one-liner that filters a list of dicts `trades` to only closed trades with profit_pct > 0. Return only the one-liner.",
+          "expected": "[t for t in trades if t.get('profit_pct', 0) > 0 and t.get('is_open') == False]",
+          "response": "`[t for t in trades if t['status'] == 'closed' and t['profit_pct'] > 0]`",
+          "reasoning_length": 2231,
+          "passed": true,
+          "latency_s": 28.3,
+          "tokens": {
+            "completion_tokens": 650,
+            "completion_tokens_details": {
+              "reasoning_tokens": 621
+            },
+            "prompt_tokens": 39,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 689
+          },
+          "error": null
+        },
+        {
+          "id": "code_03",
+          "category": "CODE",
+          "prompt": "Write a Python function `kelly_fraction(p, b)` that returns the Kelly criterion fraction f = (p*b - (1-p)) / b. Include a guard for b <= 0 returning 0.0. Only the function, no explanation.",
+          "expected": "Working Kelly function with guard",
+          "response": "```python\ndef kelly_fraction(p, b):\n    if b <= 0:\n        return 0.0\n    return (p * b - (1 - p)) / b\n```",
+          "reasoning_length": 860,
+          "passed": true,
+          "latency_s": 9.7,
+          "tokens": {
+            "completion_tokens": 335,
+            "completion_tokens_details": {
+              "reasoning_tokens": 292
+            },
+            "prompt_tokens": 57,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 392
+          },
+          "error": null
+        }
+      ]
+    },
+    "FACTUAL": {
+      "questions": 4,
+      "correct": 4,
+      "score": "4/4",
+      "accuracy": 100.0,
+      "details": [
+        {
+          "id": "fact_01",
+          "category": "FACTUAL",
+          "prompt": "What does RSI measure in technical analysis? Answer in exactly one sentence.",
+          "expected": "Momentum/speed of price changes (0-100 oscillator)",
+          "response": "The Relative Strength Index (RSI) measures the speed and magnitude of recent price changes to evaluate whether an asset is overbought or oversold.",
+          "reasoning_length": 1664,
+          "passed": true,
+          "latency_s": 13.1,
+          "tokens": {
+            "completion_tokens": 428,
+            "completion_tokens_details": {
+              "reasoning_tokens": 396
+            },
+            "prompt_tokens": 20,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 448
+          },
+          "error": null
+        },
+        {
+          "id": "fact_02",
+          "category": "FACTUAL",
+          "prompt": "What is the standard interpretation when the 50-day EMA crosses above the 200-day EMA? One sentence.",
+          "expected": "Golden cross / bullish signal",
+          "response": "When the 50-day EMA crosses above the 200-day EMA, it forms a \"Golden Cross,\" which is widely interpreted by traders as a strong bullish signal indicating the potential start of a long-term upward trend.",
+          "reasoning_length": 1617,
+          "passed": true,
+          "latency_s": 18.4,
+          "tokens": {
+            "completion_tokens": 433,
+            "completion_tokens_details": {
+              "reasoning_tokens": 386
+            },
+            "prompt_tokens": 29,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 462
+          },
+          "error": null
+        },
+        {
+          "id": "fact_03",
+          "category": "FACTUAL",
+          "prompt": "In the context of algorithmic trading, what is 'slippage'? One sentence.",
+          "expected": "Difference between expected and actual execution price",
+          "response": "In algorithmic trading, slippage is the difference between the expected price of a trade and the actual price at which the order is executed, typically caused by market volatility, low liquidity, or execution latency.",
+          "reasoning_length": 1926,
+          "passed": true,
+          "latency_s": 18.6,
+          "tokens": {
+            "completion_tokens": 506,
+            "completion_tokens_details": {
+              "reasoning_tokens": 462
+            },
+            "prompt_tokens": 23,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 529
+          },
+          "error": null
+        },
+        {
+          "id": "fact_04",
+          "category": "FACTUAL",
+          "prompt": "What does ADX measure and what value indicates a strong trend? One sentence.",
+          "expected": "Trend strength (not direction), >25 indicates strong trend",
+          "response": "The Average Directional Index (ADX) measures the strength of a market trend regardless of its direction, and a value above 25 generally indicates a strong trend.",
+          "reasoning_length": 1768,
+          "passed": true,
+          "latency_s": 14.0,
+          "tokens": {
+            "completion_tokens": 455,
+            "completion_tokens_details": {
+              "reasoning_tokens": 421
+            },
+            "prompt_tokens": 21,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 476
+          },
+          "error": null
+        }
+      ]
+    },
+    "INSTRUCTION_FOLLOWING": {
+      "questions": 3,
+      "correct": 3,
+      "score": "3/3",
+      "accuracy": 100.0,
+      "details": [
+        {
+          "id": "instr_01",
+          "category": "INSTRUCTION_FOLLOWING",
+          "prompt": "Return a JSON object with exactly these keys: {\"signal\": \"BUY\", \"confidence\": 0.72, \"pair\": \"BTC/USDT\"}. Return ONLY the JSON, nothing else.",
+          "expected": "Valid JSON with signal, confidence, pair",
+          "response": "{\"signal\": \"BUY\", \"confidence\": 0.72, \"pair\": \"BTC/USDT\"}",
+          "reasoning_length": 737,
+          "passed": true,
+          "latency_s": 10.5,
+          "tokens": {
+            "completion_tokens": 245,
+            "completion_tokens_details": {
+              "reasoning_tokens": 220
+            },
+            "prompt_tokens": 46,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 291
+          },
+          "error": null
+        },
+        {
+          "id": "instr_02",
+          "category": "INSTRUCTION_FOLLOWING",
+          "prompt": "List exactly 3 risks of using leverage in crypto trading. Number them 1-3. No other text.",
+          "expected": "3 numbered risks",
+          "response": "1. Rapid liquidation of collateral during sudden market volatility.\n2. Magnified financial losses that can quickly exceed the initial investment.\n3. Accumulation of expensive margin interest and funding rate fees.",
+          "reasoning_length": 1624,
+          "passed": true,
+          "latency_s": 18.4,
+          "tokens": {
+            "completion_tokens": 442,
+            "completion_tokens_details": {
+              "reasoning_tokens": 401
+            },
+            "prompt_tokens": 28,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 470
+          },
+          "error": null
+        },
+        {
+          "id": "instr_03",
+          "category": "INSTRUCTION_FOLLOWING",
+          "prompt": "Respond with only the word 'PASS'. No other text, no punctuation, no explanation.",
+          "expected": "PASS",
+          "response": "PASS",
+          "reasoning_length": 460,
+          "passed": true,
+          "latency_s": 6.7,
+          "tokens": {
+            "completion_tokens": 129,
+            "completion_tokens_details": {
+              "reasoning_tokens": 126
+            },
+            "prompt_tokens": 23,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 152
+          },
+          "error": null
+        }
+      ]
+    }
+  }
+}

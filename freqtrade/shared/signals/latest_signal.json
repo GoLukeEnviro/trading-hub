@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0/debug",
+  "timestamp_utc": "2026-05-12T03:21:29.980842+00:00",
+  "source": "hermes-bridge",
+  "polls_total": 116,
+  "polls_success": 72,
+  "polls_failed": 0,
+  "primo_health": "healthy",
+  "signals": {}
+}

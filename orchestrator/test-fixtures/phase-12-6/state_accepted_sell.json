@@ -1,0 +1,149 @@
+{
+  "bridge_version": "0.2.0-risk-aware",
+  "max_signal_age_hours": 6,
+  "pairs": {
+    "ARB/USDT": {
+      "age_seconds": 0,
+      "allow_long_bias": false,
+      "allow_short_bias": false,
+      "block_entry": false,
+      "confidence": 0.1,
+      "is_fresh": true,
+      "normalized_action": "HOLD",
+      "pair": "ARB/USDT",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "source_action": "HOLD",
+      "verdict": "WATCH_ONLY",
+      "watch_only": true
+    },
+    "AVAX/USDT": {
+      "age_seconds": 0,
+      "allow_long_bias": false,
+      "allow_short_bias": false,
+      "block_entry": false,
+      "confidence": 0.15,
+      "is_fresh": true,
+      "normalized_action": "HOLD",
+      "pair": "AVAX/USDT",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "source_action": "HOLD",
+      "verdict": "WATCH_ONLY",
+      "watch_only": true
+    },
+    "BTC/USDT": {
+      "age_seconds": 0,
+      "allow_long_bias": false,
+      "allow_short_bias": true,
+      "block_entry": false,
+      "confidence": 0.25,
+      "is_fresh": true,
+      "normalized_action": "HOLD",
+      "pair": "BTC/USDT",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "source_action": "HOLD",
+      "verdict": "ACCEPTED",
+      "watch_only": true
+    },
+    "ETH/USDT": {
+      "age_seconds": 0,
+      "allow_long_bias": false,
+      "allow_short_bias": false,
+      "block_entry": false,
+      "confidence": 0.55,
+      "is_fresh": true,
+      "normalized_action": "WATCH",
+      "pair": "ETH/USDT",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "source_action": "WATCH",
+      "verdict": "WATCH_ONLY",
+      "watch_only": true
+    },
+    "NEAR/USDT": {
+      "age_seconds": 0,
+      "allow_long_bias": false,
+      "allow_short_bias": false,
+      "block_entry": false,
+      "confidence": 0.25,
+      "is_fresh": true,
+      "normalized_action": "HOLD",
+      "pair": "NEAR/USDT",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "source_action": "HOLD",
+      "verdict": "WATCH_ONLY",
+      "watch_only": true
+    },
+    "OP/USDT": {
+      "age_seconds": 0,
+      "allow_long_bias": false,
+      "allow_short_bias": false,
+      "block_entry": false,
+      "confidence": 0.25,
+      "is_fresh": true,
+      "normalized_action": "HOLD",
+      "pair": "OP/USDT",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "source_action": "HOLD",
+      "verdict": "WATCH_ONLY",
+      "watch_only": true
+    },
+    "SOL/USDT": {
+      "age_seconds": 0,
+      "allow_long_bias": false,
+      "allow_short_bias": false,
+      "block_entry": false,
+      "confidence": 0.2,
+      "is_fresh": true,
+      "normalized_action": "HOLD",
+      "pair": "SOL/USDT",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "source_action": "HOLD",
+      "verdict": "WATCH_ONLY",
+      "watch_only": true
+    }
+  },
+  "riskguard_available": true,
+  "riskguard_version": "0.1.0",
+  "schema_version": "0.2",
+  "source_file": "/home/hermes/primoagent/output/signals/primo_risk_filtered_latest.json",
+  "source_generated_at": "2026-05-07T21:04:00.319148+00:00",
+  "source_type": "riskguard",
+  "summary": {
+    "accepted_count": 0,
+    "blocked_count": 0,
+    "fail_open": false,
+    "long_bias_count": 0,
+    "short_bias_count": 0,
+    "stale_count": 0,
+    "total": 7,
+    "watch_only_count": 7
+  },
+  "written_at": "2026-05-07T21:04:01.047355+00:00"
+}

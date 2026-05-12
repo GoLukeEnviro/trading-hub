@@ -1,0 +1,109 @@
+# =============================================================================
+# HERMES TRADING HUB — Freqtrade Fleet Manifest
+# =============================================================================
+# Stand: 2026-05-07 09:06 UTC
+# Netzwerk: ki-fabrik (Caddy-routbar via Tailscale Funnel)
+# Alle Bots: Dry-Run / Futures / Isolierte Margin / Bitget
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # BOT 1 — RSI SimpleRSIOnly_v1
+  # ---------------------------------------------------------------------------
+  freqtrade-rsi:
+    image: freqtradeorg/freqtrade:stable
+    container_name: freqtrade-rsi
+    restart: unless-stopped
+    networks:
+      - ki-fabrik
+    ports:
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - /home/hermes/projects/trading/freqtrade/bots/rsi/config:/freqtrade/config:ro
+      - /home/hermes/projects/trading/freqtrade/bots/rsi/user_data:/freqtrade/user_data:rw
+      - /home/hermes/projects/trading/freqtrade/logs:/freqtrade/logs:rw
+      - /home/hermes/projects/trading/freqtrade/shared:/freqtrade/shared:rw
+    command: >
+      trade
+      --config /freqtrade/config/config.json
+      --strategy SimpleRSIOnly_v1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      - "hermes.bot=rsi"
+      - "hermes.phase=fleet"
+      - "hermes.exchange=bitget"
+
+  # ---------------------------------------------------------------------------
+  # BOT 2 — Momentum MomentumBG15_v1
+  # ---------------------------------------------------------------------------
+  freqtrade-momentum:
+    image: freqtrade-momentum-custom:running
+    container_name: freqtrade-momentum
+    restart: unless-stopped
+    networks:
+      - ki-fabrik
+    ports:
+      - "127.0.0.1:8084:8082"
+    volumes:
+      - /home/hermes/projects/trading/freqtrade/bots/momentum/config:/freqtrade/config:ro
+      - /home/hermes/projects/trading/freqtrade/bots/momentum/user_data:/freqtrade/user_data:rw
+      - /home/hermes/projects/trading/freqtrade/logs:/freqtrade/logs:rw
+      - /home/hermes/projects/trading/freqtrade/shared:/freqtrade/shared:rw
+    command: >
+      trade
+      --config /freqtrade/config/config.json
+      --strategy MomentumBG15_v1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      - "hermes.bot=momentum"
+      - "hermes.phase=fleet"
+      - "hermes.exchange=bitget"
+
+  # ---------------------------------------------------------------------------
+  # BOT 3 — Regime-Switching Hybrid v7 v0.4 Integration (Phase 35)
+  # Test-Candidate: RegimeSwitchingHybrid_v7_v04_Integration
+  # ---------------------------------------------------------------------------
+  freqtrade-regime-hybrid:
+    image: freqtradeorg/freqtrade:stable
+    container_name: freqtrade-regime-hybrid
+    restart: unless-stopped
+    networks:
+      - ki-fabrik
+    ports:
+      - "127.0.0.1:8085:8085"
+    volumes:
+      - /home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config:/freqtrade/config:ro
+      - /home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data:/freqtrade/user_data:rw
+      - /home/hermes/projects/trading/freqtrade/logs:/freqtrade/logs:rw
+      - /home/hermes/projects/trading/freqtrade/shared:/freqtrade/shared:rw
+    command: >
+      trade
+      --config /freqtrade/config/config_regime_hybrid_dryrun.json
+      --strategy RegimeSwitchingHybrid_v7_v04_Integration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      - "hermes.bot=regime-hybrid"
+      - "hermes.phase=fleet"
+      - "hermes.exchange=bitget"
+      - "hermes.version=v7-v04-integration"
+      - "hermes.test-candidate=true"
+
+# =============================================================================
+# Netzwerk (extern — existiert bereits auf Host)
+# =============================================================================
+networks:
+  ki-fabrik:
+    external: true

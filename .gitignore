@@ -1,0 +1,180 @@
+# ============================================================
+# Trading Hub — .gitignore
+# Parent repo: /home/hermes/projects/trading
+# ============================================================
+
+# ---- Secrets / Credentials ----
+.env
+.env.*
+*.pem
+*.key
+!*key_manager*
+!*api_key*
+secret-handling-policy.md
+
+# ---- Python / Environments ----
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+*.egg/
+dist/
+build/
+
+# ---- Node ----
+node_modules/
+
+# Freqtrade bot configs — contain jwt_secret_key and UI passwords
+# Only example/sanitized configs should be committed
+freqtrade/bots/*/config/config*.json
+freqtrade/bots/*/config/config*.json.*
+freqtrade/bots/*/config/config*.json.bak*
+!freqtrade/bots/*/config/config*.example.json
+
+# Freqforge configs — contain jwt_secret_key and passwords
+freqforge/config/config*.json
+freqforge/baseline_v1/*/config*.json
+!freqforge/config/config*.example.json
+
+# Backtest lab configs — may contain secrets
+backtests/daily_lab/config*.json
+
+# ---- Runtime / Logs / Generated State ----
+logs/
+*.log
+var/
+cache/
+output/
+outputs/
+tmp/
+temp/
+
+# ---- Databases / Dumps / Binary Artifacts ----
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.dump
+*.pkl
+*.parquet
+*.feather
+*.fthypt
+
+# ---- Archives / Backups / Large Artifacts ----
+backups/
+backup/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# ---- Docker Images ----
+freqtrade/shared/images/
+
+# ---- Nested External Repositories ----
+# Agenten_Auto_Trade: independent git repo (GoLukeEnviro/Agenten_Auto_Trade)
+Agenten_Auto_Trade/
+
+# ai-hedge-fund-crypto: upstream repo (github.com/51bitquant/ai-hedge-fund-crypto)
+# Tracked independently. Local wrappers/Docker compose at root level are still tracked.
+ai-hedge-fund-crypto/
+
+# weatherhermes: separate project, not part of trading hub
+weatherhermes_persistent/
+weatherhermes_backup/
+
+# ---- Hyperopt Results (binary, large) ----
+**/hyperopt_results/
+
+# Freqtrade User Data (databases, trades, feather data)
+# Strategy .py files are NOT ignored — see negation rules below
+**/user_data/data/
+**/user_data/tradesv3*.sqlite*
+**/user_data/hyperopt_results/
+**/user_data/backtest_results/
+
+# Freqtrade shared downloads (exchange data)
+freqtrade/shared/downloads/
+
+# Orchestrator runtime state (snapshots, large JSON)
+orchestrator/state/
+
+# ---- OS / Editor Junk ----
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# ============================================================
+# NEGATION RULES — explicitly keep important files
+# ============================================================
+
+# Strategy source files — ALWAYS track
+!**/strategies/**/*.py
+!**/strategy/**/*.py
+!**/*strategy*.py
+
+# Research source files
+!**/research/**/*.py
+!**/research/**/*.md
+
+# Tools and scripts
+!tools/**/*.py
+!scripts/**/*.sh
+!scripts/**/*.py
+
+# Documentation
+!docs/**/*.md
+!docs/**/*.txt
+!docs/**/*.yaml
+!docs/**/*.yml
+
+# Config examples and templates (NOT real configs with secrets)
+!**/*config.example*
+!**/*.example.*
+!**/*config*example*
+!**/config.example.*
+
+# Docker compose files (sanitized — no secrets inline)
+!docker-compose*.yml
+!**/Dockerfile
+
+# Orchestrator tooling
+!orchestrator/**/*.py
+!orchestrator/**/*.sh
+!orchestrator/**/*.md
+
+# FreqForge shadow evaluator
+!freqforge/**/*.py
+!freqforge/**/*.md
+
+# Bridge code
+!bridge/**/*.py
+!bridge/Dockerfile
+
+# Primo agent code
+!primo/**/*.py
+!primo/Dockerfile
+
+# Root-level project identity
+!SOUL.md
+!AGENTS.md
+!ORCHESTRATOR_CHARTER.md
+!README.md
+!pyproject.toml
+!requirements*.txt
+
+# Backtest scripts and reports (not the data)
+!backtests/**/*.py
+!backtests/**/*.md
+!backtests/**/*.sh

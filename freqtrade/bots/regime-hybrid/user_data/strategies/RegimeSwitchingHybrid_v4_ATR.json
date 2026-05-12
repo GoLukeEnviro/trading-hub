@@ -1,0 +1,34 @@
+{
+  "strategy_name": "RegimeSwitchingHybrid_v4_ATR",
+  "params": {
+    "roi": {
+      "0": 0.06,
+      "60": 0.03,
+      "120": 0.01,
+      "240": 0
+    },
+    "stoploss": {
+      "stoploss": -0.99
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 5
+    },
+    "buy": {
+      "adx_threshold": 23,
+      "rsi_oversold": 20
+    },
+    "sell": {
+      "atr_sl_range": 2.351,
+      "atr_sl_trend": 3.612,
+      "atr_tp_trend": 2.803
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-05-03 02:01:16.086111+00:00"
+}

@@ -1,0 +1,126 @@
+{
+  "meta": {
+    "riskguard_version": "0.1.0",
+    "generated_at": "2026-05-07T21:05:54.149166+00:00",
+    "source_file": "primo_multi_signal_latest.json",
+    "source_generated_at": "2000-01-01T00:00:00+00:00",
+    "max_signal_age_hours": 6,
+    "min_confidence_for_accept": 0.65,
+    "meta_age_seconds": 831503154,
+    "meta_age_hours": 230973.09833333333
+  },
+  "counts": {
+    "total": 7,
+    "accepted_count": 0,
+    "watch_only_count": 7,
+    "blocked_count": 0,
+    "stale_count": 7
+  },
+  "results": [
+    {
+      "pair": "BTC/USDT",
+      "source_action": "BUY",
+      "normalized_action": "BUY",
+      "confidence": 0.9,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "action_allowed",
+        "signal_stale",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 831503154
+    },
+    {
+      "pair": "ETH/USDT",
+      "source_action": "BUY",
+      "normalized_action": "BUY",
+      "confidence": 0.9,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "action_allowed",
+        "signal_stale",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 831503154
+    },
+    {
+      "pair": "SOL/USDT",
+      "source_action": "BUY",
+      "normalized_action": "BUY",
+      "confidence": 0.9,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "action_allowed",
+        "signal_stale",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 831503154
+    },
+    {
+      "pair": "AVAX/USDT",
+      "source_action": "BUY",
+      "normalized_action": "BUY",
+      "confidence": 0.9,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "action_allowed",
+        "signal_stale",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 831503154
+    },
+    {
+      "pair": "NEAR/USDT",
+      "source_action": "BUY",
+      "normalized_action": "BUY",
+      "confidence": 0.9,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "action_allowed",
+        "signal_stale",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 831503154
+    },
+    {
+      "pair": "ARB/USDT",
+      "source_action": "BUY",
+      "normalized_action": "BUY",
+      "confidence": 0.9,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "action_allowed",
+        "signal_stale",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 831503154
+    },
+    {
+      "pair": "OP/USDT",
+      "source_action": "BUY",
+      "normalized_action": "BUY",
+      "confidence": 0.9,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "action_allowed",
+        "signal_stale",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 831503154
+    }
+  ]
+}

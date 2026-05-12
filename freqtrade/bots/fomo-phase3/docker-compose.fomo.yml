@@ -1,0 +1,48 @@
+# =============================================================================
+# FOMO Phase 3 — Docker Compose Fragment
+# =============================================================================
+# DO NOT deploy this fragment alone. Integrate it into the fleet compose:
+#   /home/hermes/projects/trading/freqtrade/docker-compose.fleet.yml
+#
+# Usage (dry-run only):
+#   docker compose -f ../docker-compose.fleet.yml -f docker-compose.fomo.yml up -d
+#
+# To start the bot manually (after config validation):
+#   docker run -d --restart unless-stopped \
+#     --name freqtrade-fomo-phase3 \
+#     --network ki-fabrik \
+#     -p 127.0.0.1:8087:8087 \
+#     -v /home/hermes/projects/trading/freqtrade/bots/fomo-phase3/config:/freqtrade/config:ro \
+#     -v /home/hermes/projects/trading/freqtrade/bots/fomo-phase3/user_data:/freqtrade/user_data:rw \
+#     -v /home/hermes/projects/trading/freqtrade/logs:/freqtrade/logs:rw \
+#     -v /home/hermes/projects/trading/freqtrade/shared:/freqtrade/shared:ro \
+#     freqtradeorg/freqtrade:stable \
+#     trade --dry-run -v \
+#     --strategy FOMO_Phase3_v0 \
+#     --config /freqtrade/config/config_fomo_phase3_dryrun.json
+# =============================================================================
+
+version: "3.8"
+
+services:
+  fomo-phase3:
+    image: freqtradeorg/freqtrade:stable
+    container_name: freqtrade-fomo-phase3
+    restart: unless-stopped
+    networks:
+      - ki-fabrik
+    ports:
+      - "127.0.0.1:8087:8087"
+    volumes:
+      - /home/hermes/projects/trading/freqtrade/bots/fomo-phase3/config:/freqtrade/config:ro
+      - /home/hermes/projects/trading/freqtrade/bots/fomo-phase3/user_data:/freqtrade/user_data:rw
+      - /home/hermes/projects/trading/freqtrade/logs:/freqtrade/logs:rw
+      - /home/hermes/projects/trading/freqtrade/shared:/freqtrade/shared:ro
+    command: >
+      trade --dry-run -v
+      --strategy FOMO_Phase3_v0
+      --config /freqtrade/config/config_fomo_phase3_dryrun.json
+
+networks:
+  ki-fabrik:
+    external: true

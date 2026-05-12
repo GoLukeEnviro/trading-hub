@@ -1,0 +1,119 @@
+{
+  "meta": {
+    "riskguard_version": "0.1.0",
+    "generated_at": "2026-05-07T21:05:54.227277+00:00",
+    "source_file": "primo_multi_signal_latest.json",
+    "source_generated_at": "2026-05-07T21:04:00.319148+00:00",
+    "max_signal_age_hours": 6,
+    "min_confidence_for_accept": 0.65,
+    "meta_age_seconds": 113,
+    "meta_age_hours": 0.03138888888888889
+  },
+  "counts": {
+    "total": 7,
+    "accepted_count": 0,
+    "watch_only_count": 7,
+    "blocked_count": 0,
+    "stale_count": 0
+  },
+  "results": [
+    {
+      "pair": "INVALID/PAIR",
+      "source_action": "HOLD",
+      "normalized_action": "HOLD",
+      "confidence": 0.9,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 0
+    },
+    {
+      "pair": "ETH/USDT",
+      "source_action": "WATCH",
+      "normalized_action": "WATCH",
+      "confidence": 0.55,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 0
+    },
+    {
+      "pair": "SOL/USDT",
+      "source_action": "HOLD",
+      "normalized_action": "HOLD",
+      "confidence": 0.2,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 0
+    },
+    {
+      "pair": "AVAX/USDT",
+      "source_action": "HOLD",
+      "normalized_action": "HOLD",
+      "confidence": 0.15,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 0
+    },
+    {
+      "pair": "NEAR/USDT",
+      "source_action": "HOLD",
+      "normalized_action": "HOLD",
+      "confidence": 0.25,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 0
+    },
+    {
+      "pair": "ARB/USDT",
+      "source_action": "HOLD",
+      "normalized_action": "HOLD",
+      "confidence": 0.1,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 0
+    },
+    {
+      "pair": "OP/USDT",
+      "source_action": "HOLD",
+      "normalized_action": "HOLD",
+      "confidence": 0.25,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "schema_valid",
+        "watch_action_no_entry",
+        "riskguard_watch_only"
+      ],
+      "generated_at": "unknown",
+      "age_seconds": 0
+    }
+  ]
+}

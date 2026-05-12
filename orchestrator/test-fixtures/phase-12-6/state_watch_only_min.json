@@ -1,0 +1,29 @@
+{
+  "schema_version": "0.2",
+  "bridge_version": "0.2.0-risk-aware",
+  "written_at": "2026-05-07T00:00:00Z",
+  "source_type": "riskguard",
+  "source_file": "/tmp/fake.json",
+  "riskguard_available": true,
+  "fresh": true,
+  "age_minutes": 1,
+  "pairs": {
+    "BTC/USDT": {
+      "pair": "BTC/USDT",
+      "source_action": "SELL",
+      "normalized_action": "SELL",
+      "confidence": 0.9,
+      "verdict": "WATCH_ONLY",
+      "reasons": [
+        "test"
+      ],
+      "age_seconds": 60,
+      "is_fresh": true,
+      "allow_long_bias": false,
+      "allow_short_bias": false,
+      "watch_only": true,
+      "block_entry": false
+    }
+  },
+  "summary": {}
+}

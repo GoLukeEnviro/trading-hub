@@ -1,0 +1,33 @@
+{
+  "strategy_name": "RegimeSwitchingHybrid_v6_Stable",
+  "params": {
+    "roi": {
+      "0": 0.06,
+      "60": 0.03,
+      "120": 0.01,
+      "240": 0
+    },
+    "stoploss": {
+      "stoploss": -0.08
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 5
+    },
+    "buy": {
+      "adx_rel_threshold": 1.0,
+      "rsi_oversold": 20
+    },
+    "sell": {
+      "atr_sl_range": 3.836,
+      "atr_tp_trend": 0.522
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-05-09 02:03:57.470705+00:00"
+}

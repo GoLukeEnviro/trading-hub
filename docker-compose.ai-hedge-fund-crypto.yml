@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  ai-hedge-fund-crypto:
+    build:
+      context: ./ai-hedge-fund-crypto
+      dockerfile: docker/Dockerfile
+    container_name: ai-hedge-fund-crypto
+    restart: unless-stopped
+    networks:
+      - ki-fabrik
+    env_file:
+      - ./ai-hedge-fund-crypto/.env
+    environment:
+      - SERVICE_PORT=8080
+    volumes:
+      - ./ai-hedge-fund-crypto/output:/app/output
+    command: ["python3", "docker/service_entrypoint.py"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request, json; d=json.loads(urllib.request.urlopen('http://localhost:8080/health').read()); exit(0 if d['status']=='ok' else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    ports:
+      - "127.0.0.1:8410:8080"
+
+networks:
+  ki-fabrik:
+    external: true
