@@ -1,51 +1,73 @@
-# ORCHESTRATOR_CHARTER.md
+# ORCHESTRATOR_CHARTER.md — Binding Orchestration Rules
 
 ## Mission
 
-This charter defines the binding rules for the autonomous trading orchestration system based on ai-hedge-fund-crypto as signal layer and Hermes as the meta-orchestrator.
+This charter defines the binding rules for the autonomous trading orchestration system.
+ai-hedge-fund-crypto is the signal layer, Hermes the meta-orchestrator, Freqtrade the dry-run fleet.
+The system operates under a strict dry-run-only policy until explicitly cleared for live trading.
+
+**Version:** 2.0
+**Updated:** 2026-05-12
+**Profile:** orchestrator
+**Project:** /home/hermes/projects/trading
+**Repo:** github.com/GoLukeEnviro/trading-hub (private)
+
+---
 
 ## Role Split
 
 ### ai-hedge-fund-crypto — Signal Layer
 - Signal generation via TA ensemble + LLM portfolio decisions
 - Exchange: Bitget Futures OHLCV
-- Model: DeepSeek V4 Pro
-- Advisory output only (no order placement)
+- Model: DeepSeek V4 Pro (Ollama cloud endpoint)
+- Advisory output only — no order placement
+- Container: `ai-hedge-fund-crypto` (port 8410, healthy)
+- Output: `ai-hedge-fund-crypto/output/hermes_signal.json`
 
 ### Hermes — Meta-Orchestrator
 - Profile isolation (`orchestrator` profile)
 - Tool execution and automation
-- System audits and repairs
-- Documentation and escalation
+- System audits, repairs, documentation
 - Human interface via Telegram/Gateway
+- Git housekeeping for trading-hub repo
+- Subagent delegation for research/dev/review
 
 ### Freqtrade — Execution Fleet
-- Dry-run trade execution
+- Dry-run trade execution (6 bots, all bitget futures)
 - Strategy-based entry/exit
 - Signal as conservative filter
 - No signal-forced trades
 - Fail-open on stale/missing signals
+- Fleet compose: `freqtrade/docker-compose.fleet.yml`
+
+### FreqForge Shadow Evaluator — Passive Observer
+- Observes dry-run activity, evaluates decisions
+- Does NOT execute, modify, or override trades
+- Append-only JSONL evidence trail
+- Components: `tools/freqforge/`
+
+### Honcho — Persistent Memory
+- Session-scoped write frequency
+- Deriver MQG v2.0.0
+- Hourly watchdog cron
+
+---
 
 ## Hermes Profile Isolation
 
-| Profile      | Purpose                                      | Status   |
-| ------------ | -------------------------------------------- | -------- |
-| `default`    | General-purpose Hermes operations            | active   |
-| `mira`       | Mira content pipeline                        | stopped  |
-| `trading`    | Future domain/worker profile for trading ops | stopped  |
-| `orchestrator` | Meta-control profile for trading orchestration | **NEW**  |
+| Profile | Purpose | Status |
+|---------|---------|--------|
+| `default` | General-purpose Hermes operations | active |
+| `mira` | Mira content pipeline | stopped |
+| `trading` | Future domain/worker profile | stopped |
+| `orchestrator` | Meta-control profile for trading orchestration | **ACTIVE** |
 
 The `orchestrator` profile:
-- Cloned config, .env, SOUL.md from `default` (not `--clone-all`)
-- Has isolated memory, sessions, cronjobs
-- Working directory set to `/home/hermes/projects/trading`
-- SOUL at `~/.hermes/profiles/orchestrator/SOUL.md`
+- Isolated memory, sessions, cronjobs
+- Working directory: `/home/hermes/projects/trading`
+- SOUL: `~/.hermes/profiles/orchestrator/SOUL.md`
 
-## Existing Profile Roles
-
-- **default**: remains unchanged, general-purpose operations
-- **trading**: documented as future domain/worker profile, not meta-controller
-- **orchestrator**: meta-control profile for trading orchestration
+---
 
 ## Dry-Run Only Policy
 
@@ -54,12 +76,22 @@ The `orchestrator` profile:
 - No exchange credentials may be added
 - No real orders may be placed
 - No leverage/position sizing automation
-- No live trading without separate explicit approval
+- No live trading without separate explicit approval per the FreqForge deployment rule: **backtest → paper 48h → live**
 
 **Validation:**
-- `dry_run` must be verified via container config inspection
+- `dry_run` verified via container config inspection
 - Exchange keys must be absent or empty strings
-- API server credentials may exist for internal control but must be redacted in reports
+- API server credentials may exist for internal control but must be redacted in reports and never committed to git
+
+---
+
+## Trading Hard Limits
+
+Per user mandate (non-negotiable):
+1. **Confidence threshold >= 0.60** — no trade under 60% confidence
+2. **Minimum 60 paper trades** before strategy path is unlocked (FreqForge Risk-Manager lock)
+
+---
 
 ## Forbidden Actions
 
@@ -73,7 +105,10 @@ Without separate explicit approval:
 - Migrating or deleting cronjobs
 - Enabling live trading
 - Changing signal thresholds or RiskGuard policies
-- Modifying Pair allowlists
+- Modifying pair allowlists
+- Deleting historical data
+
+---
 
 ## Human Approval Requirements
 
@@ -89,6 +124,8 @@ Approval required for:
 - Destructive filesystem operations
 - Deletion of historical data
 
+---
+
 ## State Machine
 
 ### Global System State
@@ -99,7 +136,7 @@ INIT → PREFLIGHT → DATA_READY → SIGNAL_READY → RISK_FILTERED → SHADOW_
 
 ### Error States
 
-- `DATA_STALE` — Signal output older than max_age
+- `DATA_STALE` — Signal output older than max_age (45 min)
 - `SIGNAL_INVALID` — schema validation failed
 - `RISK_BLOCKED` — RiskGuard verdict is BLOCK_ENTRY
 - `FLEET_UNHEALTHY` — bot API unreachable or state != RUNNING
@@ -118,6 +155,8 @@ NO_DATA → DATA_OK → BASELINE_SIGNAL → LLM_SIGNAL → RECONCILED → ACCEPT
 ```
 UNKNOWN → CONTAINER_RUNNING → API_PONG → STATE_RUNNING → STRATEGY_ACTIVE → SIGNAL_STATE_VISIBLE → DRY_RUN_SAFE
 ```
+
+---
 
 ## Gate System
 
@@ -139,7 +178,7 @@ UNKNOWN → CONTAINER_RUNNING → API_PONG → STATE_RUNNING → STRATEGY_ACTIVE
 - `generated_at` not stale (max 45 minutes)
 - All expected pairs present
 - Actions in allowed set
-- Confidence in valid range
+- Confidence in valid range [0.60, 1.0]
 - Pair mapping complete
 
 ### Gate 3 — RiskGuard
@@ -156,114 +195,32 @@ UNKNOWN → CONTAINER_RUNNING → API_PONG → STATE_RUNNING → STRATEGY_ACTIVE
 - Counts match input
 
 ### Gate 5 — Freqtrade Sync
-- Bridge writes per-bot state files
+- Bridge writes per-bot signal state files
 - State files readable by containers
 - Helper module importable
 - Stale signal triggers fallback
-- Fresh signal gates direction only
+- Fresh signal gates direction only, does not force trades
 
-### Gate 6 — Performance Gate (Future)
-- Backtest v1.1 with fees/slippage
+### Gate 6 — Performance Gate
+- Backtest with fees/slippage
 - Pair-scoped non-overlap
 - 4h/12h/24h horizons tested
-- Baseline comparisons passed
-- Minimum 50 non-overlapping signals
-- Net 24h edge > baseline + 0.25pp
+- Minimum 60 non-overlapping trades (hard limit)
+- Net edge > baseline + threshold
+- Walk-forward validation passed
 
-## RiskGuard Policy
-
-**Verdicts:**
-- `ACCEPTED` — signal passes all gates, may be used as filter
-- `WATCH_ONLY` — informational only, no entry allowed
-- `BLOCK_ENTRY` — signal blocked, fallback to normal strategy
-
-**Rules:**
-- Entry candidates: `BUY`, `SELL` only
-- Informational actions: `TREND_HOLD`, `WATCH`, `HOLD` → never entry
-- Horizon: 24h advisory only (until separately validated)
-- Pair allowlist must match backtested universe
-- `signal_quality == weak` → `WATCH_ONLY`
-- Unknown pair/action/quality → `BLOCK_ENTRY`
-- Non-numeric confidence → `BLOCK_ENTRY`
-- Baseline/LLM disagreement → downgrade to `WATCH` or `BLOCK`
-
-## Shadow Logging Policy
-
-**Requirements:**
-- Append-only JSONL
-- One record per signal cycle
-- Daily aggregation files
-- Summary report per cycle
-- No Freqtrade API calls
-- No trade execution
-- No side effects
-
-**Record Fields:**
-- `timestamp`
-- `signals_file`
-- `risk_file`
-- `signals_read`
-- `accepted_count`
-- `blocked_count`
-- `watch_only_count`
-- `accepted_signals`
-- `blocked_signals`
-- `watch_only_pairs`
-- `mode`
-- `notes`
-
-## Freqtrade Bridge Policy
-
-**Current State:**
-- Bridge reads `hermes_signal.json`
-- Writes per-bot signal state files
-- Shared helper in `/freqtrade/shared/` used by strategies
-- Fail-open: stale/missing signal → normal strategy logic
-- Fresh signal gates entry direction only, does not force trades
-
-**Future State:**
-- Bridge will read risk-filtered signal as primary source
-- Raw signal becomes fallback only
-- Risk verdict included in state file
-- Age, generated_at, reason fields added
-
-## Cron Isolation and Future Migration Plan
-
-**Current State:**
-- 4 cronjobs exist in `default` profile:
-  - `freqtrade-daily-data-regime-report` (daily 7:00 UTC)
-  - `freqtrade-4h-fleet-trade-snapshot` (every 240m)
-  - `strategy_heartbeat_intelligence` (every 120m)
-  - `ai-hedge-fund-signal-cycle` (every 240m)
-
-**This Phase:**
-- Cronjobs inventoried only
-- No migration
-- No pausing
-- No deletion
-- No recreation
-
-**Future Migration Plan:**
-1. Pause old default-profile job
-2. Recreate equivalent job under `orchestrator` profile
-3. Run orchestrator job once manually
-4. Compare outputs
-5. Retire old default-profile job only after approval
-
-**Documentation:**
-- `orchestrator-cron-inventory-and-migration-plan-YYYY-MM-DD.md`
+---
 
 ## Monitoring Colors
 
 ### GREEN
-- Signal output fresh
+- Signal output fresh (< 45 min)
 - RiskGuard valid
 - ShadowLogger writing
 - Bridge writing state
 - All Freqtrade APIs pong
 - All bots dry-run verified
 - No config drift
-- No stale telemetry
 
 ### YELLOW
 - Signal stale but Freqtrade running normally
@@ -286,8 +243,9 @@ UNKNOWN → CONTAINER_RUNNING → API_PONG → STATE_RUNNING → STRATEGY_ACTIVE
 - Corrupt JSON
 - RiskGuard blocks due to schema invalid
 - ShadowLogger not writing
-- Cron forwards old reports
 - Live-money risk detected
+
+---
 
 ## Human Escalation Matrix
 
@@ -312,27 +270,32 @@ UNKNOWN → CONTAINER_RUNNING → API_PONG → STATE_RUNNING → STRATEGY_ACTIVE
 - Skill documentation
 - Suggestions
 - Dry-run healthchecks
+- Git commits (non-destructive, no secrets)
+
+---
 
 ## Definition of Done
 
-The orchestrator is considered complete when:
+The orchestrator system is considered operationally complete when:
 
-1. ✅ Signal canonical path is unambiguous
-2. ✅ Signal cycle runs stably
-3. ✅ RiskGuard validates every signal file
-4. ✅ ShadowLogger appends every run auditably
-5. ✅ Bridge uses max-age and fallback correctly
-6. ✅ All three Freqtrade bots API-pong
-7. ✅ All bots dry-run verified
-8. ✅ Daily report generates automatically
-9. ✅ Stale telemetry never reported as GREEN
-10. ✅ Every change is auditable
-11. ✅ No live execution exists
-12. ✅ Runbook + Charter exist
+1. Signal canonical path is unambiguous
+2. Signal cycle runs stably (ai-hedge-fund-crypto healthy)
+3. RiskGuard validates every signal file
+4. ShadowLogger appends every run auditably
+5. Bridge uses max-age and fallback correctly
+6. All Freqtrade bots API-pong
+7. All bots dry-run verified
+8. Daily report generates automatically
+9. Stale telemetry never reported as GREEN
+10. Every change is auditable via git
+11. No live execution exists
+12. Runbook + Charter exist and are current
 
-## Version
+---
 
-- Charter Version: 1.0
-- Created: 2026-05-07
-- Profile: orchestrator
-- Project: /home/hermes/projects/trading
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 2.0 | 2026-05-12 | Full rewrite: reflect current fleet (6 bots), ai-hedge-fund-crypto as signal layer, PrimoAgent decommissioned, git repo established, hard limits added, FOMO Phase 3 documented |
+| 1.0 | 2026-05-07 | Initial charter |
