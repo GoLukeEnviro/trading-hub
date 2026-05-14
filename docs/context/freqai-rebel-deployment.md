@@ -18,15 +18,17 @@ This is the versioned source location. Runtime data lives in Docker named volume
 |----------|-------|
 | Container name | `freqai-rebel` |
 | Image | `freqtradeorg/freqtrade:2026.3_freqai` |
-| Exchange | **bitget** (spot) |
+| Exchange | **bitget** (futures, swap) |
+| Trading mode | **futures** (isolated margin) |
 | Host API port | `8087` |
 | Container API port | `8080` |
 | Strategy | `RebelLiquidation.py` |
 | FreqAI model | XGBoostClassifier |
 | Dry-run | **enabled** |
-| Pairs | BTC/USDT, ETH/USDT |
+| Pairs | BTC/USDT:USDT, ETH/USDT:USDT |
 | Timeframe | 5m (with 15m, 1h features) |
 | DI_threshold | 0.9 |
+| ccxt defaultType | swap |
 
 ## Deploy / Sync
 
@@ -54,13 +56,15 @@ Runtime data excluded via `.gitignore`:
 
 ## Known Issues
 
-1. **STOPPED after startup**: Normal for FreqAI on first cycle. Waits for next 5m candle.
+1. **STOPPED after startup**: Normal for FreqAI on first cycle. Waits for next 5m candle to trigger training.
 2. **Host API unreachable from Hermes**: Hermes runs in its own container, `127.0.0.1:8087` doesn't route. Use `docker exec freqai-rebel curl ...` instead.
 3. **No live trading**: dry_run=true enforced. No exchange credentials configured.
+4. **Spot->Futures migration (2026-05-14)**: Originally deployed as spot. Patched to futures (isolated margin, swap, `:USDT` pair format) to match the rest of the fleet. Old spot data purged and re-downloaded as futures data.
 
 ## Next Steps
 
 1. Wait for first FreqAI training cycle to complete (~5-10 min after next candle)
 2. Verify model artifacts in `/freqtrade/user_data/models/rebel-liquidation-v1/`
-3. Run controlled backtests before any live trading changes
-4. Rotate dev API credentials before exposure beyond localhost/Tailscale
+3. Monitor first predictions and compare signal quality
+4. Run controlled backtests before any live trading changes
+5. Rotate dev API credentials before exposure beyond localhost/Tailscale
