@@ -1,0 +1,16 @@
+# Freqtrade/FreqAI runtime data - do not commit
+user_data/models/
+user_data/data/
+user_data/logs/
+user_data/backtest_results/
+user_data/hyperopt_results/
+user_data/notebooks/
+user_data/*.sqlite
+user_data/*.sqlite-*
+user_data/**/*.feather
+user_data/**/*.parquet
+user_data/**/*.pkl
+user_data/**/*.joblib
+user_data/**/*.zip
+.env
+*.log
