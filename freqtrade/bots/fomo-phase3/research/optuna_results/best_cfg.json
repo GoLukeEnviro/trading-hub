@@ -1,0 +1,37 @@
+{
+  "best_params": {
+    "fomo_entry": 1.950012224640387,
+    "roc_long": 0.0023094427862851833,
+    "roc_short": -0.004880530104302752,
+    "trend_min": 0.07178788495678613,
+    "noise_atr_pct": 0.11571459284336713,
+    "oi_price_alignment_thresh": 0.20912832901102435,
+    "funding_residual_thresh_long": 0.0006972763640450207,
+    "funding_residual_thresh_short": -0.0010337156867870649,
+    "z_window": 110,
+    "atr_period": 15,
+    "sl_atr_mult": 2.641531692142519,
+    "tp1_atr_mult": 4.777755692715243,
+    "tp2_atr_mult": 3.3727889929497348,
+    "tp1_fraction": 0.3384899549143965,
+    "max_bars": 22,
+    "fomo_exit": 0.16122128725400442
+  },
+  "best_score": -7.102451906447374,
+  "train": {
+    "trades": 196,
+    "total_return_pct": -45.11372281307787,
+    "max_drawdown_pct": 45.82624023654495,
+    "sharpe": -10.188158364057454,
+    "profit_factor": 0.2591008285325025,
+    "win_rate": 22.660098522167488
+  },
+  "oos": {
+    "trades": 93,
+    "total_return_pct": -29.37815864375114,
+    "max_drawdown_pct": 29.37815864375114,
+    "sharpe": -14.551166654342794,
+    "profit_factor": 0.10074069662749453,
+    "win_rate": 13.684210526315791
+  }
+}
