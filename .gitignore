@@ -201,3 +201,4 @@ freqforge-canary/config/config*.json
 
 # Optimization runtime logs
 **/optimization_log.txt
+.ssh_local/
