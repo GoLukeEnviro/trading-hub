@@ -178,3 +178,26 @@ Thumbs.db
 !backtests/**/*.py
 !backtests/**/*.md
 !backtests/**/*.sh
+
+# ============================================================
+# ADDITIONAL IGNORES — Secure Git Cleanup 2026-05-16
+# ============================================================
+
+# Freqtrade bot configs with secrets (user_data path variant)
+# The config/ path rule above misses these — they contain jwt_secret_key + password
+freqtrade/bots/*/user_data/config.json
+freqtrade/bots/*/user_data/config*.json
+
+# Canary/standalone bot configs with secrets
+freqforge-canary/config/config*.json
+
+# Large research data files (CSV equity curves, OHLCV data)
+**/research/data/*.csv
+**/research/data/*.json
+**/research/optuna_results/*_equity_curve.csv
+
+# Backup timestamp files
+*.backup-*
+
+# Optimization runtime logs
+**/optimization_log.txt
