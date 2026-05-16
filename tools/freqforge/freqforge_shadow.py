@@ -427,6 +427,8 @@ def run_poll() -> Dict:
 
     # Poll each bot
     for bot_key, bot in BOTS.items():
+        if not bot.active:
+            continue
         try:
             n = poll_bot(bot_key, bot, state, signal_deck, summary["events"])
             summary["new_events"] += n

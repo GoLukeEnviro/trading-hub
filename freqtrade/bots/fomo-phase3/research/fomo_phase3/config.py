@@ -38,12 +38,12 @@ class WalkForwardFold:
 @dataclass(frozen=True)
 class StrategyConfig:
     # Signal thresholds
-    fomo_entry: float = 1.8
+    fomo_entry: float = 2.2
     fomo_exit: float = 0.3
     roc_long: float = 0.0012
     roc_short: float = -0.0012
     trend_min: float = 0.1
-    noise_atr_pct: float = 0.30
+    noise_atr_pct: float = 0.55
     oi_price_alignment_thresh: float = 0.15
     funding_residual_thresh_long: float = 0.0004
     funding_residual_thresh_short: float = -0.0004

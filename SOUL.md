@@ -50,4 +50,4 @@ Versioniert unter `github.com/GoLukeEnviro/trading-hub` (private).
 - Repo: `github.com/GoLukeEnviro/trading-hub` (private)
 - Branch: `main`
 - .gitignore: Secrets, Configs mit jwt keys, venvs, DBs, Docker images, backups
-- 43 Strategie-Files versioniert, Nested repos ignoriert
+- 49 Strategie-Files versioniert (Stand 2026-05-14), Nested repos ignoriert

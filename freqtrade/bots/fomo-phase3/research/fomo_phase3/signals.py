@@ -1,6 +1,6 @@
 """
 Signal engine — vectorized indicator computation for FOMO strategy.
-v2-derived. Pure pandas vectorized operations.
+v5: FOMO = sqrt(vol_surge × oi_surge) — geometric mean of surges over 30-bar window.
 """
 
 from __future__ import annotations
@@ -11,40 +11,37 @@ import pandas as pd
 from fomo_phase3.config import StrategyConfig
 
 
-def zscore(series: pd.Series, window: int) -> pd.Series:
-    mean = series.rolling(window).mean()
-    std = series.rolling(window).std()
-    return (series - mean) / std.replace(0, np.nan)
-
-
 def compute_signals(df: pd.DataFrame, cfg: StrategyConfig) -> pd.DataFrame:
     out = df.copy()
 
     prev_close = out["close"].shift(1)
-    tr = pd.concat(
-        [
-            out["high"] - out["low"],
-            (out["high"] - prev_close).abs(),
-            (out["low"] - prev_close).abs(),
-        ],
-        axis=1,
-    ).max(axis=1)
+    tr = pd.concat([
+        out["high"] - out["low"],
+        (out["high"] - prev_close).abs(),
+        (out["low"] - prev_close).abs(),
+    ], axis=1).max(axis=1)
 
     out["atr"] = tr.ewm(alpha=1 / cfg.atr_period, adjust=False).mean()
-    out["z_vol"] = zscore(out["volume"], cfg.z_window)
-    out["oi_delta"] = out["oi"].pct_change()
-    out["z_oi"] = zscore(out["oi_delta"], cfg.z_window)
-    out["fomo"] = (out["z_vol"] * 0.6) + (out["z_oi"] * 0.4)
+
+    # ── FOMO v5: Geometric Mean of Surges ──
+    vol_surge = out["volume"] / out["volume"].rolling(30).mean().replace(0, np.nan)
+    oi_surge = out["oi"] / out["oi"].rolling(30).mean().replace(0, np.nan)
+    out["fomo"] = (vol_surge * oi_surge) ** 0.5
+
     out["roc3"] = out["close"].pct_change(3)
 
     ema_fast = out["close"].ewm(span=cfg.ema_fast, adjust=False).mean()
     ema_slow = out["close"].ewm(span=cfg.ema_slow, adjust=False).mean()
     out["trend_slope"] = (ema_fast - ema_slow) / out["atr"].replace(0, np.nan)
 
+    # EMA(21) für Breakout-Filter
+    out["ema21"] = out["close"].ewm(span=21, adjust=False).mean()
+
     out["price_delta"] = out["close"].pct_change()
-    out["oi_price_alignment"] = out["oi_delta"].rolling(cfg.oi_alignment_window).corr(
-        out["price_delta"]
-    )
+    out["oi_delta"] = out["oi"].pct_change()
+    out["oi_price_alignment"] = out["oi_delta"].rolling(
+        cfg.oi_alignment_window
+    ).corr(out["price_delta"])
 
     funding_mean = out["funding_rate"].rolling(cfg.funding_residual_window).mean()
     out["funding_residual"] = out["funding_rate"] - funding_mean
@@ -58,13 +55,8 @@ def add_entry_signals(df: pd.DataFrame, cfg: StrategyConfig) -> pd.DataFrame:
     out = df.copy()
 
     required_signal_cols = [
-        "atr",
-        "fomo",
-        "roc3",
-        "trend_slope",
-        "oi_price_alignment",
-        "funding_residual",
-        "movement",
+        "atr", "fomo", "roc3", "trend_slope",
+        "oi_price_alignment", "funding_residual", "movement", "ema21",
     ]
 
     valid = out[required_signal_cols].notna().all(axis=1)
@@ -76,6 +68,7 @@ def add_entry_signals(df: pd.DataFrame, cfg: StrategyConfig) -> pd.DataFrame:
         & (out["fomo"] > cfg.fomo_entry)
         & (out["roc3"] > cfg.roc_long)
         & (out["trend_slope"] >= cfg.trend_min)
+        & (out["close"] > out["ema21"])
         & (out["oi_price_alignment"] >= cfg.oi_price_alignment_thresh)
         & (out["funding_residual"] <= cfg.funding_residual_thresh_long)
     )
@@ -85,6 +78,7 @@ def add_entry_signals(df: pd.DataFrame, cfg: StrategyConfig) -> pd.DataFrame:
         & (out["fomo"] > cfg.fomo_entry)
         & (out["roc3"] < cfg.roc_short)
         & (out["trend_slope"] <= -cfg.trend_min)
+        & (out["close"] < out["ema21"])
         & (out["oi_price_alignment"] <= -cfg.oi_price_alignment_thresh)
         & (out["funding_residual"] >= cfg.funding_residual_thresh_short)
     )

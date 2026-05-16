@@ -1,0 +1,25 @@
+networks:
+  freqai-rebel-net:
+    driver: bridge
+
+volumes:
+  freqai-rebel-data:
+    external: true
+
+services:
+  freqai-rebel:
+    image: freqtradeorg/freqtrade:2026.3_freqai
+    container_name: freqai-rebel
+    restart: unless-stopped
+    networks:
+      - freqai-rebel-net
+    ports:
+      - "8087:8080"
+    volumes:
+      - freqai-rebel-data:/freqtrade/user_data
+    command: >
+      trade
+      --config /freqtrade/user_data/config.json
+      --strategy RebelLiquidation
+      --freqaimodel RebelXGBoostClassifier
+      --logfile /freqtrade/user_data/logs/freqai-rebel.log
