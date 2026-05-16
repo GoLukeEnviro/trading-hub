@@ -14,7 +14,7 @@ services:
     networks:
       - freqai-rebel-net
     ports:
-      - "8087:8080"
+      - "127.0.0.1:8087:8080"
     volumes:
       - freqai-rebel-data:/freqtrade/user_data
     command: >
