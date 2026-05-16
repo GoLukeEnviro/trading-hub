@@ -31,7 +31,7 @@ import freqtrade.vendor.qtpylib.indicators as qtpylib
 from pandas import DataFrame
 
 sys.path.insert(0, "/freqtrade/shared")
-from primo_signal import primo_gate_allows
+from primo_signal import primo_gate_allows, load_signal_state, normalize_pair as _norm_pair
 from fleetguard_v1 import FleetGuard, FleetGuardConfig
 
 logger = logging.getLogger(__name__)
@@ -96,6 +96,11 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
     atr_sl_range = DecimalParameter(2.0, 4.0, default=2.8, space="sell", optimize=True)
     atr_tp_trend = DecimalParameter(1.0, 2.5, default=1.8, space="sell", optimize=True)
 
+    # Dry-run override: when True and running in dry_run mode, bypasses the
+    # conservative primo gate and uses a lower confidence threshold instead.
+    dry_run_override = True
+    dry_run_confidence_threshold = 0.20
+
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         # FIX-1: Per-pair regime history — no cross-pair contamination
@@ -118,6 +123,25 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
         if len(history) == 2 and history[0] == history[1]:
             return history[1]
         return history[0] if history else "unknown"
+
+    def _dry_run_gate_allows(self, pair: str, side: str) -> bool:
+        """Override gate for dry-run mode: allow if raw confidence >= threshold.
+
+        Reads the signal state directly and checks confidence, bypassing the
+        conservative verdict/bias system that blocks all WATCH_ONLY entries.
+        """
+        state = load_signal_state()
+        if not state:
+            return True
+        pair_data = (state.get("pairs") or {}).get(_norm_pair(pair))
+        if not isinstance(pair_data, dict):
+            return True
+        confidence = float(pair_data.get("confidence", 0.0))
+        if confidence >= self.dry_run_confidence_threshold:
+            return True
+        logger.debug(f"dry_run_gate: {pair} {side} blocked — "
+                     f"confidence {confidence:.2f} < {self.dry_run_confidence_threshold}")
+        return False
 
     def informative_pairs(self):
         pairs = self.dp.current_whitelist()
@@ -258,8 +282,14 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         ema200_htf = dataframe[f'ema200_{self.informative_timeframe}']
         pair = metadata.get("pair")
-        long_gate = primo_gate_allows(pair, "long")
-        short_gate = primo_gate_allows(pair, "short")
+        is_dry_run = self.config.get('dry_run', False)
+
+        if self.dry_run_override and is_dry_run:
+            long_gate = self._dry_run_gate_allows(pair, "long")
+            short_gate = self._dry_run_gate_allows(pair, "short")
+        else:
+            long_gate = primo_gate_allows(pair, "long")
+            short_gate = primo_gate_allows(pair, "short")
 
         # --- Strategy-native LONG conditions ---
         trend_long = (

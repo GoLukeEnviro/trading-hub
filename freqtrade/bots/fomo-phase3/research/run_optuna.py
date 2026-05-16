@@ -10,6 +10,7 @@ Min trades gate: 30. Max drawdown constraint: 12%.
 import json
 import math
 import os
+import time
 import warnings
 
 import numpy as np
@@ -22,14 +23,17 @@ from fomo_phase3.backtest import backtest
 from fomo_phase3.config import StrategyConfig
 from fomo_phase3.metrics import BacktestResult
 
-# ── Paths ──────────────────────────────────────────────────────────────────
+# ── Config ──────────────────────────────────────────────────────────────────
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "btc_5m.feather")
 OUT_DIR = os.path.join(os.path.dirname(__file__), "optuna_results")
 os.makedirs(OUT_DIR, exist_ok=True)
 
+# Train on first 50K bars (~173 days at 5m) for speed
 # OOS: last 25,000 bars (~87 days at 5m)
+TRAIN_BARS = 50_000
 OOS_BARS = 25_000
 MIN_TRADES = 30
+N_TRIALS = 20
 
 
 # ── Data ────────────────────────────────────────────────────────────────────
@@ -41,12 +45,12 @@ def load_data() -> pd.DataFrame:
     print(f"[DATA] {n:,} rows, {df['timestamp'].iloc[0]} to {df['timestamp'].iloc[-1]}")
 
     required = ["timestamp", "open", "high", "low", "close", "volume",
-                 "open_interest", "funding_rate"]
+                 "oi", "funding_rate"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"Missing columns: {missing}")
     print(f"[DATA] Columns: {list(df.columns)}")
-    print(f"[DATA] OI range: {df['open_interest'].min():.0f} to {df['open_interest'].max():.0f}")
+    print(f"[DATA] OI range: {df['oi'].min():.0f} to {df['oi'].max():.0f}")
     print(f"[DATA] funding range: {df['funding_rate'].min():.8f} to {df['funding_rate'].max():.8f}")
     return df
 
@@ -91,13 +95,13 @@ def objective(trial: optuna.Trial, df: pd.DataFrame) -> float:
         tp1_atr_mult=trial.suggest_float("tp1_atr_mult", 1.0, 6.0),
         tp2_atr_mult=trial.suggest_float("tp2_atr_mult", 2.0, 8.0),
         tp1_fraction=trial.suggest_float("tp1_fraction", 0.3, 0.8),
-        max_bars=trial.suggest_int("max_bars", 12, 96),
+        max_bars=trial.suggest_int("max_bars", 12, 48),
         # FOMO exit
         fomo_exit=trial.suggest_float("fomo_exit", 0.0, 1.0),
     )
 
     try:
-        train_end = len(df) - OOS_BARS
+        train_end = TRAIN_BARS
         train_df = df.iloc[:train_end].reset_index(drop=True)
         r = backtest(train_df, cfg, initial_equity=10_000.0)
         return score_result(r)
@@ -114,11 +118,12 @@ def main():
     print("=" * 60)
 
     df = load_data()
-    n_total = len(df)
-    n_train = n_total - OOS_BARS
+
+    # For backtesting: use TRAIN_BARS for training, last OOS_BARS for eval
+    n_train = TRAIN_BARS
     print(f"\n[TRAIN] {n_train:,} rows ({df['timestamp'].iloc[0]} to "
           f"{df['timestamp'].iloc[n_train-1]})")
-    print(f"[OOS]   {OOS_BARS:,} rows ({df['timestamp'].iloc[n_train]} to "
+    print(f"[OOS]   {OOS_BARS:,} rows ({df['timestamp'].iloc[-OOS_BARS]} to "
           f"{df['timestamp'].iloc[-1]})")
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -129,16 +134,24 @@ def main():
         study_name="fomo_phase3_v1_5m",
     )
 
-    n_trials = 100
-    print(f"\n[OPTUNA] Starting {n_trials} trials on 5m data...")
+    n_trials = N_TRIALS
+    print(f"\n[OPTUNA] Starting {n_trials} trials on {TRAIN_BARS:,} training bars (5m)...")
 
+    progress_path = os.path.join(OUT_DIR, "optuna_progress.log")
+    t_start = time.time()
     for i in range(n_trials):
         trial = study.ask()
         val = objective(trial, df)
         study.tell(trial, val)
-        if (i + 1) % 10 == 0 or i == 0:
+        if (i + 1) % 5 == 0 or i == 0:
+            elapsed = time.time() - t_start
             best = study.best_trial
-            print(f"  Trial {i+1}/{n_trials} — best: {best.value:.2f} (trial #{best.number})")
+            rate = (i + 1) / elapsed
+            eta = (n_trials - i - 1) / rate if rate > 0 else 0
+            msg = f"  Trial {i+1}/{n_trials} — best: {best.value:.2f} (#{best.number}) — {elapsed:.0f}s elapsed, ~{eta:.0f}s remain"
+            print(msg, flush=True)
+            with open(progress_path, "a") as pf:
+                pf.write(msg + "\n")
 
     best = study.best_trial
     print("\n" + "=" * 60)
@@ -153,7 +166,7 @@ def main():
     best_cfg = StrategyConfig(**best.params)
 
     print("\n[EVAL] Training set backtest...")
-    train_df = df.iloc[:n_train].reset_index(drop=True)
+    train_df = df.iloc[:TRAIN_BARS].reset_index(drop=True)
     result_train = backtest(train_df, best_cfg, initial_equity=10_000.0)
 
     print("[EVAL] OOS backtest...")

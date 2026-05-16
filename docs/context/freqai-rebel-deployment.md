@@ -56,15 +56,17 @@ Runtime data excluded via `.gitignore`:
 
 ## Known Issues
 
-1. **STOPPED after startup**: Normal for FreqAI on first cycle. Waits for next 5m candle to trigger training.
+1. **STOPPED after startup**: Current runtime remains in `STOPPED` heartbeats after the futures data download phase.
 2. **Host API unreachable from Hermes**: Hermes runs in its own container, `127.0.0.1:8087` doesn't route. Use `docker exec freqai-rebel curl ...` instead.
 3. **No live trading**: dry_run=true enforced. No exchange credentials configured.
 4. **Spot->Futures migration (2026-05-14)**: Originally deployed as spot. Patched to futures (isolated margin, swap, `:USDT` pair format) to match the rest of the fleet. Old spot data purged and re-downloaded as futures data.
+5. **Training not yet proven (verified 2026-05-14)**: No fatal traceback in recent logs, API ping returns `pong`, futures data files exist, but no fit/prediction logs were observed. Current model artifacts under `/freqtrade/user_data/models/rebel-liquidation-v1/` contain only `run_params.json`. Active volume config has `initial_state = None`.
 
 ## Next Steps
 
-1. Wait for first FreqAI training cycle to complete (~5-10 min after next candle)
-2. Verify model artifacts in `/freqtrade/user_data/models/rebel-liquidation-v1/`
-3. Monitor first predictions and compare signal quality
-4. Run controlled backtests before any live trading changes
-5. Rotate dev API credentials before exposure beyond localhost/Tailscale
+1. Determine whether `initial_state` should be explicitly set to `running` for this bot before expecting live FreqAI training
+2. Re-verify logs after the next controlled restart or config change
+3. Verify model artifacts in `/freqtrade/user_data/models/rebel-liquidation-v1/`
+4. Monitor first predictions and compare signal quality
+5. Run controlled backtests before any live trading changes
+6. Rotate dev API credentials before exposure beyond localhost/Tailscale

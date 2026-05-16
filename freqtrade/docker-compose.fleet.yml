@@ -101,6 +101,38 @@ services:
       - "hermes.version=v7-v04-integration"
       - "hermes.test-candidate=true"
 
+  # ---------------------------------------------------------------------------
+  # BOT 4 — FreqForge Canary (RSI replacement, spot, derived from FreqForge)
+  # Deployed: 2026-05-16
+  # ---------------------------------------------------------------------------
+  freqforge-canary:
+    image: freqtradeorg/freqtrade:stable
+    container_name: freqtrade-freqforge-canary
+    restart: unless-stopped
+    networks:
+      - ki-fabrik
+    ports:
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - /home/hermes/projects/trading/freqforge-canary/config:/freqtrade/config:ro
+      - /home/hermes/projects/trading/freqforge-canary/user_data:/freqtrade/user_data:rw
+      - /home/hermes/projects/trading/freqtrade/shared:/freqtrade/shared:rw
+      - /home/hermes/projects/trading/freqtrade/logs:/freqtrade/logs:rw
+    command: >
+      trade
+      --config /freqtrade/config/config_canary_dryrun.json
+      --strategy FreqForge_Override
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      - "hermes.bot=freqforge-canary"
+      - "hermes.phase=fleet"
+      - "hermes.exchange=bitget"
+      - "hermes.derived-from=freqforge"
+
 # =============================================================================
 # Netzwerk (extern — existiert bereits auf Host)
 # =============================================================================

@@ -18,8 +18,8 @@ The repo contains strategies, tooling, documentation, and infrastructure definit
 | Regime-Hybrid | `freqtrade-regime-hybrid` | 8085 | Regime-switching strategy bot |
 | Momentum | `freqtrade-momentum` | 8084 | Momentum strategy bot |
 | RSI | `freqtrade-rsi` | 8081 | RSI mean-reversion bot |
-| MVS | `freqtrade-mvs` | 8087 | Minimal viable strategy bot |
-| FOMO Phase 3 | — (stopped) | — | FOMO research bot |
+| MVS | `freqtrade-mvs` | — | NOT_DEPLOYED — strategy file preserved, no active container |
+| FOMO Phase 3 | — | NOT_DEPLOYED — research code preserved under freqtrade/bots/fomo-phase3, no active container |
 | Webserver | `freqtrade-webserver` | — | Freqtrade UI |
 | Hermes Agent | `hermes-agent` | 8642 | Meta-orchestrator |
 | Honcho | `honcho-api` | 8000 | Persistent memory |
@@ -29,7 +29,7 @@ All bots: dry_run=True, exchange=bitget, no real credentials.
 
 ## What This Repo Tracks
 
-- **Strategy source files** — 43 `.py` strategy files across all bots (protected by .gitignore negation rules)
+- **Strategy source files** — 49 `.py` strategy files across all bots (protected by .gitignore negation rules) (Stand 2026-05-14)
 - **Freqtrade fleet compose** — `freqtrade/docker-compose.fleet.yml`
 - **Signal infrastructure** — `docker-compose.ai-hedge-fund-crypto.yml`
 - **FreqForge Shadow Evaluator** — `tools/freqforge/` (passive observer)
@@ -37,7 +37,7 @@ All bots: dry_run=True, exchange=bitget, no real credentials.
 - **Bridge & Primo code** — `bridge/`, `primo/`
 - **Backtest tooling** — `backtests/` (scripts, benchmarks, lab strategies)
 - **FOMO Phase 3 research** — `freqtrade/bots/fomo-phase3/research/` (11 modules, 89/92 tests pass)
-- **Documentation** — `docs/context/` (40+ phase reports), `docs/git-hygiene.md`
+- **Documentation** — `docs/context/` (49 phase reports as of 2026-05-14), `docs/git-hygiene.md`
 - **Project identity** — `SOUL.md`, `AGENTS.md`, `ORCHESTRATOR_CHARTER.md`
 
 ## What This Repo Ignores

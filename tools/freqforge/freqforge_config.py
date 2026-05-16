@@ -59,6 +59,15 @@ BOTS: Dict[str, BotDef] = {
         port=8086,
         timeframe="15m",
     ),
+    "freqforge-canary": BotDef(
+        name="FreqForge-Canary",
+        container="freqtrade-freqforge-canary",
+        db_path="/freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite",
+        config_path="/freqtrade/config/config_canary_dryrun.json",
+        strategy="FreqForge_Override",
+        port=8081,
+        timeframe="15m",
+    ),
     "regime-hybrid": BotDef(
         name="Regime-Hybrid",
         container="freqtrade-regime-hybrid",
@@ -85,6 +94,7 @@ BOTS: Dict[str, BotDef] = {
         strategy="RSIMeanReversionV11",
         port=8081,
         timeframe="15m",
+        active=False,
     ),
 }
 

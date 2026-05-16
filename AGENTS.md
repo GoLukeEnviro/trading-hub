@@ -140,15 +140,15 @@ configs, or container state. no_action_taken=True + shadow_mode=True in every ev
 | FreqForge | `freqtrade-freqforge` | 8086 | FreqForge_Override | bitget | dry-run |
 | Regime-Hybrid | `freqtrade-regime-hybrid` | 8085 | RegimeSwitchingHybrid_v7_v04_Integration | bitget | futures |
 | Momentum | `freqtrade-momentum` | 8084 | MomentumBG15_v1 | bitget | futures |
-| RSI | `freqtrade-rsi` | 8081 | SimpleRSIOnly_v1 | bitget | futures |
-| MVS | `freqtrade-mvs` | 8087 | MinimalViableStrategy_v1 | bitget | futures |
+| RSI | `freqtrade-rsi` | 8081 | SimpleRSIOnly_v1 | bitget | futures (QUARANTINE — strategy dead for 15m, replacement pending) |
+| MVS | `freqtrade-mvs` | — | NOT_DEPLOYED — strategy file preserved, no active container | bitget | — |
 | Webserver | `freqtrade-webserver` | — | — | — | UI only |
 
 **Stopped / Staged:**
 
 | Bot | Port | Strategy | Status |
 |-----|------|----------|--------|
-| FOMO Phase 3 | 8087 | FOMO_Phase3_v0 | stopped, initial_state=stopped |
+| FOMO Phase 3 | — | NOT_DEPLOYED — research code preserved, no active container | — | — |
 
 **Fleet Compose:** `freqtrade/docker-compose.fleet.yml`
 
@@ -166,7 +166,7 @@ RegimeSwitchingHybrid v2 → v3_Final → v4_ATR → v5_ATRv2 → v6_Stable → 
 ### Honcho — Persistent Memory
 
 **Containers:** honcho-api, honcho-database (PostgreSQL), honcho-redis, honcho-ollama, honcho-deriver
-**Status:** Active. writeFrequency=session. DB ~2,000 docs.
+**Status:** Active. writeFrequency=session. DB ~3,500 docs as of 2026-05-14 (exact audit: 3,509).
 **Models:** qwen3-coder:480b, gpt-oss:120b, deepseek-v3.1:671b
 **Deriver:** MQG v2.0.0 via ro bind mount
 **Watchdog:** Hourly cron alerts Telegram
@@ -199,7 +199,7 @@ RegimeSwitchingHybrid v2 → v3_Final → v4_ATR → v5_ATRv2 → v6_Stable → 
 ├── README.md                          — repo overview
 ├── .gitignore                         — secret/binary/runtime exclusions
 ├── docs/
-│   ├── context/                       — living documentation (40+ reports)
+│   ├── context/                       — living documentation (49 reports as of 2026-05-14)
 │   ├── git-hygiene.md                 — what is tracked and why
 │   └── hermes-integration-plan.md     — integration reference
 ├── orchestrator/

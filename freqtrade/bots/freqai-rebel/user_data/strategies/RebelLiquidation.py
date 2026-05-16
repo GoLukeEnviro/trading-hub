@@ -60,7 +60,7 @@ class RebelLiquidation(IStrategy):
     def set_freqai_targets(self, dataframe, **kwargs):
         self.freqai.class_names = ['down', 'up']
         dataframe['&s-up_or_down'] = np.where(
-            dataframe['close'].shift(-12) > dataframe['close'] * 1.005,
+            dataframe['close'].shift(-12) > dataframe['close'] * 1.0005,
             'up', 'down'
         )
         return dataframe

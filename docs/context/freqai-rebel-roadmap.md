@@ -478,3 +478,64 @@ Final clean diff contains ONLY the intended changes:
 - early_stopping_rounds: (new) 20
 
 Container restarted and verified with corrected config.
+
+### Phase 6A — Minimal Target Threshold Redesign (2026-05-14)
+
+#### Change
+- Target threshold: `1.005` (+0.5% in 1h) → `1.002` (+0.2% in 1h)
+- FreqAI identifier: `rebel-liquidation-v1-wrapper-n80-es20-t002`
+
+#### Label Distribution Improvement
+```
+              1.005 (before)         1.002 (after)
+BTC:    down=89.7% up=10.3%    down=73.8% up=26.2%
+ETH:    down=86.3% up=13.7%    down=70.1% up=29.9%
+```
+
+Imbalance improved from ~90:10 to ~74:26.
+
+#### Verification
+- Container: RUNNING, port 8087
+- Training: BTC early-stops ~iter 22, ETH ~iter 26
+- Prediction: 118KB historic_predictions.pkl, growing
+- do_predict=1 signals appearing
+- No errors, no KeyError, no Traceback
+
+#### Explicitly Not Changed
+- No feature changes
+- No can_short
+- No entry/exit logic change
+- DI_threshold: 0.9 (unchanged)
+- train_period_days: 30 (unchanged)
+- n_estimators: 80, early_stopping_rounds: 20 (unchanged)
+
+### Phase 6A — Minimal Target Threshold Redesign (2026-05-14)
+
+#### Change
+- Target threshold: 1.005 (+0.5% in 1h) -> 1.002 (+0.2% in 1h)
+- FreqAI identifier: rebel-liquidation-v1-wrapper-n80-es20-t002
+
+#### Label Distribution Improvement
+BTC: down=89.7% up=10.3% -> down=73.8% up=26.2%
+ETH: down=86.3% up=13.7% -> down=70.1% up=29.9%
+Imbalance improved from ~90:10 to ~74:26.
+
+#### Verification
+- Container RUNNING, port 8087
+- Training: BTC early-stops ~iter 22, ETH ~iter 26
+- Prediction: 118KB historic_predictions growing
+- do_predict=1 signals appearing, no errors
+
+#### Explicitly Not Changed
+- No features, no can_short, no entry/exit logic
+- DI_threshold=0.9, train_period=30, n=80, es=20 all unchanged
+
+
+### Phase 6C — DI Threshold Sensitivity (2026-05-14)
+
+Tested DI=0.5 and DI=0.0 with target 1.002.
+DI=0.5: 0 trades (blocks everything)
+DI=0.0: 4 trades (identical to DI=0.9)
+DI_threshold is NOT the bottleneck. Model predicts mostly "down" regardless.
+Strategy entry logic is the actual gate. DI=0.9 restored as safe default.
+
