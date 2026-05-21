@@ -81,6 +81,7 @@ backups/
 backup/
 **/*.bak
 **/*.bak-*
+**/*.bak_*
 *.backup.*
 *.zip
 *.tar
