@@ -12,6 +12,7 @@ import json
 import os
 from datetime import datetime
 from typing import Optional
+from pathlib import Path
 
 import talib.abstract as ta
 from freqtrade.strategy import IStrategy, IntParameter, DecimalParameter, merge_informative_pair
@@ -20,6 +21,7 @@ from pandas import DataFrame
 
 sys.path.insert(0, "/freqtrade/shared")
 from primo_signal import primo_gate_allows
+from fleet_risk_manager import FleetRiskManager
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +31,7 @@ class FreqForge_Override(IStrategy):
     INTERFACE_VERSION = 3
     timeframe = "15m"
     informative_timeframe = "1h"
-    can_short = False
+    can_short = True  # PAPER-TRADING OVERRIDE (2026-05-17) — siehe SOUL.md
 
     minimal_roi = {"0": 0.085, "45": 0.045, "90": 0.02, "180": 0}
     stoploss = -0.09
@@ -59,6 +61,8 @@ class FreqForge_Override(IStrategy):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         self._regime_histories: dict = {}
+        self.risk_manager = FleetRiskManager()
+        self._fleet_source = str(config.get("bot_name") or self.__class__.__name__)
 
     def _get_stable_regime(self, pair: str, current_regime: str) -> str:
         """2-cycle hysteresis per pair. Regime shifts only after 2 consecutive same candles."""
@@ -71,6 +75,21 @@ class FreqForge_Override(IStrategy):
         if len(history) == 2 and history[0] == history[1]:
             return history[1]
         return history[0] if history else "unknown"
+
+    def bot_loop_start(self, current_time: datetime, **kwargs) -> None:
+        try:
+            from freqtrade.persistence import Trade
+            source = self._fleet_source
+            open_trades = list(Trade.get_trades_proxy(is_open=True))
+            closed_trades = list(Trade.get_trades_proxy(is_open=False))
+            self.risk_manager.sync_trade_state(source=source, open_trades=open_trades, closed_trades=closed_trades)
+            if hasattr(self, "wallets") and self.wallets:
+                try:
+                    self.risk_manager.update_source_equity(source, float(self.wallets.get_total_stake_amount()))
+                except Exception as wallet_err:
+                    logger.debug(f"FleetRisk source equity skipped for {source}: {wallet_err}")
+        except Exception as exc:
+            logger.debug(f"FleetRisk sync skipped for {self._fleet_source}: {exc}")
 
     def informative_pairs(self):
         pairs = self.dp.current_whitelist()
@@ -163,6 +182,26 @@ class FreqForge_Override(IStrategy):
         vol = (dataframe.loc[breakout_sell_mask, 'volume_ratio'] / 1.5).clip(0, 1)
         dataframe.loc[breakout_sell_mask, 'v04_confidence'] = (0.5 * squeeze + 0.5 * vol).round(4)
 
+        # AI SIGNAL OVERRIDE: Inject primo bridge confidence into v04 columns
+        # Enables execution override in populate_entry_trend for high-conviction AI signals
+        self._inject_ai_signal_override(dataframe, pair)
+
+    def _inject_ai_signal_override(self, dataframe: DataFrame, pair: str) -> None:
+        """DISABLED 2026-05-21 (recovery safety repair).
+
+        Previously: overrode v04 columns with raw AI signal if confidence >= 0.80,
+        bypassing canonical RiskGuard gate. This is unsafe because it forces
+        entries regardless of the pipeline's ACCEPTED/REJECTED verdict.
+
+        Signal overrides must go through trading_pipeline.py -> fleet_risk_manager.py
+        using CONFIDENCE_MIN = 0.65, not injected directly into strategy columns.
+
+        Re-enable only after: (1) canonical gate integration, (2) backtest validation.
+        """
+        # Intentional no-op. AI signals flow through the pipeline correctly
+        # without this direct column override.
+        pass
+
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         if not self.dp:
             return dataframe
@@ -209,7 +248,14 @@ class FreqForge_Override(IStrategy):
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         ema200_htf = dataframe[f'ema200_{self.informative_timeframe}']
         pair = metadata.get("pair")
-        long_gate = primo_gate_allows(pair, "long")
+        long_risk_allowed, long_risk_reason = self.risk_manager.check_entry_allowed(pair, "long")
+        short_risk_allowed, short_risk_reason = self.risk_manager.check_entry_allowed(pair, "short")
+        if not long_risk_allowed:
+            logger.debug(f"[FleetRisk] LONG gate reduced for {pair}: {long_risk_reason}")
+        if not short_risk_allowed:
+            logger.debug(f"[FleetRisk] SHORT gate reduced for {pair}: {short_risk_reason}")
+        long_gate = primo_gate_allows(pair, "long") and long_risk_allowed
+        short_gate = primo_gate_allows(pair, "short") and short_risk_allowed
 
         # --- Strategy-native LONG conditions ---
         trend_long = (
@@ -240,6 +286,41 @@ class FreqForge_Override(IStrategy):
         dataframe.loc[long_entries, 'enter_tag'] = 'range_reversion_long'
         dataframe.loc[trend_long & ~long_override_mask, 'enter_tag'] = 'trend_pullback_long'
 
+        # --- SHORT ENTRY LOGIC ---
+        trend_short = (
+            (dataframe['adx_rel'] > self.adx_rel_threshold.value) &
+            (dataframe['close'] < ema200_htf) &
+            (dataframe['close'] < dataframe['ema200']) &
+            (dataframe['close'] > dataframe['ema50']) &
+            (dataframe['rsi'] > 50) &
+            (dataframe['volume'] > dataframe['volume_mean']) &
+            short_gate
+        )
+
+        range_short = (
+            (dataframe['adx_rel'] <= self.adx_rel_threshold.value) &
+            (dataframe['rsi'] > (100 - self.rsi_oversold.value)) &
+            (dataframe['close'] > dataframe['bb_upperband']) &
+            (dataframe['volume'] > dataframe['volume_mean']) &
+            short_gate
+        )
+
+        # v0.4 SIGNAL OVERRIDE: DISABLED 2026-05-21 (recovery safety repair)
+        # Previously: confidence >= 0.80 forced short regardless of TA analysis.
+        # Signal overrides must go through canonical RiskGuard policy, not bypass TA here.
+        # signal_override_short = (
+        #     (dataframe['v04_action'] == 'SELL') &
+        #     (dataframe['v04_confidence'] >= 0.80) &
+        #     short_gate
+        # )
+
+        # Native short entries only (no AI signal override)
+        short_entries = trend_short | range_short
+
+        dataframe.loc[short_entries, 'enter_short'] = 1
+        dataframe.loc[trend_short, 'enter_tag'] = 'trend_pullback_short'
+        dataframe.loc[range_short, 'enter_tag'] = 'range_reversion_short'
+
         return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
@@ -253,6 +334,14 @@ class FreqForge_Override(IStrategy):
         PASSIVES SHADOW-LOGGING — zeichnet jeden Trade mit Marktkontext auf.
         Gibt immer True zurueck (kein Eingriff in Trades).
         """
+        risk_allowed, risk_reason = self.risk_manager.check_entry_allowed(pair, side)
+        if not risk_allowed:
+            logger.info(f"[FleetRisk] Entry blockiert: {pair} {side} -> {risk_reason}")
+            return False
+        if not primo_gate_allows(pair, side):
+            logger.info(f"[PrimoGate] Entry blockiert: {pair} {side}")
+            return False
+
         log_entry = {
             "timestamp": current_time.isoformat(),
             "pair": pair,
@@ -286,12 +375,23 @@ class FreqForge_Override(IStrategy):
         except Exception as e:
             log_entry["context_error"] = str(e)
 
+        log_entry["fleet_risk_level"] = self.risk_manager.get_drawdown_level()
+        log_entry["fleet_risk_reason"] = risk_reason
+        try:
+            cluster = self.risk_manager._get_cluster(pair)
+            stats = self.risk_manager.get_cluster_stats(cluster)
+            log_entry["fleet_risk_cluster"] = cluster
+            log_entry["fleet_cluster_winrate"] = round(float(stats.get("winrate", 0.5)), 4)
+            log_entry["fleet_cluster_pnl"] = round(float(stats.get("pnl", 0.0)), 4)
+        except Exception as exc:
+            log_entry["fleet_risk_context_error"] = str(exc)
+
         # JSONL-Log schreiben
         try:
             log_path = "/freqtrade/logs/freqforge_shadow.log"
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
             with open(log_path, "a") as f:
-                f.write(json.dumps(log_entry) + "\n")
+                f.write(json.dumps(log_entry) + "\\n")
         except Exception as e:
             logger.error(f"FreqForge Shadow log write failed: {e}")
 
