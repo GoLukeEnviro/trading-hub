@@ -54,6 +54,16 @@ outputs/
 tmp/
 temp/
 
+# ---- Local cleanup / staging artifacts ----
+.hermes/
+docs/context/git-cleanup-snapshots/
+docs/context/memory-migration-staging/
+events/
+proposals/
+shared/hermes_signal.json
+orchestrator/config/cron_jobs_backup.json
+orchestrator/backups/
+
 # ---- Databases / Dumps / Binary Artifacts ----
 *.sqlite
 *.sqlite3
@@ -69,6 +79,9 @@ temp/
 # ---- Archives / Backups / Large Artifacts ----
 backups/
 backup/
+**/*.bak
+**/*.bak-*
+*.backup.*
 *.zip
 *.tar
 *.tar.gz
@@ -102,6 +115,16 @@ weatherhermes_backup/
 
 # Freqtrade shared downloads (exchange data)
 freqtrade/shared/downloads/
+freqtrade/shared/*state*.json
+freqtrade/shared/fleet_correlation_matrix.json
+freqtrade/shared/*.lock
+
+# Freqtrade bot runtime state and signal archives
+freqtrade/bots/*/user_data/primo_signal_state.json
+freqtrade/bots/*/user_data/signals/
+freqtrade/bots/regime-hybrid/config/research/automation/latest_*.json
+freqtrade/bots/regime-hybrid/config/research/automation/*_events.jsonl
+freqtrade/bots/regime-hybrid/config/research/automation/*_state.json
 
 # Orchestrator runtime state (snapshots, large JSON)
 orchestrator/state/
@@ -198,6 +221,7 @@ freqforge-canary/config/config*.json
 
 # Backup timestamp files
 *.backup-*
+**/*.tmp-*
 
 # Optimization runtime logs
 **/optimization_log.txt

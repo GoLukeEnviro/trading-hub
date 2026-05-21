@@ -1,269 +1,99 @@
 # AGENTS.md — Trading Hub System Architecture
 
-## System Architecture
+## Purpose
 
-Autonomous trading orchestration system with clear role separation.
-All components run as Docker containers on a single host.
-Version-controlled at `github.com/GoLukeEnviro/trading-hub`.
+This is the repo-level operating guide for agents working in the Trading Hub.
+It describes the current architecture, the safety boundary, and the documentation
+rules that apply before any modification is made.
 
-## Role Definitions
+Use `docs/state/current-operational-state.md` for the latest validated runtime
+snapshot and `docs/context/` for append-only historical reports.
+
+## Agent safety rules
+
+1. Read `AGENTS.md` and `SOUL.md` before making changes.
+2. Never use `git add .`; stage files explicitly by path only.
+3. Never enable live trading, set `dry_run=false`, or change trading behavior
+   without explicit approval.
+4. Never use destructive cleanup commands such as `git reset --hard`,
+   `git clean -fd`, `git clean -fdx`, or force-push / history rewrite.
+5. Always update `docs/context/` after meaningful work, incident resolution,
+   bootstrap, cleanup, or architecture changes.
+6. Never commit secrets, runtime state, databases, logs, backups, model files,
+   or inspect dumps.
+
+## System architecture
 
 ### ai-hedge-fund-crypto — Signal Layer (ACTIVE)
 
-**Role:** Crypto-native signal generator using Bitget Futures OHLCV,
-technical analysis ensemble, deterministic risk management, and
-DeepSeek V4 Pro LLM portfolio decisions.
-
-**Status:** Active. Container `ai-hedge-fund-crypto` (port 8410, healthy).
-Exchange: bitget. Model: deepseek-v4-pro @ temp 0.15.
-Base URL: Ollama cloud endpoint.
-
-**Output:** `ai-hedge-fund-crypto/output/hermes_signal.json`
-
-**Endpoints (localhost:8410):**
-- `GET /health` — container health + signal freshness
-- `GET /signal` — latest Hermes signal JSON
-- `GET /trigger` — run analysis cycle on demand
-
-**Compose:** `docker-compose.ai-hedge-fund-crypto.yml`
-**Source:** upstream clone of `github.com/51bitquant/ai-hedge-fund-crypto` (ignored by parent repo)
-
----
+- Crypto-native signal generator using Bitget Futures OHLCV.
+- Technical-analysis ensemble plus LLM-assisted portfolio decisions.
+- Output: `ai-hedge-fund-crypto/output/hermes_signal.json`.
+- HTTP endpoints: `/health`, `/signal`, `/trigger` on localhost:8410.
+- Treated as the active signal core; the parent repo only orchestrates it.
 
 ### Hermes — Meta-Orchestrator
 
-**Container:** `hermes-agent` (CLI, persistent)
+- Container / profile: `hermes-agent` in the `orchestrator` profile.
+- Responsibilities: audits, repairs, cron maintenance, documentation,
+  escalation, and safe git housekeeping.
+- Boundaries: does not decide trades directly, does not place orders, does not
+  enable live trading, does not modify Freqtrade configs without approval, and
+  does not restart containers without approval.
+- Working directory: `/home/hermes/projects/trading`.
+- Project identity lives in `~/.hermes/profiles/orchestrator/SOUL.md`.
 
-**Responsibilities:**
-- Profile isolation (`orchestrator` profile)
-- Tool execution (terminal, file, docker, cron)
-- System audits (Reality Lock, Fleet Safety, Skill Audit)
-- Repairs (container recovery, cron repair, config sync)
-- Documentation (docs/context updates after every phase)
-- Human escalation interface (Telegram/Gateway)
-- Subagent delegation for research/dev/review tasks
-- Git housekeeping for trading-hub repo
+### RiskGuard / Judge — Safety Layer (SPEC ONLY)
 
-**Boundaries:**
-- Does not decide trades directly
-- Does not place orders
-- Does not enable live trading without approval
-- Does not modify Freqtrade configs without approval
-- Does not restart containers without approval
+- This layer is a design reference in AGENTS.md only.
+- No deployed service, container, cron job, or script currently implements it as
+  a standalone component.
+- Planned checks: schema validation, freshness, allowlist validation, action /
+  confidence validation, and baseline-vs-LLM disagreement handling.
+- Verdicts: `ACCEPTED`, `WATCH_ONLY`, `BLOCK_ENTRY`.
+- Rules: BUY/SELL only for entries; TREND_HOLD / WATCH / HOLD never force an
+  entry; weak or unknown signals degrade or block.
 
-**Profile:**
-- Name: `orchestrator`
-- Working directory: `/home/hermes/projects/trading`
-- SOUL: `~/.hermes/profiles/orchestrator/SOUL.md`
+### ShadowLogger — Evidence Layer (SPEC ONLY)
 
----
-
-### RiskGuard / Judge — Safety Layer
-
-**Responsibilities:**
-- Schema validation against expected signal format
-- Signal freshness check (max 45 minutes)
-- Pair allowlist validation
-- Action/confidence validation
-- Baseline/LLM disagreement detection
-- Signal quality assessment
-
-**Verdicts:**
-- `ACCEPTED` — signal passes all gates
-- `WATCH_ONLY` — informational only, no entry
-- `BLOCK_ENTRY` — signal blocked due to risk
-
-**Rules:**
-- Entry candidates: BUY/SELL only
-- Informational: TREND_HOLD, WATCH, HOLD → never entry
-- `signal_quality == weak` → WATCH_ONLY
-- Unknown pair/action/quality → BLOCK_ENTRY
-- Baseline/LLM disagreement → downgrade
-
----
-
-### ShadowLogger — Evidence Layer
-
-**Responsibilities:**
-- Append-only JSONL logging of every signal cycle
-- Daily aggregation and summary report generation
-- No side effects, no API calls, no trade execution
-
-**Output:**
-- `var/freqforge/shadow_decisions.jsonl` — append-only decision log
-- `var/freqforge/state.json` — trade-ID state for change detection
-- `var/freqforge/snapshots/` — hourly snapshot directory
-
----
+- This layer is the append-only audit concept for signal-cycle decisions.
+- No deployed service currently implements it as a standalone component.
+- Planned output: JSONL decision log, state snapshot, and snapshot directory.
+- Principle: no side effects, no order execution, no hidden branching.
 
 ### FreqForge Shadow Evaluator — v0.1 (PASSIVE)
 
-**Role:** Passive shadow layer that observes Freqtrade dry-run activity and evaluates
-whether each entry/exit decision would be approved, vetoed, reduced, or marked uncertain.
-Does NOT place, modify, cancel, force-exit, or override any trade.
+- Passive observer that evaluates whether Freqtrade decisions would be
+  approved, vetoed, reduced, or marked uncertain.
+- Never places, modifies, cancels, or overrides trades.
+- Runs against read-only Freqtrade SQLite data and the latest signal JSON.
+- Hard constraint: all bots remain `dry_run=True`.
 
-**Status:** Active. No trade execution capability.
+### Freqtrade — Dry-Run Execution Fleet
 
-**Components:**
-- `tools/freqforge/freqforge_shadow.py` — main poll loop
-- `tools/freqforge/freqforge_rules.py` — deterministic rule engine
-- `tools/freqforge/freqforge_config.py` — bot map + thresholds
-- `tools/freqforge/freqforge_report.py` — markdown report generator
+- Dry-run trade execution only; no live orders.
+- Strategy-based entry/exit with signal as a conservative filter.
+- State reporting via REST API and SQLite trade history.
 
-**Data Sources:**
-- Freqtrade SQLite DBs via `docker exec sqlite3` (read-only SELECT)
-- ai-hedge-fund-crypto signal: `ai-hedge-fund-crypto/output/latest/hermes_signal.json`
+| Bot | Container | Port | Strategy | Mode |
+|-----|-----------|------|----------|------|
+| FreqForge | `freqtrade-freqforge` | 8086 | `FreqForge_Override` | dry-run |
+| Regime-Hybrid | `freqtrade-regime-hybrid` | 8085 | `RegimeSwitchingHybrid_v7_v04_Integration` | dry-run |
+| Momentum | `freqtrade-momentum` | 8084 | `MomentumBG15_v1` | dry-run |
+| FreqForge-Canary | `freqtrade-freqforge-canary` | 8081 | `SimpleRSIOnly_v1` | dry-run |
+| FreqAI-Rebel | `freqai-rebel` | 8087 | `RebelLiquidation + RebelXGBoostClassifier` | dry-run |
+| MVS | — | — | NOT_DEPLOYED | — |
+| Webserver | `freqtrade-webserver` | — | UI only | — |
 
-**Rule Groups:**
-- ENTRY_RULES (E1-E5): evaluated on new trade open
-- OPEN_RISK_RULES (O1-O3): evaluated each poll for open positions
-- EXIT_RULES (X1-X3): post-hoc review on closed trades
+### Decommissioned / historical
 
-**Hard constraints:** dry_run=True enforced on all bots. No modification of strategies,
-configs, or container state. no_action_taken=True + shadow_mode=True in every event.
+- Honcho persistent memory was decommissioned and archived.
+- Caddy remains the reverse proxy layer for the host.
 
----
+## Documentation discipline
 
-### Freqtrade — Execution Fleet
-
-**Responsibilities:**
-- Dry-run trade execution (Bitget futures)
-- Strategy-based entry/exit
-- Signal as conservative filter
-- State reporting via REST API
-- Trade history in SQLite
-
-**Active Bots:**
-
-| Bot | Container | Port | Strategy | Exchange | Mode |
-|-----|-----------|------|----------|----------|------|
-| FreqForge | `freqtrade-freqforge` | 8086 | FreqForge_Override | bitget | dry-run |
-| Regime-Hybrid | `freqtrade-regime-hybrid` | 8085 | RegimeSwitchingHybrid_v7_v04_Integration | bitget | futures |
-| Momentum | `freqtrade-momentum` | 8084 | MomentumBG15_v1 | bitget | futures |
-| RSI | `freqtrade-rsi` | 8081 | SimpleRSIOnly_v1 | bitget | futures (QUARANTINE — strategy dead for 15m, replacement pending) |
-| MVS | `freqtrade-mvs` | — | NOT_DEPLOYED — strategy file preserved, no active container | bitget | — |
-| Webserver | `freqtrade-webserver` | — | — | — | UI only |
-
-**Stopped / Staged:**
-
-| Bot | Port | Strategy | Status |
-|-----|------|----------|--------|
-| FOMO Phase 3 | — | NOT_DEPLOYED — research code preserved, no active container | — | — |
-
-**Fleet Compose:** `freqtrade/docker-compose.fleet.yml`
-
-**Boundaries:**
-- Dry-run only — no exchange credentials
-- No signal forces a trade
-- Fail-open on stale/missing signal
-- Conservative fallback to normal strategy logic
-
-**Strategy Lineage (regime-hybrid — most evolved):**
-RegimeSwitchingHybrid v2 → v3_Final → v4_ATR → v5_ATRv2 → v6_Stable → v6.1_Fett → v7_EntryRefactor → v7_v04_Integration (active) → v8_BaselineTest → v8.1/8.2/8.3_RRR → v8.3_Filter → v9.1_Sentient (research)
-
----
-
-### Honcho — Persistent Memory
-
-**Containers:** honcho-api, honcho-database (PostgreSQL), honcho-redis, honcho-ollama, honcho-deriver
-**Status:** Active. writeFrequency=session. DB ~3,500 docs as of 2026-05-14 (exact audit: 3,509).
-**Models:** qwen3-coder:480b, gpt-oss:120b, deepseek-v3.1:671b
-**Deriver:** MQG v2.0.0 via ro bind mount
-**Watchdog:** Hourly cron alerts Telegram
-
----
-
-### Caddy — Reverse Proxy
-
-**Container:** `caddy` (host network)
-**Tailscale Funnel:** `taile6801f.ts.net:443` → Caddy → Docker containers
-**Freqtrade Web UI:** `https://agent0.taile6801f.ts.net:9092`
-
-## Profile Structure
-
-```
-~/.hermes/profiles/
-├── default/       — general-purpose profile
-├── mira/          — Mira content pipeline (stopped)
-├── trading/       — future domain/worker profile
-└── orchestrator/  — meta-control profile (ACTIVE)
-```
-
-## Project Structure
-
-```
-/home/hermes/projects/trading/         ← git root (trading-hub)
-├── SOUL.md                            — project identity + rules
-├── AGENTS.md                          — this file
-├── ORCHESTRATOR_CHARTER.md            — binding orchestration rules
-├── README.md                          — repo overview
-├── .gitignore                         — secret/binary/runtime exclusions
-├── docs/
-│   ├── context/                       — living documentation (49 reports as of 2026-05-14)
-│   ├── git-hygiene.md                 — what is tracked and why
-│   └── hermes-integration-plan.md     — integration reference
-├── orchestrator/
-│   ├── scripts/                       — fleet_healthcheck, multicycle_validator, etc.
-│   ├── reports/                       — generated reports (fleet health, observation)
-│   ├── state/                         — runtime state (gitignored)
-│   ├── runbooks/                      — operational procedures
-│   └── test-fixtures/                 — phase-12-6 signal/risk/state fixtures
-├── tools/
-│   └── freqforge/                     — FreqForge Shadow Evaluator v0.1
-│       ├── freqforge_config.py        — bot map + thresholds
-│       ├── freqforge_rules.py         — deterministic rule engine
-│       ├── freqforge_shadow.py        — main poll loop
-│       └── freqforge_report.py        — markdown report generator
-├── freqforge/                         — FreqForge bot instance
-│   ├── config/                        — config (gitignored, has jwt keys)
-│   ├── baseline_v1/                   — baseline strategy + config
-│   └── user_data/strategies/          — FreqForge_Override.py
-├── ai-hedge-fund-crypto/              — [ignored] upstream clone
-│   ├── output/                        — signal output (gitignored)
-│   ├── src/                           — signal generator source
-│   └── docker/                        — Dockerfile + entrypoint
-├── freqtrade/
-│   ├── docker-compose.fleet.yml       — fleet orchestration
-│   ├── bots/
-│   │   ├── regime-hybrid/             — 30 strategy versions, active config
-│   │   ├── momentum/                  — MomentumBG15 variants
-│   │   ├── rsi/                       — SimpleRSI strategies
-│   │   ├── mvs/                       — MinimalViableStrategy
-│   │   ├── fomo-phase3/              — FOMO research (stopped)
-│   │   └── sve/                       — SVE bot
-│   ├── shared/
-│   │   ├── strategies/                — shared strategy files
-│   │   ├── exit_agent_v9.py           — ExitAgent prompt + logic
-│   │   ├── fleetguard_v1.py           — fleet guard module
-│   │   ├── primo_gate.py             — signal gate module
-│   │   ├── primo_signal.py           — signal bridge helper
-│   │   └── signals/latest_signal.json — latest bridged signal
-│   ├── tools/primo_signal_bridge.py   — signal bridge script
-│   └── tests/                         — fleetguard tests
-├── bridge/
-│   ├── hermes_primo_bridge.py         — Hermes-Primo bridge
-│   └── Dockerfile                     — bridge container
-├── primo/
-│   ├── primo_api.py                   — PrimoAgent API
-│   ├── llm_signal_filter.py           — LLM signal filter
-│   └── Dockerfile                     — Primo container
-├── backtests/
-│   ├── benchmarks/                    — multi-model LLM benchmarks
-│   ├── daily_lab/                     — daily strategy experiments
-│   ├── reports/                       — backtest reports
-│   ├── walk_forward/                  — walk-forward results
-│   └── signal_quality/                — signal quality analysis
-├── Agenten_Auto_Trade/                — [ignored] independent git repo
-├── backups/                           — [gitignored] cold archives
-├── var/                               — [gitignored] runtime state
-└── logs/                              — [gitignored] operational logs
-```
-
-## Communication Protocol
-
-- All responses start with a status line (OK/WARN/FAIL/INFO)
-- Technical content in English
-- Casual German for meta-communication
-- Zero disclaimers
-- Evidence files always listed
-- Next actions always specified
+- After each meaningful change, update the relevant `docs/context/` report.
+- Keep root docs in sync: `README.md`, `docs/README.md`, `docs/context/README.md`,
+  `docs/state/current-operational-state.md`.
+- Treat `docs/context/` as historical context, not as the canonical current state.
+- Treat `docs/state/current-operational-state.md` as the current validated snapshot.
