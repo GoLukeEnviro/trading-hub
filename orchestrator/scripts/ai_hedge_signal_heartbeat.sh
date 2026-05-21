@@ -23,18 +23,8 @@ mkdir -p "$(dirname "$LATEST")" "$(dirname "$LOG")"
 # --- Step 1: Trigger via container-internal localhost:8080 ---
 echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] heartbeat start" >> "$LOG"
 
-HTTP_CODE=$(docker exec "$CONTAINER" python3 -c "
-import urllib.request, json, sys
-try:
-    r = urllib.request.urlopen('http://localhost:8080/trigger', timeout=120)
-    data = r.read()
-    # write to stdout for capture
-    sys.stdout.buffer.write(data)
-    sys.exit(0 if r.status == 200 else 1)
-except Exception as e:
-    print(f'ERROR: {e}', file=sys.stderr)
-    sys.exit(1)
-" 2>>"$LOG" > "$TEMP") && HTTP_OK=true || HTTP_OK=false
+HTTP_CODE=$(curl -sS -m 120 -o "$TEMP" -w '%{http_code}' http://127.0.0.1:8410/trigger 2>>"$LOG")
+[ "$HTTP_CODE" = "200" ] && HTTP_OK=true || HTTP_OK=false
 
 if [ "$HTTP_OK" != "true" ]; then
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] ERROR: /trigger failed" >> "$LOG"
