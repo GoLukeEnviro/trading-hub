@@ -31,13 +31,18 @@ TIMERANGE = "20250401-20260511"
 TIMEFRAME = "15m"
 STRATEGY_CLASS = "MomentumBG15_v3_1"  # class name inside the file (CamelCase)
 
-# Claude Code env
+# Claude Code env — secrets loaded from environment only
+_anthropic_token = os.getenv("ANTHROPIC_AUTH_TOKEN", "")
+if not _anthropic_token:
+    print("FATAL: ANTHROPIC_AUTH_TOKEN env var is not set. Refusing to run with hardcoded secrets.", flush=True)
+    sys.exit(1)
+
 CLAUDE_ENV = {
     "PATH": f"{os.path.expanduser('~')}/.local/bin:{os.environ.get('PATH', '')}",
-    "ANTHROPIC_AUTH_TOKEN": "17bee5a8f43f4b2884ba9bb9f2fdf1cc.tPvdmTjJpFOiNACq",
-    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
-    "ANTHROPIC_TEMPERATURE": "0.3",
-    "ANTHROPIC_TOP_P": "0.9",
+    "ANTHROPIC_AUTH_TOKEN": _anthropic_token,
+    "ANTHROPIC_BASE_URL": os.getenv("ANTHROPIC_BASE_URL", "https://api.z.ai/api/anthropic"),
+    "ANTHROPIC_TEMPERATURE": os.getenv("ANTHROPIC_TEMPERATURE", "0.3"),
+    "ANTHROPIC_TOP_P": os.getenv("ANTHROPIC_TOP_P", "0.9"),
 }
 
 # Quality gates

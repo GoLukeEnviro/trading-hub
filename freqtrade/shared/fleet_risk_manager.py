@@ -25,6 +25,12 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# ── Canonical signal gate policy (single source of truth) ──────────────
+# All consumers MUST import these instead of defining local copies.
+CONFIDENCE_MIN: float = 0.65        # minimum AI confidence to accept signal
+STALENESS_MINUTES: float = 30.0     # max signal age before stale/rejected
+# ──────────────────────────────────────────────────────────────────────
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()

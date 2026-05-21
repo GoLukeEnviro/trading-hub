@@ -33,6 +33,7 @@ from pandas import DataFrame
 sys.path.insert(0, "/freqtrade/shared")
 from primo_signal import primo_gate_allows, load_signal_state, normalize_pair as _norm_pair
 from fleetguard_v1 import FleetGuard, FleetGuardConfig
+from fleet_risk_manager import FleetRiskManager
 
 logger = logging.getLogger(__name__)
 
@@ -96,16 +97,23 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
     atr_sl_range = DecimalParameter(2.0, 4.0, default=2.8, space="sell", optimize=True)
     atr_tp_trend = DecimalParameter(1.0, 2.5, default=1.8, space="sell", optimize=True)
 
-    # Dry-run override: when True and running in dry_run mode, bypasses the
-    # conservative primo gate and uses a lower confidence threshold instead.
-    dry_run_override = True
-    dry_run_confidence_threshold = 0.20
+    # Signal gate: uses canonical CONFIDENCE_MIN from fleet_risk_manager.
+    # Previous dry_run_override bypass (0.20 threshold) was a safety hazard
+    # and has been removed. Same strict threshold applies in all modes.
+    dry_run_override = False
+    try:
+        from fleet_risk_manager import CONFIDENCE_MIN as _canonical_conf_min
+        dry_run_confidence_threshold = _canonical_conf_min
+    except ImportError:
+        dry_run_confidence_threshold = 0.65  # fallback — keep in sync
 
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         # FIX-1: Per-pair regime history — no cross-pair contamination
         # Each pair gets its own 2-cycle hysteresis tracking
         self._regime_histories: Dict[str, list] = {}
+        self.risk_manager = FleetRiskManager()
+        self._fleet_source = str(config.get("bot_name") or self.__class__.__name__)
 
     def _get_stable_regime(self, pair: str, current_regime: str) -> str:
         """
@@ -142,6 +150,21 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
         logger.debug(f"dry_run_gate: {pair} {side} blocked — "
                      f"confidence {confidence:.2f} < {self.dry_run_confidence_threshold}")
         return False
+
+    def bot_loop_start(self, current_time: datetime, **kwargs) -> None:
+        try:
+            from freqtrade.persistence import Trade
+            source = self._fleet_source
+            open_trades = list(Trade.get_trades_proxy(is_open=True))
+            closed_trades = list(Trade.get_trades_proxy(is_open=False))
+            self.risk_manager.sync_trade_state(source=source, open_trades=open_trades, closed_trades=closed_trades)
+            if hasattr(self, "wallets") and self.wallets:
+                try:
+                    self.risk_manager.update_source_equity(source, float(self.wallets.get_total_stake_amount()))
+                except Exception as wallet_err:
+                    logger.debug(f"FleetRisk source equity skipped for {source}: {wallet_err}")
+        except Exception as exc:
+            logger.debug(f"FleetRisk sync skipped for {self._fleet_source}: {exc}")
 
     def informative_pairs(self):
         pairs = self.dp.current_whitelist()
@@ -283,13 +306,20 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
         ema200_htf = dataframe[f'ema200_{self.informative_timeframe}']
         pair = metadata.get("pair")
         is_dry_run = self.config.get('dry_run', False)
+        long_risk_allowed, long_risk_reason = self.risk_manager.check_entry_allowed(pair, "long")
+        short_risk_allowed, short_risk_reason = self.risk_manager.check_entry_allowed(pair, "short")
+
+        if not long_risk_allowed:
+            logger.debug(f"[FleetRisk] LONG gate reduced for {pair}: {long_risk_reason}")
+        if not short_risk_allowed:
+            logger.debug(f"[FleetRisk] SHORT gate reduced for {pair}: {short_risk_reason}")
 
         if self.dry_run_override and is_dry_run:
-            long_gate = self._dry_run_gate_allows(pair, "long")
-            short_gate = self._dry_run_gate_allows(pair, "short")
+            long_gate = self._dry_run_gate_allows(pair, "long") and long_risk_allowed
+            short_gate = self._dry_run_gate_allows(pair, "short") and short_risk_allowed
         else:
-            long_gate = primo_gate_allows(pair, "long")
-            short_gate = primo_gate_allows(pair, "short")
+            long_gate = primo_gate_allows(pair, "long") and long_risk_allowed
+            short_gate = primo_gate_allows(pair, "short") and short_risk_allowed
 
         # --- Strategy-native LONG conditions ---
         trend_long = (
@@ -360,6 +390,11 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
                             rate: float, time_in_force: str, current_time: datetime,
                             entry_tag: Optional[str], side: str, **kwargs) -> bool:
         """FleetGuard v1 entry safety check."""
+        risk_allowed, risk_reason = self.risk_manager.check_entry_allowed(pair, side)
+        if not risk_allowed:
+            logger.info(f"[FleetRisk] Entry blockiert: {pair} {side} -> {risk_reason}")
+            return False
+
         open_trades = []
         recent_closed = []
         current_drawdown = 0.0

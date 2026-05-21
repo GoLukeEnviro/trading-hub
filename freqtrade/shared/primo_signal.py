@@ -15,7 +15,12 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 DEFAULT_STATE_FILE = "/freqtrade/user_data/primo_signal_state.json"
-MAX_AGE_MINUTES = 45.0
+
+# Import canonical staleness threshold from fleet_risk_manager
+try:
+    from fleet_risk_manager import STALENESS_MINUTES as MAX_AGE_MINUTES
+except ImportError:
+    MAX_AGE_MINUTES = 30.0  # fallback — keep in sync with fleet_risk_manager
 
 
 def normalize_pair(pair: Optional[str]) -> str:

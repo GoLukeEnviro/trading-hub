@@ -40,9 +40,16 @@ STATE_OUTPUT_FILES = [
     PROJECT_DIR / "freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json",
 ]
 
-# RiskGuard config
-CONFIDENCE_THRESHOLD = 0.65      # hard limit — SOUL.md Live-Regel 4
-MAX_AGE_MINUTES = 25.0            # hard stale block threshold (heartbeat 20m, block before 30m)
+# RiskGuard config — import canonical constants from fleet_risk_manager
+try:
+    sys.path.insert(0, str(PROJECT_DIR / "freqtrade" / "shared"))
+    from fleet_risk_manager import CONFIDENCE_MIN, STALENESS_MINUTES  # canonical
+    CONFIDENCE_THRESHOLD = CONFIDENCE_MIN
+    MAX_AGE_MINUTES = STALENESS_MINUTES
+except ImportError:
+    # Fallback — keep in sync with freqtrade/shared/fleet_risk_manager.py
+    CONFIDENCE_THRESHOLD = 0.65      # hard limit — SOUL.md Live-Regel 4
+    MAX_AGE_MINUTES = 30.0           # hard stale block threshold
 MAX_POSITION_SIZE_USDT = 100.0    # max per-trade exposure
 MAX_CONCURRENT_SIGNALS = 5        # max pairs with ACCEPTED verdict
 SCHEMA_VERSION = "0.3"
@@ -746,39 +753,38 @@ def main() -> int:
         state_writes = write_state_files(state, STATE_OUTPUT_FILES)
 
     # ── 6. ShadowLogger ─────────────────────────────────────────
-    if not dry_run:
-        shadow_log(
-            timestamp=now_ts,
-            signal_source=source,
-            signal_age_minutes=signal_age,
-            is_fresh=not is_stale,
-            riskguard_summary=riskguard_summary,
-            pair_decisions=pair_decisions,
-            state_writes=state_writes,
-        )
+    # ALWAYS log — even in dry_run mode. Audit trail must be complete.
+    shadow_log(
+        timestamp=now_ts,
+        signal_source=source,
+        signal_age_minutes=signal_age,
+        is_fresh=not is_stale,
+        riskguard_summary=riskguard_summary,
+        pair_decisions=pair_decisions,
+        state_writes=state_writes,
+    )
 
-        # Legacy bridge log (backward compatible)
-        bridge_entry = {
-            "timestamp": now_ts,
-            "signal_source": source,
-            "signal_age_minutes": round(signal_age, 1) if signal_age is not None else None,
-            "fresh": not is_stale,
-            "pairs_total": total_pairs,
-            "pairs_accepted": accepted_count_final,
-            "pairs_watch_only": watch_only_count,
-            "pairs_rejected": rejected_count,
-            "writes": state_writes,
-        }
-        write_bridge_log(bridge_entry)
+    # Legacy bridge log (backward compatible)
+    bridge_entry = {
+        "timestamp": now_ts,
+        "signal_source": source,
+        "signal_age_minutes": round(signal_age, 1) if signal_age is not None else None,
+        "fresh": not is_stale,
+        "pairs_total": total_pairs,
+        "pairs_accepted": accepted_count_final,
+        "pairs_watch_only": watch_only_count,
+        "pairs_rejected": rejected_count,
+        "writes": state_writes,
+    }
+    write_bridge_log(bridge_entry)
 
-        logger.info("✅ ShadowLogger: entry appended")
+    logger.info("✅ ShadowLogger: entry appended")
 
     # ── 7. Exit code ────────────────────────────────────────────
-    if not dry_run:
-        failed = sum(1 for v in state_writes.values() if v == "FAIL")
-        if failed:
-            logger.error(f"{failed}/{len(state_writes)} writes failed")
-            return 1
+    failed = sum(1 for v in state_writes.values() if v == "FAIL")
+    if failed:
+        logger.error(f"{failed}/{len(state_writes)} writes failed")
+        return 1
 
     logger.info("Pipeline cycle complete.")
     return 0
