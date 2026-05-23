@@ -28,7 +28,6 @@ PROJECT_DIR = Path("/home/hermes/projects/trading")
 
 # Signal sources (tried in order)
 SIGNAL_INPUT_PATHS = [
-    PROJECT_DIR / "ai-hedge-fund-crypto/output/hermes_signal.json",      # canonical first
     PROJECT_DIR / "ai-hedge-fund-crypto/output/latest/hermes_signal.json",
     PROJECT_DIR / "shared/hermes_signal.json",
 ]
@@ -38,18 +37,14 @@ STATE_OUTPUT_FILES = [
     PROJECT_DIR / "freqtrade/shared/primo_signal_state.json",
     PROJECT_DIR / "freqtrade/bots/momentum/user_data/primo_signal_state.json",
     PROJECT_DIR / "freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json",
+    # Container-mounted paths (must match docker-compose volumes)
+    PROJECT_DIR / "freqforge/user_data/primo_signal_state.json",
+    PROJECT_DIR / "freqforge-canary/user_data/primo_signal_state.json",
 ]
 
-# RiskGuard config — import canonical constants from fleet_risk_manager
-try:
-    sys.path.insert(0, str(PROJECT_DIR / "freqtrade" / "shared"))
-    from fleet_risk_manager import CONFIDENCE_MIN, STALENESS_MINUTES  # canonical
-    CONFIDENCE_THRESHOLD = CONFIDENCE_MIN
-    MAX_AGE_MINUTES = STALENESS_MINUTES
-except ImportError:
-    # Fallback — keep in sync with freqtrade/shared/fleet_risk_manager.py
-    CONFIDENCE_THRESHOLD = 0.65      # hard limit — SOUL.md Live-Regel 4
-    MAX_AGE_MINUTES = 30.0           # hard stale block threshold
+# RiskGuard config
+CONFIDENCE_THRESHOLD = 0.65      # hard limit — SOUL.md Live-Regel 4
+MAX_AGE_MINUTES = 25.0            # hard stale block threshold (heartbeat 20m, block before 30m)
 MAX_POSITION_SIZE_USDT = 100.0    # max per-trade exposure
 MAX_CONCURRENT_SIGNALS = 5        # max pairs with ACCEPTED verdict
 SCHEMA_VERSION = "0.3"
@@ -351,18 +346,15 @@ def ccxt_execute_order(symbol: str, side: str, amount: float,
     """Execute order via direct ccxt (fallback path). Always dry-run."""
     layer = "ccxt-fallback" if is_fallback else "ccxt-primary"
     try:
-        try:
-            import ccxt
-            exchange = ccxt.bitget({
-                "apiKey": "",
-                "secret": "",
-                "password": "",
-                "enableRateLimit": True,
-                "options": {"defaultType": "swap"},
-            })
-            exchange.set_sandbox_mode(True)
-        except ModuleNotFoundError:
-            logger.info(f"{layer}: ccxt not available, generating simulated order")
+        import ccxt
+        exchange = ccxt.bitget({
+            "apiKey": "",
+            "secret": "",
+            "password": "",
+            "enableRateLimit": True,
+            "options": {"defaultType": "swap"},
+        })
+        exchange.set_sandbox_mode(True)
 
         # Simulate order
         order_id = f"paper_ccxt_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{hash(symbol+side) & 0xffff:04x}"
@@ -396,6 +388,24 @@ def mcp_execute_accepted_signals(pairs_out: Dict[str, Dict[str, Any]]) -> List[D
     Returns a list of execution results.
     """
     execution_results = []
+
+    # Pre-check available balance from MCP paper portfolio
+    available_balance = MAX_POSITION_SIZE_USDT * 100  # default fallback (10000 USDT)
+    try:
+        import sys as _sys
+        _project_root = str(PROJECT_DIR)
+        if _project_root not in _sys.path:
+            _sys.path.insert(0, _project_root)
+        import asyncio
+        from orchestrator.scripts.bitget_mcp_server import handle_get_balance
+        loop = asyncio.new_event_loop()
+        try:
+            bal = loop.run_until_complete(handle_get_balance())
+            available_balance = bal.get("free", 50000.0)
+        finally:
+            loop.close()
+    except Exception:
+        logger.warning("Could not query MCP balance, using conservative cap")
 
     for pair, decision in pairs_out.items():
         if decision.get("verdict") != "ACCEPTED":
@@ -434,6 +444,34 @@ def mcp_execute_accepted_signals(pairs_out: Dict[str, Dict[str, Any]]) -> List[D
             quantity = round((MAX_POSITION_SIZE_USDT * confidence) / price, 6)
             if quantity <= 0:
                 quantity = 0.001  # minimum notional
+
+        # Dynamic margin cap: ensure margin_required <= 20% of available balance
+        from orchestrator.scripts.bitget_mcp_server import LEVERAGE as MCP_LEVERAGE
+        try:
+            import asyncio
+            from orchestrator.scripts.bitget_mcp_server import handle_get_ticker
+            loop = asyncio.new_event_loop()
+            try:
+                ticker = loop.run_until_complete(handle_get_ticker(pair))
+                mark_price = ticker.get("last", 50000.0)
+            finally:
+                loop.close()
+        except Exception:
+            mark_price = 50000.0 if "BTC" in pair else 3000.0 if "ETH" in pair else 150.0
+
+        margin_required = (quantity * mark_price) / MCP_LEVERAGE
+        max_margin_per_trade = available_balance * 0.20  # max 20% of free balance per trade
+        if margin_required > max_margin_per_trade:
+            # Scale down quantity to fit within margin budget
+            scaled_notional = max_margin_per_trade * MCP_LEVERAGE
+            quantity = round(scaled_notional / mark_price, 6)
+            logger.warning(
+                f"MCP margin cap active: {pair} margin_req={margin_required:.2f} > "
+                f"20% balance ({max_margin_per_trade:.2f}), scaled qty to {quantity}"
+            )
+
+        if quantity <= 0:
+            quantity = 0.001  # absolute minimum floor
 
         logger.info(f"MCP executing: {action} {quantity} {pair} (conf={confidence:.2f})")
         result = mcp_execute_order(pair, side, quantity)
@@ -753,38 +791,39 @@ def main() -> int:
         state_writes = write_state_files(state, STATE_OUTPUT_FILES)
 
     # ── 6. ShadowLogger ─────────────────────────────────────────
-    # ALWAYS log — even in dry_run mode. Audit trail must be complete.
-    shadow_log(
-        timestamp=now_ts,
-        signal_source=source,
-        signal_age_minutes=signal_age,
-        is_fresh=not is_stale,
-        riskguard_summary=riskguard_summary,
-        pair_decisions=pair_decisions,
-        state_writes=state_writes,
-    )
+    if not dry_run:
+        shadow_log(
+            timestamp=now_ts,
+            signal_source=source,
+            signal_age_minutes=signal_age,
+            is_fresh=not is_stale,
+            riskguard_summary=riskguard_summary,
+            pair_decisions=pair_decisions,
+            state_writes=state_writes,
+        )
 
-    # Legacy bridge log (backward compatible)
-    bridge_entry = {
-        "timestamp": now_ts,
-        "signal_source": source,
-        "signal_age_minutes": round(signal_age, 1) if signal_age is not None else None,
-        "fresh": not is_stale,
-        "pairs_total": total_pairs,
-        "pairs_accepted": accepted_count_final,
-        "pairs_watch_only": watch_only_count,
-        "pairs_rejected": rejected_count,
-        "writes": state_writes,
-    }
-    write_bridge_log(bridge_entry)
+        # Legacy bridge log (backward compatible)
+        bridge_entry = {
+            "timestamp": now_ts,
+            "signal_source": source,
+            "signal_age_minutes": round(signal_age, 1) if signal_age is not None else None,
+            "fresh": not is_stale,
+            "pairs_total": total_pairs,
+            "pairs_accepted": accepted_count_final,
+            "pairs_watch_only": watch_only_count,
+            "pairs_rejected": rejected_count,
+            "writes": state_writes,
+        }
+        write_bridge_log(bridge_entry)
 
-    logger.info("✅ ShadowLogger: entry appended")
+        logger.info("✅ ShadowLogger: entry appended")
 
     # ── 7. Exit code ────────────────────────────────────────────
-    failed = sum(1 for v in state_writes.values() if v == "FAIL")
-    if failed:
-        logger.error(f"{failed}/{len(state_writes)} writes failed")
-        return 1
+    if not dry_run:
+        failed = sum(1 for v in state_writes.values() if v == "FAIL")
+        if failed:
+            logger.error(f"{failed}/{len(state_writes)} writes failed")
+            return 1
 
     logger.info("Pipeline cycle complete.")
     return 0

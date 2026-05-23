@@ -36,11 +36,11 @@ class RegimeSwitchingHybrid_v6_Stable(IStrategy):
     # Strategy settings
     can_short = True
     
-    # Base ROI (Locked)
+    # Base ROI (Phase 27 — realistic targets; old 6% was hit too rarely)
     minimal_roi = {
-        "0": 0.06,
-        "60": 0.03,
-        "120": 0.01,
+        "0": 0.015,
+        "60": 0.008,
+        "120": 0.004,
         "240": 0
     }
 
@@ -73,11 +73,11 @@ class RegimeSwitchingHybrid_v6_Stable(IStrategy):
     rsi_oversold = IntParameter(20, 40, default=20, space="buy")
     
     # ATR Multipliers (Sell space)
-    # CHANGE 1 (Phase 19): Fixed atr_sl_trend
-    atr_sl_trend = 4.5
+    # CHANGE 1 (Phase 27): Tightened atr_sl_trend — losses were 6.7x larger than wins
+    atr_sl_trend = 2.5
     
-    # CHANGE 2 (Phase 19): Narrowed atr_sl_range
-    atr_sl_range = DecimalParameter(2.5, 4.5, default=3.5, space="sell", optimize=True)
+    # CHANGE 2 (Phase 27): Tightened atr_sl_range — narrower stops for range trades
+    atr_sl_range = DecimalParameter(1.5, 2.5, default=2.0, space="sell", optimize=True)
     
     # CHANGE 3 (Phase 19): Narrowed atr_tp_trend
     atr_tp_trend = DecimalParameter(0.5, 2.0, default=1.7, space="sell", optimize=True)
@@ -224,7 +224,7 @@ class RegimeSwitchingHybrid_v6_Stable(IStrategy):
         
         if is_trend:
             sl_distance = atr_pct * self.atr_sl_trend
-            if current_profit > (atr_pct * self.atr_tp_trend.value):
+            if current_profit > max(0.015, atr_pct * self.atr_tp_trend.value):
                 return max(-sl_distance, current_profit - sl_distance)
         else:
             sl_distance = atr_pct * self.atr_sl_range.value

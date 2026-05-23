@@ -15,7 +15,7 @@ set -euo pipefail
 LOG="/home/hermes/projects/trading/orchestrator/logs/watchdog.log"
 STATE="/home/hermes/projects/trading/orchestrator/state/container_watchdog_state.json"
 
-TRADING_CONTAINERS="freqtrade-freqforge freqtrade-freqforge-canary freqtrade-regime-hybrid freqtrade-momentum freqai-rebel ai-hedge-fund-crypto"
+TRADING_CONTAINERS="freqtrade-freqforge freqtrade-freqforge-canary freqtrade-regime-hybrid freqai-rebel ai-hedge-fund-crypto"
 
 # Map containers to probe files for file-based fallback
 # These are files updated by the trading pipeline or bots themselves

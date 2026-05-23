@@ -27,7 +27,12 @@ import talib.abstract as ta
 from freqtrade.strategy import IStrategy, IntParameter, DecimalParameter
 from pandas import DataFrame
 
-sys.path.insert(0, "/freqtrade/shared")
+import pathlib
+_shared = str(pathlib.Path(__file__).resolve().parents[4] / "shared")
+if pathlib.Path(_shared).is_dir():
+    sys.path.insert(0, _shared)
+else:
+    sys.path.insert(0, "/freqtrade/shared")
 from primo_signal import primo_gate_allows
 from fleetguard_v1 import FleetGuard, FleetGuardConfig
 

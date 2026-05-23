@@ -2,8 +2,8 @@
 
 ## Summary
 
-- **Verdict:** GREEN
-- **Checked At:** 2026-05-08T21:32:05.164237+00:00
+- **Verdict:** RED
+- **Checked At:** 2026-05-23T17:17:48.380772+00:00
 - **Shared Helper:** ✅ Exists
 - **Total Bots:** 3
 
@@ -11,9 +11,9 @@
 
 | Bot | Container | Running | Dry-Run | Credentials | Strategy | State File | Verdict |
 |-----|-----------|---------|---------|-------------|----------|------------|---------|
-| rsi | freqtrade-rsi | ✅ | ✅ | absent/absent | ✅ | ✅ | GREEN |
-| momentum | freqtrade-momentum | ✅ | ✅ | absent/absent | ✅ | ✅ | GREEN |
-| regime-hybrid | freqtrade-regime-hybrid | ✅ | ✅ | absent/absent | ✅ | ✅ | GREEN |
+| rsi | freqtrade-rsi | ❌ | ✅ | absent/absent | ❌ | ✅ | RED |
+| momentum | freqtrade-momentum | ❌ | ✅ | absent/absent | ❌ | ✅ | RED |
+| regime-hybrid | freqtrade-regime-hybrid | ✅ | ✅ | absent/absent | ❌ | ✅ | RED |
 
 
 ## Verdict Legend
@@ -27,5 +27,5 @@
 
 ---
 
-**Generated:** 2026-05-08T21:32:05.164237+00:00  
+**Generated:** 2026-05-23T17:17:48.380772+00:00  
 **Fleet Healthcheck Version:** v0.1.0

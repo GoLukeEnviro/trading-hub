@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "timestamp_utc": "2026-05-20T03:25:01.384062+00:00",
+  "source": "ai-hedge-fund-crypto",
+  "mode": "active",
+  "exchange": "bitget",
+  "llm_used": true,
+  "llm_model": "deepseek-v4-pro",
+  "llm_temperature": 0.15,
+  "pairs": {
+    "BTC/USDT:USDT": {
+      "bias": "bearish",
+      "confidence": 0.75,
+      "recommendation": "allow",
+      "action": "short",
+      "quantity": 0.02609477360826787,
+      "reason": "Full convergence bearish: TA bearish (39.8), Fear & Greed fear (27), X sentiment neutral-weak (42.8). Macro bias SHORT_FAVORED. All three pillars align bearish, triggering maximum conviction per convergence rule. Opening full short position."
+    },
+    "ETH/USDT:USDT": {
+      "bias": "bearish",
+      "confidence": 0.75,
+      "recommendation": "allow",
+      "action": "short",
+      "quantity": 0.9480560111491387,
+      "reason": "Full convergence bearish: TA bearish (38.3), Fear & Greed fear (27), X sentiment neutral-weak (41.2). Macro bias SHORT_FAVORED. All pillars bearish, high conviction short entry."
+    },
+    "SOL/USDT:USDT": {
+      "bias": "bearish",
+      "confidence": 0.75,
+      "recommendation": "allow",
+      "action": "short",
+      "quantity": 23.796209263864267,
+      "reason": "Full convergence bearish: TA bearish (37.8), Fear & Greed fear (27), X sentiment neutral-weak (40.7). Macro bias SHORT_FAVORED. All pillars aligned, taking full short position."
+    }
+  },
+  "global_risk_mode": "risk_on",
+  "notes": [
+    "Analysis cycle completed. Bitget Futures data."
+  ]
+}

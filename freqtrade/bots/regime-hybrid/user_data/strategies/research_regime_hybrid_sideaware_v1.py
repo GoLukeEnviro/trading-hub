@@ -1,6 +1,6 @@
 """
-RegimeSwitchingHybrid_v7_v04_Integration
-Phase 35 — Primo v0.4 Integration (REVIEW FIX)
+research_regime_hybrid_sideaware_v1
+Research variant — side-aware gate + symmetric shorts + ATR stop
 Incorporates: generate_signal(), _combine_signals(), Kelly Sizing from primo_trading_bot_v0_4.py
 
 Fixes applied (review fixes):
@@ -33,7 +33,6 @@ from pandas import DataFrame
 sys.path.insert(0, "/freqtrade/shared")
 from primo_signal import primo_gate_allows, load_signal_state, normalize_pair as _norm_pair
 from fleetguard_v1 import FleetGuard, FleetGuardConfig
-from fleet_risk_manager import FleetRiskManager
 
 logger = logging.getLogger(__name__)
 
@@ -54,19 +53,19 @@ STRATEGY_CONFIG = {
 # STRATEGY CLASS
 # ============================================================
 
-class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
+class ResearchRegimeHybridSideAwareV1(IStrategy):
 
     INTERFACE_VERSION = 3
     timeframe = "15m"
     informative_timeframe = "1h"
-    can_short = False  # FIXED: was True (long-only)
+    can_short = True  # RESEARCH: enable clean mirrored short entries
 
-    minimal_roi = {'0': 0.012, '15': 0.008, '30': 0.004, '60': 0}
-    stoploss = -0.015
-    use_custom_stoploss = False
-    trailing_stop = True  # ENABLED: lock profits after offset
-    trailing_stop_positive = 0.006
-    trailing_stop_positive_offset = 0.012
+    minimal_roi = {'0': 0.025, '15': 0.015, '30': 0.008, '60': 0}
+    stoploss = -0.05  # RESEARCH: fallback only; custom_stoploss is primary
+    use_custom_stoploss = True  # RESEARCH: ATR/time-based dynamic stop active
+    trailing_stop = False  # FIXED: was True (killing profits)
+    trailing_stop_positive = 0.01
+    trailing_stop_positive_offset = 0.02
     trailing_only_offset_is_reached = True
 
     startup_candle_count = 500
@@ -97,23 +96,16 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
     atr_sl_range = DecimalParameter(2.0, 4.0, default=2.8, space="sell", optimize=True)
     atr_tp_trend = DecimalParameter(1.0, 2.5, default=1.8, space="sell", optimize=True)
 
-    # Signal gate: uses canonical CONFIDENCE_MIN from fleet_risk_manager.
-    # Previous dry_run_override bypass (0.20 threshold) was a safety hazard
-    # and has been removed. Same strict threshold applies in all modes.
-    dry_run_override = False
-    try:
-        from fleet_risk_manager import CONFIDENCE_MIN as _canonical_conf_min
-        dry_run_confidence_threshold = _canonical_conf_min
-    except ImportError:
-        dry_run_confidence_threshold = 0.65  # fallback — keep in sync
+    # Dry-run override: when True and running in dry_run mode, bypasses the
+    # conservative primo gate and uses a lower confidence threshold instead.
+    dry_run_override = True
+    dry_run_confidence_threshold = 0.70
 
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         # FIX-1: Per-pair regime history — no cross-pair contamination
         # Each pair gets its own 2-cycle hysteresis tracking
         self._regime_histories: Dict[str, list] = {}
-        self.risk_manager = FleetRiskManager()
-        self._fleet_source = str(config.get("bot_name") or self.__class__.__name__)
 
     def _get_stable_regime(self, pair: str, current_regime: str) -> str:
         """
@@ -133,38 +125,63 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
         return history[0] if history else "unknown"
 
     def _dry_run_gate_allows(self, pair: str, side: str) -> bool:
-        """Override gate for dry-run mode: allow if raw confidence >= threshold.
+        """Side-aware dry-run signal gate.
 
-        Reads the signal state directly and checks confidence, bypassing the
-        conservative verdict/bias system that blocks all WATCH_ONLY entries.
+        The active v7 implementation allowed any side when raw confidence was
+        above threshold. That made bearish/short signals permit long entries.
+        This research variant only allows the matching direction:
+        - long: action buy/long + bullish bias + confidence >= 0.70
+        - short: action sell/short + bearish bias + confidence >= 0.70
+
+        If signal state or pair data is absent, fail closed for research safety.
         """
         state = load_signal_state()
-        if not state:
-            return True
-        pair_data = (state.get("pairs") or {}).get(_norm_pair(pair))
-        if not isinstance(pair_data, dict):
-            return True
-        confidence = float(pair_data.get("confidence", 0.0))
-        if confidence >= self.dry_run_confidence_threshold:
-            return True
-        logger.debug(f"dry_run_gate: {pair} {side} blocked — "
-                     f"confidence {confidence:.2f} < {self.dry_run_confidence_threshold}")
-        return False
+        pairs = (state.get("pairs") or {}) if isinstance(state, dict) else {}
 
-    def bot_loop_start(self, current_time: datetime, **kwargs) -> None:
-        try:
-            from freqtrade.persistence import Trade
-            source = self._fleet_source
-            open_trades = list(Trade.get_trades_proxy(is_open=True))
-            closed_trades = list(Trade.get_trades_proxy(is_open=False))
-            self.risk_manager.sync_trade_state(source=source, open_trades=open_trades, closed_trades=closed_trades)
-            if hasattr(self, "wallets") and self.wallets:
+        # Research backtests cannot rely on the live bridge state: the active
+        # state file can be stale/empty. Allow a config-scoped fixture under
+        # config/research/ for deterministic side-aware tests.
+        if not pairs:
+            signal_file = self.config.get("research_signal_file")
+            if signal_file:
                 try:
-                    self.risk_manager.update_source_equity(source, float(self.wallets.get_total_stake_amount()))
-                except Exception as wallet_err:
-                    logger.debug(f"FleetRisk source equity skipped for {source}: {wallet_err}")
-        except Exception as exc:
-            logger.debug(f"FleetRisk sync skipped for {self._fleet_source}: {exc}")
+                    import json
+                    from pathlib import Path
+                    fixture_state = json.loads(Path(signal_file).read_text())
+                    if isinstance(fixture_state, dict):
+                        pairs = fixture_state.get("pairs") or {}
+                except Exception as e:
+                    logger.warning(f"research signal fixture load failed: {e}")
+                    pairs = {}
+
+        if not isinstance(pairs, dict) or not pairs:
+            return False
+
+        pair_norm = _norm_pair(pair)
+        pair_raw = str(pair or "").strip().upper()
+        pair_data = pairs.get(pair_raw) or pairs.get(pair_norm)
+        if not isinstance(pair_data, dict):
+            return False
+
+        action = str(pair_data.get("action", "")).lower().strip()
+        bias = str(pair_data.get("bias", "")).lower().strip()
+        recommendation = str(pair_data.get("recommendation", "")).lower().strip()
+        verdict = str(pair_data.get("verdict", "")).lower().strip()
+        try:
+            confidence = float(pair_data.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+
+        threshold = self.dry_run_confidence_threshold
+        accepted = verdict in ("accepted", "", "allow") or recommendation in ("allow", "")
+
+        if side == "long":
+            return accepted and action in ("buy", "long") and bias == "bullish" and confidence >= threshold
+
+        if side == "short":
+            return accepted and action in ("sell", "short") and bias == "bearish" and confidence >= threshold
+
+        return False
 
     def informative_pairs(self):
         pairs = self.dp.current_whitelist()
@@ -269,6 +286,7 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
             pair=pair, timeframe=self.informative_timeframe
         )
         informative['ema200'] = ta.EMA(informative, timeperiod=200)
+        informative['ema50'] = ta.EMA(informative, timeperiod=50)
         informative['adx'] = ta.ADX(informative)
         informative['rsi'] = ta.RSI(informative)
         dataframe = merge_informative_pair(
@@ -296,6 +314,10 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
 
         dataframe['volume_mean'] = dataframe['volume'].rolling(window=30).mean()
         dataframe['volume_ratio'] = dataframe['volume'] / dataframe['volume_mean']
+        dataframe['volume_ma'] = dataframe['volume_mean']
+        dataframe['trend'] = 'neutral'
+        dataframe.loc[(dataframe['close'] > dataframe['ema200']) & (dataframe['ema50'] > dataframe['ema200']), 'trend'] = 'bullish'
+        dataframe.loc[(dataframe['close'] < dataframe['ema200']) & (dataframe['ema50'] < dataframe['ema200']), 'trend'] = 'bearish'
 
         # v0.4 signal pre-computation (vectorized, per-pair regime tracking)
         self._build_v04_signal_layer(dataframe, pair)
@@ -304,82 +326,79 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         ema200_htf = dataframe[f'ema200_{self.informative_timeframe}']
+        ema50_htf = dataframe[f'ema50_{self.informative_timeframe}'] if f'ema50_{self.informative_timeframe}' in dataframe.columns else None
         pair = metadata.get("pair")
         is_dry_run = self.config.get('dry_run', False)
-        long_risk_allowed, long_risk_reason = self.risk_manager.check_entry_allowed(pair, "long")
-        short_risk_allowed, short_risk_reason = self.risk_manager.check_entry_allowed(pair, "short")
-
-        if not long_risk_allowed:
-            logger.debug(f"[FleetRisk] LONG gate reduced for {pair}: {long_risk_reason}")
-        if not short_risk_allowed:
-            logger.debug(f"[FleetRisk] SHORT gate reduced for {pair}: {short_risk_reason}")
 
         if self.dry_run_override and is_dry_run:
-            long_gate = self._dry_run_gate_allows(pair, "long") and long_risk_allowed
-            short_gate = self._dry_run_gate_allows(pair, "short") and short_risk_allowed
+            long_gate = self._dry_run_gate_allows(pair, "long")
+            short_gate = self._dry_run_gate_allows(pair, "short")
         else:
-            long_gate = primo_gate_allows(pair, "long") and long_risk_allowed
-            short_gate = primo_gate_allows(pair, "short") and short_risk_allowed
+            long_gate = primo_gate_allows(pair, "long")
+            short_gate = primo_gate_allows(pair, "short")
 
-        # --- Strategy-native LONG conditions ---
+        atr_expanding = dataframe['atr_pct'] > dataframe['atr_pct'].rolling(20).mean()
+        vol_ok = dataframe['volume'] > dataframe['volume_ma']
+
+        # RESEARCH LONG: symmetric bullish regime only. Bearish external signal fails closed.
         trend_long = (
+            (dataframe['trend'] == 'bullish') &
             (dataframe['adx_rel'] > self.adx_rel_threshold.value) &
             (dataframe['close'] > ema200_htf) &
             (dataframe['close'] > dataframe['ema200']) &
-            (dataframe['close'] < dataframe['ema50']) &
-            (dataframe['rsi'] < 50) &
-            (dataframe['volume'] > dataframe['volume_mean']) &
+            (dataframe['rsi'] < 35) &
+            vol_ok &
+            atr_expanding &
             long_gate
         )
 
         range_long = (
+            (dataframe['trend'] != 'bearish') &
             (dataframe['adx_rel'] <= self.adx_rel_threshold.value) &
             (dataframe['rsi'] < self.rsi_oversold.value) &
             (dataframe['close'] < dataframe['bb_lowerband']) &
-            (dataframe['volume'] > dataframe['volume_mean']) &
+            vol_ok &
+            atr_expanding &
             long_gate
         )
 
-        # --- Strategy-native SHORT conditions ---
+        # RESEARCH SHORT: mirrored bearish regime. Uses enter_short in populate_entry_trend
+        # (Freqtrade v3 does not call populate_short_trend()).
         trend_short = (
+            (dataframe['trend'] == 'bearish') &
             (dataframe['adx_rel'] > self.adx_rel_threshold.value) &
             (dataframe['close'] < ema200_htf) &
             (dataframe['close'] < dataframe['ema200']) &
-            (dataframe['close'] > dataframe['ema50']) &
-            (dataframe['rsi'] > 50) &
-            (dataframe['volume'] > dataframe['volume_mean']) &
+            (dataframe['rsi'] > 65) &
+            vol_ok &
+            atr_expanding &
             short_gate
         )
 
         range_short = (
+            (dataframe['trend'] != 'bullish') &
             (dataframe['adx_rel'] <= self.adx_rel_threshold.value) &
             (dataframe['rsi'] > 75) &
             (dataframe['close'] > dataframe['bb_upperband']) &
-            (dataframe['volume'] > dataframe['volume_mean']) &
+            vol_ok &
+            atr_expanding &
             short_gate
         )
 
-        # --- v0.4 SECOND LAYER: Override via v04_action column ---
-        # Block entry if v0.4 says WATCH and strategy wanted to enter
+        # v0.4 layer may still veto WATCH candidates.
         long_override_mask = ((dataframe['v04_action'] == 'WATCH') & (trend_long | range_long))
         short_override_mask = ((dataframe['v04_action'] == 'WATCH') & (trend_short | range_short))
 
-        if long_override_mask.any():
-            logger.debug(f"v0.4 Override LONG: {(trend_long & long_override_mask).sum()} trend, "
-                         f"{(range_long & long_override_mask).sum()} range entries blocked for {pair}")
-        if short_override_mask.any():
-            logger.debug(f"v0.4 Override SHORT: {(trend_short & short_override_mask).sum()} entries blocked for {pair}")
-
-        # Apply combined entries
         long_entries = (trend_long | range_long) & ~long_override_mask
         short_entries = (trend_short | range_short) & ~short_override_mask
 
         dataframe.loc[long_entries, 'enter_long'] = 1
-        dataframe.loc[long_entries, 'enter_tag'] = 'range_reversion_long'
-        dataframe.loc[trend_long & ~long_override_mask, 'enter_tag'] = 'trend_pullback_long'
+        dataframe.loc[range_long & ~long_override_mask, 'enter_tag'] = 'research_range_reversion_long'
+        dataframe.loc[trend_long & ~long_override_mask, 'enter_tag'] = 'research_trend_pullback_long'
+
         dataframe.loc[short_entries, 'enter_short'] = 1
-        dataframe.loc[short_entries, 'enter_tag'] = 'range_reversion_short'
-        dataframe.loc[trend_short & ~short_override_mask, 'enter_tag'] = 'trend_pullback_short'
+        dataframe.loc[range_short & ~short_override_mask, 'enter_tag'] = 'research_range_reversion_short'
+        dataframe.loc[trend_short & ~short_override_mask, 'enter_tag'] = 'research_trend_pullback_short'
 
         return dataframe
 
@@ -390,11 +409,6 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
                             rate: float, time_in_force: str, current_time: datetime,
                             entry_tag: Optional[str], side: str, **kwargs) -> bool:
         """FleetGuard v1 entry safety check."""
-        risk_allowed, risk_reason = self.risk_manager.check_entry_allowed(pair, side)
-        if not risk_allowed:
-            logger.info(f"[FleetRisk] Entry blockiert: {pair} {side} -> {risk_reason}")
-            return False
-
         open_trades = []
         recent_closed = []
         current_drawdown = 0.0
@@ -435,22 +449,27 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
 
     def custom_stoploss(self, pair: str, trade, current_time, current_rate,
                         current_profit: float, **kwargs) -> float:
-        """ATR-based dynamic stoploss with regime-aware trailing."""
+        """ATR-based custom stoploss for research variant.
+
+        - Protect profits once current_profit > 2%.
+        - Kill stale losers after 90 minutes.
+        - Otherwise use 2x ATR relative to current rate, capped at -5%.
+        """
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
-        if dataframe.empty:
+        if dataframe is None or dataframe.empty:
             return self.stoploss
 
-        last = dataframe.iloc[-1]
-        atr_pct = last['atr_pct']
-        adx_rel = last.get('adx_rel', 1.0)
-        is_trend = adx_rel > self.adx_rel_threshold.value
+        last_candle = dataframe.iloc[-1]
+        atr = last_candle.get('atr')
+        if atr is None or current_rate <= 0:
+            return self.stoploss
 
-        if is_trend:
-            sl_distance = atr_pct * self.atr_sl_trend
-            tp_trigger = atr_pct * self.atr_tp_trend.value
-            if current_profit > tp_trigger:
-                return max(-sl_distance, current_profit - sl_distance)
-            return -sl_distance
-        else:
-            sl_distance = atr_pct * self.atr_sl_range.value
-            return -sl_distance
+        if current_profit > 0.02:
+            return -0.012
+
+        trade_duration_min = (current_time - trade.open_date_utc).total_seconds() / 60
+        if trade_duration_min > 90 and current_profit < 0:
+            return -0.018
+
+        atr_stoploss = -(2 * float(atr) / float(current_rate))
+        return max(atr_stoploss, -0.05)

@@ -1,13 +1,13 @@
 {
   "version": "0.1.0",
-  "checked_at": "2026-05-08T21:32:05.164237+00:00",
-  "fleet_verdict": "GREEN",
+  "checked_at": "2026-05-23T17:17:48.380772+00:00",
+  "fleet_verdict": "RED",
   "helper_exists": true,
   "bots": [
     {
       "bot": "rsi",
       "container": "freqtrade-rsi",
-      "container_running": true,
+      "container_running": false,
       "config_path": "/home/hermes/projects/trading/freqtrade/bots/rsi/config/config.json",
       "config_readable": true,
       "dry_run": true,
@@ -16,15 +16,15 @@
         "secret": "absent"
       },
       "expected_strategy": "SimpleRSIOnly_v1",
-      "strategy_matches": true,
+      "strategy_matches": false,
       "state_file": "/home/hermes/projects/trading/freqtrade/bots/rsi/user_data/primo_signal_state.json",
       "state_file_exists": true,
-      "verdict": "GREEN"
+      "verdict": "RED"
     },
     {
       "bot": "momentum",
       "container": "freqtrade-momentum",
-      "container_running": true,
+      "container_running": false,
       "config_path": "/home/hermes/projects/trading/freqtrade/bots/momentum/config/config.json",
       "config_readable": true,
       "dry_run": true,
@@ -33,10 +33,10 @@
         "secret": "absent"
       },
       "expected_strategy": "MomentumBG15_v1",
-      "strategy_matches": true,
+      "strategy_matches": false,
       "state_file": "/home/hermes/projects/trading/freqtrade/bots/momentum/user_data/primo_signal_state.json",
       "state_file_exists": true,
-      "verdict": "GREEN"
+      "verdict": "RED"
     },
     {
       "bot": "regime-hybrid",
@@ -50,10 +50,10 @@
         "secret": "absent"
       },
       "expected_strategy": "RegimeSwitchingHybrid_v6_Stable",
-      "strategy_matches": true,
+      "strategy_matches": false,
       "state_file": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json",
       "state_file_exists": true,
-      "verdict": "GREEN"
+      "verdict": "RED"
     }
   ]
 }

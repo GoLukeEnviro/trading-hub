@@ -18,12 +18,37 @@ LATEST="$SIGNAL_DIR/latest/hermes_signal.json"
 LOG="$SIGNAL_DIR/logs/heartbeat.log"
 TEMP="${CANONICAL}.tmp.$$"
 
+resolve_trigger_url() {
+  if [ -n "${AI_HEDGE_HEARTBEAT_URL:-}" ]; then
+    printf '%s\n' "$AI_HEDGE_HEARTBEAT_URL"
+    return 0
+  fi
+
+  CONTAINER_IP=$(getent hosts "$CONTAINER" 2>/dev/null | awk 'NR==1{print $1; exit}' || true)
+  if [ -n "$CONTAINER_IP" ]; then
+    printf 'http://%s:8080/trigger\n' "$CONTAINER_IP"
+    return 0
+  fi
+
+  if command -v docker >/dev/null 2>&1; then
+    CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER" 2>/dev/null || true)
+    if [ -n "$CONTAINER_IP" ]; then
+      printf 'http://%s:8080/trigger\n' "$CONTAINER_IP"
+      return 0
+    fi
+  fi
+
+  printf '%s\n' "http://127.0.0.1:8410/trigger"
+}
+
+TARGET_URL="$(resolve_trigger_url)"
+
 mkdir -p "$(dirname "$LATEST")" "$(dirname "$LOG")"
 
-# --- Step 1: Trigger via container-internal localhost:8080 ---
-echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] heartbeat start" >> "$LOG"
+# --- Step 1: Trigger via docker-resolved ai-hedge-fund-crypto endpoint ---
+echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] heartbeat start target=${TARGET_URL}" >> "$LOG"
 
-HTTP_CODE=$(curl -sS -m 120 -o "$TEMP" -w '%{http_code}' http://127.0.0.1:8410/trigger 2>>"$LOG")
+HTTP_CODE=$(curl -sS -m 180 -o "$TEMP" -w '%{http_code}' "$TARGET_URL" 2>>"$LOG")
 [ "$HTTP_CODE" = "200" ] && HTTP_OK=true || HTTP_OK=false
 
 if [ "$HTTP_OK" != "true" ]; then
