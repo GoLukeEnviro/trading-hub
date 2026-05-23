@@ -122,6 +122,7 @@ freqtrade/shared/*.lock
 
 # Freqtrade bot runtime state and signal archives
 freqtrade/bots/*/user_data/primo_signal_state.json
+freqforge/*/primo_signal_state.json
 freqtrade/bots/*/user_data/signals/
 freqtrade/bots/regime-hybrid/config/research/automation/latest_*.json
 freqtrade/bots/regime-hybrid/config/research/automation/*_events.jsonl
