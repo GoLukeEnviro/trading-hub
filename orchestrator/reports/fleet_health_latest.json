@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "checked_at": "2026-05-23T17:17:48.380772+00:00",
+  "checked_at": "2026-05-28T10:30:53.770439+00:00",
   "fleet_verdict": "RED",
   "helper_exists": true,
   "bots": [
@@ -18,7 +18,7 @@
       "expected_strategy": "SimpleRSIOnly_v1",
       "strategy_matches": false,
       "state_file": "/home/hermes/projects/trading/freqtrade/bots/rsi/user_data/primo_signal_state.json",
-      "state_file_exists": true,
+      "state_file_exists": false,
       "verdict": "RED"
     },
     {
@@ -41,7 +41,7 @@
     {
       "bot": "regime-hybrid",
       "container": "freqtrade-regime-hybrid",
-      "container_running": true,
+      "container_running": false,
       "config_path": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json",
       "config_readable": true,
       "dry_run": true,
