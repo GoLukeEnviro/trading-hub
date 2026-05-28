@@ -12,11 +12,14 @@ services:
   # BOT 1 — RSI SimpleRSIOnly_v1
   # ---------------------------------------------------------------------------
   freqtrade-rsi:
-    image: freqtradeorg/freqtrade:stable
+    image: freqtrade-hermes10000:stable
     container_name: freqtrade-rsi
     restart: unless-stopped
     networks:
       - ki-fabrik
+    user: "10000:10000"
+    group_add:
+      - "10000"
     ports:
       - "127.0.0.1:8081:8081"
     volumes:
@@ -47,6 +50,9 @@ services:
     restart: unless-stopped
     networks:
       - ki-fabrik
+    user: "10000:10000"
+    group_add:
+      - "10000"
     ports:
       - "127.0.0.1:8084:8082"
     volumes:
@@ -73,11 +79,14 @@ services:
   # Test-Candidate: RegimeSwitchingHybrid_v7_v04_Integration
   # ---------------------------------------------------------------------------
   freqtrade-regime-hybrid:
-    image: freqtradeorg/freqtrade:stable
+    image: freqtrade-hermes10000:stable
     container_name: freqtrade-regime-hybrid
     restart: unless-stopped
     networks:
       - ki-fabrik
+    user: "10000:10000"
+    group_add:
+      - "10000"
     ports:
       - "127.0.0.1:8085:8085"
     volumes:
@@ -106,11 +115,14 @@ services:
   # Deployed: 2026-05-16
   # ---------------------------------------------------------------------------
   freqforge-canary:
-    image: freqtradeorg/freqtrade:stable
+    image: freqtrade-hermes10000:stable
     container_name: freqtrade-freqforge-canary
     restart: unless-stopped
     networks:
       - ki-fabrik
+    user: "10000:10000"
+    group_add:
+      - "10000"
     ports:
       - "127.0.0.1:8081:8081"
     volumes:

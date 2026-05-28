@@ -1,0 +1,8 @@
+FROM freqtradeorg/freqtrade:stable
+
+USER root
+RUN groupmod -g 10000 ftuser \
+ && usermod -u 10000 -g 10000 ftuser \
+ && chown -R 10000:10000 /home/ftuser
+
+USER ftuser
