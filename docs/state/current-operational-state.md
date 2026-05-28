@@ -1,7 +1,7 @@
 # Operational State — Trading Hub
 
-**Last updated:** 2026-05-21 12:24 UTC
-**Update trigger:** Final repo cleanup + docs refresh
+**Last updated:** 2026-05-25 09:45 UTC
+**Update trigger:** max_open_trades-block v4.7 permanent structural fix + recovery-first hardening
 **Author:** Hermes Agent
 
 > This file is a validated snapshot, not live telemetry. Re-check container and cron
@@ -24,12 +24,19 @@
 
 | Bot | Role | Current posture |
 |-----|------|-----------------|
-| FreqForge | Baseline dry-run bot | Active |
-| Regime-Hybrid | Futures dry-run bot | Active |
-| Momentum | Futures dry-run bot | Active |
-| FreqForge Canary | Spot dry-run clone | Active |
-| FreqAI-Rebel | FreqAI dry-run bot | Active |
+| FreqForge | Baseline dry-run bot | Active (max_open_trades=5) |
+| Regime-Hybrid | Futures dry-run bot | Active (max_open_trades=5) |
+| Momentum | Futures dry-run bot | Not deployed |
+| FreqForge Canary | Spot dry-run clone | Active (max_open_trades=3) |
+| FreqAI-Rebel | FreqAI dry-run bot | Active, permanent quarantine (max_open_trades=0) |
 | MVS | Preserved strategy only | Not deployed |
+
+### Repair note (2026-05-25 09:45 UTC)
+
+- `orchestrator/scripts/system_optimizer.py` is now on v4.7 and executes a `recovery_preflight()` before any new block logic, so expired pauses are force-restored immediately when the recent 24h window is green.
+- Consecutive-loss analysis is now bounded by `max(cursor, now-24h)`, which prevents old historical loss windows from re-triggering a fresh fleet block.
+- Host-side optimizer state/config writes now use atomic replace + timestamped backups, and container config writes create `.bak-<timestamp>` snapshots before replacement.
+- Verified live state after restart + pipeline + optimizer rerun: FreqForge `5`, Regime-Hybrid `5`, Canary `3`, Rebel `0` (intentional permanent quarantine); no immediate re-block occurred.
 
 ---
 
