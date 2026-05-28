@@ -1,111 +1,88 @@
 # Operational State — Trading Hub
 
-**Last updated:** 2026-05-25 09:45 UTC
-**Update trigger:** max_open_trades-block v4.7 permanent structural fix + recovery-first hardening
-**Author:** Hermes Agent
+**Stand:** 2026-05-28 (CEST)  
+**Quelle:** Live-Checks auf Host `Agent0` (nicht nur Repo-Stand)
 
-> This file is a validated snapshot, not live telemetry. Re-check container and cron
-> state before making any operational decision.
+> Dieser Snapshot ist eine belastbare Momentaufnahme. Vor produktiven Eingriffen trotzdem erneut live validieren.
 
 ---
 
-## 1. Fleet / operating mode
+## 1) Container- und Service-Status
 
-- Trading Hub remains in **dry-run only** mode.
-- `ai-hedge-fund-crypto` is the active signal core.
-- Hermes remains the meta-orchestrator for audits, repairs, cron, and docs.
-- The Freqtrade fleet remains the dry-run execution layer.
-- `trading-guardian` permission hardening is active and should stay in the
-  read-only safety posture described in the recent audit docs.
-- RiskGuard is still a spec-only safety layer in the repo.
-- ShadowLogger remains the passive evidence layer / spec reference.
+Aktive Kernservices (Auszug):
 
-### Documented bots
+- `hermes-green` — Up
+- `green-mem0`, `green-ollama`, `green-qdrant` — Up
+- `hermes-mem0-local-api` — Up (healthy)
+- `ai-hedge-fund-crypto` — Up (healthy)
+- `freqtrade-freqforge` — Up
+- `freqtrade-freqforge-canary` — Up
+- `freqtrade-regime-hybrid` — Up
+- `freqai-rebel` — Up
+- `freqtrade-webserver` — Up (nach Rechte-Fix)
+- `caddy` — Up
+- `claude-worker`, `a0-v2`, `trading-guardian`, `rizzcoach-app-1` — Up
 
-| Bot | Role | Current posture |
-|-----|------|-----------------|
-| FreqForge | Baseline dry-run bot | Active (max_open_trades=5) |
-| Regime-Hybrid | Futures dry-run bot | Active (max_open_trades=5) |
-| Momentum | Futures dry-run bot | Not deployed |
-| FreqForge Canary | Spot dry-run clone | Active (max_open_trades=3) |
-| FreqAI-Rebel | FreqAI dry-run bot | Active, permanent quarantine (max_open_trades=0) |
-| MVS | Preserved strategy only | Not deployed |
+Relevante Ports:
 
-### Repair note (2026-05-25 09:45 UTC)
-
-- `orchestrator/scripts/system_optimizer.py` is now on v4.7 and executes a `recovery_preflight()` before any new block logic, so expired pauses are force-restored immediately when the recent 24h window is green.
-- Consecutive-loss analysis is now bounded by `max(cursor, now-24h)`, which prevents old historical loss windows from re-triggering a fresh fleet block.
-- Host-side optimizer state/config writes now use atomic replace + timestamped backups, and container config writes create `.bak-<timestamp>` snapshots before replacement.
-- Verified live state after restart + pipeline + optimizer rerun: FreqForge `5`, Regime-Hybrid `5`, Canary `3`, Rebel `0` (intentional permanent quarantine); no immediate re-block occurred.
+- Freqtrade/API-Ports: `8081`, `8085`, `8086`, `8087`, `8180` auf `127.0.0.1`
+- Public Edge weiterhin nur über Caddy/Netzwerk-Policy
 
 ---
 
-## 2. Repository and documentation state
+## 2) Speicherstatus
 
-- `main` is synced with `origin/main` at the time of this snapshot.
-- The documentation layer was refreshed to reflect the current safety model and
-  repo layout.
-- `docs/context/` is the historical archive; it is not the canonical current
-  state.
-- `docs/state/current-operational-state.md` is the current snapshot file.
-- Several strategy, research, and runtime artifacts remain intentionally local
-  until they are classified, reviewed, or archived.
+Snapshot zum Zeitpunkt dieser Datei:
 
----
+- Filesystem `/`: `301G` gesamt / `211G` belegt / `78G` frei (`73%`)
 
-## 3. Local-only runtime artifacts
+Bewertung:
 
-The following classes of files are expected to remain uncommitted:
-
-- `.hermes/` local plans and cleanup notes
-- `docs/context/git-cleanup-snapshots/`
-- `docs/context/memory-migration-staging/`
-- `events/` and `proposals/`
-- `shared/hermes_signal.json`
-- `freqtrade/shared/*state*.json`
-- `freqtrade/shared/*.lock`
-- `freqtrade/shared/fleet_correlation_matrix.json`
-- `freqtrade/bots/*/user_data/primo_signal_state.json`
-- `freqtrade/bots/*/user_data/signals/`
-- `freqtrade/bots/regime-hybrid/config/research/automation/latest_*.json`
-- `freqtrade/bots/regime-hybrid/config/research/automation/*_events.jsonl`
-- `freqtrade/bots/regime-hybrid/config/research/automation/*_state.json`
-- `orchestrator/config/cron_jobs_backup.json`
-- `orchestrator/backups/`
-- `**/*.bak`, `**/*.bak-*`, `*.backup.*`
+- Ziel `>= 90G frei` ist **noch nicht erreicht**.
+- Bereits erledigt: alte DB-Dumps (26./27.) entfernt, OpenClaw-Alt-Volumes entfernt, Caches bereinigt.
 
 ---
 
-## 4. Known risks before live trading
+## 3) Backup-Status (Restic + lokal)
 
-1. Live trading is still not approved.
-2. Strategy or config changes require explicit review.
-3. Runtime state can drift from the docs, so validate live before action.
-4. Research and automation artifacts are intentionally split from production
-   logic and may remain uncommitted until they are classified.
-5. Historical reports in `docs/context/` should not be mistaken for current
-   runtime telemetry.
+- `restic-backblaze-backup.timer`: aktiv
+- Letzter planmäßiger Service-Run: `SUCCESS` (heute Nacht)
+- Zusätzlicher manueller Fix-Snapshot vorhanden: `1b81bd74` (Tag `manual-fix-20260528`)
+- Neuester Snapshot enthält **nicht mehr**:
+  - `/opt/backups`
+  - `/home/claudio/hermes-backups`
+  - `/opt/hermes-recovery-*`
 
----
+Hinweis:
 
-## 5. Validation commands
-
-```bash
-git branch --show-current
-git status -sb
-git diff --name-status
-git rev-parse HEAD
-git rev-parse origin/main
-git check-ignore -v shared/hermes_signal.json \
-  freqtrade/shared/fleet_risk_state.json \
-  freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json \
-  docs/context/git-cleanup-snapshots/
-python3 /home/hermes/projects/trading/freqtrade/shared/fleet_watcher.py --once --tail-lines 20
-```
+- Ältere Snapshots enthalten historisch noch `/opt/backups` (vor Fix), was erwartet ist.
 
 ---
 
-## 6. Cleanup report reference
+## 4) Security-Status (Port-Bindings)
 
-See `docs/context/final-repo-cleanup-and-docs-refresh-20260521.md` for the
-final cleanup classification and documentation alignment notes.
+- `freqtrade-webserver` war vorher `0.0.0.0:8180`, jetzt auf `127.0.0.1:8180` umgestellt.
+- UFW-Hardening-Regeln für `8180/8081/8085/8086/8087` auf `eth0` aktiv.
+- `ss`-Prüfung zeigt für diese Zielports nur localhost-Bindings.
+
+---
+
+## 5) Dry-Run-Sicherheit
+
+Direkt aus den geladenen Container-Konfigurationen verifiziert:
+
+- `freqtrade-freqforge`: `dry_run=True`
+- `freqtrade-freqforge-canary`: `dry_run=True`
+- `freqtrade-regime-hybrid`: `dry_run=True`
+- `freqai-rebel`: `dry_run=True`
+
+---
+
+## 6) Offene TODOs / Blocker
+
+1. **Speicherziel nicht erreicht** (`78G` statt `>=90G`).
+2. Große Kandidaten weiterhin vorhanden:
+   - `/home/claudio/hermes-backups/lossless-20260527-145953` (~31G)
+   - `/opt/hermes-recovery-20260517-111339` (~26G)
+3. Beide großen Kandidaten sind aktuell **nicht direkt über Restic-Path-Coverage abgesichert** (R5-Constraint), daher noch nicht gelöscht.
+4. Konsolidierte Root-Compose erstellt (`/home/hermes/projects/trading/docker-compose.yml`), aber noch nicht als alleiniger Live-Orchestrator übernommen.

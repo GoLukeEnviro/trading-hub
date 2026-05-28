@@ -1,0 +1,164 @@
+services:
+  # 1. Docker Socket Proxy (SECURITY LAYER)
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      SERVICES: 1
+      NETWORKS: 1
+      INFO: 1
+      # Explizit KEIN: POST, DELETE, EXEC
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy-net
+
+  # 2. Signal Layer
+  ai-hedge-fund:
+    image: trading-ai-hedge-fund-crypto:latest
+    ports:
+      - "127.0.0.1:8410:8410"
+    restart: unless-stopped
+    networks:
+      - hermes-net
+      - proxy-net
+
+  # 3. Hermes Orchestrator
+  hermes-green:
+    image: nousresearch/hermes-agent:latest
+    environment:
+      DOCKER_HOST: tcp://docker-proxy:2375
+    restart: unless-stopped
+    networks:
+      - hermes-net
+      - proxy-net
+    depends_on:
+      - docker-proxy
+
+  # 4. Memory Layer
+  green-qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - green-qdrant-data:/qdrant/storage
+    networks:
+      - hermes-net
+    restart: unless-stopped
+
+  green-ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - green-ollama-data:/root/.ollama
+    networks:
+      - hermes-net
+    restart: unless-stopped
+
+  green-mem0:
+    image: hermes-mem0-local-api:stable
+    networks:
+      - hermes-net
+    restart: unless-stopped
+    depends_on:
+      - green-qdrant
+      - green-ollama
+
+  # 5. Freqtrade Fleet (alle 127.0.0.1)
+  freqtrade-freqforge:
+    image: freqtradeorg/freqtrade:stable
+    ports:
+      - "127.0.0.1:8086:8080"
+    command: trade --config /freqtrade/user_data/config.json
+    volumes:
+      - ./freqtrade/user_data:/freqtrade/user_data
+    restart: unless-stopped
+    networks:
+      - hermes-net
+
+  freqtrade-regime-hybrid:
+    image: freqtradeorg/freqtrade:stable
+    ports:
+      - "127.0.0.1:8085:8080"
+    volumes:
+      - ./freqtrade/user_data:/freqtrade/user_data
+    restart: unless-stopped
+    networks:
+      - hermes-net
+
+  freqtrade-freqforge-canary:
+    image: freqtradeorg/freqtrade:stable
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./freqtrade/user_data:/freqtrade/user_data
+    restart: unless-stopped
+    networks:
+      - hermes-net
+
+  freqai-rebel:
+    image: freqtradeorg/freqtrade:stable
+    ports:
+      - "127.0.0.1:8087:8080"
+    volumes:
+      - ./freqtrade/user_data:/freqtrade/user_data
+    restart: unless-stopped
+    networks:
+      - hermes-net
+
+  freqtrade-webserver:
+    image: freqtradeorg/freqtrade:stable
+    ports:
+      - "127.0.0.1:8180:8080"
+    command: webserver --config /freqtrade/user_data/config.json
+    volumes:
+      - ./freqtrade/user_data:/freqtrade/user_data
+    restart: unless-stopped
+    networks:
+      - hermes-net
+
+  # 6. Hermes Watchdog (NEU)
+  hermes-watchdog:
+    image: alpine:latest
+    command: |
+      sh -c 'while true; do
+        for port in 8081 8085 8086 8087 8410; do
+          wget -qO- --timeout=5 http://host.docker.internal:$$port/api/v1/ping \
+            || echo "ALERT: port $$port down at $$(date)" >> /var/log/watchdog.log;
+        done;
+        sleep 60;
+      done'
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - watchdog-logs:/var/log
+    restart: unless-stopped
+    networks:
+      - hermes-net
+
+  # 7. Reverse Proxy
+  caddy:
+    image: caddy:alpine
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    networks:
+      - hermes-net
+
+networks:
+  hermes-net:
+    driver: bridge
+  proxy-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  green-qdrant-data:
+  green-ollama-data:
+  freqai-rebel-data:
+  watchdog-logs:
+  caddy-data:
+  caddy-config:
