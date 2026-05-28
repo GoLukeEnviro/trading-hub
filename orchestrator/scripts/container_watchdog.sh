@@ -1,6 +1,7 @@
 #!/bin/bash
-# container_watchdog.sh v2 — Container health check with Docker-aware fallback
-# Runs every 5min via Hermes cron. Only outputs when issues found (silent = OK).
+# container_watchdog.sh v3 — Container health check with Docker-aware fallback
+# Runs every 30min via Hermes cron. Only outputs when issues found (silent = OK).
+# v3: removed freqtrade-momentum (intentionally not deployed), reduced from 5min to 30min.
 #
 # Detection strategy:
 #   1. If Docker socket available → docker inspect (authoritative)
@@ -23,7 +24,7 @@ declare -A BOT_PROBES
 BOT_PROBES["freqtrade-freqforge"]="/home/hermes/projects/trading/freqtrade/shared/primo_signal_state.json"
 BOT_PROBES["freqtrade-freqforge-canary"]="/home/hermes/projects/trading/freqtrade/shared/primo_signal_state.json"
 BOT_PROBES["freqtrade-regime-hybrid"]="/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json"
-BOT_PROBES["freqtrade-momentum"]="/home/hermes/projects/trading/freqtrade/bots/momentum/user_data/primo_signal_state.json"
+# freqtrade-momentum intentionally not deployed — removed 2026-05-24
 BOT_PROBES["freqai-rebel"]="/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json"
 BOT_PROBES["ai-hedge-fund-crypto"]="/home/hermes/projects/trading/ai-hedge-fund-crypto/output/latest/hermes_signal.json"
 

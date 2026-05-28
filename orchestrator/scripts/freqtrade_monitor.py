@@ -17,26 +17,39 @@ from datetime import datetime, timezone
 PROJECT_ROOT = "/home/hermes/projects/trading/freqtrade"
 BOTS_DIR = os.path.join(PROJECT_ROOT, "bots")
 
+# Docker network
+DOCKER_NETWORK = "ki-fabrik"
+
 BOTS = {
-    "freqtrade-momentum": {
-        "bot_dir": os.path.join(BOTS_DIR, "momentum", "user_data"),
-        "port": 8084,
-        "db": "tradesv3.momentum.sqlite",
-    },
     "freqtrade-regime-hybrid": {
         "bot_dir": os.path.join(BOTS_DIR, "regime-hybrid", "user_data"),
         "port": 8085,
         "db": "tradesv3.regime_hybrid.dryrun.sqlite",
+        "config": "/freqtrade/config/config_regime_hybrid_dryrun.json",
+        "network": DOCKER_NETWORK,
     },
-    "freqtrade-rsi": {
-        "bot_dir": os.path.join(BOTS_DIR, "rsi", "user_data"),
+    "freqtrade-freqforge": {
+        "bot_dir": "/home/hermes/projects/trading/freqforge/user_data",
+        "port": 8086,
+        "db": "tradesv3.freqforge.dryrun.sqlite",
+        "config": "/freqtrade/config/config_freqforge_dryrun.json",
+        "network": DOCKER_NETWORK,
+    },
+    "freqtrade-freqforge-canary": {
+        "bot_dir": "/home/hermes/projects/trading/freqforge-canary/user_data",
         "port": 8081,
+        "db": "tradesv3.freqforge_canary.dryrun.sqlite",
+        "config": "/freqtrade/config/config_canary_dryrun.json",
+        "network": DOCKER_NETWORK,
+    },
+    "freqai-rebel": {
+        "bot_dir": None,  # Docker volume: freqai-rebel-data
+        "port": 8087,
         "db": "tradesv3.dryrun.sqlite",
+        "config": "/freqtrade/user_data/config.json",
+        "network": "freqai-rebel-net",
     },
 }
-
-# Docker network
-DOCKER_NETWORK = "ki-fabrik"
 
 CONTAINER_IPS = {}
 
@@ -65,24 +78,31 @@ def sh_quote(s):
 
 
 def get_container_ip(container):
-    """Get container IP on the custom Docker network."""
+    """Get container IP on the appropriate Docker network."""
     if container in CONTAINER_IPS:
         return CONTAINER_IPS[container]
-    out, err = run_cmd(f"docker inspect {container} --format='{{{{.NetworkSettings.Networks.{DOCKER_NETWORK}.IPAddress}}}}'", timeout=5)
+    # Determine network from BOTS config
+    bot_info = BOTS.get(container, {})
+    network = bot_info.get("network", DOCKER_NETWORK)
+    out, err = run_cmd(f"docker inspect {container} --format='{{{{.NetworkSettings.Networks.{network}.IPAddress}}}}'", timeout=5)
     if out and out != "<no value>":
         CONTAINER_IPS[container] = out
         return out
     # Fallback: via hostname -i inside the container
     out2, _ = docker_exec(container, "hostname -i", timeout=5)
     if out2:
-        CONTAINER_IPS[container] = out2
-        return out2
+        CONTAINER_IPS[container] = out2.split()[0] if out2 else None
+        return CONTAINER_IPS[container]
     return None
 
 
 def get_trade_db_path(bot_name, bot_info):
     """Get the absolute host path to the SQLite trade database."""
-    return os.path.join(bot_info["bot_dir"], bot_info["db"])
+    bot_dir = bot_info.get("bot_dir")
+    if bot_dir is None:
+        # Docker volume bot — no host path, use docker exec
+        return None
+    return os.path.join(bot_dir, bot_info["db"])
 
 
 def parse_sqlite_row(row):
@@ -94,25 +114,20 @@ def get_trade_stats(bot_name, bot_info):
     """Query trade statistics from the SQLite database."""
     db_path = get_trade_db_path(bot_name, bot_info)
 
-    if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
-        return {"error": "DB not found or empty", "total_trades": 0, "wins": 0, "losses": 0}
+    # For bots with host-mounted DBs, check existence
+    if db_path is not None:
+        if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
+            return {"error": "DB not found or empty", "total_trades": 0, "wins": 0, "losses": 0}
 
     container = bot_name
     db_container_path = f"/freqtrade/user_data/{bot_info['db']}"
-
-    # Check DB has trades table
-    out, _ = docker_exec(container, f"sqlite3 \"{db_container_path}\" \".tables\" 2>/dev/null", timeout=5)
-    if "trades" not in out:
-        return {"error": "no trades table", "total_trades": 0, "wins": 0, "losses": 0}
 
     # Check container is running
     out, _ = run_cmd(f'docker inspect -f "{{{{.State.Status}}}}" {container}', timeout=5)
     if out != "running":
         return {"error": f"container status: {out}", "total_trades": 0}
 
-    config_path = f"/freqtrade/config/config.json"
-    if bot_name == "freqtrade-regime-hybrid":
-        config_path = "/freqtrade/config/config_regime_hybrid_dryrun.json"
+    config_path = bot_info.get("config", "/freqtrade/config/config.json")
 
     # Get config info
     stats = {}
@@ -236,9 +251,7 @@ FROM trades WHERE is_open = 1;
 
 def get_pair_whitelist(bot_name, bot_info):
     """Get the pair whitelist from the bot's config."""
-    config_path = "/freqtrade/config/config.json"
-    if bot_name == "freqtrade-regime-hybrid":
-        config_path = "/freqtrade/config/config_regime_hybrid_dryrun.json"
+    config_path = bot_info.get("config", "/freqtrade/config/config.json")
 
     out, _ = docker_exec(bot_name, f"""python3 -c "
 import json
@@ -340,7 +353,7 @@ def main():
         "summary": summary,
         "bots": results,
         "runtime_info": {
-            "script": "freqtrade_monitor.py v2",
+            "script": "freqtrade_monitor.py v3",
             "host": os.uname().nodename,
         }
     }

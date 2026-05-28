@@ -39,6 +39,7 @@ BOTS = {
     "freqforge": {
         "container": "freqtrade-freqforge",
         "port": 8086,
+        "config_host": "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json",
         "user": "freqforge",
         "password": "freqforge-local-only",
         "start_capital": 950.0,
@@ -47,6 +48,7 @@ BOTS = {
     "canary": {
         "container": "freqtrade-freqforge-canary",
         "port": 8081,
+        "config_host": "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json",
         "user": "canary",
         "password": "I7S6ZNh2T7GE3BYjYUpvnA",
         "start_capital": 500.0,
@@ -55,14 +57,17 @@ BOTS = {
     "regime_hybrid": {
         "container": "freqtrade-regime-hybrid",
         "port": 8085,
+        "config_host": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json",
         "user": "research",
         "password": "RGHx9kLt4wPzNs8vBq2E",
         "start_capital": 1000.0,
         "log_path": "/home/hermes/projects/trading/freqtrade/logs/regime-hybrid.log",
     },
+    # momentum: intentionally not deployed (removed 2026-05-24, was generating spam)
     "rebel": {
         "container": "freqai-rebel",
         "port": 8080,
+        "config_container": "/freqtrade/user_data/config.json",
         "user": "rebel",
         "password": "Vhaaz4y20joaAJQ71v3R7g",
         "start_capital": 1000.0,
@@ -124,6 +129,57 @@ def load_env():
                     os.environ[key.strip()] = val.strip()
 
 
+def _resolve_bot_auth(bot_id: str, cfg: dict):
+    """Resolve live API credentials from the bot's config file when possible.
+
+    Host-mounted configs are preferred because they are the source of truth for
+    the running dry-run fleet. Rebel uses a container-local config volume, so we
+    read it via docker exec when needed.
+    """
+    config_host = cfg.get("config_host")
+    if config_host and Path(config_host).exists():
+        try:
+            with open(config_host) as f:
+                data = json.load(f)
+            api = data.get("api_server", {})
+            return {
+                "port": int(api.get("listen_port", cfg.get("port", 0))),
+                "user": str(api.get("username", cfg.get("user", ""))),
+                "password": str(api.get("password", cfg.get("password", ""))),
+            }
+        except Exception as e:
+            log(f"  {bot_id}: host config auth read failed: {e}")
+
+    config_container = cfg.get("config_container")
+    if config_container and detect_docker():
+        try:
+            py = (
+                "import json; "
+                f"c=json.load(open({config_container!r})); "
+                "api=c.get('api_server',{}); "
+                "print(json.dumps({'port': api.get('listen_port', 0), 'user': api.get('username',''), 'password': api.get('password','')}))"
+            )
+            r = subprocess.run(
+                ["docker", "exec", cfg["container"], "python3", "-c", py],
+                capture_output=True, text=True, timeout=15,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                api = json.loads(r.stdout)
+                return {
+                    "port": int(api.get("port", cfg.get("port", 0))),
+                    "user": str(api.get("user", cfg.get("user", ""))),
+                    "password": str(api.get("password", cfg.get("password", ""))),
+                }
+        except Exception as e:
+            log(f"  {bot_id}: container config auth read failed: {e}")
+
+    return {
+        "port": int(cfg.get("port", 0)),
+        "user": str(cfg.get("user", "")),
+        "password": str(cfg.get("password", "")),
+    }
+
+
 def _get_telegram_creds():
     """Get Telegram token + chat_id."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -160,18 +216,46 @@ def _get_telegram_creds():
     return token, chat_id
 
 
-def send_telegram(message: str) -> bool:
-    """Send Telegram message."""
+def _report_keyboard(kind: str = "fleet"):
+    if kind == "approval":
+        return [
+            [{"text": "Ja, ausführen", "callback_data": "confirm_execute"}],
+            [{"text": "Nein, später", "callback_data": "defer_action"}],
+            [{"text": "Fleet Report jetzt", "callback_data": "fleet_report_now"}],
+        ]
+    return [
+        [{"text": "max_open_trades wiederherstellen", "callback_data": "restore_max_open_trades"}],
+        [{"text": "Permissions jetzt fixen", "callback_data": "fix_permissions"}],
+        [{"text": "Regime-Hybrid optimieren", "callback_data": "optimize_regime_hybrid"}],
+        [{"text": "Canary SHORTs prüfen", "callback_data": "check_canary_shorts"}],
+        [{"text": "Fleet Report jetzt", "callback_data": "fleet_report_now"}],
+    ]
+
+
+def send_telegram(message: str, inline_keyboard=None) -> bool:
+    """Send Telegram message with optional inline keyboard."""
     token, chat_id = _get_telegram_creds()
     if not token or not chat_id:
         return False
 
     try:
-        import urllib.parse
-        encoded = urllib.parse.quote(message)
-        url = f"https://api.telegram.org/bot{token}/sendMessage?chat_id={chat_id}&text={encoded}"
-        req = Request(url, method="GET")
-        resp = urlopen(req, timeout=10)
+        import json
+        import urllib.request
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "disable_web_page_preview": True,
+        }
+        if inline_keyboard:
+            payload["reply_markup"] = json.dumps({"inline_keyboard": inline_keyboard}, ensure_ascii=False)
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        resp = urllib.request.urlopen(req, timeout=10)
         return resp.status == 200
     except Exception as e:
         log(f"  Telegram send failed: {e}")
@@ -343,8 +427,9 @@ def check_drawdown():
 
     # ── Bot Balance + Reachability ──
     for bot_id, cfg in BOTS.items():
-        bal, ok = get_balance(cfg["container"], cfg["port"],
-                              cfg["user"], cfg["password"])
+        auth = _resolve_bot_auth(bot_id, cfg)
+        bal, ok = get_balance(cfg["container"], auth["port"],
+                              auth["user"], auth["password"])
 
         # Container restart detection (only with Docker)
         uptime = get_container_uptime_seconds(cfg["container"])
@@ -404,7 +489,7 @@ def check_drawdown():
     if reachable == 0 and docker_ok:
         # Docker IS available but no bots reachable = real problem
         log("KRITISCH: Kein Bot erreichbar!")
-        send_telegram("🚨 TRADING FLEET: Kein einziger Bot erreichbar!")
+        send_telegram("🚨 TRADING FLEET: Kein einziger Bot erreichbar!", inline_keyboard=_report_keyboard("approval"))
     elif reachable == 0 and not docker_ok:
         # No Docker AND no REST access = can't determine, not a real "all down"
         log(f"NO_DOCKER: Kein Docker-Zugriff. {docker_unreachable_count}/{len(BOTS)} Bots nicht prüfbar.")
@@ -461,11 +546,25 @@ def check_drawdown():
 
     # ── Send Telegram Alerts ──
     if alerts:
-        alert_lines = [f"📊 Trading Fleet Alert ({datetime.utcnow().strftime('%H:%M')} UTC) [{mode}]"]
-        for atype, text in alerts:
-            alert_lines.append(text)
-
-        if send_telegram("\n".join(alert_lines)):
+        report_text = format_drawdown_report(output={
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "mode": mode,
+            "docker_available": docker_ok,
+            "portfolio_current": round(total_current, 2),
+            "portfolio_start": round(total_start, 2),
+            "portfolio_pnl": round(portfolio_pnl, 2),
+            "drawdown_pct": round(dd_pct, 2),
+            "triggered_level": triggered_level,
+            "action": triggered_action,
+            "reachable_bots": reachable,
+            "total_bots": len(BOTS),
+            "per_bot": bot_results,
+            "signal_age_minutes": signal_age,
+            "signal_fresh": signal_fresh,
+            "fleet_health": fleet_health,
+            "alerts": [{"type": t, "text": m} for t, m in alerts],
+        })
+        if send_telegram(report_text, inline_keyboard=_report_keyboard("fleet")):
             log(f"  Telegram alert sent ({len(alerts)} alerts)")
         else:
             log(f"  Telegram not configured/alert failed ({len(alerts)} alerts queued)")
@@ -501,23 +600,92 @@ def check_drawdown():
     return output
 
 
+def _safety_config_snapshots() -> tuple[str, str]:
+    dry_parts = []
+    mot_parts = []
+    for bot_id, cfg in BOTS.items():
+        auth = _resolve_bot_auth(bot_id, cfg)
+        label = bot_id.replace('_', '-')
+        config_host = cfg.get("config_host")
+        if config_host and Path(config_host).exists():
+            try:
+                with open(config_host) as f:
+                    data = json.load(f)
+                dry_parts.append(f"{label}={'T' if data.get('dry_run') is True else 'F'}")
+                mot_parts.append(f"{label}={data.get('max_open_trades', '?')}")
+                continue
+            except Exception:
+                pass
+        config_container = cfg.get("config_container")
+        if config_container and detect_docker():
+            try:
+                py = (
+                    "import json; c=json.load(open('/freqtrade/user_data/config.json')); "
+                    "print(str(c.get('dry_run') is True)); print(c.get('max_open_trades','?'))"
+                )
+                r = subprocess.run(
+                    ["docker", "exec", cfg["container"], "python3", "-c", py],
+                    capture_output=True, text=True, timeout=15,
+                )
+                out = [line.strip() for line in r.stdout.splitlines() if line.strip()]
+                dry_parts.append(f"{label}={'T' if out and out[0].lower() == 'true' else 'F'}")
+                mot_parts.append(f"{label}={out[1] if len(out) > 1 else '?'}")
+                continue
+            except Exception:
+                pass
+        dry_parts.append(f"{label}=?")
+        mot_parts.append(f"{label}=?")
+    return ", ".join(dry_parts), ", ".join(mot_parts)
+
+
+def format_drawdown_report(output: dict) -> str:
+    alerts = output.get("alerts", [])
+    per_bot = output.get("per_bot", {})
+    hot_alerts = "; ".join(a.get("text", "") for a in alerts[:2]) if alerts else "Keine aktiven Alerts"
+    dry_snapshot, mot_snapshot = _safety_config_snapshots()
+    bot_lines = []
+    for bot_id, meta in list(per_bot.items())[:4]:
+        if meta.get("reachable") and meta.get("balance") is not None:
+            bot_lines.append(
+                f"• {bot_id}: {'+' if meta.get('pnl', 0) >= 0 else ''}{meta.get('pnl', 0):.2f}U | bal {meta.get('balance', 0):.2f}"
+            )
+        else:
+            age = meta.get("log_age_min")
+            age_txt = f" | log {age}min" if age not in (None, -1) else ""
+            bot_lines.append(f"• {bot_id}: unreachable{age_txt}")
+
+    lines = [
+        f"📉 DrawdownGuard — {output['timestamp'][:16].replace('T', ' ')} UTC [{output.get('mode', 'unknown')}]",
+        "",
+        "PROFITABILITÄT",
+        f"• Fleet {'+' if output.get('portfolio_pnl', 0) >= 0 else ''}{output.get('portfolio_pnl', 0):.2f}U | DD {output.get('drawdown_pct', 0):.1f}%",
+        f"• Portfolio {output.get('portfolio_current', 0):.2f}/{output.get('portfolio_start', 0):.2f} | action={output.get('action', 'unknown')}",
+        "",
+        "FLEET STATUS",
+        f"• Bots erreichbar: {output.get('reachable_bots', 0)}/{output.get('total_bots', 0)} | Docker={output.get('docker_available')}",
+    ]
+    lines.extend(bot_lines[:4])
+    lines += [
+        "",
+        "SIGNAL",
+        f"• {'fresh' if output.get('signal_fresh') else 'STALE'} | age {output.get('signal_age_minutes', -1):.1f} min",
+        f"• fleet_health={output.get('fleet_health', {}).get('fleet_verdict', output.get('fleet_health', {}).get('status', 'unknown'))}",
+        "",
+        "SAFETY",
+        f"• dry_run {dry_snapshot}",
+        f"• max_open {mot_snapshot}",
+        f"• {hot_alerts} | level={output.get('triggered_level') if output.get('triggered_level') is not None else 'none'}",
+        "",
+        "VORSCHLÄGE",
+        f"• {'Drawdown-/Signal-Ursache sofort prüfen' if alerts else 'Keine Sofortaktion nötig'}",
+        "• Fleet Report für Kontext gegenprüfen",
+    ]
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     result = check_drawdown()
     if result:
-        # Only print alert summary to stdout for Hermes delivery
-        alerts = result.get("alerts", [])
-        mode = result.get("mode", "unknown")
-        if alerts:
-            lines = [f"📊 Trading Fleet Alert ({result['timestamp'][:16].replace('T',' ')} UTC) [{mode}]"]
-            lines.append(f"Portfolio: ${result['portfolio_current']:.2f} | DD: {result['drawdown_pct']:.1f}% | Bots: {result['reachable_bots']}/{result['total_bots']} | Docker: {result['docker_available']}")
-            lines.append(f"Signal: {'FRESH' if result['signal_fresh'] else 'STALE ('+str(int(result['signal_age_minutes']))+'min)'}")
-            lines.append("")
-            for a in alerts:
-                lines.append(a["text"])
-            print("\n".join(lines))
-        elif not result.get("docker_available"):
-            # No alerts but no Docker — brief informational output
-            print(f"ℹ️ DrawdownGuard [{mode}]: Docker nicht verfügbar. "
-                  f"Signal: {'FRESH' if result['signal_fresh'] else 'STALE ('+str(int(result['signal_age_minutes']))+'min)'}. "
-                  f"Balancedaten nicht abrufbar.")
+        if result.get("alerts") or not result.get("docker_available"):
+            print(format_drawdown_report(result))
         # If no alerts and Docker available: silent (no stdout = no delivery)

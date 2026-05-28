@@ -27,15 +27,15 @@ from typing import Any, Dict, List, Optional, Tuple
 PROJECT_DIR = Path("/home/hermes/projects/trading")
 
 # Signal sources (tried in order)
+# Canonical signal is the source of truth; latest/ is a bridge copy.
 SIGNAL_INPUT_PATHS = [
+    PROJECT_DIR / "ai-hedge-fund-crypto/output/hermes_signal.json",
     PROJECT_DIR / "ai-hedge-fund-crypto/output/latest/hermes_signal.json",
-    PROJECT_DIR / "shared/hermes_signal.json",
 ]
 
 # Per-bot state file targets
 STATE_OUTPUT_FILES = [
     PROJECT_DIR / "freqtrade/shared/primo_signal_state.json",
-    PROJECT_DIR / "freqtrade/bots/momentum/user_data/primo_signal_state.json",
     PROJECT_DIR / "freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json",
     # Container-mounted paths (must match docker-compose volumes)
     PROJECT_DIR / "freqforge/user_data/primo_signal_state.json",
@@ -370,6 +370,14 @@ def ccxt_execute_order(symbol: str, side: str, amount: float,
             "execution_layer": layer,
             "dry_run": True,
         }
+    except ImportError as e:
+        logger.warning(f"ccxt fallback unavailable: {e}")
+        return {
+            "status": "skipped",
+            "reason": "ccxt not installed",
+            "execution_layer": layer,
+            "dry_run": True,
+        }
     except Exception as e:
         logger.error(f"ccxt fallback failed: {e}")
         return {
@@ -446,7 +454,11 @@ def mcp_execute_accepted_signals(pairs_out: Dict[str, Dict[str, Any]]) -> List[D
                 quantity = 0.001  # minimum notional
 
         # Dynamic margin cap: ensure margin_required <= 20% of available balance
-        from orchestrator.scripts.bitget_mcp_server import LEVERAGE as MCP_LEVERAGE
+        try:
+            from orchestrator.scripts.bitget_mcp_server import LEVERAGE as MCP_LEVERAGE
+        except ImportError as e:
+            logger.warning(f"MCP unavailable ({e}); skipping MCP execution layer")
+            return execution_results
         try:
             import asyncio
             from orchestrator.scripts.bitget_mcp_server import handle_get_ticker
@@ -571,11 +583,13 @@ def atomic_write_json(path: Path, data: Dict[str, Any]) -> bool:
             suffix=".json",
         )
         try:
-            os.fchmod(tmp_fd, 0o644)
+            os.fchmod(tmp_fd, 0o664)
             with os.fdopen(tmp_fd, "w") as f:
                 json.dump(data, f, indent=2)
                 f.write("\n")
             os.rename(tmp_path, str(path))
+            # Ensure group-writable after rename (belt-and-suspenders)
+            os.chmod(str(path), 0o664)
             return True
         except Exception:
             try:
