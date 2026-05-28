@@ -2,7 +2,7 @@
 
 ## Zusammenfassung
 
-Dieser Lauf hat kritische Security- und Backup-Probleme behoben und den Zielzustand dokumentiert.  
+Dieser Lauf hat kritische Security- und Backup-Probleme behoben und den Zielzustand dokumentiert.
 Wichtig: Das freie Speicherziel `>= 90G` ist jetzt erreicht.
 
 ## Was wurde gemacht
