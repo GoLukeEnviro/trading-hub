@@ -141,19 +141,10 @@ chmod 755 "$SCRIPTS_DIR/$script" 2>/dev/null || true
 done
 
 
-# ── 5. Fix permission drift on config files ──────────────────────
-# Hermes main process runs as root and creates root:root files.
-# Cron jobs run as UID 10000 and can't read them.
-# This block auto-corrects drift on each guardian cycle.
-CONFIG_DIR="$PROFILE_BASE"
-if [ -d "$CONFIG_DIR" ]; then
-    # Fix non-executable files: root:root → root:10000, 640
-    find "$CONFIG_DIR" -type f -user 0 -group 0 ! -executable         -exec chgrp 10000 {} \; -exec chmod 640 {} \; 2>/dev/null || true
-    # Fix executable files: preserve +x bit
-    find "$CONFIG_DIR" -type f -user 0 -group 0 -executable         -exec chgrp 10000 {} \; -exec chmod 750 {} \; 2>/dev/null || true
-    # Fix directories: setgid so new files inherit group
-    find "$CONFIG_DIR" -type d -user 0 -group 0         -exec chgrp 10000 {} \; -exec chmod 2775 {} \; 2>/dev/null || true
-fi
+# ── 5. Permission drift — DISABLED (shared-group model via GID 10000)
+# Removed: find+chgrp+chmod repair loop.
+# Reason: Runtime dirs now use hermes:ftuser (1337:10000) with setgid 2775.
+# No drift repair needed. Re-enable only if non-canary paths regress.
 
 # ── 6. Summary ───────────────────────────────────────────────────
 if [ "$alert_count" -eq 0 ]; then
