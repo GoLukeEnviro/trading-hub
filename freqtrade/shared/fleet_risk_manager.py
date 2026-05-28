@@ -25,6 +25,10 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# ── Backtest gate bypass ──────────────────────────────────────────────
+# Set BACKTEST_GATES=false to disable all gate logic for backtesting.
+BACKTEST_GATES = os.environ.get("BACKTEST_GATES", "true").lower() not in ("false", "0", "no")
+
 # ── Canonical signal gate policy (single source of truth) ──────────────
 # All consumers MUST import these instead of defining local copies.
 CONFIDENCE_MIN: float = 0.65        # minimum AI confidence to accept signal
@@ -759,6 +763,8 @@ class FleetRiskManager:
         return penalty
 
     def check_entry_allowed(self, pair: str, direction: str) -> Tuple[bool, str]:
+        if not BACKTEST_GATES:
+            return True, "OK (gates bypassed)"
         state = self.refresh_from_disk()
         pair_norm = _normalize_pair(pair)
         direction_norm = str(direction or "long").lower()

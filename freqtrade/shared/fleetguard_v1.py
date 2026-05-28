@@ -4,10 +4,14 @@ Lightweight, no network calls, no external dependencies.
 All state is in-memory from trade history via Freqtrade's DataProvider.
 """
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 
 logger = logging.getLogger("fleetguard")
+
+# ── Backtest gate bypass ──────────────────────────────────────────────
+BACKTEST_GATES = os.environ.get("BACKTEST_GATES", "true").lower() not in ("false", "0", "no")
 
 REASON_CODES = {
     "fleetguard_pass": "Entry allowed by FleetGuard",
@@ -51,6 +55,8 @@ class FleetGuard:
         open_trades: list of dicts with 'pair', 'is_short' keys.
         recent_closed_trades: list of dicts with 'pair', 'is_short', 'close_profit' keys.
         """
+        if not BACKTEST_GATES:
+            return True, "gates_bypassed"
         if not self.config.enabled:
             return True, "fleetguard_disabled"
         

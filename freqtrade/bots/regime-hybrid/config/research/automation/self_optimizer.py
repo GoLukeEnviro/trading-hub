@@ -996,7 +996,15 @@ def _save_rebel_reporting_state(state: dict[str, Any]) -> None:
     REBEL_REPORT_STATE_FILE.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def _send_telegram_message(message: str) -> dict[str, Any]:
+def _rebel_keyboard() -> list[list[dict[str, str]]]:
+    return [
+        [{"text": "Patch anwenden", "callback_data": "rebel_apply_patch"}],
+        [{"text": "Rollback ausführen", "callback_data": "rebel_rollback"}],
+        [{"text": "Details öffnen", "callback_data": "rebel_show_details"}],
+    ]
+
+
+def _send_telegram_message(message: str, inline_keyboard=None) -> dict[str, Any]:
     """Best-effort Telegram send via existing drawdown_guard helper. Never raises."""
     import os
     if os.environ.get("REBEL_TELEGRAM_DISABLE") == "1":
@@ -1009,7 +1017,7 @@ def _send_telegram_message(message: str) -> dict[str, Any]:
             return {"sent": False, "reason": "drawdown_guard_not_loadable"}
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
-        sent = bool(mod.send_telegram(message))
+        sent = bool(mod.send_telegram(message, inline_keyboard=inline_keyboard))
         return {"sent": sent, "via": str(guard_path)}
     except Exception as exc:
         return {"sent": False, "reason": str(exc)[:200]}
@@ -1042,7 +1050,7 @@ def _send_rebel_event_notification(result: dict, event_type: str, event_path: Pa
     if result.get("error"):
         lines.append(f"Fehler: {str(result.get('error'))[:180]}")
     lines.extend([f"Zeit: {result.get('timestamp_utc', _now_utc().isoformat())}", f"Details: {event_path}"])
-    return _send_telegram_message("\n".join(lines))
+    return _send_telegram_message("\n".join(lines), inline_keyboard=_rebel_keyboard())
 
 
 def _dedupe_key_sent_recently(key: str, hours: float) -> bool:
@@ -1074,7 +1082,7 @@ def _maybe_notify_rebel_diagnosis(diagnosis: dict[str, Any]) -> dict[str, Any] |
         "Hinweis: scale_pos_weight Proposal prüfen (neuer Identifier nötig).",
         f"Zeit: {_now_utc().isoformat()}",
     ])
-    return _send_telegram_message(msg)
+    return _send_telegram_message(msg, inline_keyboard=_rebel_keyboard())
 
 
 def _maybe_notify_rebel_proposal(proposal: dict[str, Any], path: Path) -> dict[str, Any] | None:
@@ -1093,7 +1101,7 @@ def _maybe_notify_rebel_proposal(proposal: dict[str, Any], path: Path) -> dict[s
         "Aktion: Review nötig, scale_pos_weight benötigt neuen Identifier + Retrain.",
         f"Details: {path}",
     ])
-    return _send_telegram_message(msg)
+    return _send_telegram_message(msg, inline_keyboard=_rebel_keyboard())
 
 
 def _latest_rebel_events(limit: int = 5) -> list[dict[str, Any]]:
@@ -1167,7 +1175,7 @@ def send_rebel_status_summary(*, force: bool = False, min_interval_hours: float 
         if last and (_now_utc() - last).total_seconds() < min_interval_hours * 3600:
             return {"sent": False, "reason": "interval_not_elapsed", "last_summary_utc": last.isoformat()}
     payload = build_rebel_status_summary()
-    telegram = _send_telegram_message(payload["message"])
+    telegram = _send_telegram_message(payload["message"], inline_keyboard=_rebel_keyboard())
     state["last_summary_utc"] = _now_utc().isoformat()
     state["last_summary_telegram"] = telegram
     _save_rebel_reporting_state(state)

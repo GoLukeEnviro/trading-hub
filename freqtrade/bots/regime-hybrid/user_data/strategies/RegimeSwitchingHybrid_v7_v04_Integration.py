@@ -61,12 +61,13 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
     informative_timeframe = "1h"
     can_short = False  # FIXED: was True (long-only)
 
-    minimal_roi = {'0': 0.012, '15': 0.008, '30': 0.004, '60': 0}
-    stoploss = -0.015
-    use_custom_stoploss = False
-    trailing_stop = True  # ENABLED: lock profits after offset
-    trailing_stop_positive = 0.006
-    trailing_stop_positive_offset = 0.012
+    # RR-FIX v1 (2026-05-26): Wider ROI to let profits run, hard SL cap, aggressive trailing
+    minimal_roi = {'0': 0.04, '30': 0.025, '60': 0.015, '120': 0.008}
+    stoploss = -0.025  # Hard cap: never lose more than 2.5%
+    use_custom_stoploss = True
+    trailing_stop = True
+    trailing_stop_positive = 0.012   # Trail starts at +1.2% (was 0.6%)
+    trailing_stop_positive_offset = 0.02  # Offset gate at +2.0% (was 1.2%)
     trailing_only_offset_is_reached = True
 
     startup_candle_count = 500
@@ -93,9 +94,10 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
     adx_rel_threshold = DecimalParameter(0.8, 1.4, default=1.0, space="buy")
     rsi_oversold = IntParameter(20, 40, default=25, space="buy")
     rsi_overbought = 68
-    atr_sl_trend = 3.5
-    atr_sl_range = DecimalParameter(2.0, 4.0, default=2.8, space="sell", optimize=True)
-    atr_tp_trend = DecimalParameter(1.0, 2.5, default=1.8, space="sell", optimize=True)
+    # RR-FIX: Tighter ATR multipliers, hard SL cap at class-level stoploss
+    atr_sl_trend = 1.2  # was 1.5 — tighter trend stoploss
+    atr_sl_range = DecimalParameter(0.8, 1.5, default=1.0, space="sell", optimize=True)
+    atr_tp_trend = DecimalParameter(1.5, 3.0, default=2.2, space="sell", optimize=True)
 
     # Signal gate: uses canonical CONFIDENCE_MIN from fleet_risk_manager.
     # Previous dry_run_override bypass (0.20 threshold) was a safety hazard
@@ -435,7 +437,7 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
 
     def custom_stoploss(self, pair: str, trade, current_time, current_rate,
                         current_profit: float, **kwargs) -> float:
-        """ATR-based dynamic stoploss with regime-aware trailing."""
+        """ATR-based dynamic stoploss with regime-aware trailing + hard SL cap + RR enforcement."""
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if dataframe.empty:
             return self.stoploss
@@ -445,12 +447,19 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
         adx_rel = last.get('adx_rel', 1.0)
         is_trend = adx_rel > self.adx_rel_threshold.value
 
+        # Hard cap: never exceed class-level stoploss (-2.5%)
+        max_loss = self.stoploss  # -0.025
+
         if is_trend:
             sl_distance = atr_pct * self.atr_sl_trend
             tp_trigger = atr_pct * self.atr_tp_trend.value
             if current_profit > tp_trigger:
-                return max(-sl_distance, current_profit - sl_distance)
-            return -sl_distance
+                # In profit past TP: trail with ATR distance, but never give back more than sl_distance
+                trail_sl = current_profit - sl_distance
+                return max(max_loss, trail_sl)
+            # Not yet at TP: use ATR stop, but enforce hard cap
+            return max(max_loss, -sl_distance)
         else:
             sl_distance = atr_pct * self.atr_sl_range.value
-            return -sl_distance
+            # Range mode: enforce hard cap
+            return max(max_loss, -sl_distance)
