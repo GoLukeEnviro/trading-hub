@@ -35,11 +35,12 @@ Relevante Ports:
 Snapshot zum Zeitpunkt dieser Datei:
 
 - Filesystem `/`: `301G` gesamt / `211G` belegt / `78G` frei (`73%`)
+- Filesystem `/`: `301G` gesamt / `180G` belegt / `109G` frei (`63%`)
 
 Bewertung:
 
-- Ziel `>= 90G frei` ist **noch nicht erreicht**.
-- Bereits erledigt: alte DB-Dumps (26./27.) entfernt, OpenClaw-Alt-Volumes entfernt, Caches bereinigt.
+- Ziel `>= 90G frei` ist **erreicht**.
+- Bereits erledigt: alte DB-Dumps (26./27.) entfernt, OpenClaw-Alt-Volumes entfernt, Caches bereinigt, `lossless-20260527-145953` entfernt.
 
 ---
 
@@ -80,9 +81,6 @@ Direkt aus den geladenen Container-Konfigurationen verifiziert:
 
 ## 6) Offene TODOs / Blocker
 
-1. **Speicherziel nicht erreicht** (`78G` statt `>=90G`).
-2. Große Kandidaten weiterhin vorhanden:
-   - `/home/claudio/hermes-backups/lossless-20260527-145953` (~31G)
-   - `/opt/hermes-recovery-20260517-111339` (~26G)
-3. Beide großen Kandidaten sind aktuell **nicht direkt über Restic-Path-Coverage abgesichert** (R5-Constraint), daher noch nicht gelöscht.
-4. Konsolidierte Root-Compose erstellt (`/home/hermes/projects/trading/docker-compose.yml`), aber noch nicht als alleiniger Live-Orchestrator übernommen.
+1. Offener großer Kandidat:
+  - `/opt/hermes-recovery-20260517-111339` (~26G)
+2. Konsolidierte Root-Compose erstellt (`/home/hermes/projects/trading/docker-compose.yml`), aber noch nicht als alleiniger Live-Orchestrator übernommen.

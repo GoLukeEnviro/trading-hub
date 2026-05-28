@@ -3,7 +3,7 @@
 ## Zusammenfassung
 
 Dieser Lauf hat kritische Security- und Backup-Probleme behoben und den Zielzustand dokumentiert.  
-Wichtig: Das freie Speicherziel `>= 90G` wurde noch nicht erreicht.
+Wichtig: Das freie Speicherziel `>= 90G` ist jetzt erreicht.
 
 ## Was wurde gemacht
 
@@ -41,6 +41,9 @@ Wichtig: Das freie Speicherziel `>= 90G` wurde noch nicht erreicht.
   - npm-Cache
 - Retention-Fix in `/usr/local/bin/vps-backup.sh` ergänzt:
   - separate DB-Dump-Retention auf die 2 neuesten Dump-Verzeichnisse
+- Zusätzlich gelöscht (R5-verifiziert):
+  - `/home/claudio/hermes-backups/lossless-20260527-145953` (~31G)
+  - Nachweis vor Löschung: `restic ls latest` enthielt `lossless-20260527` (`254` Treffer)
 
 ### 4) Architektur-Artefakte
 
@@ -67,17 +70,17 @@ Wichtig: Das freie Speicherziel `>= 90G` wurde noch nicht erreicht.
 
 Nicht gelöscht (bewusst):
 
-- `/home/claudio/hermes-backups/lossless-20260527-145953` (~31G)
 - `/opt/hermes-recovery-20260517-111339` (~26G)
 
-Grund: keine direkte Restic-Path-Abdeckung in den Snapshots für diese Zielpfade (R5-Constraint aktiv eingehalten).
+Grund: Für `lossless` war die Abdeckung im neuesten Snapshot nachweisbar und wurde daher gelöscht; `hermes-recovery` bleibt bis zur optionalen Archivierung bewusst erhalten.
 
 ## Speicher vorher/nachher
 
 - Ausgangslage (Start): ca. `75G` frei
-- Nach Maßnahmen: ca. `78G` frei
+- Zwischenstand vor finalem Cleanup: ca. `78G` frei
+- Nach finalem Cleanup (`lossless` entfernt): ca. `109G` frei
 
-=> Ziel `>=90G` aktuell **verfehlt**.
+=> Ziel `>=90G` **erreicht**.
 
 ## Security-Fixes
 
@@ -92,6 +95,5 @@ Grund: keine direkte Restic-Path-Abdeckung in den Snapshots für diese Zielpfade
 
 ## Offene Punkte
 
-1. Speicherziel `>=90G` noch offen.
-2. Entscheidung erforderlich: große nicht-abgedeckte Artefakte vor Löschung erst separat sichern oder explizit risk-basiert freigeben.
-3. Optional: echten `hermes`-Systemuser anlegen, wenn Cron strikt auf diesen User laufen muss.
+1. Optional: `hermes-recovery-20260517-111339` archivieren und danach löschen (zusätzliche ~26G frei).
+2. Optional: echten `hermes`-Systemuser anlegen, wenn Cron strikt auf diesen User laufen muss.
