@@ -85,7 +85,7 @@ def permissions_summary():
 def mem0_summary():
     try:
         rc, out, _ = run([
-            "docker", "inspect", "hermes-mem0-local-api", "--format",
+            "docker", "inspect", "green-mem0", "--format",
             "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}"
         ], timeout=10)
         ips = [ip.strip() for ip in out.split() if ip.strip()]

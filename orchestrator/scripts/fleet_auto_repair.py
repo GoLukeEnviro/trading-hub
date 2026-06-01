@@ -45,10 +45,13 @@ def run_cmd(cmd, timeout=30):
 
 
 def get_fleet_status():
-    """Run freqtrade_monitor.py and parse output."""
+    """Run freqtrade_monitor.py and parse output.
+    Note: monitor exits 1 when bots have errors, but still produces valid JSON.
+    We only fail on missing/invalid output.
+    """
     out, err, code = run_cmd(f"python3 {MONITOR_SCRIPT} 2>/dev/null", timeout=30)
-    if code != 0 or not out:
-        return None, f"Monitor failed: {err[:200]}"
+    if not out:
+        return None, f"Monitor produced no output (exit={code}): {err[:200]}"
     try:
         return json.loads(out), None
     except json.JSONDecodeError as e:

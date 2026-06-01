@@ -36,11 +36,10 @@ LOG_FILE_MODE = 0o664
 LOG_DIR_MODE = 0o2775
 SAFE_DETECTION_ONLY_MODE = True
 
-GHOST_PATTERNS = [
-    "HONCHO WATCHDOG", "HONCHO", "honcho_watchdog",
-    "honcho-memory-quality-guard", "honcho_memory_quality_guard",
-]
-GHOST_CONTAINER_PATTERNS = ["honcho", "watchdog-old"]
+# Honcho decommissioned 2026-05-14 — patterns removed to avoid false positives
+# against legitimate jobs whose prompts mention "Honcho ist decommissioned".
+GHOST_PATTERNS = []
+GHOST_CONTAINER_PATTERNS = ["watchdog-old"]
 
 JOBS_JSON = f"{CRON_DIR}/jobs.json"
 MEM0_WATCHDOG_SCRIPT = f"{SCRIPTS_DIR}/mem0_watchdog.py"
@@ -217,7 +216,12 @@ class GhostBuster:
             })
 
     def check_permission_drift(self):
-        """Check cron dir for root:root permission drift. SAFE AUTO-FIX."""
+        """Check cron dir for root:root permission drift. REPORT-ONLY.
+        Actual repair is handled by trading-guardian container (every 5 min)
+        with explicit per-file mode:group contracts. This method must NOT
+        silently modify ownership — it would compete with the guardian
+        and create hidden divergence.
+        """
         if not os.path.exists(CRON_DIR):
             return
         try:
@@ -226,20 +230,12 @@ class GhostBuster:
                 capture_output=True, text=True, timeout=10
             )
             drift_files = [l.strip() for l in r.stdout.strip().splitlines() if l.strip()]
-            for fpath in drift_files:
-                # SAFE: same fix trading-guardian does every 5min
-                try:
-                    subprocess.run(["chgrp", "10000", fpath], capture_output=True, timeout=5)
-                    subprocess.run(["chmod", "0640", fpath], capture_output=True, timeout=5)
-                    self.fixed.append(f"perm_fix:{os.path.basename(fpath)} (root:0 -> root:10000 0640)")
-                    self.log(f"PERM FIX: {fpath}")
-                except Exception as e:
-                    self.findings.append({
-                        "type": "PERMISSION_STUCK",
-                        "source": fpath,
-                        "detail": f"Cannot fix: {e}",
-                        "action": "MANUAL: chgrp 10000 + chmod 0640",
-                    })
+            if drift_files:
+                drift_names = [os.path.basename(f) for f in drift_files]
+                self.warnings.append(
+                    f"PERM_DRIFT ({len(drift_files)} root:root files — guardian will auto-fix): "
+                    + ", ".join(drift_names[:5])
+                )
         except Exception as e:
             self.warnings.append(f"Permission scan failed: {e}")
 
