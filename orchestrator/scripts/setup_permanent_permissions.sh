@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# setup_permanent_permissions.sh — Fix ALL permission drift permanently
-# Runs at container start and periodically. Idempotent. Safe for dry-run fleet.
+# setup_permanent_permissions.sh — Report permission drift only
+# Runs at container start and periodically. No repair actions.
 set -euo pipefail
 
 BASEDIR="/home/hermes/projects/trading"
@@ -9,7 +9,7 @@ GID=10000
 ts() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
 log() { echo "[$(ts)] PERM_FIX: $*"; }
 
-# ── 1. Shared directories: setgid 2775, group ftuser (GID 10000) ──
+# ── 1. Shared directories: report-only ──
 DIRS=(
     "$BASEDIR/freqtrade/shared"
     "$BASEDIR/freqtrade/shared/logs"
@@ -32,12 +32,15 @@ DIRS=(
 
 for d in "${DIRS[@]}"; do
     if [ -d "$d" ]; then
-        chgrp "$GID" "$d" 2>/dev/null || true
-        chmod 2775 "$d" 2>/dev/null || true
+        owner_group=$(stat -c '%G' "$d" 2>/dev/null || echo "unknown")
+        mode=$(stat -c '%a' "$d" 2>/dev/null || echo "0000")
+        if [ "$owner_group" != "ftuser" ] || [ "$mode" != "2775" ]; then
+            log "DIR_DRIFT: $d owner_group=$owner_group mode=$mode expected_group=ftuser expected_mode=2775"
+        fi
     fi
 done
 
-# ── 2. Critical shared state files: readable by ftuser (644 = guardian-consistent) ──
+# ── 2. Critical shared state files: report-only ──
 FILES=(
     "$BASEDIR/freqtrade/shared/primo_signal_state.json"
     "$BASEDIR/freqtrade/shared/fleet_risk_state.json"
@@ -50,39 +53,57 @@ FILES=(
 
 for f in "${FILES[@]}"; do
     if [ -f "$f" ]; then
-        chgrp "$GID" "$f" 2>/dev/null || true
-        chmod 664 "$f" 2>/dev/null || true
+        owner_group=$(stat -c '%G' "$f" 2>/dev/null || echo "unknown")
+        mode=$(stat -c '%a' "$f" 2>/dev/null || echo "0000")
+        if [ "$owner_group" != "ftuser" ] || [ "$mode" != "664" ]; then
+            log "FILE_DRIFT: $f owner_group=$owner_group mode=$mode expected_group=ftuser expected_mode=664"
+        fi
     fi
 done
 
-# ── 3. Lock files: group-writable ──
+# ── 3. Lock files: report-only ──
 for lock in "$BASEDIR"/freqtrade/shared/.*.lock; do
     if [ -f "$lock" ]; then
-        chgrp "$GID" "$lock" 2>/dev/null || true
-        chmod 664 "$lock" 2>/dev/null || true
+        owner_group=$(stat -c '%G' "$lock" 2>/dev/null || echo "unknown")
+        mode=$(stat -c '%a' "$lock" 2>/dev/null || echo "0000")
+        if [ "$owner_group" != "ftuser" ] || [ "$mode" != "664" ]; then
+            log "LOCK_DRIFT: $lock owner_group=$owner_group mode=$mode expected_group=ftuser expected_mode=664"
+        fi
     fi
 done
 
-# ── 4. Log files: group-writable ──
+# ── 4. Log files: report-only ──
 for logf in "$BASEDIR"/orchestrator/logs/*.log "$BASEDIR"/freqtrade/logs/*.log; do
     if [ -f "$logf" ]; then
-        chgrp "$GID" "$logf" 2>/dev/null || true
-        chmod 664 "$logf" 2>/dev/null || true
+        owner_group=$(stat -c '%G' "$logf" 2>/dev/null || echo "unknown")
+        mode=$(stat -c '%a' "$logf" 2>/dev/null || echo "0000")
+        if [ "$owner_group" != "ftuser" ] || [ "$mode" != "664" ]; then
+            log "LOG_DRIFT: $logf owner_group=$owner_group mode=$mode expected_group=ftuser expected_mode=664"
+        fi
     fi
 done
 
-# ── 5. Cron directory: root:root → root:ftuser ──
+# ── 5. Cron directory: report-only ──
 CRON_DIR="/opt/data/profiles/orchestrator/cron"
 if [ -d "$CRON_DIR" ]; then
-    find "$CRON_DIR" -type f -user 0 -group 0 \
-        -exec chgrp "$GID" {} \; -exec chmod 640 {} \; 2>/dev/null || true
+    json_owner=$(stat -c '%U:%G' "$CRON_DIR/jobs.json" 2>/dev/null || echo "missing")
+    json_mode=$(stat -c '%a' "$CRON_DIR/jobs.json" 2>/dev/null || echo "0000")
+    if [ "$json_owner" != "root:ftuser" ] || [ "$json_mode" != "640" ]; then
+        log "CRON_DRIFT: $CRON_DIR/jobs.json owner=$json_owner mode=$json_mode expected_owner=root:ftuser expected_mode=640"
+    fi
 fi
 
-# ── 6. Scripts in profile dir: executable ──
+# ── 6. Scripts in profile dir: report-only ──
 SCRIPTS_DIR="/opt/data/profiles/orchestrator/scripts"
 if [ -d "$SCRIPTS_DIR" ]; then
-    find "$SCRIPTS_DIR" -type f \( -name "*.sh" -o -name "*.py" \) \
-        -exec chmod +x {} \; 2>/dev/null || true
+    for f in "$SCRIPTS_DIR"/*; do
+        [ -f "$f" ] || continue
+        owner=$(stat -c '%U:%G' "$f" 2>/dev/null || echo "missing")
+        mode=$(stat -c '%a' "$f" 2>/dev/null || echo "0000")
+        if [ "$owner" != "10000:10000" ] || [ "$mode" != "755" ]; then
+            log "SCRIPT_DRIFT: $f owner=$owner mode=$mode expected_owner=10000:10000 expected_mode=755"
+        fi
+    done
 fi
 
-log "All permissions fixed (GID=$GID, dirs=2775, state=644, logs=664, cron=640)"
+log "Permission report complete (no changes made, GID=$GID)"
