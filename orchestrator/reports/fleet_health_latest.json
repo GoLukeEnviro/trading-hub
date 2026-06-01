@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "checked_at": "2026-05-28T14:30:57.700139+00:00",
+  "checked_at": "2026-06-01T01:59:02.100322+00:00",
   "fleet_verdict": "RED",
   "helper_exists": true,
   "bots": [
@@ -41,7 +41,7 @@
     {
       "bot": "regime-hybrid",
       "container": "freqtrade-regime-hybrid",
-      "container_running": false,
+      "container_running": true,
       "config_path": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json",
       "config_readable": true,
       "dry_run": true,

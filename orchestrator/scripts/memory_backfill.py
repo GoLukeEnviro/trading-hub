@@ -42,7 +42,7 @@ from urllib.request import Request, urlopen
 # Configuration
 # ---------------------------------------------------------------------------
 
-API_BASE = os.environ.get("MEM0_BASE_URL", "http://172.18.0.7:8787")
+API_BASE = os.environ.get("MEM0_BASE_URL", "http://green-mem0:8787")
 DB_PATH = "/opt/data/state.db"
 LOG_FILE = Path("/home/hermes/projects/trading/orchestrator/logs/memory-backfill.log")
 LOCK_FILE = Path("/tmp/memory-backfill.lock")

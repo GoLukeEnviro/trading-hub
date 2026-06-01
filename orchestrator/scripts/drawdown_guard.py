@@ -21,6 +21,8 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
+from fleet_api_client import freqtrade_api_get
+
 # ── Config ──────────────────────────────────────────────────────
 PORTFOLIO_START = 1000.0
 DRAWDOWN_LEVELS = {
@@ -283,9 +285,10 @@ def get_balance(container, port, user, password):
         # Original Docker-exec based query
         try:
             r = subprocess.run(
-                ["docker", "exec", container, "curl", "-s", "-u",
+                ["docker", "exec", container, "curl", "-s", "--retry", "2",
+                 "--retry-delay", "2", "-u",
                  f"{user}:{password}", f"http://127.0.0.1:{port}/api/v1/balance"],
-                capture_output=True, text=True, timeout=15
+                capture_output=True, text=True, timeout=20
             )
             if r.returncode == 0 and r.stdout.strip():
                 data = json.loads(r.stdout)
@@ -293,22 +296,14 @@ def get_balance(container, port, user, password):
         except Exception as e:
             log(f"  {container}: docker exec query failed: {e}")
     else:
-        # Try direct REST API (may work if on shared network or host accessible)
-        # Quick attempts with short timeout — don't waste time if unreachable
+        # Try direct REST API with retry/backoff
         try:
-            url = f"http://127.0.0.1:{port}/api/v1/balance"
-            req = Request(url)
-            import base64
-            creds = base64.b64encode(f"{user}:{password}".encode()).decode()
-            req.add_header("Authorization", f"Basic {creds}")
-            resp = urlopen(req, timeout=2)
-            if resp.status == 200:
-                data = json.loads(resp.read())
+            result = freqtrade_api_get("127.0.0.1", port, "/api/v1/balance", timeout=3)
+            if result:
+                data = json.loads(result)
                 return float(data.get("total", 0)), True
         except Exception:
             pass
-        # Don't iterate multiple hosts — if 127.0.0.1 fails, others will too
-        # (ports are bound to 127.0.0.1 on HOST, unreachable from container)
 
     return 0.0, False
 

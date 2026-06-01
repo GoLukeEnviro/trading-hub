@@ -59,7 +59,7 @@ class RegimeSwitchingHybrid_v7_v04_Integration(IStrategy):
     INTERFACE_VERSION = 3
     timeframe = "15m"
     informative_timeframe = "1h"
-    can_short = False  # FIXED: was True (long-only)
+    can_short = True  # DRY-RUN: enabled 2026-05-30 per user approval; short entries now allowed
 
     # RR-FIX v1 (2026-05-26): Wider ROI to let profits run, hard SL cap, aggressive trailing
     minimal_roi = {'0': 0.04, '30': 0.025, '60': 0.015, '120': 0.008}

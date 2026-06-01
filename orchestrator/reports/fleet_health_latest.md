@@ -3,7 +3,7 @@
 ## Summary
 
 - **Verdict:** RED
-- **Checked At:** 2026-05-28T14:30:57.700139+00:00
+- **Checked At:** 2026-06-01T01:59:02.100322+00:00
 - **Shared Helper:** ✅ Exists
 - **Total Bots:** 3
 
@@ -13,7 +13,7 @@
 |-----|-----------|---------|---------|-------------|----------|------------|---------|
 | rsi | freqtrade-rsi | ❌ | ✅ | absent/absent | ❌ | ❌ | RED |
 | momentum | freqtrade-momentum | ❌ | ✅ | absent/absent | ❌ | ✅ | RED |
-| regime-hybrid | freqtrade-regime-hybrid | ❌ | ✅ | absent/absent | ❌ | ✅ | RED |
+| regime-hybrid | freqtrade-regime-hybrid | ✅ | ✅ | absent/absent | ❌ | ✅ | RED |
 
 
 ## Verdict Legend
@@ -27,5 +27,5 @@
 
 ---
 
-**Generated:** 2026-05-28T14:30:57.700139+00:00  
+**Generated:** 2026-06-01T01:59:02.100322+00:00  
 **Fleet Healthcheck Version:** v0.1.0

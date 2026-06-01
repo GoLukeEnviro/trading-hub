@@ -42,7 +42,7 @@ case "${1:-restart}" in
             export PYTHONUNBUFFERED=1
             while true; do
                 echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") | LOOP | restarting MCP server" >> "'"${WATCHDOG_LOG}"'"
-                /opt/hermes/.venv/bin/python3 "'${MCP_SCRIPT}'" 2>&1
+                /home/hermes/projects/trading/.venv/bin/python3 "'${MCP_SCRIPT}'" 2>&1
                 EXIT_CODE=$?
                 echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") | EXIT | code=${EXIT_CODE}, restarting in 2s" >> "'"${WATCHDOG_LOG}"'"
                 sleep 2

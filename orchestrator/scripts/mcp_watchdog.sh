@@ -26,7 +26,7 @@ echo "{\"timestamp\":\"${now}\",\"mcp_processes\":${count},\"status\":\"$([ ${co
 
 if [ "$count" -eq 0 ]; then
     echo "[${now}] MCP-Server down (0 processes), restarting..." >> "$WATCHDOG_LOG"
-    nohup python3 "$SCRIPT" >> "$LOG" 2>&1 &
+    nohup /home/hermes/projects/trading/.venv/bin/python3 "$SCRIPT" >> "$LOG" 2>&1 &
     sleep 2
     new_count=$(pgrep -f bitget_mcp_server.py 2>/dev/null | wc -l) || new_count=0
     if [ "$new_count" -gt 0 ]; then

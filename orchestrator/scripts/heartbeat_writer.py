@@ -20,10 +20,13 @@ import json
 import sqlite3
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError
+
+from fleet_api_client import freqtrade_api_get, INTER_BOT_DELAY
 
 DB_PATH = Path("/home/hermes/projects/trading/orchestrator/state/hermes_heartbeat.sqlite")
 
@@ -97,17 +100,9 @@ def detect_docker() -> bool:
     return _docker_available
 
 
-def rest_api_get(host: str, port: int, endpoint: str, timeout: int = 10) -> str | None:
-    """Direct REST API call (no Docker). Returns response text or None."""
-    url = f"http://{host}:{port}{endpoint}"
-    try:
-        req = Request(url)
-        resp = urlopen(req, timeout=timeout)
-        if resp.status == 200:
-            return resp.read().decode()
-    except Exception:
-        pass
-    return None
+def rest_api_get(host: str, port: int, endpoint: str, timeout: int = 3) -> str | None:
+    """Direct REST API call with retry/backoff. Returns response text or None."""
+    return freqtrade_api_get(host, port, endpoint, timeout=timeout)
 
 
 def docker_curl(container: str, port: int, endpoint: str, timeout: int = 10) -> str | None:
@@ -284,6 +279,7 @@ def main() -> None:
                 insert_row(conn, row)
             except Exception as exc:
                 log(f"Error polling {bot['bot_name']}: {exc}")
+            time.sleep(INTER_BOT_DELAY)
 
         conn.close()
         log("Heartbeat cycle complete")
