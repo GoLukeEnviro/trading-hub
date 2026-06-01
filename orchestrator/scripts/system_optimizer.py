@@ -186,7 +186,8 @@ def cleanup_expired_guard_state():
             state = _load_json_file(CONSEC_STATE_FILE, default={})
         except Exception:
             state = {}
-        cursor = _consec_state_cursor(state) or _latest_closed_trade_cursor()
+        # Cursor priority: always take the absolute latest closed trade to avoid stale loops
+        cursor = _latest_closed_trade_cursor() or _consec_state_cursor(state) or datetime.now(timezone.utc).isoformat()
         state = {
             "paused_at": None,
             "resume_after": None,
@@ -201,7 +202,7 @@ def cleanup_expired_guard_state():
         }
         try:
             _atomic_write_json(CONSEC_STATE_FILE, state)
-            actions.append("consec_loss_state.json (cursor preserved)")
+            actions.append("consec_loss_state.json (cursor advanced)")
         except Exception as e:
             log(f"  WARN: failed to normalize stale guard file {CONSEC_STATE_FILE}: {e}")
     if actions:
@@ -247,7 +248,7 @@ KNOWN_CONTAINERS = {
     # "freqtrade-momentum" intentionally not deployed — removed 2026-05-24
     "freqtrade-freqforge-canary", "freqai-rebel", "freqtrade-webserver",
     "ai-hedge-fund-crypto", "trading-guardian", "caddy",
-    "hermes-agent", "hermes-mem0-local-api", "hermes-ollama", "hermes-qdrant",
+    "hermes-green", "green-mem0", "green-ollama", "green-qdrant",
     "claude-worker",
 }
 FLEET_BOTS = {
@@ -758,7 +759,8 @@ def check_consecutive_loss_protection():
             rd = _parse_iso_dt(ra)
             if rd and now < rd: log(f"  IN PAUSE: {(rd-now).total_seconds()/60:.0f} min remaining (resume at {ra})"); return
             else: log(f"  Pause expired at {ra} -- analyzing and resuming")
-        cursor = _consec_state_cursor(state) or _latest_closed_trade_cursor()
+        # Cursor priority: always take the absolute latest closed trade to avoid stale loops
+        cursor = _latest_closed_trade_cursor() or _consec_state_cursor(state) or datetime.now(timezone.utc).isoformat()
         if cursor and cursor != state.get("analysis_cursor"):
             state["analysis_cursor"] = cursor
             state["last_checked_close_date"] = cursor

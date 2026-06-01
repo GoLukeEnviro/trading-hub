@@ -20,13 +20,10 @@ import json
 import sqlite3
 import subprocess
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError
-
-from fleet_api_client import freqtrade_api_get, INTER_BOT_DELAY
 
 DB_PATH = Path("/home/hermes/projects/trading/orchestrator/state/hermes_heartbeat.sqlite")
 
@@ -40,11 +37,6 @@ BOTS = [
         "bot_name": "regime-hybrid",
         "container_name": "freqtrade-regime-hybrid",
         "api_port": 8085,
-    },
-    {
-        "bot_name": "momentum",
-        "container_name": "freqtrade-momentum",
-        "api_port": 8082,
     },
     {
         "bot_name": "freqforge-canary",
@@ -100,9 +92,17 @@ def detect_docker() -> bool:
     return _docker_available
 
 
-def rest_api_get(host: str, port: int, endpoint: str, timeout: int = 3) -> str | None:
-    """Direct REST API call with retry/backoff. Returns response text or None."""
-    return freqtrade_api_get(host, port, endpoint, timeout=timeout)
+def rest_api_get(host: str, port: int, endpoint: str, timeout: int = 10) -> str | None:
+    """Direct REST API call (no Docker). Returns response text or None."""
+    url = f"http://{host}:{port}{endpoint}"
+    try:
+        req = Request(url)
+        resp = urlopen(req, timeout=timeout)
+        if resp.status == 200:
+            return resp.read().decode()
+    except Exception:
+        pass
+    return None
 
 
 def docker_curl(container: str, port: int, endpoint: str, timeout: int = 10) -> str | None:
@@ -130,17 +130,18 @@ def docker_curl(container: str, port: int, endpoint: str, timeout: int = 10) -> 
 
 
 def api_get(container: str, port: int, endpoint: str) -> str | None:
-    """Try direct REST API first, then Docker exec fallback."""
-    # Try direct REST API on multiple host addresses
-    for host in ["127.0.0.1", "172.18.0.1", "172.19.0.1", "172.20.0.1"]:
-        result = rest_api_get(host, port, endpoint, timeout=3)
+    """Use Docker exec only — bots are on separate Docker network, direct REST unreachable."""
+    # Try lightweight REST probe first (fast fail)
+    for host in ["127.0.0.1"]:
+        result = rest_api_get(host, port, endpoint, timeout=2)
         if result is not None:
             return result
 
-    # Fallback to Docker exec if available
+    # Docker exec is the only reliable path from Hermes container
     if detect_docker():
         return docker_curl(container, port, endpoint)
 
+    log(f"No Docker socket available — cannot reach {container}:{port}")
     return None
 
 
@@ -279,7 +280,6 @@ def main() -> None:
                 insert_row(conn, row)
             except Exception as exc:
                 log(f"Error polling {bot['bot_name']}: {exc}")
-            time.sleep(INTER_BOT_DELAY)
 
         conn.close()
         log("Heartbeat cycle complete")
