@@ -199,7 +199,7 @@ def _get_telegram_creds():
     if not token and detect_docker():
         try:
             r = subprocess.run(
-                ["docker", "inspect", "hermes-agent", "--format", "{{json .Config.Env}}"],
+                ["docker", "inspect", "hermes-green", "--format", "{{json .Config.Env}}"],
                 capture_output=True, text=True, timeout=10
             )
             if r.returncode == 0:
