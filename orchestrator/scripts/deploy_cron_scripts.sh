@@ -45,6 +45,8 @@ try:
         data = json.load(f)
     jobs = data.get('jobs', [])
     for j in jobs:
+        if not j.get('enabled', False):
+            continue
         s = j.get('script', '')
         if s:
             print(s.split('/')[-1])
@@ -99,6 +101,11 @@ check_drift() {
         echo "  FAIL: $cron_only script(s) not tracked in Git. Fix before deploying."
         return 1
     fi
+    if [ "$missing_in_src" -gt 0 ]; then
+        echo ""
+        echo "  FAIL: $missing_in_src enabled script(s) not deployed to runtime. Run deploy."
+        return 1
+    fi
     return 0
 }
 
@@ -120,10 +127,17 @@ deploy() {
         src_file="$SRC/$script"
         dst_file="$DST/$script"
 
-        # Only overwrite existing files (never create new)
+        # Create new files or update existing ones
         if [ ! -f "$dst_file" ]; then
-            echo "  SKIP (not in runtime): $script"
-            warn=$((warn + 1))
+            # New deployment — create the file
+            cp "$src_file" "$dst_file"
+            chown "$DEPLOY_UID:$DEPLOY_GID" "$dst_file" 2>/dev/null || true
+            chmod "$DEPLOY_MODE" "$dst_file" 2>/dev/null || true
+
+            owner=$(stat -c '%u:%g' "$dst_file" 2>/dev/null)
+            mode=$(stat -c '%a' "$dst_file" 2>/dev/null)
+            echo "  CREATED: $script (owner=$owner mode=$mode)"
+            ok=$((ok + 1))
             continue
         fi
 
