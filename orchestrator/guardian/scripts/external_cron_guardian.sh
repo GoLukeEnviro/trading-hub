@@ -130,18 +130,24 @@ for cname in "${CRITICAL_CONTAINERS[@]}"; do
     fi
 done
 
-# ── 4. Check critical scripts exist in profile dir ───────────────
+# ── 4. Sync critical scripts to profile dir (missing OR stale) ──
 for script in ai_hedge_signal_heartbeat.sh trading_pipeline.py drawdown_guard.py container_watchdog.sh mcp_watchdog.sh backup_rotation.py; do
-    if [ ! -f "$SCRIPTS_DIR/$script" ]; then
-        log "WARNING: Missing script $SCRIPTS_DIR/$script — copying from project"
-        src="$PROJECT_SCRIPTS_DIR/$script"
-        if [ -f "$src" ]; then
-            cp "$src" "$SCRIPTS_DIR/$script"
-            chmod +x "$SCRIPTS_DIR/$script" 2>/dev/null || true
-            log "RESTORED: $script copied to profile dir"
-        else
-            log "FATAL: $script not found in project dir either"
-        fi
+    src="$PROJECT_SCRIPTS_DIR/$script"
+    dst="$SCRIPTS_DIR/$script"
+    if [ ! -f "$src" ]; then
+        log "FATAL: $script not found in project dir"
+        continue
+    fi
+    if [ ! -f "$dst" ]; then
+        log "SCRIPT_MISSING: $script — copying from project"
+        cp "$src" "$dst"
+        chmod +x "$dst" 2>/dev/null || true
+        log "RESTORED: $script copied to profile dir"
+    elif ! diff -q "$src" "$dst" >/dev/null 2>&1; then
+        log "SCRIPT_STALE: $script differs from project — updating"
+        cp "$src" "$dst"
+        chmod +x "$dst" 2>/dev/null || true
+        log "UPDATED: $script synced to profile dir"
     fi
 done
 
