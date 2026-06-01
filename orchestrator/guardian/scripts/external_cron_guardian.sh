@@ -94,12 +94,12 @@ print(f'{age:.1f}')
                "import urllib.request; urllib.request.urlopen('http://localhost:8080/trigger')" 2>/dev/null; then
                 log "OK: ai-hedge-fund-crypto /trigger called"
                 sleep 15
-                # Run pipeline via hermes-agent container
-                if docker exec hermes-agent bash -c \
+                # Run pipeline via hermes-green container
+                if docker exec hermes-green bash -c \
                    "cd /home/hermes/projects/trading && python3 orchestrator/scripts/trading_pipeline.py" 2>/dev/null; then
-                    log "OK: trading_pipeline.py triggered via hermes-agent"
+                    log "OK: trading_pipeline.py triggered via hermes-green"
                 else
-                    log "WARN: Could not trigger pipeline via hermes-agent"
+                    log "WARN: Could not trigger pipeline via hermes-green"
                 fi
             else
                 log "ERROR: Could not trigger ai-hedge-fund-crypto heartbeat"
@@ -131,7 +131,7 @@ for cname in "${CRITICAL_CONTAINERS[@]}"; do
 done
 
 # ── 4. Sync critical scripts to profile dir (missing OR stale) ──
-for script in ai_hedge_signal_heartbeat.sh trading_pipeline.py drawdown_guard.py container_watchdog.sh mcp_watchdog.sh backup_rotation.py; do
+for script in ai_hedge_signal_heartbeat.sh trading_pipeline.py drawdown_guard.py container_watchdog.sh mcp_watchdog.sh backup_rotation.py fleet_api_client.py; do
     src="$PROJECT_SCRIPTS_DIR/$script"
     dst="$SCRIPTS_DIR/$script"
     if [ ! -f "$src" ]; then
