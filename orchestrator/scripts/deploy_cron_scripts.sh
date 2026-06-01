@@ -10,8 +10,8 @@
 # Runtime target: /opt/data/profiles/orchestrator/scripts/
 #
 # Ownership contract:
-#   Source: 1337:1337 775 (git-tracked)
-#   Target: hermes:hermes (10000:10000) 711 (deployed, executable)
+#   Source: hermes:hermes 775 (git-tracked)
+#   Target: 10000:10000 755 (deployed, executable)
 #
 # This script NEVER:
 #   - Creates new files (only overwrites existing ones)
@@ -19,6 +19,11 @@
 #   - chmod 777
 #   - chown recursively over the project tree
 set -euo pipefail
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "FAIL: deploy_cron_scripts.sh must run as root" >&2
+    exit 1
+fi
 
 PROJECT_DIR="/home/hermes/projects/trading"
 SRC="$PROJECT_DIR/orchestrator/scripts"
@@ -28,7 +33,7 @@ DST="/opt/data/profiles/orchestrator/scripts"
 JOBS_JSON="/opt/data/profiles/orchestrator/cron/jobs.json"
 DEPLOY_UID=10000
 DEPLOY_GID=10000
-DEPLOY_MODE=711
+DEPLOY_MODE=755
 
 ok=0
 warn=0
@@ -66,6 +71,9 @@ check_drift() {
     drift_count=0
     cron_only=0
     missing_in_src=0
+    wrong_owner=0
+    wrong_mode=0
+    wrong_exec=0
 
     for script in $active; do
         src_file="$SRC/$script"
@@ -83,6 +91,21 @@ check_drift() {
             continue
         fi
 
+        owner=$(stat -c '%u:%g' "$dst_file")
+        mode=$(stat -c '%a' "$dst_file")
+        if [ "$owner" != "10000:10000" ]; then
+            echo "  WRONG_OWNER: $script (owner=$owner expected=10000:10000)"
+            wrong_owner=$((wrong_owner + 1))
+        fi
+        if [ "$mode" != "755" ]; then
+            echo "  WRONG_MODE: $script (mode=$mode expected=755)"
+            wrong_mode=$((wrong_mode + 1))
+        fi
+        if [ ! -x "$dst_file" ]; then
+            echo "  WRONG_EXEC_BIT: $script (not executable)"
+            wrong_exec=$((wrong_exec + 1))
+        fi
+
         diff_lines=$(diff "$src_file" "$dst_file" 2>/dev/null | wc -l)
         if [ "$diff_lines" -gt 0 ]; then
             echo "  DRIFT ($diff_lines lines): $script"
@@ -95,6 +118,9 @@ check_drift() {
     echo "  Drift: $drift_count"
     echo "  CRON_ONLY (not in Git): $cron_only"
     echo "  Missing in runtime: $missing_in_src"
+    echo "  Wrong owner: $wrong_owner"
+    echo "  Wrong mode: $wrong_mode"
+    echo "  Wrong exec bit: $wrong_exec"
 
     if [ "$cron_only" -gt 0 ]; then
         echo ""
@@ -104,6 +130,11 @@ check_drift() {
     if [ "$missing_in_src" -gt 0 ]; then
         echo ""
         echo "  FAIL: $missing_in_src enabled script(s) not deployed to runtime. Run deploy."
+        return 1
+    fi
+    if [ "$wrong_owner" -gt 0 ] || [ "$wrong_mode" -gt 0 ] || [ "$wrong_exec" -gt 0 ]; then
+        echo ""
+        echo "  FAIL: runtime ownership or mode contract violated."
         return 1
     fi
     return 0
@@ -118,7 +149,7 @@ deploy() {
         src_file="$SRC/$script"
         if [ ! -f "$src_file" ]; then
             echo "FAIL: $script is active in jobs.json but NOT in Git ($SRC)"
-            echo "  Fix: cp $DST/$script $SRC/$script && chown 1337:1337 $SRC/$script"
+            echo "  Fix: restore the script into Git, then redeploy"
             exit 1
         fi
     done
@@ -127,41 +158,33 @@ deploy() {
         src_file="$SRC/$script"
         dst_file="$DST/$script"
 
-        # Create new files or update existing ones
+        needs_copy=0
         if [ ! -f "$dst_file" ]; then
-            # New deployment — create the file
+            needs_copy=1
+        else
+            diff_lines=$(diff "$src_file" "$dst_file" 2>/dev/null | wc -l)
+            owner=$(stat -c '%u:%g' "$dst_file")
+            mode=$(stat -c '%a' "$dst_file")
+            if [ "$diff_lines" -gt 0 ] || [ "$owner" != "10000:10000" ] || [ "$mode" != "755" ] || [ ! -x "$dst_file" ]; then
+                needs_copy=1
+            fi
+        fi
+
+        if [ "$needs_copy" -eq 1 ]; then
             cp "$src_file" "$dst_file"
-            chown "$DEPLOY_UID:$DEPLOY_GID" "$dst_file" 2>/dev/null || true
-            chmod "$DEPLOY_MODE" "$dst_file" 2>/dev/null || true
-
-            owner=$(stat -c '%u:%g' "$dst_file" 2>/dev/null)
-            mode=$(stat -c '%a' "$dst_file" 2>/dev/null)
-            echo "  CREATED: $script (owner=$owner mode=$mode)"
-            ok=$((ok + 1))
-            continue
+            chown "$DEPLOY_UID:$DEPLOY_GID" "$dst_file"
+            chmod "$DEPLOY_MODE" "$dst_file"
         fi
-
-        # Check if already matches
-        diff_lines=$(diff "$src_file" "$dst_file" 2>/dev/null | wc -l)
-        if [ "$diff_lines" -eq 0 ]; then
-            ok=$((ok + 1))
-            continue
-        fi
-
-        # Deploy
-        cp "$src_file" "$dst_file"
-        chown "$DEPLOY_UID:$DEPLOY_GID" "$dst_file" 2>/dev/null || true
-        chmod "$DEPLOY_MODE" "$dst_file" 2>/dev/null || true
 
         # Verify
         verify_lines=$(diff "$src_file" "$dst_file" 2>/dev/null | wc -l)
-        if [ "$verify_lines" -eq 0 ]; then
-            owner=$(stat -c '%u:%g' "$dst_file" 2>/dev/null)
-            mode=$(stat -c '%a' "$dst_file" 2>/dev/null)
+        owner=$(stat -c '%u:%g' "$dst_file")
+        mode=$(stat -c '%a' "$dst_file")
+        if [ "$verify_lines" -eq 0 ] && [ "$owner" = "10000:10000" ] && [ "$mode" = "755" ] && [ -x "$dst_file" ]; then
             echo "  DEPLOYED: $script (owner=$owner mode=$mode)"
             ok=$((ok + 1))
         else
-            echo "  VERIFY_FAIL: $script (still $verify_lines lines different after copy)"
+            echo "  VERIFY_FAIL: $script (diff=$verify_lines owner=$owner mode=$mode exec=$([ -x "$dst_file" ] && echo yes || echo no))"
             fail=$((fail + 1))
         fi
     done

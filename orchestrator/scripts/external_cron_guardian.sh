@@ -42,24 +42,10 @@ alert_count=0
 
 # ── 1. Check jobs.json exists and is valid JSON ──────────────────
 if [ ! -f "$JOBS_JSON" ]; then
-    log "CRITICAL: jobs.json MISSING — restoring from backup"
-    if [ -f "$BACKUP_JSON" ]; then
-        cp "$BACKUP_JSON" "$JOBS_JSON"
-chown 10000:10000 "$JOBS_JSON" 2>/dev/null || true
-chmod 600 "$JOBS_JSON" 2>/dev/null || true
-        log "RESTORED: jobs.json from backup"
-    else
-        log "FATAL: No backup available either"
-    fi
+    log "CRITICAL: jobs.json MISSING — report only, no restore"
     alert_count=$((alert_count + 1))
 elif ! python3 -c "import json; json.load(open('$JOBS_JSON'))" 2>/dev/null; then
-    log "CRITICAL: jobs.json is invalid JSON — restoring from backup"
-    if [ -f "$BACKUP_JSON" ]; then
-        cp "$BACKUP_JSON" "$JOBS_JSON"
-chown 10000:10000 "$JOBS_JSON" 2>/dev/null || true
-chmod 600 "$JOBS_JSON" 2>/dev/null || true
-        log "RESTORED: jobs.json from backup"
-    fi
+    log "CRITICAL: jobs.json is invalid JSON — report only, no restore"
     alert_count=$((alert_count + 1))
 fi
 
@@ -81,7 +67,7 @@ except Exception as e:
 
 if [ "$stuck_count" != "ERROR" ] && [ "$stuck_count" -ge "$MAX_STUCK_JOBS" ]; then
     log "WARNING: $stuck_count stuck jobs detected (threshold=$MAX_STUCK_JOBS)"
-    log "ACTION: Hermes cron needs manual recovery (delete+recreate stuck jobs)"
+    log "ACTION: Hermes cron needs manual recovery (report only)"
     alert_count=$((alert_count + 1))
 elif [ "$stuck_count" = "ERROR" ]; then
     log "ERROR: Could not parse stuck job count"
@@ -98,8 +84,8 @@ print(f'{age:.1f}')
     if [ "$signal_age_min" != "ERROR" ]; then
         # Compare as integer (bash can't do float comparison easily)
         signal_age_int=$(echo "$signal_age_min" | cut -d. -f1)
-        if [ "$signal_age_int" -ge "$MAX_SIGNAL_AGE_MIN" ]; then
-            log "ACTION: Signal stale (${signal_age_min}min >= ${MAX_SIGNAL_AGE_MIN}min) — triggering heartbeat + pipeline"
+    if [ "$signal_age_int" -ge "$MAX_SIGNAL_AGE_MIN" ]; then
+        log "ACTION: Signal stale (${signal_age_min}min >= ${MAX_SIGNAL_AGE_MIN}min) — triggering heartbeat + pipeline"
             # Trigger heartbeat
             if bash "$WORKDIR/orchestrator/scripts/ai_hedge_signal_heartbeat.sh" >> "$LOGFILE" 2>&1; then
                 log "OK: Signal heartbeat triggered successfully"
@@ -126,25 +112,14 @@ fi
 # ── 4. Check critical scripts exist in profile dir ───────────────
 for script in ai_hedge_signal_heartbeat.sh trading_pipeline.py drawdown_guard.py; do
     if [ ! -f "$SCRIPTS_DIR/$script" ]; then
-        log "WARNING: Missing script $SCRIPTS_DIR/$script — copying from project"
-        src="$WORKDIR/orchestrator/scripts/$script"
-        if [ -f "$src" ]; then
-            cp "$src" "$SCRIPTS_DIR/$script"
-chown 10000:10000 "$SCRIPTS_DIR/$script" 2>/dev/null || true
-chmod 755 "$SCRIPTS_DIR/$script" 2>/dev/null || true
-            chmod +x "$SCRIPTS_DIR/$script" 2>/dev/null || true
-            log "RESTORED: $script copied to profile dir"
-        else
-            log "FATAL: $script not found in project dir either"
-        fi
+        log "WARNING: Missing script $SCRIPTS_DIR/$script — report only"
     fi
 done
 
 
-# ── 5. Permission drift — DISABLED (shared-group model via GID 10000)
-# Removed: find+chgrp+chmod repair loop.
-# Reason: Runtime dirs now use hermes:ftuser (1337:10000) with setgid 2775.
-# No drift repair needed. Re-enable only if non-canary paths regress.
+# ── 5. Permission drift — report-only
+# No ownership or mode repair is performed here.
+# deploy_cron_scripts.sh is the only authorized runtime script repair path.
 
 # ── 6. Summary ───────────────────────────────────────────────────
 if [ "$alert_count" -eq 0 ]; then
