@@ -65,6 +65,7 @@ def main():
 
     # Cleanup old backups (older than RETENTION_DAYS)
     removed = 0
+    cleanup_errors = 0
     cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
     for d in BACKUP_ROOT.iterdir():
         if d.is_dir() and d.name.endswith("-daily"):
@@ -73,8 +74,12 @@ def main():
                 date_str = d.name.split("-")[0]
                 d_date = datetime.strptime(date_str, "%Y%m%d").replace(tzinfo=timezone.utc)
                 if d_date < cutoff:
-                    shutil.rmtree(d)
-                    removed += 1
+                    try:
+                        shutil.rmtree(d)
+                        removed += 1
+                    except PermissionError:
+                        cleanup_errors += 1
+                        continue
             except (ValueError, IndexError):
                 pass  # Skip non-date dirs
 
