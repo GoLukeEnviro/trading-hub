@@ -7,9 +7,9 @@
 
 ## Executive Verdict
 
-**FIXED — PermissionError behoben durch Code-Patch**
+**FIXED — PermissionError behoben durch Code-Patch + Source-of-Truth reconciliation**
 
-Der portfolio-rebalancer schrieb STATE_FILE und LOG_FILE auf einen Pfad, der UID 1337 gehoerte und vom Hermes-Laufzeit-User (UID 10000) nicht beschreibbar war. Fix: Pfade auf den etablierten Orchestrator-State-Pfad geaendert. Dry-Run erfolgreich, kein Trading-Bot beruehrt.
+Der portfolio-rebalancer schrieb STATE_FILE und LOG_FILE auf einen Pfad, der UID 1337 gehoerte und vom Hermes-Laufzeit-User (UID 10000) nicht beschreibbar war. Fix: Pfade auf den etablierten Orchestrator-State-Pfad geaendert. Source-of-Truth (Git) und Runtime synchronisiert via deploy_cron_scripts.sh. Dry-Run erfolgreich, kein Trading-Bot beruehrt.
 
 ---
 
