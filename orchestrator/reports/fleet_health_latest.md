@@ -3,7 +3,7 @@
 ## Summary
 
 - **Verdict:** RED
-- **Checked At:** 2026-06-01T01:59:02.100322+00:00
+- **Checked At:** 2026-06-01T15:48:02.636993+00:00
 - **Shared Helper:** ✅ Exists
 - **Total Bots:** 3
 
@@ -27,5 +27,5 @@
 
 ---
 
-**Generated:** 2026-06-01T01:59:02.100322+00:00  
+**Generated:** 2026-06-01T15:48:02.636993+00:00  
 **Fleet Healthcheck Version:** v0.1.0
