@@ -234,3 +234,6 @@ freqforge-canary/config/config*.json
 
 # Catch-all for signal state files across all bot directories
 **/primo_signal_state.json
+
+# Runtime PID files
+*.pid
