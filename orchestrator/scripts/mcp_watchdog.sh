@@ -4,9 +4,9 @@
 #
 # v2 fix: handle pgrep pipefail correctly, don't crash on set -euo pipefail
 
-LOG="/home/hermes/projects/trading/orchestrator/logs/mcp_server.log"
-WATCHDOG_LOG="/home/hermes/projects/trading/orchestrator/logs/mcp_watchdog.log"
-STATE="/home/hermes/projects/trading/orchestrator/state/mcp_watchdog_state.json"
+LOG="/opt/data/profiles/orchestrator/logs/mcp_server.log"
+WATCHDOG_LOG="/opt/data/profiles/orchestrator/logs/mcp_watchdog.log"
+STATE="/opt/data/profiles/orchestrator/state/mcp_watchdog_state.json"
 SCRIPT="/home/hermes/projects/trading/orchestrator/scripts/bitget_mcp_server.py"
 
 now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
