@@ -61,8 +61,8 @@ BOTS = {
     },
 }
 
-STATE_FILE = Path("/home/hermes/projects/trading/orchestrator/state/rebalance_state.json")
-LOG_FILE   = Path("/home/hermes/projects/trading/orchestrator/logs/rebalancer.log")
+STATE_FILE = Path("/opt/data/profiles/orchestrator/state/rebalance_state.json")
+LOG_FILE   = Path("/opt/data/profiles/orchestrator/logs/rebalancer.log")
 
 
 def log(msg):
