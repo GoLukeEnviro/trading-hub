@@ -9,7 +9,7 @@ KEIN Live-Trading – gibt nur Empfehlungen aus.
 """
 
 import json, sqlite3, math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict
 
@@ -66,7 +66,7 @@ LOG_FILE   = Path("/opt/data/profiles/orchestrator/logs/rebalancer.log")
 
 
 def log(msg):
-    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     line = f"[{ts}] {msg}"
     print(line)
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -81,7 +81,7 @@ def get_bot_performance(db_path, days=30):
                 "trades": 0, "profit_std": 0.02, "valid": False}
 
     conn = sqlite3.connect(db_path)
-    since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     rows = [r[0] for r in conn.execute(
         "SELECT close_profit FROM trades WHERE close_date >= ? AND is_open = 0", (since,)
     ).fetchall()]
@@ -160,13 +160,13 @@ def run_rebalancer(dry_run=True):
             f"({'+' if delta >= 0 else ''}{delta:.0%}) mot={new_mot} [{action}]")
 
     output = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
         "dry_run": dry_run,
         "method": "Half-Kelly + Volatility-Drag + Shannon-Rebalancing",
         "interval_days": REBALANCE_INTERVAL_DAYS,
         "min_trades_for_kelly": MIN_TRADES_FOR_KELLY,
         "recommendations": recs,
-        "next_due": (datetime.utcnow() + timedelta(days=REBALANCE_INTERVAL_DAYS)).isoformat() + "Z",
+        "next_due": (datetime.now(timezone.utc) + timedelta(days=REBALANCE_INTERVAL_DAYS)).isoformat() + "Z",
     }
 
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
