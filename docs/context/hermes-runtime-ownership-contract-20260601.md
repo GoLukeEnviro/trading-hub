@@ -46,6 +46,11 @@
 
 - Einziger autorisierter Reparaturpfad fuer Runtime-Skripte: `deploy_cron_scripts.sh`
 - `setup_permanent_permissions.sh`, `external_cron_guardian.sh` und `ghostbuster.py` sind report-only.
+- `permission_autopilot.sh` ist Host-only, selektiv und nur fuer explizite Daten-/Log-Mounts gedacht.
+- `permission_autopilot_alert.py` ist Host-only, CRITICAL-only und sendet keine Fixes.
+- `permission_autopilot.sh` ersetzt nicht `deploy_cron_scripts.sh` und repariert keine `jobs.json`-Pfadangaben.
+- Cron soll nur `permission_autopilot.sh --summary` ausfuehren; `--apply` bleibt manuell und root-only.
+- Cron soll `permission_autopilot_alert.py` nur versetzt und ohne root ausfuehren.
 - Keine Broad-`find`-Repair-Loops fuer Ownership oder Mode.
 
 ## Validierung
