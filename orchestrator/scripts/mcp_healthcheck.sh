@@ -42,7 +42,7 @@ export PAPER_LOG_DIR="${LOG_DIR}"
 export PYTHONUNBUFFERED=1
 export DRY_RUN=true
 
-nohup /usr/bin/python3 /home/hermes/projects/trading/orchestrator/scripts/bitget_mcp_server.py \
+nohup /home/hermes/projects/trading/.venv/bin/python3 /home/hermes/projects/trading/orchestrator/scripts/bitget_mcp_server.py \
     >> "${LOG_DIR}/mcp_daemon.log" 2>&1 &
 PID=$!
 echo ${PID} > "${PID_FILE}"

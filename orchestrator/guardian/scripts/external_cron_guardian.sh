@@ -116,6 +116,20 @@ else
     alert_count=$((alert_count + 1))
 fi
 
+# ── 3b. Check critical containers are running, restart if not ────
+CRITICAL_CONTAINERS=("ai-hedge-fund-crypto" "hermes-green" "trading-guardian")
+for cname in "${CRITICAL_CONTAINERS[@]}"; do
+    if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${cname}$"; then
+        log "CONTAINER_DOWN: $cname — attempting docker start"
+        if docker start "$cname" 2>/dev/null; then
+            log "CONTAINER_RESTARTED: $cname"
+        else
+            log "CONTAINER_RESTART_FAILED: $cname"
+        fi
+        alert_count=$((alert_count + 1))
+    fi
+done
+
 # ── 4. Check critical scripts exist in profile dir ───────────────
 for script in ai_hedge_signal_heartbeat.sh trading_pipeline.py drawdown_guard.py container_watchdog.sh mcp_watchdog.sh backup_rotation.py; do
     if [ ! -f "$SCRIPTS_DIR/$script" ]; then
@@ -152,8 +166,8 @@ PERM_DIRS=(
 
 # file_path:expected_mode:expected_group
 PERM_FILES=(
-    "$WORKDIR/freqtrade/shared/primo_signal_state.json:0644:10000"
-    "$WORKDIR/freqtrade/shared/fleet_risk_state.json:0644:10000"
+    "$WORKDIR/freqtrade/shared/primo_signal_state.json:0664:10000"
+    "$WORKDIR/freqtrade/shared/fleet_risk_state.json:0664:10000"
     "$WORKDIR/freqtrade/shared/.fleet_risk_state.json.lock:0664:10000"
     "$WORKDIR/orchestrator/logs/memory-backfill.log:0664:10000"
     "$WORKDIR/freqtrade/logs/fleet_risk_update.log:0664:10000"
