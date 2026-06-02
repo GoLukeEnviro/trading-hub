@@ -43,14 +43,6 @@ BOTS = {
         "max_open_trades_limit": 3,
         "stoploss": -0.07,
     },
-    "momentum": {
-        "name": "Momentum",
-        "container": "freqtrade-momentum",
-        "db_path": "/home/hermes/projects/trading/freqtrade/bots/momentum/user_data/tradesv3.momentum.dryrun.sqlite",
-        "current_weight": 0.10,
-        "max_open_trades_limit": 2,
-        "stoploss": -0.06,
-    },
     "rebel": {
         "name": "FreqAI-rebel",
         "container": "freqai-rebel",

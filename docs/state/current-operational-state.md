@@ -1,13 +1,11 @@
 # Operational State — Trading Hub v2.x
 
-**Stand:** 2026-05-30 20:50 UTC
-**Quelle:** Live-Checks auf Host `Agent0`
-**Status:** ✅ SELBSTREGENERIEREND — Self-Healing Level erreicht
+**Stand:** 2026-06-02 23:00 UTC
+**Quelle:** Live-Checks auf Host `Agent0` (synthetisiert aus Kontext 2026-06-01/02)
+**Status:** ✅ SYSTEM_GREEN_DRYRUN_READY
 
-> Dieses Dokument ist der offizielle System-Snapshot und dient als
-> Geburtsurkunde für das selbstreparierende Trading Hub v2.x.
-> Alle Phasen 1–6 sind abgeschlossen. Das System kann sich selbst
-> überwachen, reparieren und anpassen.
+> Dieses Dokument ist der offizielle System-Snapshot.
+> Alle Bots laufen dry_run=True. Kein Live-Trading.
 
 ---
 
@@ -46,7 +44,8 @@
 │                    ▼                            │
 │           ┌────────────────┐                    │
 │           │  MCP EXECUTION │ (paper orders)    │
-│           │  Layer v1.0    │                    │
+│           │  bitget-mcp-   │                    │
+│           │  server npm    │                    │
 │           └────────────────┘                    │
 └─────────────────────┬──────────────────────────┘
                       │ primo_signal_state.json
@@ -69,6 +68,7 @@ SELBSTHEILUNGS-SCHICHT:
 │  FleetReport (4h)        → Telegram-Report      │
 │  System Optimizer (5min) → Fleet-Optimierung    │
 │  Log Rotation (täglich)  → Log-Management       │
+│  Permission Autopilot    → Ownership-Stabilizer │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -76,26 +76,24 @@ SELBSTHEILUNGS-SCHICHT:
 
 ## 2. Container-Fleet
 
-| # | Container | Port | Status | Uptime | Strategie |
-|---|-----------|------|--------|--------|-----------|
-| 1 | `freqtrade-freqforge` | 8086 | ✅ Up | 44h | `FreqForge_Override` |
-| 2 | `freqtrade-freqforge-canary` | 8081 | ✅ Up | 5d | `FreqForge_Override` |
-| 3 | `freqtrade-regime-hybrid` | 8085 | ✅ Up | 12h | `RegimeSwitchingHybrid_v7_v04_Integration` |
-| 4 | `freqai-rebel` | 8087 | ✅ Up | 3d | `RebelLiquidation + XGBoost` |
-| 5 | `ai-hedge-fund-crypto` | 8410 | ✅ Healthy | 5d | Signal Generator |
-| 6 | `hermes-green` | — | ✅ Up | 32h | Meta-Orchestrator |
-| 7 | `green-mem0` | 8787 | ✅ Healthy | 32h | Memory-Stack |
-| 8 | `green-ollama` | 11436 | ✅ Up | 32h | LLM-Inference |
-| 9 | `green-qdrant` | 6333 | ✅ Up | 32h | Vector-DB |
-| 10 | `hermes-mem0-local-api` | 8787 | ✅ Healthy | 5d | Fallback Memory |
-| 11 | `freqtrade-webserver` | 8180 | ✅ Up | 2d | Web-UI |
-| 12 | `caddy` | — | ✅ Up | 8d | Reverse Proxy |
-| 13 | `claude-worker` | 5050 | ✅ Healthy | 7d | AI Worker |
-| 14 | `hermes-ollama` | 11434 | ✅ Healthy | 11d | Local LLM |
-| 15 | `hermes-qdrant` | 6333-4 | ✅ Healthy | 11d | Vector-DB |
+| # | Container | Port | Status | Strategie |
+|---|-----------|------|--------|-----------|
+| 1 | `freqtrade-freqforge` | 8086 | ✅ Up | `FreqForge_Override` |
+| 2 | `freqtrade-freqforge-canary` | 8081 | ✅ Up | `FreqForge_Override` |
+| 3 | `freqtrade-regime-hybrid` | 8085 | ✅ Up | `RegimeSwitchingHybrid_v7_v04_Integration` |
+| 4 | `freqai-rebel` | 8087 | ✅ Up (isolated net) | `RebelLiquidation + XGBoost` |
+| 5 | `ai-hedge-fund-crypto` | 8410 | ✅ Healthy | Signal Generator |
+| 6 | `hermes-green` | — | ✅ Up | Meta-Orchestrator |
+| 7 | `green-mem0` | 8787 | ✅ Healthy | Memory-Stack |
+| 8 | `green-ollama` | 11436 | ✅ Up | LLM-Inference |
+| 9 | `green-qdrant` | 6333 | ✅ Up | Vector-DB |
+| 10 | `freqtrade-webserver` | 8180 | ✅ Up | Web-UI |
+| 11 | `caddy` | — | ✅ Up | Reverse Proxy |
+| 12 | `trading-guardian` | — | ⚠️ Up (purpose unclear) | Guardian (isoliertes Netz) |
 
 **Nicht mehr aktiv:**
 - `freqtrade-momentum` — **DECOMMISSIONED** seit 2026-05-24
+- `hermes-mem0-local-api`, `hermes-ollama`, `hermes-qdrant` — durch green-* Stack ersetzt (EXITED)
 
 ---
 
@@ -105,7 +103,7 @@ SELBSTHEILUNGS-SCHICHT:
 - **Script:** `hermes_standby_monitor.py`
 - **Cron:** Alle 5 Minuten
 - **Funktion:** Prüft Container-Health + Scheduler-Prozesse
-- **Failover:** Auto-Restart bei Container-Down. Bei >10min Ausfall: Emergency-Fallback (kritische Scripts direkt)
+- **Failover:** Auto-Restart bei Container-Down. Bei >10min Ausfall: Emergency-Fallback
 
 ### 3.2 Config-Diff-Detektor
 - **Script:** `config_diff_detector.py`
@@ -139,19 +137,28 @@ SELBSTHEILUNGS-SCHICHT:
 - **Cron:** Alle 30 Minuten
 - **State-Dir:** `orchestrator/state/riskguard/`
 - **Files:** `riskguard_health.json`, `riskguard_state.json`, `riskguard_audit.jsonl`
-- **Funktion:** Unabhängiges Signal-Audit + Health-Check
 
 ### 3.6 Log-Rotation
 - **Script:** `log_rotation.py`
 - **Cron:** Täglich 03:00 UTC
 - **Limit:** Rotation bei >5MB, Cleanup bei >30d
 
+### 3.7 Permission Autopilot
+- **Script:** `permission_autopilot.sh`
+- **Modus:** Host-only, als root
+- **Funktion:** Ownership-Drift-Erkennung und -Reparatur auf Runtime-Mount-Roots
+- **Apply-Scope:** `freqtrade/shared/`, `freqtrade/logs/`, `orchestrator/logs/`, `orchestrator/state/`
+
+### 3.8 Git Guard
+- **Script:** `git_guard.sh`
+- **Funktion:** Pre-commit Sanity-Check — prüft Ownership außerhalb von Runtime-Pfaden
+
 ---
 
 ## 4. Signal Pipeline
 
 ### Layer 1: Bridge (trading_pipeline.py)
-- **Signal-Quellen:** `hermes_signal.json` (canonical), `latest/` (fallback), `shared/` (legacy)
+- **Signal-Quellen:** `hermes_signal.json` (canonical), `latest/` (fallback)
 - **Normalisierung:** Futures-Paare (`BTC/USDT:USDT` → `BTC/USDT`)
 - **Stale-Block:** Signal >25min → PIPELINE_BLOCKED
 
@@ -165,38 +172,24 @@ SELBSTHEILUNGS-SCHICHT:
 | RG-5 | Quantity=0 trotz directional action | WATCH_ONLY |
 
 ### Layer 2.5: MCP Execution
-- **Status:** ✅ AKTIV (v1.0)
-- **Funktion:** Paper-Orders via Bitget MCP (immer dry_run=true)
-- **Fix:** Shebang auf Hermes-venv umgestellt (ccxt im venv verfügbar)
+- **Status:** ✅ AKTIV (npm bitget-mcp-server v1.1.0, read-only, --read-only flag)
+- **Funktion:** Paper-Orders via offiziellen Bitget MCP (immer dry_run=true, keine API-Keys)
+- **Migration:** Custom `bitget_mcp_server.py` durch offizielles npm Package ersetzt
 
 ### Layer 3: ShadowLogger
 - **File:** `orchestrator/logs/shadow_decisions.jsonl`
 - **Format:** Append-only JSONL, Schema v1.0
 - **Inhalt:** Signal-Age, RiskGuard-Summary, Pair-Decisions, State-Writes
-- **Einträge:** 170+, 276KB
 
 ### Layer 4: Bridge-Write
-- **State-Files:** 5 Zielpfade (shared, momentum, regime-hybrid, freqforge, canary)
+- **State-Files:** 4 Zielpfade (regime-hybrid, freqforge, canary, freqai-rebel)
 - **Atomic Write:** tmp+rename, chmod 644
 
 ---
 
 ## 5. Safety & Risk Management
 
-### 5.1 State Files (alle aktiv)
-
-| Datei | Pfad | Update | Inhalt |
-|-------|------|--------|--------|
-| `fleet_risk_state.json` | `freqtrade/shared/` | Echtzeit | Equity, Drawdown, Open Trades |
-| `consec_loss_state.json` | `orchestrator/state/` | via Optimizer | Loss-Streak-Analyse |
-| `drawdown_state.json` | `orchestrator/state/` | via drawdown_guard | Drawdown-Schutz |
-| `riskguard_health.json` | `orchestrator/state/riskguard/` | via RiskGuard | Signal-Audit |
-| `hermes_heartbeat.sqlite` | `orchestrator/state/` | via Heartbeat | Bot-Health |
-| `config_diff_health.json` | `orchestrator/state/config_diff/` | via Diff-Detektor | Config-Drift |
-| `auto_params_health.json` | `orchestrator/state/auto_params/` | via Auto-Params | Parameter-Anpassungen |
-| `hermes_health.json` | `orchestrator/state/standby/` | via Standby | Hermes-Health |
-
-### 5.2 Bot-Konfiguration
+### 5.1 Bot-Konfiguration
 
 | Bot | dry_run | MOT | Stake | Strategie |
 |-----|---------|-----|-------|-----------|
@@ -205,59 +198,70 @@ SELBSTHEILUNGS-SCHICHT:
 | Regime-Hybrid | ✅ True | 5 | 50 | `RegimeSwitchingHybrid_v7_v04_Integration` |
 | Rebel | ✅ True | 2 | 50 | `RebelLiquidation + XGBoost` |
 
-### 5.3 Fleet Performance (kumuliert)
+### 5.2 Fleet Performance (kumuliert, Stand 2026-06-02)
 
-| Bot | Trades | PnL | WR% | PF | Open |
-|-----|--------|-----|-----|----|------|
-| FreqForge | 52 | +7.96 | 86.3 | 1.25 | 1 |
-| Regime-Hybrid | 43 | -7.10 | 76.7 | 0.55 | 0 |
-| Canary | 33 | +3.19 | 90.6 | 104.3 | 1 |
-| Rebel | 100 | -5.76 | 25.0 | 0.18 | 0 |
-| **Fleet** | **228** | **-1.71** | — | — | **2** |
+| Bot | PnL (USDT) | WR% | Open |
+|-----|------------|-----|------|
+| FreqForge | +8.94 | 86.5 | 1 |
+| FreqForge-Canary | +3.23 | 90.9 | 3 |
+| Regime-Hybrid | -7.08 | 77.3 | 0 |
+| Rebel | -5.76 | 25.0 | 0 |
+| **Fleet** | **-0.67** | — | **4** |
+
+**MCP Paper Portfolio:** 4 offene Positionen, 399 Orders, 8.47 USDT Balance
 
 ---
 
 ## 6. Cron-Job-Übersicht
 
-### 6.1 Hochfrequenz (≤15min)
+### 6.1 Kern-Pipeline
 | Job | Intervall | Funktion |
 |-----|-----------|----------|
 | `trading-pipeline` | */10min | Signal-Bridge + RiskGuard + MCP |
 | `system-optimizer` | 5min | Fleet-Optimierung + Guard-States |
-| `hermes-standby-monitor` | 5min | Health-Check + Auto-Restart |
-| `fleetrisk-auto-params` | 15min | Dynamische Parameter |
 | `FleetRisk equity updater` | 5min | Equity-Tracking |
-| `heartbeat-writer` | 15min | Bot-Health-DB |
+| `unified-signal-heartbeat` | */15min | Unified Signal-Trigger (ersetzt signal-heartbeat + smart-heartbeat) |
 
-### 6.2 Mittelfrequenz (30min–2h)
+### 6.2 Monitoring & Sicherheit
 | Job | Intervall | Funktion |
 |-----|-----------|----------|
-| `riskguard-service` | 30min | Unabhängiges Signal-Audit |
-| `canary-position-monitor` | 30min | Canary-Positions-Überwachung |
-| `drawdown-guard` | 30min | Drawdown-Schutz |
-| `container-watchdog` | 30min | Container-Health |
-| `autonomous-health-loop` | 30min | Autonome Health-Checks |
-| `Fleet Report (4h)` | 240min | Telegram-Report |
-| `signal-heartbeat` | */20min | Signal-Trigger |
-| `smart-heartbeat` | */10min | Defensiver Signal-Trigger |
-
-### 6.3 Niedrigfrequenz (≥2h)
-| Job | Intervall | Funktion |
-|-----|-----------|----------|
+| `hermes-standby-monitor` | 5min | Health-Check + Auto-Restart |
+| `heartbeat-writer` | */15min | Bot-Health-DB |
+| `critical-event-watchdog` | */10min | Kritische Event-Überwachung |
+| `mot-floor-watchdog` | */10min | MOT-Untergrenze |
+| `container-watchdog` | */30min | Container-Health |
+| `drawdown-guard` | */30min | Drawdown-Schutz |
+| `canary-position-monitor` | */30min | Canary-Positions |
+| `fleetrisk-auto-params` | */15min | Dynamische Parameter |
+| `riskguard-service` | */30min | Unabhängiges Signal-Audit |
 | `config-diff-detector` | 1h | Config-Drift-Prüfung |
-| `ghostbuster` | 2h | Stale-Artifact-Cleanup |
+
+### 6.3 Reports & Wartung
+| Job | Intervall | Funktion |
+|-----|-----------|----------|
+| `Fleet Report` | 4h | Telegram-Bericht |
+| `autonomous-health-loop` | 30min | Autonomer Health-Check (LLM) |
 | `fleet-auto-repair` | 2h | Auto-Reparatur |
+| `ghostbuster` | 2h | Stale-Artifact-Cleanup |
 | `mem0-watchdog` | 2h | Memory-Health |
 | `Memory Backfill` | 2h | Memory-Recovery |
-| `Heartbeat Intelligence` | 6h | Bot-Intelligence-Report |
 | `cron-guardian` | 6h | Cron-Job-Health |
-| `daily-heartbeat` | 24h | Täglicher Heartbeat |
-| `daily-backup` | 24h (02:00) | Backup-Rotation |
-| `log-rotation-daily` | 24h (03:00) | Log-Rotation |
-| `portfolio-rebalancer` | wöchentlich | Portfolio- Rebalancing |
+| `Heartbeat Intelligence` | 6h | Bot-Intelligence-Report |
+| `daily-signal-confidence-monitor` | 6h | Signal-Konfidenz (LLM) |
+| `System Health Check` | 8h | System-Gesamtcheck (LLM) |
+| `daily-heartbeat` | 06:00 UTC | Täglicher Heartbeat |
+| `morning-brief-daily` | 08:00 UTC | Morning Brief |
+| `morning-brief-1040` | 10:40 UTC | Morning Brief 2 |
+| `quality-hub-monitor` | 08:00 UTC | Qualitätsprüfung |
+| `daily-backup` | 02:00 UTC | Backup-Rotation |
+| `log-rotation-daily` | 03:00 UTC | Log-Rotation |
+| `trading-hub-deep-dive-validation` | täglich 09:00 | Validierung (LLM) |
+| `Rebel Status Summary` | 12h | Rebel-Bericht |
+| `Fleet correlation refresh` | 72h | Korrelations-Update |
 | `monthly-strategy-report` | monatlich | Strategie-Report |
+| `portfolio-rebalancer` | Montag 06:00 | Portfolio-Rebalancing |
 
-**Gesamt:** 33 Cron-Jobs aktiv
+**Gesamt:** ~37 Cron-Jobs
 
 ---
 
@@ -271,21 +275,24 @@ Host Agent0
 │   ├── green-ollama — LLM
 │   └── green-qdrant — Vector-DB
 │
-└── ki-fabrik (172.18.0.0/24)
-    ├── ai-hedge-fund-crypto (172.18.0.6) — Signal-Generator
-    ├── freqtrade-freqforge — Bot
-    ├── freqtrade-freqforge-canary — Bot
-    ├── freqtrade-regime-hybrid — Bot
-    ├── freqai-rebel — Bot
-    ├── hermes-green (172.18.0.5) — auch auf ki-fabrik
-    ├── claude-worker — AI Worker
-    ├── hermes-mem0-local-api — Memory-API
-    └── hermes-ollama/hermes-qdrant — Fallback AI
+├── ki-fabrik (172.18.0.0/24)
+│   ├── ai-hedge-fund-crypto — Signal-Generator
+│   ├── freqtrade-freqforge — Bot
+│   ├── freqtrade-freqforge-canary — Bot
+│   ├── freqtrade-regime-hybrid — Bot
+│   └── hermes-green (dual-homed)
+│
+└── trading_hermes-net (isoliert)
+    └── trading-guardian (Zweck ungeklärt)
+
+freqai-rebel: eigenes freqai-rebel-net (ISOLIERT)
 ```
 
-**Hermes-Container ist dual-homed:** Beide Netzwerke direkt erreichbar.
-**Freqtrade-Container:** Nur auf `ki-fabrik` → nicht direkt von Hermes aus HTTP-erreichbar
-**Heartbeat-Zugriff:** `docker exec` (einziger verlässlicher Pfad)
+**Besonderheiten:**
+- Hermes-Container ist dual-homed: green-net + ki-fabrik
+- Freqtrade FreqForge/Canary/Regime: ki-fabrik direkt erreichbar
+- Rebel: Netzwerk-isoliert, nur via `docker exec` erreichbar
+- trading-guardian: eigenes Netz, keine Logs, Zweck unklar
 
 ---
 
@@ -293,12 +300,11 @@ Host Agent0
 
 | Ressource | Wert | Status |
 |-----------|------|--------|
-| Disk (/) | 182G/301G (63%) | ✅ 107G frei |
-| RAM | 8.6G/30G (28%) | ✅ 22G frei |
-| Docker Images | 26.3 GB | ⚠️ 2.6 GB reclaimable |
-| Docker Volumes | 24.9 GB | ⚠️ 2.6 GB reclaimable |
-| Build Cache | 5.5 GB | 🔄 komplett reclaimable |
-| Container | 16 up / 0 down | ✅ |
+| Disk (/) | ~182G/301G (63%) | ✅ ~107G frei |
+| RAM | ~8.6G/30G (28%) | ✅ ~22G frei |
+| Mem0 Memories | 1160 Einträge | ✅ Aktiv (hermes_memories_v2) |
+| ShadowLogger | 170+ Einträge | ✅ Aktiv |
+| Alert-Speicher | 883+ Dateien | ⚠️ Aufräumen empfohlen |
 
 ---
 
@@ -306,12 +312,12 @@ Host Agent0
 
 | ID | Risiko | Severity | Status |
 |----|--------|----------|--------|
-| R1 | Rebel permanent quarantined (MOT=2) | NIEDRIG | Bewusst |
-| R2 | AVAX/NEAR/ARB/OP ohne X-Sentiment (conf 0.2) | NIEDRIG | Fehlende Datenquelle |
-| R3 | Equity-History erst 2 Datenpunkte | NIEDRIG | Füllt sich mit Zeit |
-| R4 | MCP Execution Layer: Kein echter Trade | KEINES | dry_run=true Hardcoded |
-| R5 | Kein Telegram-Alarm bei Auto-Params | NIEDRIG | Phase 7 Kandidat |
-| R6 | Kein Hermes-Selbst-Update-Mechanismus | NIEDRIG | Phase 7 Kandidat |
+| R1 | Rebel permanent quarantined (MOT=2, isoliertes Netz) | NIEDRIG | Bewusst |
+| R2 | trading-guardian Zweck ungeklärt | NIEDRIG | Zu dokumentieren |
+| R3 | Alert-Speicher (883+ Dateien) wächst unkontrolliert | NIEDRIG | Rotation einführen |
+| R4 | Dual Script-Repos (/opt/data vs. Projekt) | MITTEL | deploy_cron_scripts.sh als Sync-Tool |
+| R5 | MCP Paper: keine API-Keys, nur public endpoints | KEINES | Bewusst (dry_run=true) |
+| R6 | FreqAI-Rebel Netzwerk-Isolation | NIEDRIG | Kein ki-fabrik Zugriff |
 
 ---
 
@@ -319,15 +325,17 @@ Host Agent0
 
 | Datum | Phase | Änderung |
 |-------|-------|----------|
-| 2026-05-30 | **1** | Heartbeat Writer fix (Docker exec statt REST), Error-Jobs reset, AGENTS.md Korrektur (Momentum raus, Canary-Strategie fix) |
-| 2026-05-30 | **2** | FleetRisk Cursor reaktiviert (23. Mai → 30. Mai), Signal-Bridge Diskrepanz analysiert (kein Bug), Log-Rotation implementiert |
-| 2026-05-30 | **3** | Equity Protection rückgängig (Stakes 100%), Canary SHORTs geprüft (alle gewinnbringend geschlossen), Signal-Heartbeat v3 (docker exec) |
-| 2026-05-30 | **4** | FleetRisk-Status verifiziert (alle State-Files aktiv), Backup-Cron reset, Operational State Update |
-| 2026-05-30 | **5** | **MCP Execution Layer fix** (ccxt via Hermes-venv), ShadowLogger verifiziert (170 Einträge), **RiskGuard Service deployt** (eigenständig mit Health-Check) |
-| 2026-05-30 | **6** | **Standby-Hermes Monitor** (5min, Auto-Restart), **Config-Diff-Detektor** (stündlich, Drift-Prüfung), **FleetRisk Auto-Params** (15min, 6 Regeln) |
-| 2026-05-30 | **Final** | Dokumentation abgeschlossen. 33 Crons aktiv. Selbstheilungs-Level erreicht. |
+| 2026-05-30 | **1–6** | Heartbeat, FleetRisk, Signal-Bridge, Log-Rotation, RiskGuard, Standby-Monitor, Config-Diff, Auto-Params |
+| 2026-05-30 | **Final** | Selbstheilungs-Level v1 erreicht. 33 Crons aktiv. |
+| 2026-06-01 | **Stabilisierung** | Fleet-Idle-Diagnose, FleetRisk Phase 2-4, MCP+ShadowLogger Verifizierung, Permission-Drift-Lockdown |
+| 2026-06-01 | **Recovery** | ai-hedge-trigger Orchestration Fix, Cron-Failure-Repair, Hermes Scheduler Recovery |
+| 2026-06-02 | **Migration** | MCP Server: custom bitget_mcp_server.py → npm bitget-mcp-server v1.1.0 (read-only) |
+| 2026-06-02 | **Fixes** | FleetRisk Cursor Fix (host_dbs), daily-backup PermissionError-tolerant, signal heartbeat unified |
+| 2026-06-02 | **Automation** | permission_autopilot.sh + git_guard.sh hinzugefügt; portfolio_rebalancer momentum-Bot entfernt |
+| 2026-06-02 | **State** | deploy_cron_scripts.sh pipefail-Bug behoben; current-operational-state.md aktualisiert |
 
 ---
 
-*Erstellt von Hermes Orchestrator (deepseek-v4-flash) am 2026-05-30 20:50 UTC*
-*Nächstes Routin-Update: nach der nächsten Phase oder bei kritischer Systemänderung*
+*Letzte Aktualisierung: 2026-06-02 — synthetisiert aus Kontext 2026-06-01/02*
+*Nächstes Update: nach der nächsten Phase oder bei kritischer Systemänderung*
+

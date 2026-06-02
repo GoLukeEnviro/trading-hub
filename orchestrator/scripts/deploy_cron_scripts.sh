@@ -106,7 +106,7 @@ check_drift() {
             wrong_exec=$((wrong_exec + 1))
         fi
 
-        diff_lines=$(diff "$src_file" "$dst_file" 2>/dev/null | wc -l)
+        diff_lines=$( { diff "$src_file" "$dst_file" 2>/dev/null || true; } | wc -l )
         if [ "$diff_lines" -gt 0 ]; then
             echo "  DRIFT ($diff_lines lines): $script"
             drift_count=$((drift_count + 1))
@@ -162,7 +162,7 @@ deploy() {
         if [ ! -f "$dst_file" ]; then
             needs_copy=1
         else
-            diff_lines=$(diff "$src_file" "$dst_file" 2>/dev/null | wc -l)
+            diff_lines=$( { diff "$src_file" "$dst_file" 2>/dev/null || true; } | wc -l )
             owner=$(stat -c '%u:%g' "$dst_file")
             mode=$(stat -c '%a' "$dst_file")
             if [ "$diff_lines" -gt 0 ] || [ "$owner" != "10000:10000" ] || [ "$mode" != "755" ] || [ ! -x "$dst_file" ]; then
@@ -177,7 +177,7 @@ deploy() {
         fi
 
         # Verify
-        verify_lines=$(diff "$src_file" "$dst_file" 2>/dev/null | wc -l)
+        verify_lines=$( { diff "$src_file" "$dst_file" 2>/dev/null || true; } | wc -l )
         owner=$(stat -c '%u:%g' "$dst_file")
         mode=$(stat -c '%a' "$dst_file")
         if [ "$verify_lines" -eq 0 ] && [ "$owner" = "10000:10000" ] && [ "$mode" = "755" ] && [ -x "$dst_file" ]; then
