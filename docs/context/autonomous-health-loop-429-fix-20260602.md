@@ -1,6 +1,6 @@
-# Autonomous Health Loop 429 — Triage and Classification
-**Datum:** 2026-06-02T04:03Z
-**Typ:** Provider-Transient Classification + Frequenz-Reduktion
+# Autonomous Health Loop 429 — Triage, Classification and Fallback Chain
+**Datum:** 2026-06-02T04:03Z (initial) / T06:07Z (fallback chain)
+**Typ:** Provider-Transient Classification + Frequenz-Reduktion + z.ai Fallback Chain
 **Autor:** Hermes Meta-Orchestrator
 
 ---
@@ -86,4 +86,43 @@ Der 429 kommt vom zai-Provider, nicht von Hermes. Es ist ein transienter Overloa
 
 ---
 
-*Nicht code-gepatcht — transienter Provider-Overload akzeptiert und Frequenz reduziert.*
+## Fallback Chain (2026-06-02T06:07Z)
+
+**Typ:** Globaler `config.yaml` fallback_providers Eintrag (gilt fuer ALLE zai-Agent-Jobs)
+
+Die globale Hermes-Config in `/opt/data/config.yaml` wurde um eine z.ai-Fallback-Chain erweitert:
+
+```yaml
+fallback_providers:
+  - provider: zai
+    model: glm-5-turbo
+  - provider: zai
+    model: glm-4.7
+```
+
+**Fallback-Logik:**
+1. Primär: glm-5.1 (unverändert)
+2. Bei 429/Timeout/Model-Fehler: Versuch glm-5-turbo (zai)
+3. Bei erneutem Fehler: Versuch glm-4.7 (zai)
+4. Nach Erschöpfung: Job failt mit DEGRADED, self-heal auf nächstem Tick
+
+**Warum nur z.ai:**
+- Provider-Konsistenz: gleicher API-Key (GLM_API_KEY), gleicher Base-URL, gleicher Auth-Context
+- Keine neuen Credential-Chains oder Provider-Integrationen nötig
+- DeepSeek/Ollama Cloud bewusst weggelassen, um keine zusätzliche Baustelle zu öffnen
+
+**Mechanismus:**
+- `config.yaml` fallback_providers wird vom Scheduler bei jedem Job-Tick frisch gelesen (scheduler.py Zeile 1280: "Re-read .env and config.yaml fresh every run")
+- An AIAgent._fallback_chain übergeben (scheduler.py Zeile 1398)
+- Kein Gateway-/Container-Restart nötig
+
+**Betroffene Jobs:**
+- autonomous-health-loop (glm-5.1, 60m)
+- Rebel Status Summary (glm-5.1, 720m)
+- trading-hub-deep-dive-validation (glm-5.1, täglich)
+- daily-signal-confidence-monitor (glm-5.1, alle 6h)
+- Alle weiteren zai-Agent-Jobs mit glm-5.1
+
+---
+
+*Zwei Schichten: (1) Frequenz-Reduktion von 30m→60m, (2) globale z.ai-Fallback-Chain. Kein Code-Patch nötig.*
