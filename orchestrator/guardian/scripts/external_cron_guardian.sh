@@ -94,12 +94,12 @@ print(f'{age:.1f}')
                "import urllib.request; urllib.request.urlopen('http://localhost:8080/trigger')" 2>/dev/null; then
                 log "OK: ai-hedge-fund-crypto /trigger called"
                 sleep 15
-                # Run pipeline via hermes-agent container
-                if docker exec hermes-agent bash -c \
+                # Run pipeline via hermes-green container
+                if docker exec hermes-green bash -c \
                    "cd /home/hermes/projects/trading && python3 orchestrator/scripts/trading_pipeline.py" 2>/dev/null; then
-                    log "OK: trading_pipeline.py triggered via hermes-agent"
+                    log "OK: trading_pipeline.py triggered via hermes-green"
                 else
-                    log "WARN: Could not trigger pipeline via hermes-agent"
+                    log "WARN: Could not trigger pipeline via hermes-green"
                 fi
             else
                 log "ERROR: Could not trigger ai-hedge-fund-crypto heartbeat"
@@ -116,18 +116,38 @@ else
     alert_count=$((alert_count + 1))
 fi
 
-# ── 4. Check critical scripts exist in profile dir ───────────────
-for script in ai_hedge_signal_heartbeat.sh trading_pipeline.py drawdown_guard.py container_watchdog.sh mcp_watchdog.sh backup_rotation.py; do
-    if [ ! -f "$SCRIPTS_DIR/$script" ]; then
-        log "WARNING: Missing script $SCRIPTS_DIR/$script — copying from project"
-        src="$PROJECT_SCRIPTS_DIR/$script"
-        if [ -f "$src" ]; then
-            cp "$src" "$SCRIPTS_DIR/$script"
-            chmod +x "$SCRIPTS_DIR/$script" 2>/dev/null || true
-            log "RESTORED: $script copied to profile dir"
+# ── 3b. Check critical containers are running, restart if not ────
+CRITICAL_CONTAINERS=("ai-hedge-fund-crypto" "hermes-green" "trading-guardian")
+for cname in "${CRITICAL_CONTAINERS[@]}"; do
+    if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${cname}$"; then
+        log "CONTAINER_DOWN: $cname — attempting docker start"
+        if docker start "$cname" 2>/dev/null; then
+            log "CONTAINER_RESTARTED: $cname"
         else
-            log "FATAL: $script not found in project dir either"
+            log "CONTAINER_RESTART_FAILED: $cname"
         fi
+        alert_count=$((alert_count + 1))
+    fi
+done
+
+# ── 4. Sync critical scripts to profile dir (missing OR stale) ──
+for script in ai_hedge_signal_heartbeat.sh trading_pipeline.py drawdown_guard.py container_watchdog.sh mcp_watchdog.sh backup_rotation.py fleet_api_client.py; do
+    src="$PROJECT_SCRIPTS_DIR/$script"
+    dst="$SCRIPTS_DIR/$script"
+    if [ ! -f "$src" ]; then
+        log "FATAL: $script not found in project dir"
+        continue
+    fi
+    if [ ! -f "$dst" ]; then
+        log "SCRIPT_MISSING: $script — copying from project"
+        cp "$src" "$dst"
+        chmod +x "$dst" 2>/dev/null || true
+        log "RESTORED: $script copied to profile dir"
+    elif ! diff -q "$src" "$dst" >/dev/null 2>&1; then
+        log "SCRIPT_STALE: $script differs from project — updating"
+        cp "$src" "$dst"
+        chmod +x "$dst" 2>/dev/null || true
+        log "UPDATED: $script synced to profile dir"
     fi
 done
 
@@ -152,8 +172,8 @@ PERM_DIRS=(
 
 # file_path:expected_mode:expected_group
 PERM_FILES=(
-    "$WORKDIR/freqtrade/shared/primo_signal_state.json:0644:10000"
-    "$WORKDIR/freqtrade/shared/fleet_risk_state.json:0644:10000"
+    "$WORKDIR/freqtrade/shared/primo_signal_state.json:0664:10000"
+    "$WORKDIR/freqtrade/shared/fleet_risk_state.json:0664:10000"
     "$WORKDIR/freqtrade/shared/.fleet_risk_state.json.lock:0664:10000"
     "$WORKDIR/orchestrator/logs/memory-backfill.log:0664:10000"
     "$WORKDIR/freqtrade/logs/fleet_risk_update.log:0664:10000"

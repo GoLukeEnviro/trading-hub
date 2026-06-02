@@ -39,11 +39,6 @@ BOTS = [
         "api_port": 8085,
     },
     {
-        "bot_name": "momentum",
-        "container_name": "freqtrade-momentum",
-        "api_port": 8082,
-    },
-    {
         "bot_name": "freqforge-canary",
         "container_name": "freqtrade-freqforge-canary",
         "api_port": 8081,
@@ -135,17 +130,18 @@ def docker_curl(container: str, port: int, endpoint: str, timeout: int = 10) -> 
 
 
 def api_get(container: str, port: int, endpoint: str) -> str | None:
-    """Try direct REST API first, then Docker exec fallback."""
-    # Try direct REST API on multiple host addresses
-    for host in ["127.0.0.1", "172.18.0.1", "172.19.0.1", "172.20.0.1"]:
-        result = rest_api_get(host, port, endpoint, timeout=3)
+    """Use Docker exec only — bots are on separate Docker network, direct REST unreachable."""
+    # Try lightweight REST probe first (fast fail)
+    for host in ["127.0.0.1"]:
+        result = rest_api_get(host, port, endpoint, timeout=2)
         if result is not None:
             return result
 
-    # Fallback to Docker exec if available
+    # Docker exec is the only reliable path from Hermes container
     if detect_docker():
         return docker_curl(container, port, endpoint)
 
+    log(f"No Docker socket available — cannot reach {container}:{port}")
     return None
 
 

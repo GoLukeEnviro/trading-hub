@@ -12,7 +12,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 MEM0_BASE = os.environ.get("MEM0_BASE_URL", "")
-MEM0_CONTAINER = os.environ.get("MEM0_CONTAINER_NAME", "hermes-mem0-local-api")
+MEM0_CONTAINER = os.environ.get("MEM0_CONTAINER_NAME", "green-mem0")
 MEM0_PORT = int(os.environ.get("MEM0_PORT", "8787"))
 TIMEOUT = 10
 ALERTS = []
@@ -41,7 +41,7 @@ def resolve_mem0_url():
             return f"http://{ips[0]}:{MEM0_PORT}"
     except Exception:
         pass
-    return f"http://mem0-local-api:{MEM0_PORT}"
+    return f"http://localhost:8788"
 
 
 def http_get(url, timeout=TIMEOUT):

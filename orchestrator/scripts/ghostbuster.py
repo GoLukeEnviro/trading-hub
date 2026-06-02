@@ -22,7 +22,7 @@ Dangerous actions REMOVED from v1:
   - docker rm container → REMOVED (can kill intentional stopped containers)
 """
 
-import json, os, sys, time, subprocess, glob, pwd, grp, tempfile
+import json, os, sys, time, subprocess, glob, tempfile
 from datetime import datetime, timezone, timedelta
 
 # ── Configuration ──────────────────────────────────────────────────
@@ -36,11 +36,10 @@ LOG_FILE_MODE = 0o664
 LOG_DIR_MODE = 0o2775
 SAFE_DETECTION_ONLY_MODE = True
 
-GHOST_PATTERNS = [
-    "HONCHO WATCHDOG", "HONCHO", "honcho_watchdog",
-    "honcho-memory-quality-guard", "honcho_memory_quality_guard",
-]
-GHOST_CONTAINER_PATTERNS = ["honcho", "watchdog-old"]
+# Honcho decommissioned 2026-05-14 — patterns removed to avoid false positives
+# against legitimate jobs whose prompts mention "Honcho ist decommissioned".
+GHOST_PATTERNS = []
+GHOST_CONTAINER_PATTERNS = ["watchdog-old"]
 
 JOBS_JSON = f"{CRON_DIR}/jobs.json"
 MEM0_WATCHDOG_SCRIPT = f"{SCRIPTS_DIR}/mem0_watchdog.py"
@@ -55,21 +54,6 @@ ts = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 date_str = now_utc.strftime("%Y-%m-%d")
 
 
-def _lookup_hermes_ids():
-    try:
-        uid = pwd.getpwnam("hermes").pw_uid
-    except KeyError:
-        uid = 10000
-    try:
-        gid = grp.getgrnam("hermes").gr_gid
-    except KeyError:
-        gid = 10000
-    return uid, gid
-
-
-HERMES_UID, HERMES_GID = _lookup_hermes_ids()
-
-
 def secure_path_permissions(path, *, mode, ensure_file=False, ensure_dir=False):
     if ensure_dir:
         os.makedirs(path, exist_ok=True)
@@ -78,11 +62,6 @@ def secure_path_permissions(path, *, mode, ensure_file=False, ensure_dir=False):
         if not os.path.exists(path):
             fd = os.open(path, os.O_CREAT | os.O_WRONLY, mode)
             os.close(fd)
-    try:
-        os.chown(path, HERMES_UID, HERMES_GID)
-    except PermissionError:
-        pass
-    os.chmod(path, mode)
 
 
 def atomic_append_log(log_path, lines):
@@ -95,10 +74,6 @@ def atomic_append_log(log_path, lines):
     )
     try:
         os.fchmod(fd, LOG_FILE_MODE)
-        try:
-            os.fchown(fd, HERMES_UID, HERMES_GID)
-        except PermissionError:
-            pass
         with os.fdopen(fd, "w") as tmp:
             try:
                 with open(log_path, "r") as current:
@@ -217,7 +192,7 @@ class GhostBuster:
             })
 
     def check_permission_drift(self):
-        """Check cron dir for root:root permission drift. SAFE AUTO-FIX."""
+        """Check cron dir for root:root permission drift. REPORT-ONLY."""
         if not os.path.exists(CRON_DIR):
             return
         try:
@@ -226,20 +201,12 @@ class GhostBuster:
                 capture_output=True, text=True, timeout=10
             )
             drift_files = [l.strip() for l in r.stdout.strip().splitlines() if l.strip()]
-            for fpath in drift_files:
-                # SAFE: same fix trading-guardian does every 5min
-                try:
-                    subprocess.run(["chgrp", "10000", fpath], capture_output=True, timeout=5)
-                    subprocess.run(["chmod", "0640", fpath], capture_output=True, timeout=5)
-                    self.fixed.append(f"perm_fix:{os.path.basename(fpath)} (root:0 -> root:10000 0640)")
-                    self.log(f"PERM FIX: {fpath}")
-                except Exception as e:
-                    self.findings.append({
-                        "type": "PERMISSION_STUCK",
-                        "source": fpath,
-                        "detail": f"Cannot fix: {e}",
-                        "action": "MANUAL: chgrp 10000 + chmod 0640",
-                    })
+            if drift_files:
+                drift_names = [os.path.basename(f) for f in drift_files]
+                self.warnings.append(
+                    f"PERM_DRIFT ({len(drift_files)} root:root files — report only): "
+                    + ", ".join(drift_names[:5])
+                )
         except Exception as e:
             self.warnings.append(f"Permission scan failed: {e}")
 
@@ -384,7 +351,7 @@ class GhostBuster:
         self.scan_cron_outputs()
         self.scan_docker_containers()
         self.scan_scripts_dir()
-        self.check_permission_drift()       # safe auto-fix only
+        self.check_permission_drift()       # report-only
         self.check_mem0_watchdog_health()
         self.check_docker_disk()            # read-only report
 

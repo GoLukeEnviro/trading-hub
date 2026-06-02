@@ -42,9 +42,9 @@ from urllib.request import Request, urlopen
 # Configuration
 # ---------------------------------------------------------------------------
 
-API_BASE = os.environ.get("MEM0_BASE_URL", "http://172.18.0.7:8787")
+API_BASE = os.environ.get("MEM0_BASE_URL", "http://green-mem0:8787")
 DB_PATH = "/opt/data/state.db"
-LOG_FILE = Path("/home/hermes/projects/trading/orchestrator/logs/memory-backfill.log")
+LOG_FILE = Path("/opt/data/profiles/orchestrator/logs/memory-backfill.log")
 LOCK_FILE = Path("/tmp/memory-backfill.lock")
 USER_ID = "luke-hermes"
 AGENT_ID = "hermes"
@@ -122,17 +122,6 @@ SKIP_CONTAINS = [
     "extrem ehrlicher",
     "extrem pragmatischer",
     "pragmatischer, extrem ehrlicher",
-    # Task-assignment headers: "Hermes, [Role] – [Title]"
-    "System Optimization Agent",
-    "Principal System Architect",
-    "Root-Cause Master",
-    "Report Auditor",
-    "Report Architect",
-    "Meta-Layer v4.6",
-    "Full Autonomous Mode",
-    "Full Autonomous Cleanup Mode",
-    "FINALER Permission-Fix",
-    "FINALER Fix-Run",
     # Cron table dumps / job listings
     "Ghost-Detection + Auto-Hea",
     "ghostbuster     |",
@@ -215,11 +204,69 @@ def api_get_all_memories() -> Tuple[List[Dict], Optional[str]]:
         return [], str(e)
 
 
+def text_optimize_for_storage(fact: str) -> str:
+    """Optimize fact text for better embedding search before storing.
+
+    Goal: Mem0's internal LLM reformats memories into 'User [action]' prose.
+    By pre-optimizing the text structure, we reduce reformatting and
+    preserve keyword density for better vector search.
+
+    Strategy:
+    1. Remove 'User ' / 'User's ' / 'The user ' prefix if present (Mem0 adds its own)
+    2. Promote technical keywords to front (versions, paths, params, methods)
+    3. Keep it factual and terse — let keywords drive the embedding
+    """
+    import re as _re
+
+    text = fact.strip()
+
+    # Remove existing "User" / "The user" / "User's" prefixes (Mem0 adds its own)
+    text = _re.sub(r"^(?:User|The user|User's|Users)\s+", "", text, flags=_re.IGNORECASE)
+
+    # Remove "Luke" / "Luke's" prefixes (redundant — everything is luke-hermes)
+    text = _re.sub(r"^Luke(?:'s)?\s+", "", text, flags=_re.IGNORECASE)
+
+    # Remove "Assistant" / "The assistant" prefixes
+    text = _re.sub(r"^(?:The\s+)?Assistant\s+", "", text, flags=_re.IGNORECASE)
+
+    # Convert passive reported-speech to active factual statements
+    # "User noted that X was deployed" → "X deployed"
+    reported = _re.match(
+        r"(?:mentions?|notes?|states?|reports?|indicates?|says?|thinks?)\s+that\s+",
+        text, _re.IGNORECASE
+    )
+    if reported:
+        text = text[reported.end():]
+
+    # Convert "prefers/requires/wants/mandates/instructs that" → chop "that"
+    text = _re.sub(r"\b(prefers|requires|wants|mandates|instructs|requests)\s+that\s+",
+                   "", text, flags=_re.IGNORECASE)
+
+    # Capitalize first letter
+    if text and text[0].islower():
+        text = text[0].upper() + text[1:]
+
+    # Remove "to" / "in order to" before the core action
+    # e.g., "User wants to set X" → after prefix removal → "wants to set X" → "Set X"
+    if text.lower().startswith(("wants to ", "needs to ", "likes to ", "prefers to ")):
+        verb = text.split()[2]  # "wants to set" → "set"
+        rest = " ".join(text.split()[3:])
+        if verb and rest:
+            text = verb.capitalize() + " " + rest
+
+    # Ensure minimum content length
+    if len(text) < 15:
+        return fact  # Return original if optimization broke it
+
+    return text
+
+
 def api_store_fact(fact: str) -> Tuple[bool, Optional[str]]:
-    """Store a single fact via text format. Returns (success, error_msg)."""
+    """Store a single fact via text format. Text is optimized before storage."""
     try:
+        optimized = text_optimize_for_storage(fact)
         payload = json.dumps({
-            "text": fact,
+            "text": optimized,
             "user_id": USER_ID,
             "agent_id": AGENT_ID,
         }).encode("utf-8")
@@ -359,6 +406,45 @@ def extract_fact_from_message(msg: str, session_title: str) -> Optional[str]:
         if text.lower().startswith(prefix.lower()):
             text = text[len(prefix):].strip()
 
+    # Strip "Hermes, [Role – ]Title" persona prefixes (handles task-assignment headers)
+    import re as _re
+    hermes_prefix_match = _re.match(
+        r"^(?:\[?Note:.*?\]?\s*\n*\s*)?"
+        r"Hermes,\s+"
+        r"(?:neuer\s+)?"
+        r"(?:Auftrag|Dauerauftrag|Update\s+)?"
+        r".+?(?:Agent|Architect|Master|Auditor|Engineer|Mode)\s*"
+        r"(?:–|-|:)\s*",
+        text, _re.IGNORECASE | _re.DOTALL
+    )
+    if hermes_prefix_match:
+        text = text[hermes_prefix_match.end():].strip()
+        # If after stripping we got a bare role continuation, skip it
+        if len(text) < 20 or text.lower().startswith("du bist "):
+            return None
+
+    # Also strip simple "Hermes, [Role]:" prefix without dash
+    simple_hermes = _re.match(
+        r"^Hermes,\s+.+?(?:Agent|Architect|Master|Auditor|Optimizer)\s*:\s*",
+        text, _re.IGNORECASE
+    )
+    if simple_hermes and len(text) > simple_hermes.end():
+        text = text[simple_hermes.end():].strip()
+
+    # Remove "[Note: model was just switched from ... ]" prefix that survived filter
+    note_model_prefix = _re.match(r"^\[Note:\s*model was just switched.*?\]\s*\n*\s*", text)
+    if note_model_prefix:
+        text = text[note_model_prefix.end():].strip()
+        # Re-check persona stripping after removing model note
+        hermes_prefix_after_note = _re.match(
+            r"^Hermes,\s+.+?(?:Agent|Architect|Master|Auditor|Optimizer)\s*(?:–|-|:)\s*",
+            text, _re.IGNORECASE
+        )
+        if hermes_prefix_after_note:
+            text = text[hermes_prefix_after_note.end():].strip()
+            if len(text) < 20 or text.lower().startswith("du bist "):
+                return None
+
     if text.strip().startswith(("##", "---", "[19.", "[20.")):
         return None
     # Skip acknowledgements / copied assistant-style text that contains no user fact.
@@ -409,6 +495,17 @@ def extract_fact_from_message(msg: str, session_title: str) -> Optional[str]:
         "Check the ", "Check all ", "Check if ",
         "Bucket-Tabelle",
         "erstelle zuerst",
+        # Vague task headers (no specific facts)
+        "Sofort-Fix", "Sofort-Aktion", "Finaler Fix-Run",
+        "Abschluss der letzten", "Git Housekeeping",
+        "Cronjob Response:", "Rest-Probleme final",
+        "Tiefenanalyse der zwei",
+        # Role/mode assignments
+        "Ab sofort hast du die Rolle",
+        "Ab sofort übernimmst du die Rolle",
+        "Ab sofort läuft das gesamte",
+        "Ab sofort läuft der gesamte",
+        "Ab sofort baust du in alle",
     ]
     if any(text.startswith(p) for p in operational_prefixes):
         return None
@@ -423,6 +520,9 @@ def extract_fact_from_message(msg: str, session_title: str) -> Optional[str]:
         "Senior Quant", "Senior Freqtrade", "Senior Trading",
         "Du bist im HIGH-MODE", "Du bist Grok",
         "Senior Autonomous", "Senior Automation",
+        "Principal System", "Principal Report",
+        "Full Autonomous", "Full Autonomous Cleanup",
+        "Report Auditor", "Report Architect",
     ]
     if any(text.startswith(p) for p in persona_starts):
         return None
@@ -450,9 +550,22 @@ def extract_fact_from_message(msg: str, session_title: str) -> Optional[str]:
         return None
 
     # Truncate at first newline for multi-line messages (keep the core statement)
-    first_line = text.split("\n")[0].strip()
-    if len(first_line) > 20:
-        text = first_line
+    # But skip header-only first lines (e.g. "Sofort-Fix:") — use the second line if it's meatier
+    lines = text.split("\n")
+    if len(lines) > 1 and len(lines[0].strip()) > 20:
+        first_line = lines[0].strip()
+        # If first line is a short header ending with : or !, prefer subsequent lines
+        if first_line.rstrip().endswith((":", "!", "?")) and len(first_line) < 80:
+            # Look for the first line with substantial content
+            for l in lines[1:]:
+                stripped = l.strip()
+                if len(stripped) > 30 and not stripped.startswith(("#", "-", "**")):
+                    text = stripped
+                    break
+            else:
+                text = first_line
+        else:
+            text = first_line
 
     # Truncate to reasonable length
     if len(text) > 300:
@@ -478,6 +591,52 @@ def extract_fact_from_message(msg: str, session_title: str) -> Optional[str]:
         "wo ist",
     ]
     if any(text.lower().startswith(q) for q in question_only):
+        return None
+
+    # Skip pure imperative task assignments (start with command verbs and < 80 chars)
+    command_verbs = [
+        "extrahiere ", "führe ", "mache ", "starte ", "behebe ",
+        "prüfe ", "checke ", "erstelle ", "erweitere ", "ersetze ",
+        "kopiere ", "gib ", "nimm ", "lösche ", "entferne ", "aktualisiere ",
+        "aktiviere ", "deaktiviere ", "setze ", "lege ", "schreibe ",
+        "verschaffe ", "verificiere ", "validierte ", "guck ",
+    ]
+    text_lower = text.lower()
+    if any(text_lower.startswith(v) for v in command_verbs) and len(text) < 120:
+        return None
+
+    # Skip if text is purely a task header with no specific detail
+    # (single sentence, < 100 chars, ends with : or !, no specific path/number)
+    has_specific = "/" in text or any(c.isdigit() for c in text if c.isdigit())
+    if (text.rstrip().endswith((":", "!")) and len(text) < 100 
+        and not has_specific):
+        return None
+
+    # Skip version-stamped task headers like "Task Name (v4.5)" or "Topic (v4.5 – Detail)"
+    if _re.search(r"\(v\d+\.\d+.*?\)", text) and len(text) < 100:
+        return None
+
+    # Skip role-assignment messages (definition of a role, not a fact)
+    # e.g. "Ab sofort hast du die Rolle X"
+    role_assignment = _re.search(
+        r"(?:Rolle\s+.+?(?:Agent|Architect|Master|Mode))|"
+        r"(?:bist\s+(?:ab\s+sofort|jetzt)\s+.+?(?:Architect|Master|Manager|Agent))",
+        text, _re.IGNORECASE
+    )
+    if role_assignment and len(text) < 90:
+        return None
+
+    # Skip "Du" directives targeting the agent with no embedded fact
+    # (e.g. "Du bist jetzt…" already caught above, but also "Du bleibst auf Mode X")
+    du_directive = _re.match(
+        r"^Du\s+(bist|bleibst|hast|wirst|arbeitest)",
+        text, _re.IGNORECASE
+    )
+    if du_directive and len(text) < 80:
+        return None
+
+    # Skip short "Hermes, do X" directives (not task assignments with specifics)
+    if text.startswith("Hermes,") and len(text) < 100:
         return None
 
     return text

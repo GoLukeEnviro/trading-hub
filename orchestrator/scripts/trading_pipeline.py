@@ -790,6 +790,22 @@ def main() -> int:
     else:
         logger.info("Stale signal — MCP execution skipped")
 
+    # ── 3.75 LATEST/ Sync — update latest/hermes_signal.json ────────
+    # After successful signal read and processing, sync canonical to latest/
+    # so that unified-signal-heartbeat sees a fresh latest/ next time.
+    if not is_stale and signal is not None and not dry_run:
+        canonical = PROJECT_DIR / "ai-hedge-fund-crypto/output/hermes_signal.json"
+        latest = PROJECT_DIR / "ai-hedge-fund-crypto/output/latest/hermes_signal.json"
+        if canonical.exists():
+            import shutil as _shutil
+            try:
+                latest.parent.mkdir(parents=True, exist_ok=True)
+                _shutil.copy2(str(canonical), str(latest) + ".tmp")
+                _shutil.move(str(latest) + ".tmp", str(latest))
+                logger.info("✅ LATEST/ sync: canonical -> latest")
+            except Exception as e:
+                logger.warning(f"LATEST/ sync failed: {e}")
+
     # ── 4. Build State ──────────────────────────────────────────
     state = build_state(signal, signal_age, pairs_out)
 

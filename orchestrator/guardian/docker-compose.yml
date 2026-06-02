@@ -1,0 +1,21 @@
+services:
+  trading-guardian:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trading-guardian
+    restart: unless-stopped
+    volumes:
+      - /home/hermes/projects/trading:/guardian/data
+      - /opt/data/profiles/orchestrator/cron:/guardian/cron
+      - /opt/data/profiles/orchestrator/scripts:/guardian/scripts
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - PERMISSION_GUARD_MODE=repair
+    networks:
+      - hermes-net
+
+networks:
+  hermes-net:
+    external: true
+    name: trading_hermes-net

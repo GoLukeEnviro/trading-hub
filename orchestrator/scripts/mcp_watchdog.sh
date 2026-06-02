@@ -4,9 +4,9 @@
 #
 # v2 fix: handle pgrep pipefail correctly, don't crash on set -euo pipefail
 
-LOG="/home/hermes/projects/trading/orchestrator/logs/mcp_server.log"
-WATCHDOG_LOG="/home/hermes/projects/trading/orchestrator/logs/mcp_watchdog.log"
-STATE="/home/hermes/projects/trading/orchestrator/state/mcp_watchdog_state.json"
+LOG="/opt/data/profiles/orchestrator/logs/mcp_server.log"
+WATCHDOG_LOG="/opt/data/profiles/orchestrator/logs/mcp_watchdog.log"
+STATE="/opt/data/profiles/orchestrator/state/mcp_watchdog_state.json"
 SCRIPT="/home/hermes/projects/trading/orchestrator/scripts/bitget_mcp_server.py"
 
 now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -26,7 +26,7 @@ echo "{\"timestamp\":\"${now}\",\"mcp_processes\":${count},\"status\":\"$([ ${co
 
 if [ "$count" -eq 0 ]; then
     echo "[${now}] MCP-Server down (0 processes), restarting..." >> "$WATCHDOG_LOG"
-    nohup python3 "$SCRIPT" >> "$LOG" 2>&1 &
+    nohup /home/hermes/projects/trading/.venv/bin/python3 "$SCRIPT" >> "$LOG" 2>&1 &
     sleep 2
     new_count=$(pgrep -f bitget_mcp_server.py 2>/dev/null | wc -l) || new_count=0
     if [ "$new_count" -gt 0 ]; then

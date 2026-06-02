@@ -1,0 +1,46 @@
+{
+  "audit": "trading-hub-v2-root-reality-audit-20260531",
+  "timestamp_utc": "2026-05-31T09:13:00Z",
+  "verdict": "PARTIAL",
+  "hermes_down": false,
+  "bots_down": false,
+  "docker_access": {
+    "host_root": true,
+    "host_hermes": true,
+    "hermes_green_as_hermes": false,
+    "root_cause": "container user uid 10000 lacks docker group access to /var/run/docker.sock"
+  },
+  "jobs_json": {
+    "host_path": "/opt/data/profiles/orchestrator/cron/jobs.json",
+    "container_path": "/opt/data/profiles/orchestrator/cron/jobs.json",
+    "host_owner_mode": "root ftuser 775",
+    "container_owner_mode": "root root 600",
+    "job_count": 10,
+    "enabled_count": 10,
+    "error_count": 0,
+    "last_run_at_none": 10
+  },
+  "state_log_failures": [
+    {
+      "path": "/home/hermes/projects/trading/orchestrator/state/morning_brief.json",
+      "error": "PermissionError [Errno 13] Permission denied"
+    },
+    {
+      "path": "/home/hermes/projects/trading/orchestrator/logs/quality-hub-report.md",
+      "error": "PermissionError [Errno 13] Permission denied"
+    }
+  ],
+  "false_positives": [
+    "Hermes container DOWN",
+    "Fleet only 0/4 bots running"
+  ],
+  "real_alerts": [
+    "smart_heartbeat stale signal",
+    "drawdown_guard file-based no-docker fallback"
+  ],
+  "autonomy": "partial_not_autonomous",
+  "files_written": [
+    "docs/context/trading-hub-v2-root-reality-audit-20260531.md",
+    "docs/context/trading-hub-v2-root-reality-audit-20260531.json"
+  ]
+}

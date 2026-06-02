@@ -1,0 +1,63 @@
+{
+  "timestamp": "2026-06-02T04:58Z",
+  "root_cause": "ACTIVE_WRITER_WRONG_PATH",
+  "classification": "OBSOLETE_LEGACY_LOG + BY_DESIGN_SILENT_OK",
+  "summary": "container_watchdog.sh and mcp_watchdog.sh wrote LOG/STATE to /home/hermes/projects/trading/ (UID 1337) instead of /opt/data/profiles/orchestrator/ (hermes:hermes). Additionally, watchdog.log only receives writes when ISSUES are detected (silent OK = no log entry). The stale /opt/data/.../watchdog.log was a legacy copy from before the path was changed to Git source. The real health indicator is container_watchdog_state.json which IS updated every 30min.",
+  "files_changed": [
+    "orchestrator/scripts/container_watchdog.sh",
+    "orchestrator/scripts/mcp_watchdog.sh"
+  ],
+  "canonical_log_path": "/opt/data/profiles/orchestrator/logs/watchdog.log",
+  "canonical_state_path": "/opt/data/profiles/orchestrator/state/container_watchdog_state.json",
+  "validation": {
+    "container_watchdog_test_run": "exit 0, state updated 2026-06-02T04:58:15Z",
+    "all_containers_running": true,
+    "dry_run_unchanged": true,
+    "no_trading_bot_restart": true
+  },
+  "watchdog_inventory": {
+    "container-watchdog": {
+      "job_id": "1d044920216f",
+      "schedule": "*/30 * * * *",
+      "enabled": true,
+      "last_status": "ok",
+      "script": "container_watchdog.sh",
+      "log_behavior": "writes only on ISSUES, silent OK = no log entry",
+      "state_file": "updated every run"
+    },
+    "mem0-watchdog": {
+      "job_id": "d979aaaa0676",
+      "schedule": "0 */2 * * *",
+      "enabled": true,
+      "last_status": "ok",
+      "script": "mem0_watchdog.py",
+      "not_modified": true
+    },
+    "mot-floor-watchdog": {
+      "job_id": "ca4933892906",
+      "schedule": "*/10 * * * *",
+      "enabled": true,
+      "last_status": "ok",
+      "script": "mot_floor_watchdog.py",
+      "not_modified": true
+    },
+    "critical-event-watchdog": {
+      "job_id": "ae387e595ca0",
+      "schedule": "*/10 * * * *",
+      "enabled": true,
+      "last_status": "ok",
+      "script": "critical_event_watchdog.py",
+      "not_modified": true
+    },
+    "mcp-watchdog": {
+      "status": "NOT in jobs.json (decommissioned/disabled)",
+      "script": "mcp_watchdog.sh",
+      "patched_for_consistency": true
+    }
+  },
+  "rollback": {
+    "description": "Restore original LOG/STATE paths in both scripts from Git history",
+    "git_restore_command": "git checkout HEAD~1 -- orchestrator/scripts/container_watchdog.sh orchestrator/scripts/mcp_watchdog.sh",
+    "re_deploy": "bash orchestrator/scripts/deploy_cron_scripts.sh || manual cp+chown+chmod"
+  }
+}

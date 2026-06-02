@@ -197,14 +197,14 @@ class FleetRiskManager:
                 delete=False,
             ) as handle:
                 tmp_path = Path(handle.name)
-                os.fchmod(handle.fileno(), 0o644)
+                os.fchmod(handle.fileno(), 0o664)
                 json.dump(state, handle, indent=2, sort_keys=True)
                 handle.write("\n")
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(tmp_path, path)
             try:
-                os.chmod(path, 0o644)
+                os.chmod(path, 0o664)
             except Exception:
                 pass
         except Exception as exc:

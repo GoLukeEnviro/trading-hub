@@ -1,0 +1,144 @@
+{
+  "audit": {
+    "type": "gap-audit",
+    "version": "2.x",
+    "date": "2026-05-31T08:48:40Z",
+    "host": "Agent0",
+    "user": "hermes",
+    "uid": 1337,
+    "groups": ["hermes", "docker", "ftuser"],
+    "repository": {
+      "path": "/home/hermes/projects/trading",
+      "branch_dirty": true,
+      "last_commit": "e7a43c5 docs: final operational state v2.x — self-healing level reached"
+    },
+    "verdict": "PARTIAL",
+    "autonomous": false,
+    "self_healing_claim": false
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "CRITICAL",
+      "title": "Scheduler cannot read jobs.json (root:root 0600)",
+      "file": "/opt/data/profiles/orchestrator/cron/jobs.json",
+      "owner": "root:root",
+      "mode": "0600",
+      "evidence": "Container logs show continuous Permission denied errors",
+      "stuck_jobs_count": 11,
+      "total_jobs_count": 38,
+      "impact": "29% of scheduled jobs have never executed"
+    },
+    {
+      "id": "F2",
+      "severity": "HIGH",
+      "title": "Root-owned state directories block writes",
+      "directories": [
+        "orchestrator/state/riskguard/",
+        "orchestrator/state/config_diff/",
+        "orchestrator/state/auto_params/",
+        "orchestrator/state/standby/"
+      ],
+      "files": [
+        "orchestrator/state/morning_brief.json",
+        "orchestrator/state/riskguard/riskguard_state.json",
+        "orchestrator/state/riskguard/riskguard_audit.jsonl",
+        "orchestrator/state/config_diff/config_drift.log",
+        "orchestrator/state/auto_params/auto_params_health.json",
+        "orchestrator/state/standby/hermes_health.json"
+      ],
+      "owner": "root:hermes",
+      "dir_mode": "755",
+      "file_mode": "644",
+      "impact": "PermissionError on state writes from hermes user"
+    },
+    {
+      "id": "F3",
+      "severity": "HIGH",
+      "title": "Two conflicting cron systems",
+      "gateway_cron": {
+        "path": "/opt/data/cron/jobs.json",
+        "owner": "hermes:hermes",
+        "job_count": 0,
+        "status": "empty"
+      },
+      "profile_cron": {
+        "path": "/opt/data/profiles/orchestrator/cron/jobs.json",
+        "owner": "root:root",
+        "job_count": 38,
+        "stuck_count": 11,
+        "status": "unreadable by scheduler"
+      },
+      "host_copy": {
+        "path": "/opt/data/profiles/orchestrator/cron/jobs.json (host)",
+        "job_count": 10,
+        "status": "stale since 2026-05-19"
+      }
+    },
+    {
+      "id": "F4",
+      "severity": "MEDIUM",
+      "title": "All Docker failure reports are false negatives",
+      "containers_running": {
+        "hermes-green": {"status": "running", "up_hours": 12},
+        "freqtrade-freqforge": {"status": "running", "up_hours": 13},
+        "freqtrade-freqforge-canary": {"status": "running", "up_hours": 13},
+        "freqtrade-regime-hybrid": {"status": "running", "up_hours": 13},
+        "freqai-rebel": {"status": "running", "up_hours": 13}
+      },
+      "docker_access_from_host": true,
+      "docker_access_from_container": true,
+      "docker_socket_mounted": true,
+      "verdict": "All Telegram Docker failure reports are false negatives"
+    },
+    {
+      "id": "F5",
+      "severity": "MEDIUM",
+      "title": "Script version drift between profile and repo",
+      "drift": [
+        {"script": "drawdown_guard.py", "profile_version": "v2", "repo_version": "v3"},
+        {"script": "container_watchdog.sh", "profile_bytes": 1462, "repo_bytes": 4229},
+        {"script": "trading_pipeline.py", "profile_bytes": 30873, "repo_bytes": 33732}
+      ]
+    }
+  ],
+  "stuck_jobs": [
+    {"name": "signal-heartbeat", "schedule": "*/20 * * * *", "script": "ai_hedge_signal_heartbeat.sh"},
+    {"name": "smart-heartbeat", "schedule": "*/10 * * * *", "script": "smart_heartbeat.py"},
+    {"name": "hermes-standby-monitor", "schedule": "*/5 * * * *", "script": "hermes_standby_monitor.py"},
+    {"name": "config-diff-detector", "schedule": "0 * * * *", "script": "config_diff_detector.py"},
+    {"name": "fleetrisk-auto-params", "schedule": "*/15 * * * *", "script": "fleet_risk_auto_params.py"},
+    {"name": "riskguard-service", "schedule": "*/30 * * * *", "script": "riskguard_service.py"},
+    {"name": "critical-event-watchdog", "schedule": "*/10 * * * *", "script": "critical_event_watchdog.py"},
+    {"name": "morning-brief-daily", "schedule": "0 8 * * *", "script": "morning_brief.py"},
+    {"name": "morning-brief-1040", "schedule": "40 10 * * *", "script": "morning_brief.py"},
+    {"name": "daily-backup", "schedule": "0 2 * * *", "script": "backup_rotation.py"},
+    {"name": "quality-hub-monitor", "schedule": "0 8 * * *", "script": "quality_hub_monitor.py"}
+  ],
+  "manual_script_tests": {
+    "critical_event_watchdog.py": {"exit_code": 0, "classification": "OK"},
+    "morning_brief.py": {"exit_code": 0, "classification": "OK"},
+    "quality_hub_monitor.py": {"exit_code": 0, "classification": "OK"},
+    "fleet_risk_auto_params.py": {"exit_code": 0, "classification": "OK"},
+    "config_diff_detector.py": {"exit_code": 0, "classification": "OK"},
+    "riskguard_service.py": {"exit_code": 0, "classification": "OK"},
+    "drawdown_guard.py": {"exit_code": 0, "classification": "OK"},
+    "fleet_auto_repair.py": {"exit_code": 0, "classification": "OK"},
+    "container_watchdog.sh": {"exit_code": 0, "classification": "OK"}
+  },
+  "systemd_services": {
+    "trading-cron-guardian.timer": {"status": "active", "interval": "5min", "last_run": "2026-05-31T08:45:01CEST"},
+    "external_cron_guardian.log": {"status": "healthy", "entries_today": "all OK"}
+  },
+  "fix_plan": {
+    "stage_1": "Fix jobs.json ownership: chown hermes:hermes inside container",
+    "stage_2": "Fix root-owned state files: chown -R hermes:hermes for affected dirs",
+    "stage_3": "Sync profile scripts from repo to profile dir",
+    "stage_4": "Prevent future drift: setgid on state directories or fix container user",
+    "stage_5": "Update documentation to remove false self-healing claims"
+  },
+  "audit_files": {
+    "markdown_report": "docs/context/trading-hub-v2-gap-audit-20260531.md",
+    "json_summary": "docs/context/trading-hub-v2-gap-audit-20260531.json"
+  }
+}

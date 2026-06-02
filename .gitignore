@@ -231,3 +231,13 @@ freqforge-canary/config/config*.json
 
 # Local Freqtrade WebUI credentials - never commit
 .env.freqtrade-webui.local
+
+# Catch-all for signal state files across all bot directories
+**/primo_signal_state.json
+
+# Runtime PID files
+*.pid
+
+# Runtime fleet reports
+orchestrator/reports/fleet_health_latest.json
+orchestrator/reports/fleet_health_latest.md

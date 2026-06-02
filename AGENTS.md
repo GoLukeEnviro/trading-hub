@@ -79,9 +79,9 @@ snapshot and `docs/context/` for append-only historical reports.
 |-----|-----------|------|----------|------|
 | FreqForge | `freqtrade-freqforge` | 8086 | `FreqForge_Override` | dry-run |
 | Regime-Hybrid | `freqtrade-regime-hybrid` | 8085 | `RegimeSwitchingHybrid_v7_v04_Integration` | dry-run |
-| Momentum | `freqtrade-momentum` | 8084 | `MomentumBG15_v1` | NOT_DEPLOYED |
-| FreqForge-Canary | `freqtrade-freqforge-canary` | 8081 | `SimpleRSIOnly_v1` | dry-run |
+| FreqForge-Canary | `freqtrade-freqforge-canary` | 8081 | `FreqForge_Override` | dry-run |
 | FreqAI-Rebel | `freqai-rebel` | 8087 | `RebelLiquidation + RebelXGBoostClassifier` | dry-run |
+| Momentum | — | — | DECOMMISSIONED | — |
 | MVS | — | — | NOT_DEPLOYED | — |
 | Webserver | `freqtrade-webserver` | — | UI only | — |
 
