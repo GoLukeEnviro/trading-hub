@@ -13,6 +13,7 @@ import argparse
 import json
 import math
 import re
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -147,7 +148,7 @@ def main() -> int:
 
     files = discover_latest_pair_files()
     if not files:
-        print("No 15m futures feather files found.")
+        print("No 15m futures feather files found.", file=sys.stderr)
         return 1
 
     series_map: Dict[str, pd.Series] = {}
@@ -156,15 +157,15 @@ def main() -> int:
         try:
             series = load_return_series(path, pair, args.lookback)
             if series.empty:
-                print(f"SKIP {pair}: not enough data in {path}")
+                print(f"SKIP {pair}: not enough data in {path}", file=sys.stderr)
                 continue
             series_map[pair] = series
             source_paths[pair] = str(path)
         except Exception as exc:
-            print(f"WARN {pair}: failed to load {path} ({exc})")
+            print(f"WARN {pair}: failed to load {path} ({exc})", file=sys.stderr)
 
     if len(series_map) < 2:
-        print("Not enough pairs with data to compute correlations.")
+        print("Not enough pairs with data to compute correlations.", file=sys.stderr)
         return 1
 
     combined = pd.concat(series_map.values(), axis=1)
@@ -205,8 +206,12 @@ def main() -> int:
 
     print(
         f"Wrote {args.output} | pairs={len(series_map)} | high_corr={len(high_corr_pairs)} | "
-        f"clusters={len(output['clusters'])}"
+        f"clusters={len(output['clusters'])}",
+        file=sys.stderr,
     )
+    # Emit JSON to stdout only (for pipe/capture by wrapper)
+    sys.stdout.write(json.dumps(output, indent=2, sort_keys=True) + "\n")
+    sys.stdout.flush()
     return 0
 
 
