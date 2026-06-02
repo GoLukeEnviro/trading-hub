@@ -142,33 +142,57 @@ def _consec_state_cursor(state):
 
 
 def _latest_closed_trade_cursor():
+    """Return the latest close_date across all bots.
+    Prefers host-side DB paths (readable from Hermes container),
+    falls back to container-internal paths via docker exec.
+    """
     latest = None
     for ct, info in FLEET_BOTS.items():
-        for db in info["dbs"]:
+        # Try host-side DBs first (directly readable from this container)
+        for db in info.get("host_dbs", []):
             try:
-                if Path(db).exists():
-                    conn = sqlite3.connect(db)
+                p = Path(db)
+                if p.exists():
+                    conn = sqlite3.connect(str(p))
                     cur = conn.cursor()
                     cur.execute("SELECT max(close_date) FROM trades WHERE is_open=0;")
                     r = cur.fetchone()[0]
                     conn.close()
-                else:
-                    py = (
-                        "import json, sqlite3, sys; "
-                        f"conn=sqlite3.connect({db!r}); "
-                        "cur=conn.cursor(); "
-                        "cur.execute(\"SELECT max(close_date) FROM trades WHERE is_open=0;\"); "
-                        "r=cur.fetchone()[0]; "
-                        "print(r if r else '')"
-                    )
-                    rr = subprocess.run(["docker", "exec", ct, "python3", "-c", py], capture_output=True, text=True, timeout=15)
-                    r = rr.stdout.strip() if rr.returncode == 0 else None
-                if r:
-                    dt = _parse_iso_dt(r)
-                    if dt and (latest is None or dt > latest):
-                        latest = dt
+                    if r:
+                        dt = _parse_iso_dt(r)
+                        if dt and (latest is None or dt > latest):
+                            latest = dt
+                    break  # found a working host DB for this bot
             except Exception:
                 continue
+        else:
+            # Fallback: try container-internal paths via docker exec
+            for db in info["dbs"]:
+                try:
+                    if Path(db).exists():
+                        conn = sqlite3.connect(db)
+                        cur = conn.cursor()
+                        cur.execute("SELECT max(close_date) FROM trades WHERE is_open=0;")
+                        r = cur.fetchone()[0]
+                        conn.close()
+                    else:
+                        py = (
+                            "import json, sqlite3, sys; "
+                            f"conn=sqlite3.connect({db!r}); "
+                            "cur=conn.cursor(); "
+                            "cur.execute(\"SELECT max(close_date) FROM trades WHERE is_open=0;\"); "
+                            "r=cur.fetchone()[0]; "
+                            "print(r if r else '')"
+                        )
+                        rr = subprocess.run(["docker", "exec", ct, "python3", "-c", py], capture_output=True, text=True, timeout=15)
+                        r = rr.stdout.strip() if rr.returncode == 0 else None
+                    if r:
+                        dt = _parse_iso_dt(r)
+                        if dt and (latest is None or dt > latest):
+                            latest = dt
+                    break  # found working path
+                except Exception:
+                    continue
     return latest.isoformat() if latest else None
 
 
@@ -252,10 +276,22 @@ KNOWN_CONTAINERS = {
     "claude-worker",
 }
 FLEET_BOTS = {
-    "freqtrade-freqforge": {"dbs": ["/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite", "/freqtrade/tradesv3.dryrun.sqlite"], "label": "FreqForge", "config_host": "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json", "config_container": "/freqtrade/config/config_freqforge_dryrun.json"},
-    "freqtrade-regime-hybrid": {"dbs": ["/freqtrade/user_data/tradesv3.regime_hybrid.dryrun.sqlite"], "label": "Regime-Hybrid", "config_host": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json", "config_container": "/freqtrade/config/config_regime_hybrid_dryrun.json"},
-    "freqtrade-freqforge-canary": {"dbs": ["/freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite"], "label": "Canary", "config_host": "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json", "config_container": "/freqtrade/config/config_canary_dryrun.json"},
-    "freqai-rebel": {"dbs": ["/freqtrade/tradesv3.dryrun.sqlite", "/freqtrade/user_data/tradesv3.dryrun.sqlite"], "label": "Rebel", "config_host": None, "config_container": "/freqtrade/user_data/config.json"},
+    "freqtrade-freqforge": {
+        "dbs": ["/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite", "/freqtrade/tradesv3.dryrun.sqlite"],
+        "host_dbs": ["/home/hermes/projects/trading/freqforge/user_data/tradesv3.freqforge.dryrun.sqlite"],
+        "label": "FreqForge", "config_host": "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json", "config_container": "/freqtrade/config/config_freqforge_dryrun.json"},
+    "freqtrade-regime-hybrid": {
+        "dbs": ["/freqtrade/user_data/tradesv3.regime_hybrid.dryrun.sqlite"],
+        "host_dbs": ["/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/tradesv3.regime_hybrid.dryrun.sqlite"],
+        "label": "Regime-Hybrid", "config_host": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json", "config_container": "/freqtrade/config/config_regime_hybrid_dryrun.json"},
+    "freqtrade-freqforge-canary": {
+        "dbs": ["/freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite"],
+        "host_dbs": ["/home/hermes/projects/trading/freqforge-canary/user_data/tradesv3.freqforge_canary.dryrun.sqlite"],
+        "label": "Canary", "config_host": "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json", "config_container": "/freqtrade/config/config_canary_dryrun.json"},
+    "freqai-rebel": {
+        "dbs": ["/freqtrade/tradesv3.dryrun.sqlite", "/freqtrade/user_data/tradesv3.dryrun.sqlite"],
+        "host_dbs": [],
+        "label": "Rebel", "config_host": None, "config_container": "/freqtrade/user_data/config.json"},
 }
 BASELINE_MAX_OPEN_TRADES = {
     "FreqForge": 5,
