@@ -237,3 +237,7 @@ freqforge-canary/config/config*.json
 
 # Runtime PID files
 *.pid
+
+# Runtime fleet reports
+orchestrator/reports/fleet_health_latest.json
+orchestrator/reports/fleet_health_latest.md
