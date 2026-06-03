@@ -96,6 +96,11 @@ freqtrade/shared/images/
 # Agenten_Auto_Trade: independent git repo (GoLukeEnviro/Agenten_Auto_Trade)
 Agenten_Auto_Trade/
 
+# Additional independent nested repos kept out of the parent repo
+Polymarket-BTC-15-Minute-Trading-Bot/
+btc5m-bot/
+weatherbot/
+
 # ai-hedge-fund-crypto: upstream repo (github.com/51bitquant/ai-hedge-fund-crypto)
 # Tracked independently. Local wrappers/Docker compose at root level are still tracked.
 ai-hedge-fund-crypto/
@@ -237,6 +242,9 @@ freqforge-canary/config/config*.json
 
 # Runtime PID files
 *.pid
+
+# Local RiskGuard decision trail
+tools/riskguard/decisions.jsonl
 
 # Runtime fleet reports
 orchestrator/reports/fleet_health_latest.json

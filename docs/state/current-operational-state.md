@@ -326,6 +326,7 @@ Host Agent0
 | 2026-05-30 | **5** | **MCP Execution Layer fix** (ccxt via Hermes-venv), ShadowLogger verifiziert (170 Einträge), **RiskGuard Service deployt** (eigenständig mit Health-Check) |
 | 2026-05-30 | **6** | **Standby-Hermes Monitor** (5min, Auto-Restart), **Config-Diff-Detektor** (stündlich, Drift-Prüfung), **FleetRisk Auto-Params** (15min, 6 Regeln) |
 | 2026-05-30 | **Final** | Dokumentation abgeschlossen. 33 Crons aktiv. Selbstheilungs-Level erreicht. |
+| 2026-06-02 | Observation Runner | `orchestrator/scripts/observation_runner.py` implementiert (report_only, Lock/Heartbeat/State/Report/Eskalation) und mit 10 Tests verifiziert. |
 
 ---
 

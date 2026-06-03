@@ -11,6 +11,7 @@ arrived at its current state.
 - Migration and bootstrap summaries
 - Audit and validation reports
 - Cleanup reports and post-phase summaries
+- Dashboard surface audits, external access notes, and UI gap analyses
 - Temporary context that later becomes historical reference
 
 ## What does not belong here

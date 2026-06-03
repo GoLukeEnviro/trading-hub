@@ -92,7 +92,8 @@ Das venv liegt unter `.venv/` im Repo-Root. Freqtrade-Bots laufen als UID/GID 10
 - `main` immer mit `origin/main` synchron halten.
 - Feature-Branches fuer nicht-triviale Aenderungen anlegen.
 - Dateien explizit nach Pfad stagen; `git diff --cached` vor jedem Commit pruefen.
-- Nested Repos (`ai-hedge-fund-crypto/`, `Agenten_Auto_Trade/`) sind gitignored — deren Inhalte nicht tracken.
+- Nested Repos (`ai-hedge-fund-crypto/`, `Agenten_Auto_Trade/`, `btc5m-bot/`, `Polymarket-BTC-15-Minute-Trading-Bot/`, `weatherbot/`) sind gitignored — deren Inhalte nicht tracken.
+- `tools/riskguard/decisions.jsonl` ist lokales Runtime-Log und bleibt untracked.
 
 ## Cronjobs
 

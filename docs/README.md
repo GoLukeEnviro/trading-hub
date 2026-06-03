@@ -6,17 +6,20 @@ context trail for Trading Hub.
 ## Canonical docs
 
 - `../README.md` — repository overview, safety rules, and workflow guardrails.
-- `../AGENTS.md` — agent safety rules and architecture guide.
+- `../AGENTS.md` — agent safety and architecture guide.
 - `../SOUL.md` — project identity and operating principles.
 - `git-hygiene.md` — tracked vs ignored file policy.
 - `state/current-operational-state.md` — current validated operational snapshot.
+- `context/trading-dashboard-surface-audit-20260603.md` — dashboard surface audit and operator-view notes.
+- `context/trading-dashboard-external-access-20260602.md` — dashboard external access / Docker socket notes.
 
 ## Subdirectories
 
 ### `context/`
 Append-only historical reports, incident notes, migration artifacts, cleanup
-reports, and other time-stamped context. Treat this as audit trail material,
-not as the canonical current state.
+reports, dashboard surface audits, external-access notes, and other time-
+stamped context. Treat this as audit trail material, not as the canonical
+current state.
 
 ### `state/`
 Current or near-current snapshots of the fleet and repo state.

@@ -17,6 +17,16 @@ state, orchestrator automation, and audit documentation.
 - No `dry_run=false` changes without a separate, explicit go-ahead.
 - No exchange credentials belong in this repository.
 
+## Trading dashboard
+
+`dashboard.py` is the read-only observability surface for the fleet.
+
+- Start it with `python3 dashboard.py` (default `PORT=5000`).
+- The page is server-side rendered and re-reads data on every request.
+- The live UI is intentionally lean: KPI row, current Hermes signals, bot table, system status, and a compact RiskGuard line.
+- Keep analysis-heavy or low-value panels out of the main surface; move them into docs or audits instead.
+- Fresh reads cover the bot SQLite databases, the latest Hermes signal JSON, and the current system-status snapshots.
+
 For the current validated snapshot, see:
 `docs/state/current-operational-state.md`.
 
@@ -32,6 +42,7 @@ For the current validated snapshot, see:
 | `bridge/` | Bridge code | Hermes/Primo bridge logic. |
 | `primo/` | Primo agent code | Signal-filter and integration helpers. |
 | `tools/freqforge/` | Shadow evaluator | Passive observer and report generator. |
+| `dashboard.py` | Read-only observability | Single-file Flask dashboard; server-side rendered, no caches or websockets, live request-time reads only. |
 | `docs/context/` | Historical context | Append-only reports, audits, and migration notes. |
 | `docs/state/` | Current state | Current operational snapshot and live-readiness notes. |
 
@@ -40,6 +51,7 @@ For the current validated snapshot, see:
 ```text
 trading-hub/
 ├── README.md
+├── dashboard.py         # single-file Flask dashboard
 ├── AGENTS.md
 ├── SOUL.md
 ├── ORCHESTRATOR_CHARTER.md
@@ -58,8 +70,11 @@ trading-hub/
 ├── primo/
 ├── backtests/
 ├── ai-hedge-fund-crypto/      # ignored nested clone
-├── Agenten_Auto_Trade/       # independent nested repo
-└── weatherhermes_persistent/  # separate project, ignored
+├── Agenten_Auto_Trade/                  # independent nested repo
+├── btc5m-bot/                           # independent nested repo
+├── Polymarket-BTC-15-Minute-Trading-Bot/ # independent nested repo
+├── weatherbot/                          # independent nested repo
+└── weatherhermes_persistent/            # separate project, ignored
 ```
 
 ## Runtime files that must not be committed
@@ -72,6 +87,7 @@ explicitly reviewed and approved for version control:
 - Runtime state: `shared/hermes_signal.json`, `freqtrade/shared/*state*.json`,
   `freqtrade/shared/*.lock`, `freqtrade/bots/*/user_data/primo_signal_state.json`,
   `freqtrade/bots/*/user_data/signals/`.
+- Local RiskGuard trail: `tools/riskguard/decisions.jsonl`.
 - Logs and generated output: `logs/`, `var/`, `output/`, `cache/`, `events/`,
   `proposals/`.
 - Backups and archives: `backups/`, `orchestrator/backups/`, `**/*.bak`,
@@ -127,5 +143,7 @@ python3 /home/hermes/projects/trading/freqtrade/shared/fleet_watcher.py --once -
 - `SOUL.md` — project identity and operating principles.
 - `docs/README.md` — documentation index.
 - `docs/context/README.md` — historical context and report conventions.
+- `docs/context/trading-dashboard-surface-audit-20260603.md` — current dashboard surface, design notes, and failure-handling rules.
+- `docs/context/trading-dashboard-external-access-20260602.md` — Docker-socket and external-access notes for the dashboard.
 - `docs/state/current-operational-state.md` — current operational snapshot.
 - `docs/git-hygiene.md` — tracked vs ignored file policy.
