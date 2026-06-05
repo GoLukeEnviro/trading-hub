@@ -249,3 +249,11 @@ tools/riskguard/decisions.jsonl
 # Runtime fleet reports
 orchestrator/reports/fleet_health_latest.json
 orchestrator/reports/fleet_health_latest.md
+
+# ── Runtime State (FIX 2026-06-05) — nicht committen ────────
+freqtrade/shared/kill_switch.json
+freqtrade/shared/system_mode.json
+freqtrade/shared/executed_signals.json
+**/shadow_decisions.jsonl
+**/*.bak.2026*
+orchestrator/backups/

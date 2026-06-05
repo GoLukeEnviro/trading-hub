@@ -2,10 +2,15 @@
 	@agent0 host agent0.taile6801f.ts.net
 	handle @agent0 {
 		handle_path /dashboard* {
-			reverse_proxy 172.17.0.2:5000 127.0.0.1:5000
+			reverse_proxy 127.0.0.1:5000
 		}
-		reverse_proxy 127.0.0.1:8082 {
-			flush_interval -1
+		handle_path /weather* {
+			reverse_proxy 127.0.0.1:9090
+		}
+		handle_path /weather2* {
+			reverse_proxy 127.0.0.1:9091 {
+				flush_interval -1
+			}
 		}
 	}
 	@trade host trade.taile6801f.ts.net

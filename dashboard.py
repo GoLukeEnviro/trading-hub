@@ -71,7 +71,7 @@ EXTRA_CONTAINERS = {
     'trading-guardian': 'trading-guardian',
 }
 
-SIGNAL_JSON = '/app/output/latest/hermes_signal.json'
+SIGNAL_JSON = '/app/output/hermes_signal.json'
 OBSERVATION_REPORT = '/app/output/latest/observation_report.json'
 PRIMO_SIGNAL_STATE_PATH = '/freqtrade/user_data/primo_signal_state.json'
 RISKGUARD_STATE_REL = 'orchestrator/state/riskguard/riskguard_state.json'
