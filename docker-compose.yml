@@ -1,5 +1,4 @@
 services:
-  # 1. Docker Socket Proxy (SECURITY LAYER)
   docker-proxy:
     image: tecnativa/docker-socket-proxy:latest
     restart: unless-stopped
@@ -8,157 +7,246 @@ services:
       SERVICES: 1
       NETWORKS: 1
       INFO: 1
-      # Explizit KEIN: POST, DELETE, EXEC
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+    - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - proxy-net
-
-  # 2. Signal Layer
+    - proxy-net
   ai-hedge-fund:
     image: trading-ai-hedge-fund-crypto:latest
+    command:
+    - python3
+    - docker/service_entrypoint.py
     ports:
-      - "127.0.0.1:8410:8410"
+    - 127.0.0.1:8410:8080
+    env_file:
+    - ./ai-hedge-fund-crypto/.env
+    environment:
+    - SERVICE_PORT=8080
+    volumes:
+    - ./ai-hedge-fund-crypto/output:/app/output
+    healthcheck:
+      test:
+      - CMD
+      - python3
+      - -c
+      - import urllib.request, json; d=json.loads(urllib.request.urlopen('http://localhost:8080/health').read());
+        exit(0 if d['status']=='ok' else 1)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
     restart: unless-stopped
     networks:
-      - hermes-net
-      - proxy-net
-
-  # 3. Hermes Orchestrator
+    - hermes-net
+    - proxy-net
   hermes-green:
     image: nousresearch/hermes-agent:latest
+    tty: true
+    stdin_open: true
     environment:
       DOCKER_HOST: tcp://docker-proxy:2375
+      PUID: 10000
+      PGID: 10000
+      HERMES_DASHBOARD: 1
+      HERMES_DASHBOARD_INSECURE: 1
+      HERMES_DASHBOARD_TUI: 1
+      HERMES_DASHBOARD_HOST: 0.0.0.0
+      HERMES_DASHBOARD_PORT: 9119
+    volumes:
+    - /opt/hermes-green/config:/opt/data
+    - /opt/hermes/ssh:/home/hermes/.ssh:ro
+    - /home/hermes/projects:/home/hermes/projects:rw
+    - /home/hermes/projects/trading/weatherhermes_persistent/weatherbot_master:/home/hermes/weatherbot_master:ro
+    - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
     networks:
-      - hermes-net
-      - proxy-net
+    - hermes-net
+    - proxy-net
     depends_on:
-      - docker-proxy
-
-  # 4. Memory Layer
+    - docker-proxy
+    container_name: hermes-green
+    command:
+    - sleep
+    - infinity
+    env_file: /opt/hermes-green/.env
+    ports:
+    - 127.0.0.1:8083:9119
+    - 127.0.0.1:8642:8642
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: '3'
   green-qdrant:
     image: qdrant/qdrant:latest
     volumes:
-      - green-qdrant-data:/qdrant/storage
+    - green-qdrant-data:/qdrant/storage
     networks:
-      - hermes-net
+    - hermes-net
     restart: unless-stopped
-
+    container_name: green-qdrant
+    command:
+    - sleep
+    - infinity
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '3'
   green-ollama:
     image: ollama/ollama:latest
     volumes:
-      - green-ollama-data:/root/.ollama
+    - green-ollama-data:/root/.ollama
     networks:
-      - hermes-net
+    - hermes-net
     restart: unless-stopped
-
+    container_name: green-ollama
+    # Fix G-02: removed broken "command: [sleep, infinity]" which collided
+    # with ollama entrypoint. Now runs default "ollama serve" for Mem0 embeddings.
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '3'
   green-mem0:
     image: hermes-mem0-local-api:stable
     networks:
-      - hermes-net
+    - hermes-net
     restart: unless-stopped
     depends_on:
-      - green-qdrant
-      - green-ollama
-
-  # 5. Freqtrade Fleet (alle 127.0.0.1)
+    - green-qdrant
+    - green-ollama
+    container_name: green-mem0
+    command:
+    - sleep
+    - infinity
+    environment:
+      QDRANT_HOST: green-qdrant
+      QDRANT_PORT: 6333
+      OLLAMA_BASE_URL: http://green-ollama:11434
+      MEM0_COLLECTION: hermes_memories_v2
+      MEM0_EMBEDDER_MODEL: qwen3-embedding:4b
+      MEM0_EMBEDDING_DIMS: 1024
+      MEM0_API_HOST: 0.0.0.0
+      MEM0_API_PORT: 8787
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY}
+    env_file: /opt/hermes-green/.env
+    ports:
+    - 127.0.0.1:8788:8787
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '3'
   freqtrade-freqforge:
     image: freqtradeorg/freqtrade:stable
     ports:
-      - "127.0.0.1:8086:8080"
-    command: trade --config /freqtrade/user_data/config.json
+    - 127.0.0.1:8086:8080
+    command: trade --config /freqtrade/user_data/config.json --strategy FreqForge_Override
     volumes:
-      - ./freqtrade/user_data:/freqtrade/user_data
+    - ./freqforge/user_data:/freqtrade/user_data
+    - ./freqtrade/shared:/freqtrade/shared
+    - ./freqtrade/shared/primo_signal_state.json:/freqtrade/user_data/primo_signal_state.json:ro
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: '1.0'
     networks:
-      - hermes-net
-
+    - hermes-net
   freqtrade-regime-hybrid:
     image: freqtradeorg/freqtrade:stable
+    command: trade --config /freqtrade/user_data/config.json --strategy RegimeSwitchingHybrid_v7_v04_Integration
     ports:
-      - "127.0.0.1:8085:8080"
+    - 127.0.0.1:8085:8080
     volumes:
-      - ./freqtrade/user_data:/freqtrade/user_data
+    - ./freqtrade/bots/regime-hybrid/user_data:/freqtrade/user_data
+    - ./freqtrade/shared:/freqtrade/shared
+    - ./freqtrade/shared/primo_signal_state.json:/freqtrade/user_data/primo_signal_state.json:ro
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: '1.0'
     networks:
-      - hermes-net
-
+    - hermes-net
   freqtrade-freqforge-canary:
     image: freqtradeorg/freqtrade:stable
+    command: trade --config /freqtrade/user_data/config.json --strategy FreqForge_Override
     ports:
-      - "127.0.0.1:8081:8080"
+    - 127.0.0.1:8081:8080
     volumes:
-      - ./freqtrade/user_data:/freqtrade/user_data
+    - ./freqforge-canary/user_data:/freqtrade/user_data
+    - ./freqtrade/shared:/freqtrade/shared
+    - ./freqtrade/shared/primo_signal_state.json:/freqtrade/user_data/primo_signal_state.json:ro
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: '0.5'
     networks:
-      - hermes-net
-
+    - hermes-net
   freqai-rebel:
     image: freqtradeorg/freqtrade:stable
+    command: trade --config /freqtrade/user_data/config.json --strategy RebelLiquidation
     ports:
-      - "127.0.0.1:8087:8080"
+    - 127.0.0.1:8087:8080
     volumes:
-      - ./freqtrade/user_data:/freqtrade/user_data
+    - ./freqtrade/bots/freqai-rebel/user_data:/freqtrade/user_data
+    - ./freqtrade/shared:/freqtrade/shared
+    - ./freqtrade/shared/primo_signal_state.json:/freqtrade/user_data/primo_signal_state.json:ro
     restart: unless-stopped
+    mem_limit: 2g
+    cpus: '2.0'
     networks:
-      - hermes-net
-
+    - hermes-net
   freqtrade-webserver:
     image: freqtradeorg/freqtrade:stable
     ports:
-      - "127.0.0.1:8180:8080"
+    - 127.0.0.1:8180:8080
     command: webserver --config /freqtrade/user_data/config.json
     volumes:
-      - ./freqtrade/user_data:/freqtrade/user_data
+    - ./freqforge/user_data:/freqtrade/user_data
     restart: unless-stopped
+    mem_limit: 256m
+    cpus: '0.5'
     networks:
-      - hermes-net
-
-  # 6. Hermes Watchdog (NEU)
+    - hermes-net
   hermes-watchdog:
     image: alpine:latest
-    command: |
-      sh -c 'while true; do
-        for port in 8081 8085 8086 8087 8410; do
-          wget -qO- --timeout=5 http://host.docker.internal:$$port/api/v1/ping \
-            || echo "ALERT: port $$port down at $$(date)" >> /var/log/watchdog.log;
-        done;
-        sleep 60;
-      done'
+    command: "sh -c 'while true; do\n  for port in 8081 8085 8086 8087 8410; do\n\
+      \    wget -qO- --timeout=5 http://host.docker.internal:$$port/api/v1/ping \\\
+      \n      || echo \"ALERT: port $$port down at $$(date)\" >> /var/log/watchdog.log;\n\
+      \  done;\n  sleep 60;\ndone'\n"
     extra_hosts:
-      - host.docker.internal:host-gateway
+    - host.docker.internal:host-gateway
     volumes:
-      - watchdog-logs:/var/log
+    - watchdog-logs:/var/log
     restart: unless-stopped
     networks:
-      - hermes-net
-
-  # 7. Reverse Proxy
+    - hermes-net
   caddy:
     image: caddy:alpine
-    ports:
-      - "0.0.0.0:80:80"
-      - "0.0.0.0:443:443"
+    network_mode: host
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
+    - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    - caddy_data:/data
+    - caddy_config:/config
     restart: unless-stopped
-    networks:
-      - hermes-net
-
 networks:
   hermes-net:
     driver: bridge
   proxy-net:
     driver: bridge
     internal: true
-
 volumes:
   green-qdrant-data:
+    external: true
   green-ollama-data:
-  freqai-rebel-data:
-  watchdog-logs:
-  caddy-data:
-  caddy-config:
+    external: true
+  freqai-rebel-data: null
+  watchdog-logs: null
+  caddy_data:
+    external: true
+  caddy_config:
+    external: true
