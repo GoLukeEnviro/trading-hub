@@ -68,9 +68,9 @@ DEFAULT_BOT_ORDER = (
     "freqai-rebel",
 )
 DEFAULT_CONTAINERS = [
-    "freqtrade-freqforge",
-    "freqtrade-freqforge-canary",
-    "freqtrade-regime-hybrid",
+    "trading-freqtrade-freqforge-1",
+    "trading-freqtrade-freqforge-canary-1",
+    "trading-freqtrade-regime-hybrid-1",
 ]
 UTC = dt.timezone.utc
 

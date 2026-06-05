@@ -20,7 +20,7 @@ import freqtrade.vendor.qtpylib.indicators as qtpylib
 from pandas import DataFrame
 
 sys.path.insert(0, "/freqtrade/shared")
-from primo_signal import primo_gate_allows
+from primo_signal import primo_gate_allows, load_signal_state, normalize_pair
 from fleet_risk_manager import FleetRiskManager
 
 logger = logging.getLogger(__name__)
@@ -33,15 +33,14 @@ class FreqForge_Override(IStrategy):
     informative_timeframe = "1h"
     can_short = True  # PAPER-TRADING OVERRIDE (2026-05-17) — siehe SOUL.md
 
-    minimal_roi = {"0": 0.045, "60": 0.030, "120": 0.020, "180": 0.010}
-    stoploss = -0.045
+    minimal_roi = {"0": 0.060, "180": 0.040, "480": 0.025, "960": 0.015}
+    stoploss = -0.050
     use_custom_stoploss = True
-    trailing_stop = True
-    trailing_stop_positive = 0.015
-    trailing_stop_positive_offset = 0.025
-    trailing_only_offset_is_reached = True
+    trailing_stop = False
 
     startup_candle_count = 500
+    AI_OVERRIDE_ALLOWED_PAIRS = {"BTC/USDT", "ETH/USDT", "SOL/USDT"}
+    AI_OVERRIDE_CONFIDENCE_MIN = 0.75
 
     @property
     def protections(self):
@@ -58,8 +57,8 @@ class FreqForge_Override(IStrategy):
              "required_profit": -0.01},
         ]
 
-    adx_rel_threshold = DecimalParameter(0.8, 1.4, default=1.0, space="buy")
-    rsi_oversold = IntParameter(20, 40, default=25, space="buy")
+    adx_rel_threshold = DecimalParameter(0.75, 1.20, default=0.90, space="buy")
+    rsi_oversold = IntParameter(24, 42, default=32, space="buy")
 
     def __init__(self, config: dict) -> None:
         super().__init__(config)
@@ -189,21 +188,73 @@ class FreqForge_Override(IStrategy):
         # Enables execution override in populate_entry_trend for high-conviction AI signals
         self._inject_ai_signal_override(dataframe, pair)
 
+    def _get_ai_override_signal(self, pair: str) -> Optional[dict]:
+        normalized_pair = normalize_pair(pair)
+        if normalized_pair not in self.AI_OVERRIDE_ALLOWED_PAIRS:
+            return None
+
+        state = load_signal_state()
+        if not isinstance(state, dict) or not state.get("fresh", False):
+            return None
+
+        pair_state = (state.get("pairs") or {}).get(normalized_pair)
+        if not isinstance(pair_state, dict):
+            return None
+
+        verdict = str(pair_state.get("verdict", "UNKNOWN")).upper().strip()
+        action = str(pair_state.get("action", "HOLD")).upper().strip()
+        confidence = float(pair_state.get("confidence", 0.0) or 0.0)
+        riskguard_reason = str(pair_state.get("riskguard_reason", "") or "")
+        riskguard_accepted = verdict == "ACCEPTED" or riskguard_reason.upper().startswith("PASS")
+
+        if verdict != "ACCEPTED":
+            return None
+        if action not in {"BUY", "LONG", "SELL", "SHORT"}:
+            return None
+        if not (confidence >= self.AI_OVERRIDE_CONFIDENCE_MIN or riskguard_accepted):
+            return None
+
+        bias_allowed = bool(pair_state.get("allow_long_bias", False)) if action in {"BUY", "LONG"} else bool(pair_state.get("allow_short_bias", False))
+        if not bias_allowed:
+            return None
+
+        return {
+            "pair": normalized_pair,
+            "action": action,
+            "confidence": confidence,
+            "verdict": verdict,
+            "riskguard_reason": riskguard_reason,
+        }
+
     def _inject_ai_signal_override(self, dataframe: DataFrame, pair: str) -> None:
-        """DISABLED 2026-05-21 (recovery safety repair).
+        """Inject ACCEPTED ai-hedge-fund-crypto signals for BTC/ETH/SOL only.
 
-        Previously: overrode v04 columns with raw AI signal if confidence >= 0.80,
-        bypassing canonical RiskGuard gate. This is unsafe because it forces
-        entries regardless of the pipeline's ACCEPTED/REJECTED verdict.
-
-        Signal overrides must go through trading_pipeline.py -> fleet_risk_manager.py
-        using CONFIDENCE_MIN = 0.65, not injected directly into strategy columns.
-
-        Re-enable only after: (1) canonical gate integration, (2) backtest validation.
+        Safety gates:
+        - canonical primo_signal_state must mark the pair ACCEPTED
+        - confidence must be >= 0.75 OR RiskGuard must have passed the signal
+        - allow_long_bias / allow_short_bias must still agree with the side
+        - only the latest candle is overridden (dry-run forward mode, no backfill)
         """
-        # Intentional no-op. AI signals flow through the pipeline correctly
-        # without this direct column override.
-        pass
+        if dataframe.empty:
+            return
+
+        signal = self._get_ai_override_signal(pair)
+        if not signal:
+            return
+
+        idx = dataframe.index[-1]
+        action = "BUY" if signal["action"] in {"BUY", "LONG"} else "SELL"
+        dataframe.at[idx, 'v04_action'] = action
+        dataframe.at[idx, 'v04_confidence'] = max(float(dataframe.at[idx, 'v04_confidence']), signal["confidence"])
+        dataframe.at[idx, 'v04_strategy'] = 'AI_OVERRIDE'
+        dataframe.at[idx, 'v04_regime'] = f"ai_{action.lower()}"
+        logger.info(
+            "[AIOverride] %s -> %s conf=%.2f verdict=%s",
+            signal["pair"],
+            action,
+            signal["confidence"],
+            signal["verdict"],
+        )
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         if not self.dp:
@@ -250,21 +301,24 @@ class FreqForge_Override(IStrategy):
 
     def custom_stoploss(self, pair: str, trade, current_time, current_rate,
                          current_profit: float, after_fill: bool, **kwargs) -> float:
-        """Time-based stoploss tightening for FreqForge v0.3.
-        - Default: -4.5% (from stoploss class attribute)
-        - After 30min without profit: tighten to -2.5%
-        - When in profit > 2%: tighten to -1%
+        """Wider profit protection without the old trailing-stop choke.
+
+        - Default hard floor stays at -5.0%
+        - Only tighten once profit is meaningful (> 4%)
+        - Losers are only accelerated after hours of dead money
         """
-        # Duration in minutes
         trade_duration = (current_time - trade.open_date_utc).total_seconds() / 60
 
-        if current_profit > 0.02:
-            return -0.010  # In profit: tight trailing
+        if current_profit >= 0.07:
+            return -0.010
+        if current_profit >= 0.04:
+            return -0.015
+        if trade_duration > 360 and current_profit < -0.015:
+            return -0.030
+        if trade_duration > 1080 and current_profit < 0:
+            return -0.020
 
-        if trade_duration > 30 and current_profit < 0:
-            return -0.025  # No movement after 30min: get out fast
-
-        return -0.045  # Default
+        return -0.050
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         ema200_htf = dataframe[f'ema200_{self.informative_timeframe}']
@@ -278,75 +332,112 @@ class FreqForge_Override(IStrategy):
         long_gate = primo_gate_allows(pair, "long") and long_risk_allowed
         short_gate = primo_gate_allows(pair, "short") and short_risk_allowed
 
-        # --- Strategy-native LONG conditions ---
+        # --- Strategy-native LONG conditions (slightly loosened to recover flow) ---
         trend_long = (
             (dataframe['adx_rel'] > self.adx_rel_threshold.value) &
-            (dataframe['close'] > ema200_htf) &
-            (dataframe['close'] > dataframe['ema200']) &
-            (dataframe['close'] < dataframe['ema50']) &
-            (dataframe['rsi'] < 50) &
-            (dataframe['volume'] > dataframe['volume_mean']) &
+            (dataframe['close'] > (ema200_htf * 0.995)) &
+            (dataframe['close'] > (dataframe['ema200'] * 0.995)) &
+            (dataframe['close'] < (dataframe['ema50'] * 1.015)) &
+            (dataframe['rsi'] < 56) &
+            (dataframe['rsi'] > 28) &
+            (dataframe['volume_ratio'] > 0.85) &
             long_gate
         )
 
         range_long = (
-            (dataframe['adx_rel'] <= self.adx_rel_threshold.value) &
+            (dataframe['adx_rel'] <= (self.adx_rel_threshold.value * 1.05)) &
             (dataframe['rsi'] < self.rsi_oversold.value) &
-            (dataframe['close'] < dataframe['bb_lowerband']) &
-            (dataframe['volume'] > dataframe['volume_mean']) &
+            (dataframe['close'] <= (dataframe['bb_lowerband'] * 1.01)) &
+            (dataframe['volume_ratio'] > 0.75) &
             long_gate
         )
 
-        # --- v0.4 SECOND LAYER: Override via v04_action column ---
-        long_override_mask = ((dataframe['v04_action'] == 'WATCH') & (trend_long | range_long))
+        signal_override_long = (
+            dataframe['v04_strategy'].eq('AI_OVERRIDE') &
+            dataframe['v04_action'].isin(['BUY', 'LONG']) &
+            (dataframe['v04_confidence'] >= self.AI_OVERRIDE_CONFIDENCE_MIN) &
+            long_gate
+        )
 
-        # Apply combined entries
-        long_entries = (trend_long | range_long) & ~long_override_mask
-
+        long_entries = trend_long | range_long | signal_override_long
         dataframe.loc[long_entries, 'enter_long'] = 1
-        dataframe.loc[long_entries, 'enter_tag'] = 'range_reversion_long'
-        dataframe.loc[trend_long & ~long_override_mask, 'enter_tag'] = 'trend_pullback_long'
+        dataframe.loc[range_long, 'enter_tag'] = 'range_reversion_long'
+        dataframe.loc[trend_long, 'enter_tag'] = 'trend_pullback_long'
+        dataframe.loc[signal_override_long, 'enter_tag'] = 'ai_override_long'
 
         # --- SHORT ENTRY LOGIC ---
         trend_short = (
             (dataframe['adx_rel'] > self.adx_rel_threshold.value) &
-            (dataframe['close'] < ema200_htf) &
-            (dataframe['close'] < dataframe['ema200']) &
-            (dataframe['close'] > dataframe['ema50']) &
-            (dataframe['rsi'] > 50) &
-            (dataframe['volume'] > dataframe['volume_mean']) &
+            (dataframe['close'] < (ema200_htf * 1.005)) &
+            (dataframe['close'] < (dataframe['ema200'] * 1.005)) &
+            (dataframe['close'] > (dataframe['ema50'] * 0.985)) &
+            (dataframe['rsi'] > 44) &
+            (dataframe['rsi'] < 72) &
+            (dataframe['volume_ratio'] > 0.85) &
             short_gate
         )
 
         range_short = (
-            (dataframe['adx_rel'] <= self.adx_rel_threshold.value) &
+            (dataframe['adx_rel'] <= (self.adx_rel_threshold.value * 1.05)) &
             (dataframe['rsi'] > (100 - self.rsi_oversold.value)) &
-            (dataframe['close'] > dataframe['bb_upperband']) &
-            (dataframe['volume'] > dataframe['volume_mean']) &
+            (dataframe['close'] >= (dataframe['bb_upperband'] * 0.99)) &
+            (dataframe['volume_ratio'] > 0.75) &
             short_gate
         )
 
-        # v0.4 SIGNAL OVERRIDE: DISABLED 2026-05-21 (recovery safety repair)
-        # Previously: confidence >= 0.80 forced short regardless of TA analysis.
-        # Signal overrides must go through canonical RiskGuard policy, not bypass TA here.
-        # signal_override_short = (
-        #     (dataframe['v04_action'] == 'SELL') &
-        #     (dataframe['v04_confidence'] >= 0.80) &
-        #     short_gate
-        # )
+        signal_override_short = (
+            dataframe['v04_strategy'].eq('AI_OVERRIDE') &
+            dataframe['v04_action'].isin(['SELL', 'SHORT']) &
+            (dataframe['v04_confidence'] >= self.AI_OVERRIDE_CONFIDENCE_MIN) &
+            short_gate
+        )
 
-        # Native short entries only (no AI signal override)
-        short_entries = trend_short | range_short
-
+        short_entries = trend_short | range_short | signal_override_short
         dataframe.loc[short_entries, 'enter_short'] = 1
         dataframe.loc[trend_short, 'enter_tag'] = 'trend_pullback_short'
         dataframe.loc[range_short, 'enter_tag'] = 'range_reversion_short'
+        dataframe.loc[signal_override_short, 'enter_tag'] = 'ai_override_short'
 
         return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        # Nur ROI + Hard Stoploss — keine Exit-Signale
+        # Nur ROI + custom_exit + Hard Stoploss — keine Exit-Signale im Candle-Frame
         return dataframe
+
+    def custom_exit(self, pair: str, trade, current_time: datetime, current_rate: float,
+                    current_profit: float, **kwargs):
+        trade_duration = (current_time - trade.open_date_utc).total_seconds() / 60
+        try:
+            dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
+            if dataframe is None or dataframe.empty:
+                return None
+            last = dataframe.iloc[-1]
+            rsi = float(last.get("rsi", 50.0))
+            adx_rel = float(last.get("adx_rel", 1.0))
+            v04_action = str(last.get("v04_action", "WATCH")).upper()
+            v04_strategy = str(last.get("v04_strategy", ""))
+        except Exception:
+            return None
+
+        if current_profit >= 0.055:
+            if trade.is_short and rsi <= 32:
+                return "tp_exhaustion_short"
+            if not trade.is_short and rsi >= 68:
+                return "tp_exhaustion_long"
+
+        if current_profit >= 0.03 and trade_duration > 240 and adx_rel < 0.90:
+            return "tp_trend_fade"
+
+        if current_profit >= 0.02 and v04_strategy == "AI_OVERRIDE":
+            if trade.is_short and v04_action not in {"SELL", "SHORT"}:
+                return "ai_bias_lost"
+            if not trade.is_short and v04_action not in {"BUY", "LONG"}:
+                return "ai_bias_lost"
+
+        if current_profit >= 0.015 and trade_duration > 960 and v04_strategy != "AI_OVERRIDE":
+            return "tp_time_decay"
+
+        return None
 
     def confirm_trade_entry(self, pair: str, order_type: str, amount: float,
                             rate: float, time_in_force: str, current_time: datetime,

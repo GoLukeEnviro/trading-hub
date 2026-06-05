@@ -762,6 +762,40 @@ class FleetRiskManager:
             penalty = min(penalty, candidate)
         return penalty
 
+    MAX_DIRECTIONAL_BIAS = 0.70  # Max 70% Long oder Short im gesamten Fleet
+
+    def _check_direction_bias(self, pending_direction: str) -> Tuple[bool, str]:
+        """Blockiert wenn >70% aller offenen Trades in eine Direction."""
+        state = self.state or {}
+        open_trades = [t for t in state.get("open_trades", []) if isinstance(t, dict)]
+        if len(open_trades) < 2:
+            return True, "OK — zu wenige Trades für Bias-Check"
+
+        total = len(open_trades)
+        shorts = sum(1 for t in open_trades
+                     if str(t.get("direction", "")).lower() in ("short", "sell"))
+        longs = total - shorts
+        pending = pending_direction.lower()
+
+        if pending in ("short", "sell"):
+            projected_shorts = shorts + 1
+            projected_ratio = projected_shorts / (total + 1)
+            if projected_ratio > self.MAX_DIRECTIONAL_BIAS:
+                return (False,
+                        f"SHORT-Bias blockiert: {projected_ratio:.0%} würde "
+                        f">{self.MAX_DIRECTIONAL_BIAS:.0%} erreichen "
+                        f"(aktuell: {shorts}/{total} Short)")
+        elif pending in ("long", "buy"):
+            projected_longs = longs + 1
+            projected_ratio = projected_longs / (total + 1)
+            if projected_ratio > self.MAX_DIRECTIONAL_BIAS:
+                return (False,
+                        f"LONG-Bias blockiert: {projected_ratio:.0%} würde "
+                        f">{self.MAX_DIRECTIONAL_BIAS:.0%} erreichen "
+                        f"(aktuell: {longs}/{total} Long)")
+
+        return True, f"OK — Direction-Balance: {longs}L / {shorts}S"
+
     def check_entry_allowed(self, pair: str, direction: str) -> Tuple[bool, str]:
         if not BACKTEST_GATES:
             return True, "OK (gates bypassed)"
@@ -777,6 +811,13 @@ class FleetRiskManager:
             return False, f"EMERGENCY DRAWDOWN ({self.current_drawdown:.1%})"
         if drawdown_level == "pause":
             return False, f"Drawdown-Pause ({self.current_drawdown:.1%}) – keine neuen Entries"
+
+        # ── Direction-Bias Gate (FIX P2-B 2026-06-05) ────
+        bias_ok, bias_reason = self._check_direction_bias(direction_norm)
+        if not bias_ok:
+            logger.warning("Direction-Bias Gate: %s", bias_reason)
+            return False, bias_reason
+        # ─────────────────────────────────────────────────
 
         same_direction_cluster = [
             t for t in state.get("open_trades", [])
