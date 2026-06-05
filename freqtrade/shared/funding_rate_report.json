@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-06-05T16:38:09.962618+00:00",
+  "alert_threshold": 0.001,
+  "symbols": {
+    "BTC/USDT:USDT": {
+      "current_rate": 2.9e-05,
+      "next_funding_time": null,
+      "annual_pct": 3.1755,
+      "is_extreme": false
+    },
+    "ETH/USDT:USDT": {
+      "current_rate": -4.2e-05,
+      "next_funding_time": null,
+      "annual_pct": -4.599,
+      "is_extreme": false
+    },
+    "SOL/USDT:USDT": {
+      "current_rate": 1.8e-05,
+      "next_funding_time": null,
+      "annual_pct": 1.971,
+      "is_extreme": false
+    },
+    "AVAX/USDT:USDT": {
+      "current_rate": 6e-06,
+      "next_funding_time": null,
+      "annual_pct": 0.657,
+      "is_extreme": false
+    },
+    "NEAR/USDT:USDT": {
+      "current_rate": 0.0001,
+      "next_funding_time": null,
+      "annual_pct": 10.95,
+      "is_extreme": false
+    },
+    "ARB/USDT:USDT": {
+      "current_rate": -5.6e-05,
+      "next_funding_time": null,
+      "annual_pct": -6.132,
+      "is_extreme": false
+    }
+  }
+}
