@@ -2,58 +2,58 @@
 
 ## Summary
 
-- **Status:** GREEN
-- **Validated At:** 2026-05-08T09:20:58.318424+00:00
-- **Wrapper Runs Found:** 11
-- **Latest Run ID:** 20260508T091944Z
+- **Status:** RED
+- **Validated At:** 2026-06-05T09:50:20.543622+00:00
+- **Wrapper Runs Found:** 0
+- **Latest Run ID:** N/A
 
 ## Component Status
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| RiskGuard | ✅ | 7 signals, 0 ACCEPTED |
-| ShadowLogger | ✅ | 70 lines logged |
-| State Files | ✅ | Schema: 0.2 |
-| Fleet Health | ✅ | GREEN |
+| RiskGuard | ❌ | 0 signals, 0 ACCEPTED |
+| ShadowLogger | ❌ | 0 lines logged |
+| Active State Files | ❌ | Schema: 0.3 |
+| Fleet Health | ⚠️ | YELLOW |
 
 ## Wrapper Runs
 
 | Run ID | Timestamp | Status | Log |
 |--------|-----------|--------|-----|
-| 20260508T091944Z | 2026-05-08T09:19:44Z | ✅ success | [log](/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T091944Z.log) |
-| 20260508T061944Z | 2026-05-08T06:19:44Z | ✅ success | [log](/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T061944Z.log) |
-| 20260508T031944Z | 2026-05-08T03:19:44Z | ✅ success | [log](/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T031944Z.log) |
-| 20260508T001944Z | 2026-05-08T00:19:44Z | ✅ success | [log](/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T001944Z.log) |
-| 20260507T211944Z | 2026-05-07T21:19:44Z | ✅ success | [log](/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T211944Z.log) |
-| 20260507T210235Z | 2026-05-07T21:02:35Z | ✅ success | [log](/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T210235Z.log) |
-| 20260507T201616Z | 2026-05-07T20:16:16Z | ✅ success | [log](/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T201616Z.log) |
-| 20260507T201301Z | 2026-05-07T20:13:01Z | ❌ unknown | [log](/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T201301Z.log) |
-| 20260507T195314Z | 2026-05-07T19:53:14Z | ✅ success | [log](/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T195314Z.log) |
-| 20260507T185137Z | 2026-05-07T18:51:37Z | ✅ success | [log](/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T185137Z.log) |
 
 
 ## State Files
 
 | Bot | Exists | Valid JSON | Schema | Pairs | Issues |
 |-----|--------|------------|--------|-------|--------|
-| rsi | ✅ | ✅ | 0.2 | 7 | ✅ |
-| momentum | ✅ | ✅ | 0.2 | 7 | ✅ |
-| regime-hybrid | ✅ | ✅ | 0.2 | 7 | ✅ |
+| freqtrade | ✅ | ✅ | 0.3 | 7 | ⚠️ [{'pair': 'BTC/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'ETH/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'SOL/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'AVAX/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'NEAR/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'ARB/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'OP/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}] |
+| freqforge | ✅ | ✅ | 0.3 | 7 | ⚠️ [{'pair': 'BTC/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'ETH/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'SOL/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'AVAX/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'NEAR/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'ARB/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'OP/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}] |
+| freqforge-canary | ✅ | ✅ | 0.3 | 7 | ⚠️ [{'pair': 'BTC/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'ETH/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'SOL/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'AVAX/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'NEAR/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'ARB/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'OP/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}] |
+| regime-hybrid | ✅ | ✅ | 0.3 | 7 | ⚠️ [{'pair': 'BTC/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'ETH/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'SOL/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'AVAX/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'NEAR/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'ARB/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}, {'pair': 'OP/USDT', 'missing': ['age_seconds', 'block_entry', 'is_fresh', 'normalized_action', 'pair', 'reasons', 'source_action', 'watch_only']}] |
+
+
+## Decommissioned / Historical State Artifacts
+
+| Bot | Exists | Artifact | Status | Note |
+|-----|--------|----------|--------|------|
+| rsi | ❌ | ❌ | DECOMMISSIONED | historical artifact absent; excluded from live status |
+| momentum | ✅ | ✅ | DECOMMISSIONED | historical artifact present; excluded from live status |
 
 
 ## RiskGuard Verdict Distribution
 
 - **ACCEPTED:** 0
-- **WATCH_ONLY:** 7
+- **WATCH_ONLY:** 0
 - **BLOCK_ENTRY:** 0
 
 ## Fleet Health
 
 | Bot | Verdict |
 |-----|---------|
-| rsi | GREEN |
-| momentum | GREEN |
+| freqforge | GREEN |
 | regime-hybrid | GREEN |
+| freqforge-canary | GREEN |
+| freqai-rebel | YELLOW |
 
 
 ## Known Limitations
@@ -63,5 +63,5 @@
 
 ---
 
-**Generated:** 2026-05-08T09:20:58.318424+00:00  
+**Generated:** 2026-06-05T09:50:20.543622+00:00
 **Multi-Cycle Validator Version:** v0.1.0

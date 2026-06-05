@@ -1,181 +1,522 @@
 {
   "version": "0.1.0",
-  "validated_at": "2026-05-08T09:20:58.318424+00:00",
-  "overall_status": "GREEN",
+  "validated_at": "2026-06-05T09:50:20.543622+00:00",
+  "overall_status": "RED",
   "wrapper_runs": {
-    "count": 11,
-    "latest_log": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T091944Z.log",
-    "latest_run_id": "20260508T091944Z",
-    "runs": [
-      {
-        "run_id": "20260508T091944Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T091944Z.log",
-        "start_timestamp": "2026-05-08T09:19:44Z",
-        "exit_status": "success",
-        "log_mtime": "2026-05-08T09:20:58.119000+00:00"
-      },
-      {
-        "run_id": "20260508T061944Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T061944Z.log",
-        "start_timestamp": "2026-05-08T06:19:44Z",
-        "exit_status": "success",
-        "log_mtime": "2026-05-08T06:20:56.340000+00:00"
-      },
-      {
-        "run_id": "20260508T031944Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T031944Z.log",
-        "start_timestamp": "2026-05-08T03:19:44Z",
-        "exit_status": "success",
-        "log_mtime": "2026-05-08T03:21:58.518000+00:00"
-      },
-      {
-        "run_id": "20260508T001944Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260508T001944Z.log",
-        "start_timestamp": "2026-05-08T00:19:44Z",
-        "exit_status": "success",
-        "log_mtime": "2026-05-08T00:20:33.657000+00:00"
-      },
-      {
-        "run_id": "20260507T211944Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T211944Z.log",
-        "start_timestamp": "2026-05-07T21:19:44Z",
-        "exit_status": "success",
-        "log_mtime": "2026-05-07T21:21:26.838000+00:00"
-      },
-      {
-        "run_id": "20260507T210235Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T210235Z.log",
-        "start_timestamp": "2026-05-07T21:02:35Z",
-        "exit_status": "success",
-        "log_mtime": "2026-05-07T21:04:01.365000+00:00"
-      },
-      {
-        "run_id": "20260507T201616Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T201616Z.log",
-        "start_timestamp": "2026-05-07T20:16:16Z",
-        "exit_status": "success",
-        "log_mtime": "2026-05-07T20:18:58.975000+00:00"
-      },
-      {
-        "run_id": "20260507T201301Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T201301Z.log",
-        "start_timestamp": "2026-05-07T20:13:01Z",
-        "exit_status": "unknown",
-        "log_mtime": "2026-05-07T20:15:57.509000+00:00"
-      },
-      {
-        "run_id": "20260507T195314Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T195314Z.log",
-        "start_timestamp": "2026-05-07T19:53:14Z",
-        "exit_status": "success",
-        "log_mtime": "2026-05-07T19:55:13.399000+00:00"
-      },
-      {
-        "run_id": "20260507T185137Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T185137Z.log",
-        "start_timestamp": "2026-05-07T18:51:37Z",
-        "exit_status": "success",
-        "log_mtime": "2026-05-07T18:51:39.944000+00:00"
-      },
-      {
-        "run_id": "20260507T185124Z",
-        "log_file": "/home/hermes/projects/trading/orchestrator/logs/trading_cycle_20260507T185124Z.log",
-        "start_timestamp": "2026-05-07T18:51:24Z",
-        "exit_status": "unknown",
-        "log_mtime": "2026-05-07T18:51:26.535000+00:00"
-      }
-    ]
+    "count": 0,
+    "latest_log": null,
+    "latest_run_id": null,
+    "runs": []
   },
   "riskguard": {
-    "exists": true,
-    "valid_json": true,
-    "total_signals": 7,
-    "accepted_count": 0,
-    "watch_only_count": 7,
-    "blocked_count": 0,
-    "schema_version": null
+    "exists": false,
+    "valid_json": false,
+    "error": "file_missing"
   },
   "shadow": {
-    "exists": true,
-    "total_lines": 70,
-    "valid_json_lines": 10,
-    "latest_entries": [
-      {
-        "run_id": "run_20260508T062056Z_4f180b83",
-        "logged_at": "2026-05-08T06:20:56.001005+00:00",
-        "pairs_count": 0
-      },
-      {
-        "run_id": "run_20260508T062056Z_4f180b83",
-        "logged_at": "2026-05-08T06:20:56.001005+00:00",
-        "pairs_count": 0
-      },
-      {
-        "run_id": "run_20260508T062056Z_4f180b83",
-        "logged_at": "2026-05-08T06:20:56.001005+00:00",
-        "pairs_count": 0
-      }
-    ]
+    "exists": false,
+    "lines": 0,
+    "valid_json_lines": 0,
+    "error": "file_missing"
   },
   "state_files": {
-    "all_valid": true,
+    "all_valid": false,
     "schema_versions": [
-      "0.2"
+      "0.3"
     ],
     "files": [
       {
-        "path": "/home/hermes/projects/trading/freqtrade/bots/rsi/user_data/primo_signal_state.json",
+        "bot": "freqtrade",
+        "path": "/home/hermes/projects/trading/freqtrade/shared/primo_signal_state.json",
+        "scope": "ACTIVE",
         "exists": true,
         "valid_json": true,
-        "schema_version": "0.2",
-        "bridge_version": "0.2.0-risk-aware",
-        "source_type": "riskguard",
-        "missing_top_fields": [],
-        "pair_issues": [],
+        "schema_version": "0.3",
+        "bridge_version": null,
+        "source_type": null,
+        "missing_top_fields": [
+          "bridge_version",
+          "riskguard_available",
+          "source_type",
+          "summary",
+          "written_at"
+        ],
+        "pair_issues": [
+          {
+            "pair": "BTC/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "ETH/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "SOL/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "AVAX/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "NEAR/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "ARB/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "OP/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          }
+        ],
         "pairs_count": 7
       },
       {
-        "path": "/home/hermes/projects/trading/freqtrade/bots/momentum/user_data/primo_signal_state.json",
+        "bot": "freqforge",
+        "path": "/home/hermes/projects/trading/freqforge/user_data/primo_signal_state.json",
+        "scope": "ACTIVE",
         "exists": true,
         "valid_json": true,
-        "schema_version": "0.2",
-        "bridge_version": "0.2.0-risk-aware",
-        "source_type": "riskguard",
-        "missing_top_fields": [],
-        "pair_issues": [],
+        "schema_version": "0.3",
+        "bridge_version": null,
+        "source_type": null,
+        "missing_top_fields": [
+          "bridge_version",
+          "riskguard_available",
+          "source_type",
+          "summary",
+          "written_at"
+        ],
+        "pair_issues": [
+          {
+            "pair": "BTC/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "ETH/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "SOL/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "AVAX/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "NEAR/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "ARB/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "OP/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          }
+        ],
         "pairs_count": 7
       },
       {
+        "bot": "freqforge-canary",
+        "path": "/home/hermes/projects/trading/freqforge-canary/user_data/primo_signal_state.json",
+        "scope": "ACTIVE",
+        "exists": true,
+        "valid_json": true,
+        "schema_version": "0.3",
+        "bridge_version": null,
+        "source_type": null,
+        "missing_top_fields": [
+          "bridge_version",
+          "riskguard_available",
+          "source_type",
+          "summary",
+          "written_at"
+        ],
+        "pair_issues": [
+          {
+            "pair": "BTC/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "ETH/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "SOL/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "AVAX/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "NEAR/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "ARB/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "OP/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          }
+        ],
+        "pairs_count": 7
+      },
+      {
+        "bot": "regime-hybrid",
         "path": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json",
+        "scope": "ACTIVE",
         "exists": true,
         "valid_json": true,
-        "schema_version": "0.2",
-        "bridge_version": "0.2.0-risk-aware",
-        "source_type": "riskguard",
-        "missing_top_fields": [],
-        "pair_issues": [],
+        "schema_version": "0.3",
+        "bridge_version": null,
+        "source_type": null,
+        "missing_top_fields": [
+          "bridge_version",
+          "riskguard_available",
+          "source_type",
+          "summary",
+          "written_at"
+        ],
+        "pair_issues": [
+          {
+            "pair": "BTC/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "ETH/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "SOL/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "AVAX/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "NEAR/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "ARB/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          },
+          {
+            "pair": "OP/USDT",
+            "missing": [
+              "age_seconds",
+              "block_entry",
+              "is_fresh",
+              "normalized_action",
+              "pair",
+              "reasons",
+              "source_action",
+              "watch_only"
+            ]
+          }
+        ],
         "pairs_count": 7
+      }
+    ],
+    "decommissioned_files": [
+      {
+        "bot": "rsi",
+        "path": "/home/hermes/projects/trading/freqtrade/bots/rsi/user_data/primo_signal_state.json",
+        "scope": "DECOMMISSIONED",
+        "status": "DECOMMISSIONED",
+        "exists": false,
+        "artifact_present": false,
+        "valid_json": null,
+        "note": "historical artifact absent; excluded from live status"
+      },
+      {
+        "bot": "momentum",
+        "path": "/home/hermes/projects/trading/freqtrade/bots/momentum/user_data/primo_signal_state.json",
+        "scope": "DECOMMISSIONED",
+        "status": "DECOMMISSIONED",
+        "exists": true,
+        "artifact_present": true,
+        "valid_json": true,
+        "schema_version": "0.3",
+        "pairs_count": 7,
+        "note": "historical artifact present; excluded from live status"
       }
     ]
   },
   "fleet_health": {
     "exists": true,
     "valid_json": true,
-    "fleet_verdict": "GREEN",
-    "bots_checked": 3,
+    "fleet_verdict": "YELLOW",
+    "bots_checked": 4,
     "helper_exists": true,
     "bot_verdicts": [
       {
-        "bot": "rsi",
-        "verdict": "GREEN"
-      },
-      {
-        "bot": "momentum",
+        "bot": "freqforge",
         "verdict": "GREEN"
       },
       {
         "bot": "regime-hybrid",
         "verdict": "GREEN"
+      },
+      {
+        "bot": "freqforge-canary",
+        "verdict": "GREEN"
+      },
+      {
+        "bot": "freqai-rebel",
+        "verdict": "YELLOW"
       }
     ]
   }
