@@ -81,10 +81,10 @@ def bot_stats(container, db_paths):
                 pnl = float(parts[1])
                 wr = float(parts[2])
                 pf = float(parts[3])
-                return {'trades': trades, 'pnl': pnl, 'wr': wr, 'pf': pf}
+                return {'trades': trades, 'pnl': pnl, 'wr': wr, 'pf': pf, 'db_path_used': db}
             except Exception:
                 continue
-    return {'trades': 0, 'pnl': 0.0, 'wr': 0.0, 'pf': 0.0}
+    return {'trades': 0, 'pnl': 0.0, 'wr': 0.0, 'pf': 0.0, 'db_path_used': None}
 
 
 def bot_open_count(container, db_paths):
@@ -129,7 +129,11 @@ def collect_fleet():
     for container, info in BOTS.items():
         stats = bot_stats(container, info['dbs'])
         open_count = bot_open_count(container, info['dbs'])
-        status = 'QUARANTINE' if info['label'] == 'Rebel' else ('LOSS' if stats['pnl'] < 0 and stats['pf'] < 1 else 'OK')
+        if info['label'] == 'Rebel':
+            rebel_mot = read_rebel_config_value('max_open_trades')
+            status = 'RUNNING_INFERENCE_ONLY' if rebel_mot == '0' else 'VISIBILITY_GAP'
+        else:
+            status = 'LOSS' if stats['pnl'] < 0 and stats['pf'] < 1 else 'OK'
         row = {
             'label': info['label'],
             'trades': stats['trades'],
@@ -276,7 +280,7 @@ def build_markdown(fleet, total_pnl, total_open, total_trades, sig, dry_snapshot
         suggestions.append(f"{bad}: Exit-/Loss-Asymmetrie prüfen")
     if not suggestions:
         suggestions.append('Keine Sofortaktion nötig')
-    suggestions.append('Rebel als intentionale Quarantäne unverändert lassen')
+    suggestions.append('Rebel VISIBILITY_GAP dokumentieren; inference-only nur bei explizitem max_open_trades=0')
     for item in suggestions[:2]:
         lines.append(f"1. {item}" if item == suggestions[0] else f"2. {item}")
     return '\n'.join(lines) + '\n'

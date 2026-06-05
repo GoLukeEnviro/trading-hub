@@ -32,10 +32,15 @@ PRIMO_ROOT = Path("/home/hermes/primoagent")
 LOGS_DIR = TRADING_ROOT / "orchestrator/logs"
 RISK_FILE = PRIMO_ROOT / "output/signals/primo_risk_filtered_latest.json"
 SHADOW_LOG = PRIMO_ROOT / "output/shadow/primo_shadow_log.jsonl"
-STATE_FILES = [
+ACTIVE_STATE_FILES = [
+    TRADING_ROOT / "freqtrade/shared/primo_signal_state.json",
+    TRADING_ROOT / "freqforge/user_data/primo_signal_state.json",
+    TRADING_ROOT / "freqforge-canary/user_data/primo_signal_state.json",
+    TRADING_ROOT / "freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json",
+]
+DECOMMISSIONED_STATE_FILES = [
     TRADING_ROOT / "freqtrade/bots/rsi/user_data/primo_signal_state.json",
     TRADING_ROOT / "freqtrade/bots/momentum/user_data/primo_signal_state.json",
-    TRADING_ROOT / "freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json",
 ]
 FLEET_HEALTH_JSON = REPORTS_DIR / "fleet_health_latest.json"
 
@@ -159,26 +164,30 @@ def validate_state_files() -> Dict[str, Any]:
     """Validate per-bot state files for schema consistency."""
     required_top = {"schema_version", "bridge_version", "written_at", "source_type", "riskguard_available", "pairs", "summary"}
     required_pair = {"pair", "source_action", "normalized_action", "confidence", "verdict", "reasons", "age_seconds", "is_fresh", "allow_long_bias", "allow_short_bias", "watch_only", "block_entry"}
-    
-    results = []
+
+    active_results = []
+    decommissioned_results = []
     all_valid = True
     schema_versions = set()
-    
-    for state_path in STATE_FILES:
+
+    for state_path in ACTIVE_STATE_FILES:
+        bot_name = state_path.parent.parent.name
         if not state_path.exists():
-            results.append({
+            active_results.append({
+                "bot": bot_name,
                 "path": str(state_path),
+                "scope": "ACTIVE",
                 "exists": False,
                 "valid_json": False,
                 "error": "file_missing"
             })
             all_valid = False
             continue
-        
+
         try:
             data = json.loads(state_path.read_text(encoding="utf-8"))
             missing_top = required_top - set(data.keys())
-            
+
             pairs = data.get("pairs", {})
             pair_issues = []
             for pair_name, entry in pairs.items():
@@ -187,11 +196,13 @@ def validate_state_files() -> Dict[str, Any]:
                 missing_pair = required_pair - set(entry.keys())
                 if missing_pair:
                     pair_issues.append({"pair": pair_name, "missing": sorted(missing_pair)})
-            
+
             schema_versions.add(data.get("schema_version"))
-            
-            results.append({
+
+            active_results.append({
+                "bot": bot_name,
                 "path": str(state_path),
+                "scope": "ACTIVE",
                 "exists": True,
                 "valid_json": True,
                 "schema_version": data.get("schema_version"),
@@ -201,31 +212,84 @@ def validate_state_files() -> Dict[str, Any]:
                 "pair_issues": pair_issues,
                 "pairs_count": len(pairs),
             })
-            
+
             if missing_top or pair_issues:
                 all_valid = False
-                
+
         except json.JSONDecodeError:
-            results.append({
+            active_results.append({
+                "bot": bot_name,
                 "path": str(state_path),
+                "scope": "ACTIVE",
                 "exists": True,
                 "valid_json": False,
                 "error": "invalid_json"
             })
             all_valid = False
         except Exception as e:
-            results.append({
+            active_results.append({
+                "bot": bot_name,
                 "path": str(state_path),
+                "scope": "ACTIVE",
                 "exists": True,
                 "valid_json": False,
                 "error": str(e)
             })
             all_valid = False
-    
+
+    for state_path in DECOMMISSIONED_STATE_FILES:
+        bot_name = state_path.parent.parent.name
+        base = {
+            "bot": bot_name,
+            "path": str(state_path),
+            "scope": "DECOMMISSIONED",
+            "status": "DECOMMISSIONED",
+        }
+        if not state_path.exists():
+            decommissioned_results.append({
+                **base,
+                "exists": False,
+                "artifact_present": False,
+                "valid_json": None,
+                "note": "historical artifact absent; excluded from live status"
+            })
+            continue
+
+        try:
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+            decommissioned_results.append({
+                **base,
+                "exists": True,
+                "artifact_present": True,
+                "valid_json": True,
+                "schema_version": data.get("schema_version"),
+                "pairs_count": len(data.get("pairs", {})),
+                "note": "historical artifact present; excluded from live status"
+            })
+        except json.JSONDecodeError:
+            decommissioned_results.append({
+                **base,
+                "exists": True,
+                "artifact_present": True,
+                "valid_json": False,
+                "error": "invalid_json",
+                "note": "historical artifact present; excluded from live status"
+            })
+        except Exception as e:
+            decommissioned_results.append({
+                **base,
+                "exists": True,
+                "artifact_present": True,
+                "valid_json": False,
+                "error": str(e),
+                "note": "historical artifact present; excluded from live status"
+            })
+
     return {
         "all_valid": all_valid,
         "schema_versions": list(schema_versions),
-        "files": results
+        "files": active_results,
+        "decommissioned_files": decommissioned_results,
     }
 
 
@@ -288,13 +352,15 @@ def write_json_report(report: Dict[str, Any], path: Path):
         json.dump(report, f, indent=2, ensure_ascii=False)
 
 
+
+
 def write_md_report(report: Dict[str, Any], path: Path):
     """Write Markdown report."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     status = report["overall_status"]
     validated_at = report["validated_at"]
-    
+
     md = f"""# Multi-Cycle Validation Report
 
 ## Summary
@@ -309,8 +375,8 @@ def write_md_report(report: Dict[str, Any], path: Path):
 | Component | Status | Details |
 |-----------|--------|---------|
 | RiskGuard | {'✅' if report['riskguard']['valid_json'] else '❌'} | {report['riskguard'].get('total_signals', 0)} signals, {report['riskguard'].get('accepted_count', 0)} ACCEPTED |
-| ShadowLogger | {'✅' if report['shadow']['total_lines'] > 0 else '❌'} | {report['shadow'].get('total_lines', 0)} lines logged |
-| State Files | {'✅' if report['state_files']['all_valid'] else '❌'} | Schema: {', '.join(report['state_files']['schema_versions']) or 'N/A'} |
+| ShadowLogger | {'✅' if report['shadow'].get('total_lines', 0) > 0 else '❌'} | {report['shadow'].get('total_lines', 0)} lines logged |
+| Active State Files | {'✅' if report['state_files']['all_valid'] else '❌'} | Schema: {', '.join(report['state_files']['schema_versions']) or 'N/A'} |
 | Fleet Health | {'✅' if report['fleet_health'].get('fleet_verdict') == 'GREEN' else '⚠️'} | {report['fleet_health'].get('fleet_verdict', 'N/A')} |
 
 ## Wrapper Runs
@@ -318,11 +384,11 @@ def write_md_report(report: Dict[str, Any], path: Path):
 | Run ID | Timestamp | Status | Log |
 |--------|-----------|--------|-----|
 """
-    
+
     for run in report["wrapper_runs"]["runs"][:10]:  # Show last 10
         status_icon = "✅" if run.get("exit_status") == "success" else "❌"
         md += f"| {run.get('run_id', 'N/A')} | {run.get('start_timestamp', 'N/A')} | {status_icon} {run.get('exit_status', 'unknown')} | [log]({run.get('log_file', '')}) |\n"
-    
+
     md += f"""
 
 ## State Files
@@ -330,15 +396,32 @@ def write_md_report(report: Dict[str, Any], path: Path):
 | Bot | Exists | Valid JSON | Schema | Pairs | Issues |
 |-----|--------|------------|--------|-------|--------|
 """
-    
+
     for file_result in report["state_files"]["files"]:
         exists = "✅" if file_result.get("exists") else "❌"
         valid = "✅" if file_result.get("valid_json") else "❌"
         schema = file_result.get("schema_version", "N/A")
         pairs = file_result.get("pairs_count", 0)
         issues = "⚠️ " + str(file_result.get("pair_issues", [])) if file_result.get("pair_issues") else "✅"
-        md += f"| {Path(file_result['path']).parent.parent.name} | {exists} | {valid} | {schema} | {pairs} | {issues} |\n"
-    
+        bot_name = file_result.get("bot") or Path(file_result["path"]).parent.parent.name
+        md += f"| {bot_name} | {exists} | {valid} | {schema} | {pairs} | {issues} |\n"
+
+    decommissioned = report["state_files"].get("decommissioned_files", [])
+    if decommissioned:
+        md += f"""
+
+## Decommissioned / Historical State Artifacts
+
+| Bot | Exists | Artifact | Status | Note |
+|-----|--------|----------|--------|------|
+"""
+        for file_result in decommissioned:
+            exists = "✅" if file_result.get("exists") else "❌"
+            artifact = "✅" if file_result.get("artifact_present") else "❌"
+            status_label = file_result.get("status", "DECOMMISSIONED")
+            note = file_result.get("note", "historical only")
+            md += f"| {file_result.get('bot', 'N/A')} | {exists} | {artifact} | {status_label} | {note} |\n"
+
     md += f"""
 
 ## RiskGuard Verdict Distribution
@@ -352,10 +435,10 @@ def write_md_report(report: Dict[str, Any], path: Path):
 | Bot | Verdict |
 |-----|---------|
 """
-    
+
     for bot in report["fleet_health"].get("bot_verdicts", []):
         md += f"| {bot.get('bot', 'N/A')} | {bot.get('verdict', 'N/A')} |\n"
-    
+
     md += f"""
 
 ## Known Limitations
@@ -368,10 +451,9 @@ def write_md_report(report: Dict[str, Any], path: Path):
 **Generated:** {validated_at}  
 **Multi-Cycle Validator Version:** v{VERSION}
 """
-    
+
     with open(path, 'w', encoding='utf-8') as f:
         f.write(md)
-
 
 def main() -> int:
     now = datetime.now(timezone.utc).isoformat()

@@ -337,9 +337,17 @@ def _collect_docker_ps(logger: logging.Logger) -> tuple[list[dict[str, str]], st
 def _known_expected_containers(expected_state: dict[str, Any]) -> list[str]:
     containers = expected_state.get("expected_containers")
     if isinstance(containers, list) and containers:
-        return [str(name) for name in containers if str(name).strip()]
+        names: list[str] = []
+        for item in containers:
+            if isinstance(item, dict):
+                name = str(item.get("name") or "").strip()
+            else:
+                name = str(item).strip()
+            if name:
+                names.append(name)
+        return names
     fallback = oc.default_expected_state().get("expected_containers", [])
-    return [str(name) for name in fallback]
+    return [str(name).strip() for name in fallback if str(name).strip()]
 
 
 def _signal_config(expected_state: dict[str, Any]) -> dict[str, Any]:
@@ -924,6 +932,19 @@ def run_cycle() -> dict[str, Any]:
         )
 
         oc.write_json_atomic(report_path, report)
+        # === Legacy Compatibility für Dashboard ===
+        legacy_paths = [
+            oc.REPO_ROOT / "ai-hedge-fund-crypto/output/observation_report.json",
+            oc.REPO_ROOT / "ai-hedge-fund-crypto/output/latest/observation_report.json",
+        ]
+
+        for legacy_path in legacy_paths:
+            try:
+                oc.write_json_atomic(legacy_path, report)
+                logger.info(f"Legacy compatibility write: {legacy_path}")
+            except Exception as e:
+                logger.warning(f"Legacy write failed {legacy_path}: {e}")
+
         state["last_report_path"] = str(report_path)
         state_path = oc.write_json_atomic(STATE_FILE, state)
         heartbeat_path = oc.write_json_atomic(
