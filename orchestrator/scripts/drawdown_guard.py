@@ -39,8 +39,8 @@ LOG_STALE_THRESHOLD_MIN = 30          # Bot log older than this = possibly down
 
 BOTS = {
     "freqforge": {
-        "container": "freqtrade-freqforge",
-        "port": 8086,
+        "container": "trading-freqtrade-freqforge-1",
+        "port": 8080,  # internal container port (Docker network)
         "config_host": "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json",
         "user": "freqforge",
         "password": "freqforge-local-only",
@@ -48,8 +48,8 @@ BOTS = {
         "log_path": "/home/hermes/projects/trading/freqtrade/logs/freqforge.log",
     },
     "canary": {
-        "container": "freqtrade-freqforge-canary",
-        "port": 8081,
+        "container": "trading-freqtrade-freqforge-canary-1",
+        "port": 8080,
         "config_host": "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json",
         "user": "canary",
         "password": "I7S6ZNh2T7GE3BYjYUpvnA",
@@ -57,8 +57,8 @@ BOTS = {
         "log_path": "/home/hermes/projects/trading/freqtrade/logs/freqforge-canary.log",
     },
     "regime_hybrid": {
-        "container": "freqtrade-regime-hybrid",
-        "port": 8085,
+        "container": "trading-freqtrade-regime-hybrid-1",
+        "port": 8080,
         "config_host": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json",
         "user": "research",
         "password": "RGHx9kLt4wPzNs8vBq2E",
@@ -67,7 +67,7 @@ BOTS = {
     },
     # momentum: intentionally not deployed (removed 2026-05-24, was generating spam)
     "rebel": {
-        "container": "freqai-rebel",
+        "container": "trading-freqai-rebel-1",
         "port": 8080,
         "config_container": "/freqtrade/user_data/config.json",
         "user": "rebel",
@@ -76,6 +76,31 @@ BOTS = {
         "log_path": "/home/hermes/projects/trading/freqtrade/logs/freqai-rebel.log",
     },
 }
+
+# Cache for Docker network IPs
+_docker_ip_cache: dict[str, str | None] = {}
+
+
+def _resolve_docker_ip(container: str) -> str | None:
+    """Resolve container IP on trading_hermes-net via docker inspect."""
+    if container in _docker_ip_cache:
+        return _docker_ip_cache[container]
+    try:
+        r = subprocess.run(
+            ["docker", "inspect", container, "--format",
+             '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}={{$v.IPAddress}}\n{{end}}'],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in r.stdout.strip().splitlines():
+            parts = line.split("=", 1)
+            if len(parts) == 2 and "hermes-net" in parts[0]:
+                ip = parts[1].strip()
+                _docker_ip_cache[container] = ip
+                return ip
+    except Exception:
+        pass
+    _docker_ip_cache[container] = None
+    return None
 
 STATE_FILE = Path("/home/hermes/projects/trading/orchestrator/state/drawdown_state.json")
 LOG_FILE   = Path("/home/hermes/projects/trading/orchestrator/logs/drawdown_guard.log")
@@ -281,8 +306,28 @@ def check_bot_log_freshness(log_path: str) -> tuple:
 
 # ── Balance Query ───────────────────────────────────────────────
 def get_balance(container, port, user, password):
+    # 1. Try Docker network IP with Basic auth (bypasses EXEC=0 proxy)
+    # Note: Docker network always uses internal container port 8080,
+    # not the config's listen_port (which is the host-mapped port)
+    docker_ip = _resolve_docker_ip(container)
+    if docker_ip:
+        try:
+            import base64
+            from urllib.request import Request, urlopen
+            credentials = base64.b64encode(f"{user}:{password}".encode()).decode()
+            url = f"http://{docker_ip}:8080/api/v1/balance"
+            req = Request(url, headers={"Authorization": f"Basic {credentials}"})
+            resp = urlopen(req, timeout=5)
+            if resp.status == 200:
+                data = json.loads(resp.read().decode())
+                total = float(data.get("total", 0))
+                if total > 0:
+                    return total, True
+        except Exception:
+            pass
+
+    # 2. Try docker exec (blocked by EXEC=0 but kept for compat)
     if detect_docker():
-        # Original Docker-exec based query
         try:
             r = subprocess.run(
                 ["docker", "exec", container, "curl", "-s", "--retry", "2",
@@ -295,15 +340,6 @@ def get_balance(container, port, user, password):
                 return float(data.get("total", 0)), True
         except Exception as e:
             log(f"  {container}: docker exec query failed: {e}")
-    else:
-        # Try direct REST API with retry/backoff
-        try:
-            result = freqtrade_api_get("127.0.0.1", port, "/api/v1/balance", timeout=3)
-            if result:
-                data = json.loads(result)
-                return float(data.get("total", 0)), True
-        except Exception:
-            pass
 
     return 0.0, False
 

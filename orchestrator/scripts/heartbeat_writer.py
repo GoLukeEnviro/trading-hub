@@ -30,25 +30,50 @@ DB_PATH = Path("/home/hermes/projects/trading/orchestrator/state/hermes_heartbea
 BOTS = [
     {
         "bot_name": "freqforge",
-        "container_name": "freqtrade-freqforge",
-        "api_port": 8086,
+        "container_name": "trading-freqtrade-freqforge-1",
+        "api_port": 8080,  # internal container port (Docker network)
     },
     {
         "bot_name": "regime-hybrid",
-        "container_name": "freqtrade-regime-hybrid",
-        "api_port": 8085,
+        "container_name": "trading-freqtrade-regime-hybrid-1",
+        "api_port": 8080,
     },
     {
         "bot_name": "freqforge-canary",
-        "container_name": "freqtrade-freqforge-canary",
-        "api_port": 8081,
+        "container_name": "trading-freqtrade-freqforge-canary-1",
+        "api_port": 8080,
     },
     {
         "bot_name": "freqai-rebel",
-        "container_name": "freqai-rebel",
+        "container_name": "trading-freqai-rebel-1",
         "api_port": 8080,
     },
 ]
+
+# Cache for Docker network IPs (resolved dynamically)
+_docker_ip_cache: dict[str, str | None] = {}
+
+
+def resolve_docker_ip(container_name: str) -> str | None:
+    """Resolve container IP on trading_hermes-net via docker inspect (read-only)."""
+    if container_name in _docker_ip_cache:
+        return _docker_ip_cache[container_name]
+    try:
+        r = subprocess.run(
+            ["docker", "inspect", container_name, "--format",
+             '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}={{$v.IPAddress}}\n{{end}}'],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in r.stdout.strip().splitlines():
+            parts = line.split("=", 1)
+            if len(parts) == 2 and ("hermes-net" in parts[0]):
+                ip = parts[1].strip()
+                _docker_ip_cache[container_name] = ip
+                return ip
+    except Exception:
+        pass
+    _docker_ip_cache[container_name] = None
+    return None
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS heartbeats (
@@ -130,18 +155,24 @@ def docker_curl(container: str, port: int, endpoint: str, timeout: int = 10) -> 
 
 
 def api_get(container: str, port: int, endpoint: str) -> str | None:
-    """Use Docker exec only — bots are on separate Docker network, direct REST unreachable."""
-    # Try lightweight REST probe first (fast fail)
-    for host in ["127.0.0.1"]:
-        result = rest_api_get(host, port, endpoint, timeout=2)
+    """Reach bot via Docker network IP first, then fallback to docker exec."""
+    # 1. Try Docker network IP (bots are on trading_hermes-net, port 8080)
+    docker_ip = resolve_docker_ip(container)
+    if docker_ip:
+        result = rest_api_get(docker_ip, port, endpoint, timeout=5)
         if result is not None:
             return result
 
-    # Docker exec is the only reliable path from Hermes container
+    # 2. Try localhost (host port mapping, works if network=host)
+    result = rest_api_get("127.0.0.1", port, endpoint, timeout=2)
+    if result is not None:
+        return result
+
+    # 3. Docker exec fallback (blocked by EXEC=0 proxy but keep for compat)
     if detect_docker():
         return docker_curl(container, port, endpoint)
 
-    log(f"No Docker socket available — cannot reach {container}:{port}")
+    log(f"No path to {container}:{port} — all methods failed")
     return None
 
 

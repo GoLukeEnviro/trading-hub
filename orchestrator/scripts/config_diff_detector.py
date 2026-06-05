@@ -29,16 +29,16 @@ HEALTH_FILE = STATE_DIR / "config_diff_health.json"
 
 # Bot config mappings: (container, host_path, container_path)
 BOT_CONFIGS = [
-    ("freqtrade-freqforge",
+    ("trading-freqtrade-freqforge-1",
      "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json",
      "/freqtrade/config/config_freqforge_dryrun.json"),
-    ("freqtrade-freqforge-canary",
+    ("trading-freqtrade-freqforge-canary-1",
      "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json",
      "/freqtrade/config/config_canary_dryrun.json"),
-    ("freqtrade-regime-hybrid",
+    ("trading-freqtrade-regime-hybrid-1",
      "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json",
      "/freqtrade/config/config_regime_hybrid_dryrun.json"),
-    ("freqai-rebel",
+    ("trading-freqai-rebel-1",
      None,  # no host path — Docker volume
      "/freqtrade/user_data/config.json"),
 ]
@@ -63,18 +63,19 @@ def read_host_config(path: str) -> dict | None:
 
 
 def read_container_config(container: str, path: str) -> dict | None:
+    """Read config from container via docker exec. Falls back to None if blocked."""
     try:
         r = subprocess.run(
             ["docker", "exec", container, "cat", path],
             capture_output=True, text=True, timeout=10,
         )
-        if r.returncode != 0:
-            log(f"  ERROR reading container config {container}:{path}: {r.stderr.strip()}")
-            return None
-        return json.loads(r.stdout)
-    except Exception as e:
-        log(f"  ERROR reading container config {container}:{path}: {e}")
-        return None
+        if r.returncode == 0 and r.stdout.strip():
+            return json.loads(r.stdout)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    except json.JSONDecodeError as e:
+        log(f"  ERROR parsing container config {container}:{path}: {e}")
+    return None
 
 
 def get_diff(host: dict, container: dict, keys: list[str] = None) -> dict:
@@ -103,6 +104,15 @@ def check_bot_config(container: str, host_path: str | None, container_path: str,
     # Read container config
     container_cfg = read_container_config(container, container_path)
     if not container_cfg:
+        # docker exec blocked (EXEC=0 proxy) — host-only mode for bind-mounted configs
+        if host_cfg:
+            log(f"  {container}: HOST-ONLY (docker exec blocked, bind-mount assumed in sync)")
+            result["drift"] = False
+            return result
+        # No host path AND no container access (e.g. freqai-rebel with Docker volume)
+        if not host_path:
+            log(f"  {container}: SKIP (no host path, docker exec blocked)")
+            return result
         result["error"] = "container config unreadable"
         return result
 

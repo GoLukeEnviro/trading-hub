@@ -64,21 +64,39 @@ def docker_ps(container: str) -> dict:
 
 
 def check_scheduler_deadline() -> dict:
-    """Check if the Hermes scheduler is running by checking docker container process."""
-    # The most reliable check: is the Hermes agent process alive inside the container?
-    # If the scheduler is stuck but container runs, the process still shows as alive.
+    """Check if the Hermes scheduler is running by checking cron job timestamps."""
+    # Since docker exec is blocked (EXEC=0 proxy), check cron job freshness instead.
+    # If any no_agent job has last_run_at within 30 minutes, scheduler is alive.
     try:
-        r = subprocess.run(
-            ["docker", "exec", HERMES_CONTAINER, "ps", "aux", "--no-headers"],
-            capture_output=True, text=True, timeout=10,
-        )
-        if r.returncode != 0:
-            return {"scheduler_alive": False, "reason": "docker exec failed"}
-        # Look for hermes agent process
-        processes = r.stdout.lower()
-        has_scheduler = "hermes" in processes or "python" in processes
-        return {"scheduler_alive": has_scheduler,
-                "process_count": len(r.stdout.strip().splitlines()) if r.stdout.strip() else 0}
+        import json as _json
+        cron_db = Path("/opt/data/profiles/orchestrator/cron/jobs.json")
+        if not cron_db.exists():
+            return {"scheduler_alive": False, "reason": "cron db not found"}
+        with open(cron_db) as f:
+            data = _json.load(f)
+        jobs = data.get("jobs", [])
+        now = datetime.now(timezone.utc)
+        recent_count = 0
+        total_no_agent = 0
+        for job in jobs:
+            if job.get("no_agent") and job.get("enabled", True):
+                total_no_agent += 1
+                lra = job.get("last_run_at")
+                if lra:
+                    try:
+                        last = datetime.fromisoformat(lra)
+                        if last.tzinfo is None:
+                            last = last.replace(tzinfo=timezone.utc)
+                        if (now - last).total_seconds() < 1800:  # 30 min
+                            recent_count += 1
+                    except (ValueError, TypeError):
+                        pass
+        # Scheduler is alive if ANY no_agent job ran recently
+        if recent_count > 0:
+            return {"scheduler_alive": True, "process_count": recent_count,
+                    "total_no_agent": total_no_agent}
+        return {"scheduler_alive": False,
+                "reason": f"0/{total_no_agent} no_agent jobs ran in last 30min"}
     except Exception as e:
         return {"scheduler_alive": False, "reason": str(e)}
 

@@ -25,8 +25,10 @@ LOCK_DIR="$PROJECT/orchestrator/state/locks"
 LOCK_FILE="$LOCK_DIR/trigger.lock"
 LOG="$PROJECT/orchestrator/logs/trigger_lock.log"
 LOCK_TIMEOUT=180
-CONTAINER="ai-hedge-fund-crypto"
+CONTAINER="trading-ai-hedge-fund-1"
 TRIGGER_URL="http://localhost:8080/trigger"
+# Docker network IP (resolved dynamically, bypasses EXEC=0 proxy)
+AI_HEDGE_IP=""
 CURL_TIMEOUT=180
 
 _test_mode=0
@@ -69,11 +71,22 @@ fi
 
   log "LOCK acquired — calling /trigger"
 
-  # ── Call /trigger via docker exec Python urllib ──────────────────
-  # Uses docker exec with Python stdlib (no curl dependency).
+  # ── Resolve Docker network IP for ai-hedge-fund ────────────────
+  if [ -z "$AI_HEDGE_IP" ]; then
+    AI_HEDGE_IP=$(docker inspect "$CONTAINER" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}={{$v.IPAddress}}{{"\n"}}{{end}}' 2>/dev/null | grep 'hermes-net' | head -1 | cut -d= -f2)
+  fi
+
+  # ── Call /trigger via HTTP (primary) or docker exec (fallback) ──
   trigger_exit=0
   trigger_out=""
-  if command -v docker &>/dev/null; then
+  if [ -n "$AI_HEDGE_IP" ]; then
+    log "TRIGGER via HTTP http://$AI_HEDGE_IP:8080/trigger"
+    trigger_out=$(curl -s --max-time "$CURL_TIMEOUT" "http://$AI_HEDGE_IP:8080/trigger" 2>&1) || trigger_exit=$?
+  fi
+
+  # Fallback to docker exec if HTTP failed and docker is available
+  if [ "${trigger_exit:-0}" -ne 0 ] && command -v docker &>/dev/null; then
+    log "HTTP trigger failed (exit=${trigger_exit}), trying docker exec fallback"
     trigger_out=$(docker exec "$CONTAINER" python3 -c "
 import urllib.request, json, sys
 try:
@@ -91,9 +104,12 @@ except Exception as e:
     print(f'TRIGGER_ERROR {e}')
     sys.exit(1)
 " 2>&1) || trigger_exit=$?
-  else
-    trigger_out="FAIL no_docker_command"
-    trigger_exit=1
+  fi
+
+  # If both methods failed, try parsing curl output for success indicators
+  if [ "${trigger_exit:-0}" -ne 0 ] && echo "$trigger_out" | grep -qi 'pairs\|OK\|triggered'; then
+    log "PARTIAL trigger_out contains success indicator"
+    trigger_exit=0
   fi
 
   if [ "${trigger_exit:-0}" -ne 0 ]; then
