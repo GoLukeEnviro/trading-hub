@@ -12,7 +12,7 @@
 set -euo pipefail
 
 SIGNAL_DIR="/home/hermes/projects/trading/ai-hedge-fund-crypto/output"
-CONTAINER="ai-hedge-fund-crypto"
+CONTAINER="trading-ai-hedge-fund-1"
 CANONICAL="$SIGNAL_DIR/hermes_signal.json"
 LATEST="$SIGNAL_DIR/latest/hermes_signal.json"
 LOG="$SIGNAL_DIR/logs/heartbeat.log"
