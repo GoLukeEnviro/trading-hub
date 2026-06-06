@@ -1,5 +1,6 @@
 # Container Watchdog — External Writer & Post-Hotfix Observation
 **Date**: 2026-06-06T06:12Z
+**Commit**: `1515568` (fix/telegram-hygiene-batch1-20260606)
 **Scope**: External Writer identification, file stability, Telegram spam, stale name audit
 **Verdict**: **GREEN**
 
