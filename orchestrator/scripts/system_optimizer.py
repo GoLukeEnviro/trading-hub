@@ -277,7 +277,7 @@ KNOWN_CONTAINERS = {
 }
 FLEET_BOTS = {
     "freqtrade-freqforge": {
-        "dbs": ["/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite", "/freqtrade/tradesv3.dryrun.sqlite"],
+        "dbs": ["/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite"],  # FIX-2026-06-06: removed stale fallback
         "host_dbs": ["/home/hermes/projects/trading/freqforge/user_data/tradesv3.freqforge.dryrun.sqlite"],
         "label": "FreqForge", "config_host": "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json", "config_container": "/freqtrade/config/config_freqforge_dryrun.json"},
     "freqtrade-regime-hybrid": {
@@ -289,7 +289,7 @@ FLEET_BOTS = {
         "host_dbs": ["/home/hermes/projects/trading/freqforge-canary/user_data/tradesv3.freqforge_canary.dryrun.sqlite"],
         "label": "Canary", "config_host": "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json", "config_container": "/freqtrade/config/config_canary_dryrun.json"},
     "freqai-rebel": {
-        "dbs": ["/freqtrade/tradesv3.dryrun.sqlite", "/freqtrade/user_data/tradesv3.dryrun.sqlite"],
+        "dbs": ["/freqtrade/user_data/tradesv3.freqai_rebel.dryrun.sqlite"],  # FIX-2026-06-06: bot-specific DB name
         "host_dbs": [],
         "label": "Rebel", "config_host": None, "config_container": "/freqtrade/user_data/config.json"},
 }

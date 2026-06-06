@@ -1,6 +1,6 @@
 # Current Operational State
 
-Generated at: 2026-06-05T20:42:32.642012+00:00
+Generated at: 2026-06-06T02:13:36.896080+00:00
 
 Canonical status artifact:
 - /home/hermes/projects/trading/docs/state/canonical-trading-status.md

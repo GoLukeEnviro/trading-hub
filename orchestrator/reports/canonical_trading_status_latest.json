@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-06-05T20:42:32.642012+00:00",
+  "generated_at": "2026-06-06T02:13:36.896080+00:00",
   "overall_status": "WARNING",
   "scores": {
     "runtime_health_score": 92,
@@ -259,7 +259,7 @@
     "LEDGER_RISK": {
       "status": "WARNING",
       "path": "/home/hermes/projects/trading/freqtrade/shared/fleet_risk_state.json",
-      "timestamp": "2026-06-05T20:42:32.642012+00:00",
+      "timestamp": "2026-06-06T02:13:36.896080+00:00",
       "current_drawdown": 0.034244149497,
       "current_equity": 2436.6496945706,
       "peak_equity": 2523.0494,
@@ -280,7 +280,7 @@
         "freqforge_canary_v1",
         "regime_hybrid_dryrun"
       ],
-      "note": "Secondary ledger / historical view. Watchdog @ 2026-06-05T20:42:32.642012+00:00: no new findings (idempotent)."
+      "note": "Secondary ledger / historical view. Watchdog @ 2026-06-06T02:13:36.896080+00:00: no new findings (idempotent)."
     },
     "MCP_PAPER_SANDBOX": {
       "status": "SANDBOX_ONLY",
@@ -343,7 +343,7 @@
     "REPORTING_HEALTH": {
       "status": "WARNING",
       "notes": [
-        "ledger-integrity-watchdog @ 2026-06-05T20:42:32 — ISSUES: freqai-rebel | drawdown > R2",
+        "ledger-integrity-watchdog @ 2026-06-06T02:13:36 — ISSUES: freqai-rebel | drawdown > R2",
         "Rebel is classified as VISIBILITY_GAP (no intentional inference-only proof).",
         "Legacy autopilot/latest.md remains historical and non-canonical.",
         "drawdown_state.json is stale (4d) and not verified current.",
@@ -359,7 +359,7 @@
     "riskguard_health_timestamp": "2026-06-05T09:31:16.825070+00:00",
     "fleet_health_checked_at": "2026-06-05T09:48:40.694552+00:00",
     "drawdown_state_timestamp": "2026-06-01T04:01:25.183014+00:00Z",
-    "fleet_risk_last_update": "2026-06-05T20:42:32.642012+00:00"
+    "fleet_risk_last_update": "2026-06-06T02:13:36.896080+00:00"
   },
   "decision_sources": [
     {

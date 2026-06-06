@@ -26,7 +26,7 @@ BOTS = {
     'freqtrade-freqforge': {
         'label': 'FreqForge',
         'config': BASE / 'freqforge/config/config_freqforge_dryrun.json',
-        'dbs': ['/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite', '/freqtrade/tradesv3.dryrun.sqlite'],
+        'dbs': ['/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite'],  # FIX-2026-06-06: removed stale fallback /freqtrade/tradesv3.dryrun.sqlite
     },
     'freqtrade-freqforge-canary': {
         'label': 'Canary',
@@ -41,7 +41,7 @@ BOTS = {
     'freqai-rebel': {
         'label': 'Rebel',
         'config': None,
-        'dbs': ['/freqtrade/tradesv3.dryrun.sqlite', '/freqtrade/user_data/tradesv3.dryrun.sqlite'],
+        'dbs': ['/freqtrade/user_data/tradesv3.freqai_rebel.dryrun.sqlite'],  # FIX-2026-06-06: bot-specific DB name, replaced generic tradesv3.dryrun.sqlite
     },
 }
 

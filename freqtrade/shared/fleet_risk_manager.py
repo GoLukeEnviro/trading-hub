@@ -100,7 +100,15 @@ class FleetRiskManager:
         self.portfolio_peak: Optional[float] = None
         self.current_equity: Optional[float] = None
         self.current_drawdown: float = 0.0
-        self.refresh_from_disk()
+        try:
+            self.state = self.refresh_from_disk()
+        except Exception as e:
+            logger.warning(
+                "FleetRiskManager: refresh_from_disk failed (%s: %s). "
+                "Falling back to default state.",
+                type(e).__name__, e,
+            )
+            self.state = self._default_state()
 
     # ---------------------------------------------------------------------
     # State primitives
@@ -766,7 +774,7 @@ class FleetRiskManager:
 
     def _check_direction_bias(self, pending_direction: str) -> Tuple[bool, str]:
         """Blockiert wenn >70% aller offenen Trades in eine Direction."""
-        state = self.state or {}
+        state = getattr(self, "state", None) or self._default_state()
         open_trades = [t for t in state.get("open_trades", []) if isinstance(t, dict)]
         if len(open_trades) < 2:
             return True, "OK — zu wenige Trades für Bias-Check"

@@ -3,7 +3,7 @@ import sqlite3
 import subprocess
 from datetime import datetime, timezone
 
-DB = '/var/lib/docker/volumes/freqai-rebel-data/_data/tradesv3.dryrun.sqlite'
+DB = '/home/hermes/projects/trading/freqtrade/bots/freqai-rebel/user_data/tradesv3.dryrun.sqlite'  # FIX-2026-06-06: switched from docker volume to bind-mount path
 
 def run(cmd):
     r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=20)

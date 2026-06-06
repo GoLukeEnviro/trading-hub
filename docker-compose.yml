@@ -7,6 +7,19 @@ services:
       SERVICES: 1
       NETWORKS: 1
       INFO: 1
+      EVENTS: 1
+      PING: 1
+      VERSION: 1
+      POST: 1
+      ALLOW_RESTARTS: 1
+      ALLOW_START: 1
+      ALLOW_STOP: 1
+      IMAGES: 1
+      VOLUMES: 1
+      EXEC: 0
+      BUILD: 0
+      COMMIT: 0
+      SECRETS: 0
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -85,9 +98,6 @@ services:
     - hermes-net
     restart: unless-stopped
     container_name: green-qdrant
-    command:
-    - sleep
-    - infinity
     logging:
       driver: json-file
       options:
@@ -117,15 +127,12 @@ services:
   green-mem0:
     image: hermes-mem0-local-api:stable
     networks:
-    - hermes-net
+    - trading_hermes-net
     restart: unless-stopped
     depends_on:
     - green-qdrant
     - green-ollama
     container_name: green-mem0
-    command:
-    - sleep
-    - infinity
     environment:
       QDRANT_HOST: green-qdrant
       QDRANT_PORT: 6333
@@ -187,7 +194,10 @@ services:
     networks:
     - hermes-net
   freqai-rebel:
-    image: freqtradeorg/freqtrade:stable
+    build:
+      context: ./freqtrade
+      dockerfile: Dockerfile.freqai-rebel
+    image: freqtrade-freqai-rebel:custom
     command: trade --config /freqtrade/user_data/config.json --strategy RebelLiquidation
     ports:
     - 127.0.0.1:8087:8080
@@ -233,12 +243,84 @@ services:
     - caddy_data:/data
     - caddy_config:/config
     restart: unless-stopped
+  polymarket-fadi:
+    image: node:20-slim
+    container_name: polymarket-fadi
+    entrypoint: ['/bin/bash', '/app/entrypoint.sh']
+    environment:
+      DRY_RUN: "true"
+    volumes:
+    - ./polymarket-fadi/repo:/app/repo
+    - ./polymarket-fadi/entrypoint.sh:/app/entrypoint.sh:ro
+    - polymarket-fadi-data:/data
+    ports:
+    - 127.0.0.1:9092:3001
+    restart: unless-stopped
+    networks:
+    - ki-fabrik
+  hermes-fleet-dashboard:
+    image: python:3.13-slim
+    container_name: hermes-fleet-dashboard
+    entrypoint: ['/bin/bash', '/app/init.sh']
+    environment:
+      WEATHERHERMES_URL: http://172.18.0.2:9090
+      BTC5M_URL: http://172.18.0.4:9090
+      POLYFADI_URL: http://172.18.0.6:3001
+      DATA_DIR: /data
+      PORT: "5000"
+    volumes:
+    - ./hermes-fleet-dashboard:/app:ro
+    - weatherhermes-data:/weatherhermes-data:ro
+    - fleet-dashboard-data:/data
+    ports:
+    - 127.0.0.1:9093:5000
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+    - ki-fabrik
+  weatherhermes:
+    image: weatherhermes:latest
+    container_name: weatherhermes
+    entrypoint: ['/bin/bash', '/data/entrypoint.sh']
+    command:
+    - all
+    environment:
+      WEATHERBOT_DATA: /data
+      VISUAL_CROSSING_API_KEY: ${VISUAL_CROSSING_API_KEY:-}
+    env_file:
+    - /opt/data/profiles/weatherbot/.env
+    volumes:
+    - weatherhermes-data:/data
+    - ./weatherhermes_persistent/weatherbot_master/self_improve.py:/app/weatherbot/self_improve.py:ro
+    - ./weatherhermes_persistent/weatherbot_master/conservative/self_improve.py:/app/weatherbot/conservative/self_improve.py:ro
+    - ./weatherhermes_persistent/weatherbot_master/aggressive/self_improve.py:/app/weatherbot/aggressive/self_improve.py:ro
+    - ./weatherhermes_persistent/weatherbot_master/balanced/self_improve.py:/app/weatherbot/balanced/self_improve.py:ro
+    ports:
+    - 127.0.0.1:9090:9090
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:9090/api/health || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+    - ki-fabrik
 networks:
   hermes-net:
     driver: bridge
   proxy-net:
     driver: bridge
     internal: true
+  ki-fabrik:
+    external: true
 volumes:
   green-qdrant-data:
     external: true
@@ -249,4 +331,10 @@ volumes:
   caddy_data:
     external: true
   caddy_config:
+    external: true
+  weatherhermes-data:
+    external: true
+  fleet-dashboard-data:
+    external: true
+  polymarket-fadi-data:
     external: true

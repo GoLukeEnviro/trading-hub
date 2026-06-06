@@ -45,7 +45,7 @@ BOTS = {
     "freqai-rebel": {
         "bot_dir": None,  # Docker volume: freqai-rebel-data
         "port": 8087,
-        "db": "tradesv3.dryrun.sqlite",
+        "db": "tradesv3.freqai_rebel.dryrun.sqlite",  # FIX-2026-06-06: bot-specific DB name
         "config": "/freqtrade/user_data/config.json",
         "network": "freqai-rebel-net",
     },

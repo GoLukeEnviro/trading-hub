@@ -46,8 +46,7 @@ BOT_SPECS: dict[str, dict[str, Any]] = {
         "container": "freqtrade-freqforge",
         "role": "candidate_core",
         "db_paths": [
-            "/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite",
-            "/freqtrade/tradesv3.dryrun.sqlite",
+            "/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite",  # FIX-2026-06-06: removed stale fallback
         ],
     },
     "regime-hybrid": {
@@ -72,8 +71,7 @@ BOT_SPECS: dict[str, dict[str, Any]] = {
         "container": "freqai-rebel",
         "role": "ml_high_uncertainty",
         "db_paths": [
-            "/freqtrade/tradesv3.dryrun.sqlite",
-            "/freqtrade/user_data/tradesv3.dryrun.sqlite",
+            "/freqtrade/user_data/tradesv3.freqai_rebel.dryrun.sqlite",  # FIX-2026-06-06: bot-specific
         ],
     },
 }

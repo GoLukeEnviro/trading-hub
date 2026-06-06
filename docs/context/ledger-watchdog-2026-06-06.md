@@ -1,4 +1,4 @@
-# Ledger Integrity Watchdog Run — 2026-06-05 2026-06-05T23-42-34
+# Ledger Integrity Watchdog Run — 2026-06-06 2026-06-06T02-13-36
 
 ## Ergebnis
 
@@ -12,7 +12,7 @@
 
 - Idempotent: kein neuer Audit-Eintrag (gleiche Findings wie letzter Run)
 - Canonical Status aktualisiert (JSON + MD + current-op-state)
-- Report aktualisiert: docs/context/ledger-watchdog-2026-06-05.md
+- Report aktualisiert: docs/context/ledger-watchdog-2026-06-06.md
 
 ## Daten-Snapshot
 
@@ -34,7 +34,7 @@ Tier-2: ledger-collector needs source_key for missing bot(s): freqai-rebel
 - Begründung: fehlende ledger-Key(s) verzerren aggregierte Equity 
 
 ## Meta
-- Run timestamp: 2026-06-05T23:42:34.856320+00:00
+- Run timestamp: 2026-06-06T02:13:36.895342+00:00
 - Fingerprint: {"dd_exceeds": false, "dd_value": 0.00044, "live_ledger_delta": 973.88, "missing": ["freqai-rebel"]}
 - Log: /opt/data/profiles/orchestrator/logs/ledger_integrity_watchdog.log
 - State: /opt/data/profiles/orchestrator/state/ledger_integrity_watchdog_state.json
