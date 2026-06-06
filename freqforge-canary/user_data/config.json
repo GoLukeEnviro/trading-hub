@@ -79,5 +79,9 @@
         "process_throttle_secs": 5
     },
     "db_url": "sqlite:////freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite",
-    "user_data_dir": "/freqtrade/user_data"
+    "user_data_dir": "/freqtrade/user_data",
+    "trailing_stop": true,
+    "trailing_stop_positive": 0.02,
+    "trailing_stop_positive_offset": 0.03,
+    "trailing_only_offset_is_reached": true
 }
