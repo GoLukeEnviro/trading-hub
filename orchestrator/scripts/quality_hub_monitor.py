@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Quality Hub Monitor v4.6
+Quality Hub Monitor v4.7
 
 Reliable script-backed replacement for the former LLM job.
 Writes a fuller Markdown audit to orchestrator/logs/quality-hub-report.md
@@ -22,26 +22,29 @@ CRON_JSON = Path('/opt/data/profiles/orchestrator/cron/jobs.json')
 SIGNAL_PATH = BASE / 'ai-hedge-fund-crypto/output/hermes_signal.json'
 DRAWDOWN_PATH = BASE / 'orchestrator/state/drawdown_state.json'
 
+# DOCKER_HOST override — docker-proxy blocks exec calls
+_DOCKER_HOST = "unix:///var/run/docker.sock"
+
 BOTS = {
-    'freqtrade-freqforge': {
+    'trading-freqtrade-freqforge-1': {
         'label': 'FreqForge',
         'config': BASE / 'freqforge/config/config_freqforge_dryrun.json',
-        'dbs': ['/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite', '/freqtrade/tradesv3.dryrun.sqlite'],
+        'dbs': ['/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite'],  # FIX-2026-06-06: removed stale fallback /freqtrade/tradesv3.dryrun.sqlite
     },
-    'freqtrade-freqforge-canary': {
+    'trading-freqtrade-freqforge-canary-1': {
         'label': 'Canary',
         'config': BASE / 'freqforge-canary/config/config_canary_dryrun.json',
         'dbs': ['/freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite'],
     },
-    'freqtrade-regime-hybrid': {
+    'trading-freqtrade-regime-hybrid-1': {
         'label': 'Regime-Hybrid',
         'config': BASE / 'freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json',
         'dbs': ['/freqtrade/user_data/tradesv3.regime_hybrid.dryrun.sqlite'],
     },
-    'freqai-rebel': {
+    'trading-freqai-rebel-1': {
         'label': 'Rebel',
         'config': None,
-        'dbs': ['/freqtrade/tradesv3.dryrun.sqlite', '/freqtrade/user_data/tradesv3.dryrun.sqlite'],
+        'dbs': ['/freqtrade/user_data/tradesv3.freqai_rebel.dryrun.sqlite'],  # FIX-2026-06-06: bot-specific DB name, replaced generic tradesv3.dryrun.sqlite
     },
 }
 
@@ -59,7 +62,8 @@ def load_json(path):
 
 
 def run(cmd, timeout=20):
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                           env={**os.environ, "DOCKER_HOST": _DOCKER_HOST})
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
 
@@ -98,7 +102,7 @@ def bot_open_count(container, db_paths):
 
 def read_rebel_config_value(key):
     rc, out, _ = run([
-        'docker', 'exec', 'freqai-rebel', 'python3', '-c',
+        'docker', 'exec', 'trading-freqai-rebel-1', 'python3', '-c',
         f"import json; c=json.load(open('/freqtrade/user_data/config.json')); print(c.get({key!r}, ''))"
     ], timeout=20)
     return out.strip() if rc == 0 else ''

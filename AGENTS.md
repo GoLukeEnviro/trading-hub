@@ -77,13 +77,13 @@ snapshot and `docs/context/` for append-only historical reports.
 
 | Bot | Container | Port | Strategy | Mode |
 |-----|-----------|------|----------|------|
-| FreqForge | `freqtrade-freqforge` | 8086 | `FreqForge_Override` | dry-run |
-| Regime-Hybrid | `freqtrade-regime-hybrid` | 8085 | `RegimeSwitchingHybrid_v7_v04_Integration` | dry-run |
-| FreqForge-Canary | `freqtrade-freqforge-canary` | 8081 | `FreqForge_Override` | dry-run |
-| FreqAI-Rebel | `freqai-rebel` | 8087 | `RebelLiquidation + RebelXGBoostClassifier` | dry-run |
+| FreqForge | `trading-freqtrade-freqforge-1` | 8086 | `FreqForge_Override` | dry-run |
+| Regime-Hybrid | `trading-freqtrade-regime-hybrid-1` | 8085 | `RegimeSwitchingHybrid_v7_v04_Integration` | dry-run |
+| FreqForge-Canary | `trading-freqtrade-freqforge-canary-1` | 8081 | `FreqForge_Override` | dry-run |
+| FreqAI-Rebel | `trading-freqai-rebel-1` | 8087 | `RebelLiquidation + RebelXGBoostClassifier` | dry-run |
 | Momentum | — | — | DECOMMISSIONED | — |
 | MVS | — | — | NOT_DEPLOYED | — |
-| Webserver | `freqtrade-webserver` | — | UI only | — |
+| Webserver | `trading-freqtrade-webserver-1` | — | UI only | — |
 
 ### Decommissioned / historical
 

@@ -29,18 +29,18 @@ PROJECT_STATE = Path("/home/hermes/projects/trading/orchestrator/state")
 ANCHOR_FILE = OBS_ROOT / "T0_anchor.txt"
 
 BOTS = [
-    ("freqtrade-freqforge", "/freqtrade/config/config_freqforge_dryrun.json"),
-    ("freqtrade-freqforge-canary", "/freqtrade/config/config_canary_dryrun.json"),
-    ("freqtrade-regime-hybrid", "/freqtrade/config/config_regime_hybrid_dryrun.json"),
-    ("freqai-rebel", "/freqtrade/user_data/config.json"),
+    ("trading-freqtrade-freqforge-1", "/freqtrade/config/config_freqforge_dryrun.json"),
+    ("trading-freqtrade-freqforge-canary-1", "/freqtrade/config/config_canary_dryrun.json"),
+    ("trading-freqtrade-regime-hybrid-1", "/freqtrade/config/config_regime_hybrid_dryrun.json"),
+    ("trading-freqai-rebel-1", "/freqtrade/user_data/config.json"),
 ]
 
 CONTAINERS = [
     "hermes-green", "trading-guardian",
     "green-mem0", "green-ollama", "green-qdrant",
-    "ai-hedge-fund-crypto",
-    "freqtrade-freqforge", "freqtrade-freqforge-canary",
-    "freqtrade-regime-hybrid", "freqai-rebel", "freqtrade-webserver",
+    "trading-ai-hedge-fund-1",
+    "trading-freqtrade-freqforge-1", "trading-freqtrade-freqforge-canary-1",
+    "trading-freqtrade-regime-hybrid-1", "trading-freqai-rebel-1", "trading-freqtrade-webserver-1",
 ]
 
 
@@ -193,7 +193,7 @@ def check_bots_dry_run():
 
 def check_signal_freshness():
     code, out, err = run([
-        "docker", "exec", "ai-hedge-fund-crypto", "python3", "-c",
+        "docker", "exec", "trading-ai-hedge-fund-1", "python3", "-c",
         "import json, time, os; p='/app/output/hermes_signal.json';\n"
         "import os.path\n"
         "if os.path.exists(p):\n"

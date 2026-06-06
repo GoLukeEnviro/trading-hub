@@ -3,7 +3,7 @@ import sqlite3
 import subprocess
 from datetime import datetime, timezone
 
-DB = '/var/lib/docker/volumes/freqai-rebel-data/_data/tradesv3.dryrun.sqlite'
+DB = '/home/hermes/projects/trading/freqtrade/bots/freqai-rebel/user_data/tradesv3.dryrun.sqlite'  # FIX-2026-06-06: switched from docker volume to bind-mount path
 
 def run(cmd):
     r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=20)
@@ -18,7 +18,7 @@ except Exception:
     count = -1
     open_count = -1
 
-logs = run("docker logs freqai-rebel --since 40m 2>&1 | grep -E 'Done training|inferencing pairlist|Bot heartbeat|Entering|Order|buy|sell' | tail -12")
+logs = run("docker logs trading-freqai-rebel-1 --since 40m 2>&1 | grep -E 'Done training|inferencing pairlist|Bot heartbeat|Entering|Order|buy|sell' | tail -12")
 now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
 
 if count > 0:

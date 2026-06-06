@@ -268,28 +268,28 @@ def cleanup_orphan_artifacts():
     return removed
 
 KNOWN_CONTAINERS = {
-    "freqtrade-freqforge", "freqtrade-regime-hybrid",
+    "trading-freqtrade-freqforge-1", "trading-freqtrade-regime-hybrid-1",
     # "freqtrade-momentum" intentionally not deployed — removed 2026-05-24
-    "freqtrade-freqforge-canary", "freqai-rebel", "freqtrade-webserver",
-    "ai-hedge-fund-crypto", "trading-guardian", "caddy",
+    "trading-freqtrade-freqforge-canary-1", "trading-freqai-rebel-1", "trading-freqtrade-webserver-1",
+    "trading-ai-hedge-fund-1", "trading-guardian", "trading-caddy-1",
     "hermes-green", "green-mem0", "green-ollama", "green-qdrant",
     "claude-worker",
 }
 FLEET_BOTS = {
-    "freqtrade-freqforge": {
-        "dbs": ["/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite", "/freqtrade/tradesv3.dryrun.sqlite"],
+    "trading-freqtrade-freqforge-1": {
+        "dbs": ["/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite"],  # FIX-2026-06-06: removed stale fallback
         "host_dbs": ["/home/hermes/projects/trading/freqforge/user_data/tradesv3.freqforge.dryrun.sqlite"],
         "label": "FreqForge", "config_host": "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json", "config_container": "/freqtrade/config/config_freqforge_dryrun.json"},
-    "freqtrade-regime-hybrid": {
+    "trading-freqtrade-regime-hybrid-1": {
         "dbs": ["/freqtrade/user_data/tradesv3.regime_hybrid.dryrun.sqlite"],
         "host_dbs": ["/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/tradesv3.regime_hybrid.dryrun.sqlite"],
         "label": "Regime-Hybrid", "config_host": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json", "config_container": "/freqtrade/config/config_regime_hybrid_dryrun.json"},
-    "freqtrade-freqforge-canary": {
+    "trading-freqtrade-freqforge-canary-1": {
         "dbs": ["/freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite"],
         "host_dbs": ["/home/hermes/projects/trading/freqforge-canary/user_data/tradesv3.freqforge_canary.dryrun.sqlite"],
         "label": "Canary", "config_host": "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json", "config_container": "/freqtrade/config/config_canary_dryrun.json"},
-    "freqai-rebel": {
-        "dbs": ["/freqtrade/tradesv3.dryrun.sqlite", "/freqtrade/user_data/tradesv3.dryrun.sqlite"],
+    "trading-freqai-rebel-1": {
+        "dbs": ["/freqtrade/user_data/tradesv3.freqai_rebel.dryrun.sqlite"],  # FIX-2026-06-06: bot-specific DB name
         "host_dbs": [],
         "label": "Rebel", "config_host": None, "config_container": "/freqtrade/user_data/config.json"},
 }

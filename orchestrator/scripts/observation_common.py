@@ -28,12 +28,12 @@ LOCK_METADATA_FILENAME = "lock.json"
 DEFAULT_EXPECTED_CONTAINERS = [
     "hermes-green",
     "trading-guardian",
-    "freqtrade-regime-hybrid",
-    "freqtrade-freqforge-canary",
-    "freqtrade-freqforge",
-    "freqtrade-webserver",
-    "ai-hedge-fund-crypto",
-    "freqai-rebel",
+    "trading-freqtrade-regime-hybrid-1",
+    "trading-freqtrade-freqforge-canary-1",
+    "trading-freqtrade-freqforge-1",
+    "trading-freqtrade-webserver-1",
+    "trading-ai-hedge-fund-1",
+    "trading-freqai-rebel-1",
 ]
 
 DEFAULT_EXPECTED_CRONJOBS = [

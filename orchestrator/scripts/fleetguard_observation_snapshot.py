@@ -72,7 +72,7 @@ for line in containers_raw.split("\n"):
 bots = {
     "freqtrade-rsi": {"db": "/freqtrade/tradesv3.dryrun.sqlite", "container": "freqtrade-rsi"},
     "freqtrade-momentum": {"db": "/freqtrade/tradesv3.dryrun.sqlite", "container": "freqtrade-momentum"},
-    "freqtrade-regime-hybrid": {"db": "/freqtrade/user_data/tradesv3.regime_hybrid.dryrun.sqlite", "container": "freqtrade-regime-hybrid"},
+    "trading-freqtrade-regime-hybrid-1": {"db": "/freqtrade/user_data/tradesv3.regime_hybrid.dryrun.sqlite", "container": "trading-freqtrade-regime-hybrid-1"},
 }
 
 snapshot = {
@@ -86,7 +86,7 @@ for name, info in bots.items():
 
 # FleetGuard logs — check for REJECT messages
 fg_logs = {}
-for container in ["freqtrade-momentum", "freqtrade-regime-hybrid"]:
+for container in ["freqtrade-momentum", "trading-freqtrade-regime-hybrid-1"]:
     logs = run(f"docker logs --since 4h {container} 2>&1 | grep -i FleetGuard || echo NONE")
     fg_logs[container] = logs
 snapshot["fleetguard_logs"] = fg_logs
@@ -97,7 +97,7 @@ snapshot["rsi_new_entries"] = rsi_new
 
 # Errors
 errors = {}
-for container in ["freqtrade-rsi", "freqtrade-momentum", "freqtrade-regime-hybrid"]:
+for container in ["freqtrade-rsi", "freqtrade-momentum", "trading-freqtrade-regime-hybrid-1"]:
     errs = run(f"docker logs --since 4h {container} 2>&1 | grep -icE 'traceback|error|exception' || echo 0")
     errors[container] = errs
 snapshot["errors"] = errors

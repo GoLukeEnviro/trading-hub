@@ -1,6 +1,8 @@
 #!/bin/bash
-# container_watchdog.sh v3 — Container health check with Docker-aware fallback
+# container_watchdog.sh v4 — Container health check with Docker-aware fallback
 # Runs every 30min via Hermes cron. Only outputs when issues found (silent = OK).
+# v4 (2026-06-06): Fixed container names to match actual docker-compose output,
+#   added DOCKER_HOST=unix:///var/run/docker.sock to bypass proxy (EXEC=0).
 # v3: removed freqtrade-momentum (intentionally not deployed), reduced from 5min to 30min.
 #
 # Detection strategy:
@@ -16,17 +18,17 @@ set -euo pipefail
 LOG="/opt/data/profiles/orchestrator/logs/watchdog.log"
 STATE="/opt/data/profiles/orchestrator/state/container_watchdog_state.json"
 
-TRADING_CONTAINERS="freqtrade-freqforge freqtrade-freqforge-canary freqtrade-regime-hybrid freqai-rebel ai-hedge-fund-crypto"
+TRADING_CONTAINERS="trading-freqtrade-freqforge-1 trading-freqtrade-freqforge-canary-1 trading-freqtrade-regime-hybrid-1 trading-freqai-rebel-1 trading-ai-hedge-fund-1"
 
 # Map containers to probe files for file-based fallback
 # These are files updated by the trading pipeline or bots themselves
 declare -A BOT_PROBES
-BOT_PROBES["freqtrade-freqforge"]="/home/hermes/projects/trading/freqtrade/shared/primo_signal_state.json"
-BOT_PROBES["freqtrade-freqforge-canary"]="/home/hermes/projects/trading/freqtrade/shared/primo_signal_state.json"
-BOT_PROBES["freqtrade-regime-hybrid"]="/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json"
+BOT_PROBES["trading-freqtrade-freqforge-1"]="/home/hermes/projects/trading/freqtrade/shared/primo_signal_state.json"
+BOT_PROBES["trading-freqtrade-freqforge-canary-1"]="/home/hermes/projects/trading/freqtrade/shared/primo_signal_state.json"
+BOT_PROBES["trading-freqtrade-regime-hybrid-1"]="/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json"
 # freqtrade-momentum intentionally not deployed — removed 2026-05-24
-BOT_PROBES["freqai-rebel"]="/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json"
-BOT_PROBES["ai-hedge-fund-crypto"]="/home/hermes/projects/trading/ai-hedge-fund-crypto/output/latest/hermes_signal.json"
+BOT_PROBES["trading-freqai-rebel-1"]="/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json"
+BOT_PROBES["trading-ai-hedge-fund-1"]="/home/hermes/projects/trading/ai-hedge-fund-crypto/output/latest/hermes_signal.json"
 
 STALE_THRESHOLD_MIN=30  # Probe file older than this = possibly down
 
@@ -36,6 +38,8 @@ all_status=""
 mode="unknown"
 
 # ── Detect Docker availability ──────────────────────────────────
+# Bypass Docker proxy (EXEC=0) via direct unix socket
+export DOCKER_HOST="unix:///var/run/docker.sock"
 has_docker=false
 if [ -S /var/run/docker.sock ] && command -v docker &>/dev/null; then
     if docker info &>/dev/null; then
@@ -82,13 +86,13 @@ for c in $TRADING_CONTAINERS; do
     all_status="${all_status},\"${c}\":{\"status\":\"${status}\",\"started_at\":\"${started}\"}"
 done
 
-# Write state file (always)
+# Write state file (always) — use printf to avoid control chars from echo
 all_status="${all_status#,}"
-echo "{\"timestamp\":\"${now}\",\"mode\":\"${mode}\",\"containers\":{${all_status}}}" > "$STATE"
+printf '{"timestamp":"%s","mode":"%s","containers":{%s}}\n' "$now" "$mode" "$all_status" > "$STATE"
 
 if [ -n "$issues" ]; then
     echo -e "🔍 Container Issues detected (${now}) [mode: ${mode}]:\n${issues}"
-    echo "[${now}] ISSUES [${mode}]: ${issues}" >> "$LOG"
+    echo "[$now] ISSUES [${mode}]: ${issues}" >> "$LOG"
     exit 0  # exit 0 so stdout gets delivered; content is the alert
 fi
 
