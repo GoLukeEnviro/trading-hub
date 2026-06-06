@@ -1,16 +1,16 @@
 # Current Operational State
 
-Generated at: 2026-06-06T02:13:36.896080+00:00
+Generated at: 2026-06-06T02:45:00+00:00
 
 Canonical status artifact:
 - /home/hermes/projects/trading/docs/state/canonical-trading-status.md
 - /home/hermes/projects/trading/orchestrator/reports/canonical_trading_status_latest.json
 
 Overall verdict: WARNING
-Runtime health: GREEN
-Reporting health: WARNING
-Live risk source: STALE / UNKNOWN (drawdown_state is not verified current)
-Ledger risk source: WARNING (current secondary ledger; stale backtest source REMOVED 2026-06-05)
+Runtime health: GREEN (all containers up)
+Reporting health: WARNING (container naming drift in monitoring scripts)
+Live risk source: STALE / UNKNOWN (drawdown_state not verified current)
+Ledger risk source: WARNING
 Paper book: SANDBOX_ONLY
 
 ## At a Glance
@@ -18,69 +18,63 @@ Paper book: SANDBOX_ONLY
 - Active trading bots: 4
 - Dry-run only: yes
 - Live trading enabled: no
-- Signal core: 2026-06-05T09:47:04.312649+00:00
-- Signal bridge: 2026-06-05T09:50:29+00:00 (reported age: 3.1 min)
-- RiskGuard state: 2026-06-05T12:01:58.484167+00:00 (signal age: 15.1 min)
-- Rebel classification: VISIBILITY_GAP
+- Signal core: 2026-06-06T02:31:10+00:00 (deepseek-v4-pro, fresh)
+- Signal bridge: 2026-06-06T02:35:37+00:00 (processed, age: 4.4 min)
+- RiskGuard state: 2026-06-06T02:35:37+00:00 (all SHORT, confidence 0.85)
+- All containers: UP
 
 ## Active Fleet
 
-| Bot | Container | Verdict | Classification | Dry-run | Strategy match | State file |
-|-----|-----------|---------|----------------|---------|----------------|------------|
-| freqforge | freqtrade-freqforge | GREEN | LIVE_RUNTIME | yes | True | True |
-| regime-hybrid | freqtrade-regime-hybrid | GREEN | LIVE_RUNTIME | yes | True | True |
-| freqforge-canary | freqtrade-freqforge-canary | GREEN | LIVE_RUNTIME | yes | True | True |
-| freqai-rebel | freqai-rebel | YELLOW | VISIBILITY_GAP | yes | True | False |
+| Bot | Container | Port | DB Name | Status | PnL | Notes |
+|-----|-----------|------|---------|--------|-----|-------|
+| FreqForge | trading-freqtrade-freqforge-1 | 8086 | tradesv3.freqforge.dryrun.sqlite | Nominal | +23.17 USDT | 63 Trades (1 open), WR 77.8% (72h) |
+| Canary | trading-freqtrade-freqforge-canary-1 | 8081 | tradesv3.freqforge_canary.dryrun.sqlite | Nominal | +7.40 USDT | 44 Trades |
+| Regime-Hybrid | trading-freqtrade-regime-hybrid-1 | 8085 | tradesv3.regime_hybrid.dryrun.sqlite | Watch | -6.18 USDT | 45 Trades |
+| FreqAI-Rebel | trading-freqai-rebel-1 | 8087 | tradesv3.freqai_rebel.dryrun.sqlite | Trainingsphase | 0.00 USDT | Neu, 0 Trades |
+
+## Container Naming — WARNING: Drift detected
+
+The docker-compose project prefix (`trading-`) and suffix (`-1`) changed from simple names.
+All monitoring scripts reference OLD container names → `docker exec` fails silently:
+
+| Script | Old Name (broken) | Actual Name | Impact |
+|--------|-------------------|-------------|--------|
+| freqtrade_monitor.py | freqtrade-regime-hybrid | trading-freqtrade-regime-hybrid-1 | All 4 bots show ERROR |
+| quality_hub_monitor.py | freqai-rebel | trading-freqai-rebel-1 | Rebel shows dry_run=F, VISIBILITY_GAP |
+| external_cron_guardian.log | ai-hedge-fund-crypto | trading-ai-hedge-fund-1 | False CONTAINER_DOWN alerts |
+
+→ Fix required: Update BOTS dicts in both monitor scripts.
 
 ## Source Freshness
 
 | Source | Timestamp | Freshness |
 |--------|-----------|-----------|
-| Signal Core | 2026-06-05T09:47:04.312649+00:00 | fresh |
-| Signal Bridge | 2026-06-05T09:50:29+00:00 | reported_age_minutes=3.1 |
-| RiskGuard State | 2026-06-05T12:01:58.484167+00:00 | reported_signal_age_minutes=15.1 |
-| RiskGuard Health | 2026-06-05T12:01:58.485273+00:00 | fresh |
-| Drawdown State | 2026-06-01T04:01:25.183014+00:00 | STALE (4d old, not verified current) |
-| Ledger Risk | 2026-06-05T12:07:13.705954+00:00 | current (stale backtest source removed) |
+| Signal Core | 2026-06-06T02:31:10+00:00 | fresh (4.4 min) |
+| Trading Pipeline | 2026-06-06T02:35:37+00:00 | processed |
+| RiskGuard State | 2026-06-06T02:35:37+00:00 | all ACCEPTED SHORT, conf 0.85 |
+| Drawdown State | 2026-06-01T04:01:25+00:00 | STALE |
+| Ledger Risk | 2026-06-05T12:07:13+00:00 | current |
 
-## Risk Separation
+## AI-Override Metrics (72h FreqForge Test)
 
-| Scope | Timestamp | Status | Notes |
-|-------|-----------|--------|-------|
-| LIVE_RISK | 2026-06-01T04:01:25.183014+00:00 | STALE | Do not use until refreshed. 4d old, equity not verifiable. |
-| LEDGER_RISK | 2026-06-05T12:07:13.705954+00:00 | WARNING | current secondary ledger; regime_hybrid_backtest source REMOVED; equity/drawdown recalculated. **INCOMPLETE**: rebel source MISSING (1061.62 USDT gap, see reconciliation audit 2026-06-05). |
+- Total PnL: +13.21 USDT | 9 Trades | WR: 77.8%
+- Profit Factor: 5.28
+- AI-Override-Anteil: 88.9% | Override-WR: 75%
+- SOL: 4/4 Wins, +10.19 USDT ← best channel
+- BTC: 1/2 Wins, -0.60 USDT ← weakest channel
 
-## Risk Note: LEDGER drawdown threshold proximity
+## Open Issues (Stand 2026-06-06)
 
-- LEDGER_RISK current_drawdown = 3.42%
-- `fleet_risk_auto_params.py` R2 threshold = 3.0% (halve all stakes)
-- Status: LEDGER view now sits above the R2 trigger threshold.
-  This is a WATCH flag only — the auto-param-adjuster reads LIVE_RISK
-  (drawdown_state) for its rules, not LEDGER_RISK. Confirm during next
-  fleet_risk_auto_params audit.
-
-## Legacy / Non-Canonical Surfaces
-
-| Path | Status | Why |
-|------|--------|-----|
-| /home/hermes/projects/trading/docs/state/autopilot/latest.md | HISTORICAL | Older autopilot snapshot; not canonical. |
-| /home/hermes/projects/trading/orchestrator/reports/fleet_health_latest.json | NON-CANONICAL | Diagnostic fleet report. |
-| /home/hermes/projects/trading/orchestrator/reports/multicycle_validation_latest.json | NON-CANONICAL | Legacy validator output. |
-
-## Decommissioned Inventory
-
-| Bot | Artifact Present | Status | Path | Note |
-|-----|------------------|--------|------|------|
-| rsi | no | DECOMMISSIONED | /home/hermes/projects/trading/freqtrade/bots/rsi/user_data/primo_signal_state.json | No current state artifact found; excluded from live fleet. |
-| momentum | yes | DECOMMISSIONED | /home/hermes/projects/trading/freqtrade/bots/momentum/user_data/primo_signal_state.json | Historical state artifact still present; excluded from live fleet. |
+1. **P2**: Container naming drift in monitor scripts (freqtrade_monitor.py, quality_hub_monitor.py)
+2. **P2**: FreqForge/Canary Config hat kein trailing_stop → 33% TS-Exit-Rate (Vorschlag erstellt)
+3. **P3**: BTC 50% WR in AI-Override → per-pair confidence threshold vorgeschlagen
+4. **P3**: Regime-Hybrid -6.18 USDT durch SHORT-Bias (Signal blockiert longs)
+5. **P4**: Root-owned 0-byte primo_signal_state.json in freqai-rebel volume (cleanup pending, kein sudo)
 
 ## Notes
 
-
-- ledger-integrity-watchdog last run: 2026-06-05T12:44:46.327173+00:00 — ISSUES: freqai-rebel | drawdown > R2.
-- Current live risk truth is not drawdown_state until it is refreshed and verified.
-- Bitget MCP paper outputs are synthetic and must never be used for live decisions.
-- Rebel remains a visibility gap; it is running and dry_run=true, but its audit surface is incomplete.
-- Regime-hybrid-backtest stale source removal recorded in
-  `docs/context/2026-06-05-regime-hybrid-backtest-source-removal.md` and
-  embedded in `fleet_risk_state.json:_audit[0]`.
+- ledger-integrity-watchdog last run: 2026-06-05T12:44:46
+- Drawdown_state is stale since 2026-06-01 — needs refresh
+- Bitget MCP paper outputs are synthetic
+- Regime-Hybrid v0.4 Integration ist ein Veto-Modell (kein Force-Entry)
+- FreqAI-Rebel läuft (dry_run=true) mit korrektem DB-Path (FIX-2026-06-06)
