@@ -21,7 +21,7 @@ MIN_TRADES_FOR_KELLY = 15
 BOTS = {
     "freqforge": {
         "name": "FreqForge MAIN",
-        "container": "freqtrade-freqforge",
+        "container": "trading-freqtrade-freqforge-1",
         "db_path": "/home/hermes/projects/trading/freqforge/user_data/tradesv3.freqforge.dryrun.sqlite",
         "current_weight": 0.40,
         "max_open_trades_limit": 5,
@@ -29,7 +29,7 @@ BOTS = {
     },
     "canary": {
         "name": "FreqForge Canary",
-        "container": "freqtrade-freqforge-canary",
+        "container": "trading-freqtrade-freqforge-canary-1",
         "db_path": "/home/hermes/projects/trading/freqforge-canary/user_data/tradesv3.freqforge_canary.dryrun.sqlite",
         "current_weight": 0.25,
         "max_open_trades_limit": 3,
@@ -37,7 +37,7 @@ BOTS = {
     },
     "regime_hybrid": {
         "name": "Regime-Hybrid",
-        "container": "freqtrade-regime-hybrid",
+        "container": "trading-freqtrade-regime-hybrid-1",
         "db_path": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/tradesv3.regime_hybrid.dryrun.sqlite",
         "current_weight": 0.20,
         "max_open_trades_limit": 3,
@@ -53,7 +53,7 @@ BOTS = {
     },
     "rebel": {
         "name": "FreqAI-rebel",
-        "container": "freqai-rebel",
+        "container": "trading-freqai-rebel-1",
         "db_path": None,  # Uses Docker volume, not bind-mounted
         "current_weight": 0.05,
         "max_open_trades_limit": 3,

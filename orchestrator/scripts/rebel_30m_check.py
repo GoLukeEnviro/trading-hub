@@ -18,7 +18,7 @@ except Exception:
     count = -1
     open_count = -1
 
-logs = run("docker logs freqai-rebel --since 40m 2>&1 | grep -E 'Done training|inferencing pairlist|Bot heartbeat|Entering|Order|buy|sell' | tail -12")
+logs = run("docker logs trading-freqai-rebel-1 --since 40m 2>&1 | grep -E 'Done training|inferencing pairlist|Bot heartbeat|Entering|Order|buy|sell' | tail -12")
 now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
 
 if count > 0:

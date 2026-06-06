@@ -123,7 +123,7 @@ def max_open_summary():
             continue
         items.append(f"{label}={cfg.get('max_open_trades', '?')}")
     rc, out, _ = run([
-        "docker", "exec", "freqai-rebel", "python3", "-c",
+        "docker", "exec", "trading-freqai-rebel-1", "python3", "-c",
         "import json; c=json.load(open('/freqtrade/user_data/config.json')); print(c.get('max_open_trades','?'))"
     ], timeout=20)
     items.append(f"Rebel={out if rc == 0 and out else '?'}")
@@ -139,7 +139,7 @@ def dry_run_summary():
         statuses.append(f"{label}={'T' if state else 'F'}")
         ok = ok and state
     rc, out, _ = run([
-        "docker", "exec", "freqai-rebel", "python3", "-c",
+        "docker", "exec", "trading-freqai-rebel-1", "python3", "-c",
         "import json; c=json.load(open('/freqtrade/user_data/config.json')); print(str(bool(c.get('dry_run') is True)))"
     ], timeout=20)
     rebel_ok = out.strip().lower() == "true"

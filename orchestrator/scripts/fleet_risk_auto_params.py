@@ -34,13 +34,13 @@ SIGNAL_CONFIDENCE_FILE = Path(BASE) / "orchestrator/state/signal_confidence_adju
 
 # Baseline configs
 BASELINE_CONFIGS = {
-    "freqtrade-freqforge": {"mot": 5, "stake": 100, "config_host": "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json",
+    "trading-freqtrade-freqforge-1": {"mot": 5, "stake": 100, "config_host": "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json",
                             "config_container": "/freqtrade/config/config_freqforge_dryrun.json"},
-    "freqtrade-freqforge-canary": {"mot": 3, "stake": 50, "config_host": "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json",
+    "trading-freqtrade-freqforge-canary-1": {"mot": 3, "stake": 50, "config_host": "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json",
                                     "config_container": "/freqtrade/config/config_canary_dryrun.json"},
-    "freqtrade-regime-hybrid": {"mot": 5, "stake": 50, "config_host": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json",
+    "trading-freqtrade-regime-hybrid-1": {"mot": 5, "stake": 50, "config_host": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json",
                                  "config_container": "/freqtrade/config/config_regime_hybrid_dryrun.json"},
-    "freqai-rebel": {"mot": 2, "stake": 50, "config_host": None,
+    "trading-freqai-rebel-1": {"mot": 2, "stake": 50, "config_host": None,
                       "config_container": "/freqtrade/user_data/config.json"},
 }
 

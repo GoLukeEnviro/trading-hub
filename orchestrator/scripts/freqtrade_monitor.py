@@ -50,7 +50,7 @@ BOTS = {
         "port": 8087,
         "db": "tradesv3.freqai_rebel.dryrun.sqlite",  # FIX-2026-06-06: bot-specific DB name
         "config": "/freqtrade/user_data/config.json",
-        "network": "freqai-rebel-net",
+        "network": "trading-freqai-rebel-1-net",
     },
 }
 

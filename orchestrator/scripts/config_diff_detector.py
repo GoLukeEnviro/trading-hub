@@ -109,7 +109,7 @@ def check_bot_config(container: str, host_path: str | None, container_path: str,
             log(f"  {container}: HOST-ONLY (docker exec blocked, bind-mount assumed in sync)")
             result["drift"] = False
             return result
-        # No host path AND no container access (e.g. freqai-rebel with Docker volume)
+        # No host path AND no container access (e.g. trading-freqai-rebel-1 with Docker volume)
         if not host_path:
             log(f"  {container}: SKIP (no host path, docker exec blocked)")
             return result

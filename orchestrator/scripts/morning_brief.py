@@ -25,10 +25,10 @@ OUTPUT_FILE = STATE_DIR / "morning_brief.json"
 def get_fleet_pnl() -> tuple:
     """Get total PnL and best/worst bot from SQLite."""
     bots = [
-        ("freqtrade-freqforge", "/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite", "FreqForge"),
-        ("freqtrade-freqforge-canary", "/freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite", "Canary"),
-        ("freqtrade-regime-hybrid", "/freqtrade/user_data/tradesv3.regime_hybrid.dryrun.sqlite", "Regime-Hybrid"),
-        ("freqai-rebel", "/freqtrade/user_data/tradesv3.rebel.dryrun.sqlite", "Rebel"),
+        ("trading-freqtrade-freqforge-1", "/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite", "FreqForge"),
+        ("trading-freqtrade-freqforge-canary-1", "/freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite", "Canary"),
+        ("trading-freqtrade-regime-hybrid-1", "/freqtrade/user_data/tradesv3.regime_hybrid.dryrun.sqlite", "Regime-Hybrid"),
+        ("trading-freqai-rebel-1", "/freqtrade/user_data/tradesv3.rebel.dryrun.sqlite", "Rebel"),
     ]
     results = {}
     for container, db_path, label in bots:
