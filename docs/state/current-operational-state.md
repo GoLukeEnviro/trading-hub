@@ -1,16 +1,15 @@
 # Current Operational State
 
-Generated at: 2026-06-06T02:45:00+00:00
+Generated at: 2026-06-06T02:55:00+00:00
 
 Canonical status artifact:
 - /home/hermes/projects/trading/docs/state/canonical-trading-status.md
 - /home/hermes/projects/trading/orchestrator/reports/canonical_trading_status_latest.json
 
-Overall verdict: WARNING
-Runtime health: GREEN (all containers up)
-Reporting health: WARNING (container naming drift in monitoring scripts)
-Live risk source: STALE / UNKNOWN (drawdown_state not verified current)
-Ledger risk source: WARNING
+Overall verdict: GREEN (WATCH: Regime-Hybrid -6.18)
+Runtime health: GREEN (all containers up, all monitors working)
+Reporting health: GREEN (naming drift fixed)
+Live risk source: STALE / UNKNOWN (drawdown_state not refreshed since 2026-06-01)
 Paper book: SANDBOX_ONLY
 
 ## At a Glance
@@ -19,62 +18,43 @@ Paper book: SANDBOX_ONLY
 - Dry-run only: yes
 - Live trading enabled: no
 - Signal core: 2026-06-06T02:31:10+00:00 (deepseek-v4-pro, fresh)
-- Signal bridge: 2026-06-06T02:35:37+00:00 (processed, age: 4.4 min)
-- RiskGuard state: 2026-06-06T02:35:37+00:00 (all SHORT, confidence 0.85)
-- All containers: UP
+- Trading Pipeline: 2026-06-06T02:35:37+00:00 (processed, age ~7 min)
+- All containers: UP (trading-*-1 naming convention)
+- Monitor scripts: Fixed (names + DOCKER_HOST + config paths)
 
 ## Active Fleet
 
-| Bot | Container | Port | DB Name | Status | PnL | Notes |
-|-----|-----------|------|---------|--------|-----|-------|
-| FreqForge | trading-freqtrade-freqforge-1 | 8086 | tradesv3.freqforge.dryrun.sqlite | Nominal | +23.17 USDT | 63 Trades (1 open), WR 77.8% (72h) |
-| Canary | trading-freqtrade-freqforge-canary-1 | 8081 | tradesv3.freqforge_canary.dryrun.sqlite | Nominal | +7.40 USDT | 44 Trades |
-| Regime-Hybrid | trading-freqtrade-regime-hybrid-1 | 8085 | tradesv3.regime_hybrid.dryrun.sqlite | Watch | -6.18 USDT | 45 Trades |
-| FreqAI-Rebel | trading-freqai-rebel-1 | 8087 | tradesv3.freqai_rebel.dryrun.sqlite | Trainingsphase | 0.00 USDT | Neu, 0 Trades |
+| Bot | Container | Trades | PnL | Winrate | PF | Open | Status |
+|-----|-----------|-------:|----:|-------:|---:|-----:|--------|
+| FreqForge | trading-freqtrade-freqforge-1 | 62 | +23.17 U | 85.5% | 1.66 | 1 | OK |
+| Canary | trading-freqtrade-freqforge-canary-1 | 44 | +7.40 U | 93.2% | 241.73 | 0 | OK |
+| Regime-Hybrid | trading-freqtrade-regime-hybrid-1 | 45 | -6.18 U | 77.8% | 0.61 | 0 | LOSS |
+| FreqAI-Rebel | trading-freqai-rebel-1 | 0 | 0.00 U | 0.0% | 0.00 | 0 | INFERENCE_ONLY |
 
-## Container Naming — WARNING: Drift detected
+## Changes Applied (2026-06-06)
 
-The docker-compose project prefix (`trading-`) and suffix (`-1`) changed from simple names.
-All monitoring scripts reference OLD container names → `docker exec` fails silently:
+### Task A — Container Naming Drift Fixed
+- freqtrade_monitor.py: names + DOCKER_HOST fix + config paths
+- quality_hub_monitor.py: names + DOCKER_HOST fix + rebel reference
+- observation_checkpoint.py: names in BOTS, CONTAINERS, docker exec
+- ai_hedge_signal_heartbeat.sh: container name fix
 
-| Script | Old Name (broken) | Actual Name | Impact |
-|--------|-------------------|-------------|--------|
-| freqtrade_monitor.py | freqtrade-regime-hybrid | trading-freqtrade-regime-hybrid-1 | All 4 bots show ERROR |
-| quality_hub_monitor.py | freqai-rebel | trading-freqai-rebel-1 | Rebel shows dry_run=F, VISIBILITY_GAP |
-| external_cron_guardian.log | ai-hedge-fund-crypto | trading-ai-hedge-fund-1 | False CONTAINER_DOWN alerts |
+### Task B — Trailing Stop Added (FreqForge + Canary)
+- Added trailing_stop: true, positive: 0.02, offset: 0.03, only_offset_is_reached: true
+- Prevents premature trailing (33% TS exit rate → expected reduction)
 
-→ Fix required: Update BOTS dicts in both monitor scripts.
+### Task C — Per-Pair BTC Confidence Override
+- Added `PAIR_CONFIDENCE_OVERRIDES = {"BTC/USDT:USDT": 0.85}`
+- BTC needs 0.85 vs default 0.65 (50% WR in 72h test)
 
-## Source Freshness
+### Task D — Runbook for Root-Owned File
+- docs/runbooks/fix-root-owned-primo-signal.md
 
-| Source | Timestamp | Freshness |
-|--------|-----------|-----------|
-| Signal Core | 2026-06-06T02:31:10+00:00 | fresh (4.4 min) |
-| Trading Pipeline | 2026-06-06T02:35:37+00:00 | processed |
-| RiskGuard State | 2026-06-06T02:35:37+00:00 | all ACCEPTED SHORT, conf 0.85 |
-| Drawdown State | 2026-06-01T04:01:25+00:00 | STALE |
-| Ledger Risk | 2026-06-05T12:07:13+00:00 | current |
+## Open Issues
 
-## AI-Override Metrics (72h FreqForge Test)
-
-- Total PnL: +13.21 USDT | 9 Trades | WR: 77.8%
-- Profit Factor: 5.28
-- AI-Override-Anteil: 88.9% | Override-WR: 75%
-- SOL: 4/4 Wins, +10.19 USDT ← best channel
-- BTC: 1/2 Wins, -0.60 USDT ← weakest channel
-
-## Open Issues (Stand 2026-06-06)
-
-1. **P2**: Container naming drift in monitor scripts (freqtrade_monitor.py, quality_hub_monitor.py)
-2. **P2**: FreqForge/Canary Config hat kein trailing_stop → 33% TS-Exit-Rate (Vorschlag erstellt)
-3. **P3**: BTC 50% WR in AI-Override → per-pair confidence threshold vorgeschlagen
-4. **P3**: Regime-Hybrid -6.18 USDT durch SHORT-Bias (Signal blockiert longs)
-5. **P4**: Root-owned 0-byte primo_signal_state.json in freqai-rebel volume (cleanup pending, kein sudo)
-
-## Notes
-
-- ledger-integrity-watchdog last run: 2026-06-05T12:44:46
-- Drawdown_state is stale since 2026-06-01 — needs refresh
-- Bitget MCP paper outputs are synthetic
-- Regime-Hybrid v0.4 Integration ist ein Veto-Modell (kein Force-Entry)
-- FreqAI-Rebel läuft (dry_run=true) mit korrektem DB-Path (FIX-2026-06-06)
+| Priority | Issue | Status |
+|----------|-------|--------|
+| P2 | Drawdown state stale since 2026-06-01 | Needs refresh |
+| P3 | Regime-Hybrid -6.18 USDT (SHORT bias blocks longs) | Watch |
+| P4 | Root-owned 0B primo_signal_state.json in rebel volume | Runbook exists, needs sudo |
+| P5 | FreqAI-Rebel training phase (0 trades) | Expected |
