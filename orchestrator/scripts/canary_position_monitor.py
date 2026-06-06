@@ -15,7 +15,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
-CANARY_CONTAINER = "freqtrade-freqforge-canary"
+CANARY_CONTAINER = "trading-freqtrade-freqforge-canary-1"
 CANARY_DB = "/freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite"
 
 # Thresholds

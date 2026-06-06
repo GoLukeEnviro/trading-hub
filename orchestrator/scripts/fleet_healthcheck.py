@@ -35,30 +35,30 @@ JSON_OUTPUT = REPORTS_DIR / "fleet_health_latest.json"
 MD_OUTPUT = REPORTS_DIR / "fleet_health_latest.md"
 
 # Decommissioned bots (rsi, momentum) removed 2026-06-05.
-# Active fleet: freqforge, regime-hybrid, freqforge-canary, freqai-rebel.
+# Active fleet: freqforge, regime-hybrid, freqforge-canary, trading-freqai-rebel-1.
 # Source: AGENTS.md, heartbeat_writer.py BOTS list, trading-fleet-operations skill.
 
 BOT_CONFIGS = {
     "freqforge": {
-        "container": "freqtrade-freqforge",
+        "container": "trading-freqtrade-freqforge-1",
         "config": "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json",
         "state": "/home/hermes/projects/trading/freqforge/user_data/primo_signal_state.json",
         "expected_strategy": "FreqForge_Override"
     },
     "regime-hybrid": {
-        "container": "freqtrade-regime-hybrid",
+        "container": "trading-freqtrade-regime-hybrid-1",
         "config": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json",
         "state": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json",
         "expected_strategy": "RegimeSwitchingHybrid_v7_v04_Integration"
     },
     "freqforge-canary": {
-        "container": "freqtrade-freqforge-canary",
+        "container": "trading-freqtrade-freqforge-canary-1",
         "config": "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json",
         "state": "/home/hermes/projects/trading/freqforge-canary/user_data/primo_signal_state.json",
         "expected_strategy": "FreqForge_Override"
     },
-    "freqai-rebel": {
-        "container": "freqai-rebel",
+    "trading-freqai-rebel-1": {
+        "container": "trading-freqai-rebel-1",
         "config": None,  # No standard host-side mount; docker exec required
         "state": None,    # No host-side state file
         "expected_strategy": "RebelLiquidation"
@@ -150,7 +150,7 @@ def determine_bot_verdict(
 
     Classification rules (2026-06-05 hardening):
     - Container down with no host-side config → AGENT_CONTEXT_FAILURE (not RED)
-      because some bots (freqai-rebel) have no host-side mount and Docker may be
+      because some bots (trading-freqai-rebel-1) have no host-side mount and Docker may be
       unreachable from cron context. This is an agent/tooling issue, NOT a trading failure.
     - dry_run=false → RED (genuine trading safety issue)
     - Credentials present → RED (genuine security issue)
@@ -190,7 +190,7 @@ def check_bot(bot_name: str, bot_info: Dict[str, Any]) -> Dict[str, Any]:
     # Container
     container_running = check_container_running(container)
 
-    # Config — handle bots without host-side config mount (e.g. freqai-rebel)
+    # Config — handle bots without host-side config mount (e.g. trading-freqai-rebel-1)
     config = None
     config_readable = False
     if config_path:
@@ -217,7 +217,7 @@ def check_bot(bot_name: str, bot_info: Dict[str, Any]) -> Dict[str, Any]:
     state_exists = check_state_file_exists(state_path) if state_path else False
 
     # Classification — scope visibility vs. live runtime health
-    if bot_name == "freqai-rebel":
+    if bot_name == "trading-freqai-rebel-1":
         classification = "VISIBILITY_GAP"
     elif not container_running:
         classification = "DOWN"

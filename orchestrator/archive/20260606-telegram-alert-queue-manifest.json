@@ -1,0 +1,15 @@
+{
+  "archived_at": "2026-06-06T05:59:47.569293Z",
+  "source_dir": "orchestrator/state/alerts",
+  "archive_dir": "orchestrator/archive/20260606-telegram-alert-queue",
+  "total_files": 1963,
+  "total_size_bytes": 2712968,
+  "total_size_human": "2.59 MB",
+  "delivered_false_count": 1963,
+  "oldest_file": "alert_20260523_135857.json",
+  "oldest_mtime": "2026-05-23T13:58:57.748069",
+  "newest_file": "alert_20260606_055741.json",
+  "newest_mtime": "2026-06-06T05:57:41.776174",
+  "reason": "Telegram Hygiene Batch 1: system-optimizer created orphaned alert queue. Archived (NOT deleted) per safety policy.",
+  "action_taken": "mv from state/alerts/ to archive/"
+}

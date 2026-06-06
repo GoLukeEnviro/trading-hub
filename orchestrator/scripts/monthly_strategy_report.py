@@ -8,23 +8,23 @@ import subprocess
 from datetime import datetime, timezone
 
 FLEET_BOTS = {
-    'freqtrade-freqforge': {
-        'dbs': ['/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite', '/freqtrade/tradesv3.dryrun.sqlite'],
+    'trading-freqtrade-freqforge-1': {
+        'dbs': ['/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite'],  # FIX-2026-06-06: removed stale fallback /freqtrade/tradesv3.dryrun.sqlite
         'label': 'FreqForge',
         'strategy': 'FreqForge_Override',
     },
-    'freqtrade-regime-hybrid': {
+    'trading-freqtrade-regime-hybrid-1': {
         'dbs': ['/freqtrade/user_data/tradesv3.regime_hybrid.dryrun.sqlite'],
         'label': 'Regime-Hybrid',
         'strategy': 'RegimeSwitchingHybrid_v7',
     },
-    'freqtrade-freqforge-canary': {
+    'trading-freqtrade-freqforge-canary-1': {
         'dbs': ['/freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite'],
         'label': 'Canary',
         'strategy': 'FreqForge_Override (Spot)',
     },
-    'freqai-rebel': {
-        'dbs': ['/freqtrade/tradesv3.dryrun.sqlite', '/freqtrade/user_data/tradesv3.dryrun.sqlite'],
+    'trading-freqai-rebel-1': {
+        'dbs': ['/freqtrade/user_data/tradesv3.freqai_rebel.dryrun.sqlite'],  # FIX-2026-06-06: bot-specific DB name
         'label': 'Rebel',
         'strategy': 'RebelLiquidation+XGBoost',
     },

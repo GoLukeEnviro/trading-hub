@@ -77,12 +77,12 @@ def check_container_health():
 def check_freqai_freshness():
     """Check if FreqAI models were trained recently."""
     alerts = []
-    out, _, _ = run_cmd("docker logs freqai-rebel --since 2h 2>&1 | grep -c 'Done training'", timeout=15)
+    out, _, _ = run_cmd("docker logs trading-freqai-rebel-1 --since 2h 2>&1 | grep -c 'Done training'", timeout=15)
     if out and int(out or 0) == 0:
         # Check if rebel is running at all
-        status, _, _ = run_cmd("docker inspect -f '{{.State.Status}}' freqai-rebel", timeout=5)
+        status, _, _ = run_cmd("docker inspect -f '{{.State.Status}}' trading-freqai-rebel-1", timeout=5)
         if status == "running":
-            out2, _, _ = run_cmd("docker logs freqai-rebel --since 24h 2>&1 | grep -c 'Done training'", timeout=15)
+            out2, _, _ = run_cmd("docker logs trading-freqai-rebel-1 --since 24h 2>&1 | grep -c 'Done training'", timeout=15)
             if out2 and int(out2 or 0) == 0:
                 alerts.append("FREQAI DRIFT: No model training in last 24h")
     return alerts

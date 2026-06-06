@@ -44,7 +44,7 @@ BOTS = [
         "api_port": 8080,
     },
     {
-        "bot_name": "freqai-rebel",
+        "bot_name": "trading-freqai-rebel-1",
         "container_name": "trading-freqai-rebel-1",
         "api_port": 8080,
     },

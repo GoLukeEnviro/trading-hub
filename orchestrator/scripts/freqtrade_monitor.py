@@ -20,34 +20,37 @@ BOTS_DIR = os.path.join(PROJECT_ROOT, "bots")
 # Docker network
 DOCKER_NETWORK = "ki-fabrik"
 
+# DOCKER_HOST override — docker-proxy blocks exec calls
+_DOCKER_HOST = "unix:///var/run/docker.sock"
+
 BOTS = {
-    "freqtrade-regime-hybrid": {
+    "trading-freqtrade-regime-hybrid-1": {
         "bot_dir": os.path.join(BOTS_DIR, "regime-hybrid", "user_data"),
         "port": 8085,
         "db": "tradesv3.regime_hybrid.dryrun.sqlite",
-        "config": "/freqtrade/config/config_regime_hybrid_dryrun.json",
+        "config": "/freqtrade/user_data/config.json",
         "network": DOCKER_NETWORK,
     },
-    "freqtrade-freqforge": {
+    "trading-freqtrade-freqforge-1": {
         "bot_dir": "/home/hermes/projects/trading/freqforge/user_data",
         "port": 8086,
         "db": "tradesv3.freqforge.dryrun.sqlite",
-        "config": "/freqtrade/config/config_freqforge_dryrun.json",
+        "config": "/freqtrade/user_data/config.json",
         "network": DOCKER_NETWORK,
     },
-    "freqtrade-freqforge-canary": {
+    "trading-freqtrade-freqforge-canary-1": {
         "bot_dir": "/home/hermes/projects/trading/freqforge-canary/user_data",
         "port": 8081,
         "db": "tradesv3.freqforge_canary.dryrun.sqlite",
-        "config": "/freqtrade/config/config_canary_dryrun.json",
+        "config": "/freqtrade/user_data/config.json",
         "network": DOCKER_NETWORK,
     },
-    "freqai-rebel": {
+    "trading-freqai-rebel-1": {
         "bot_dir": None,  # Docker volume: freqai-rebel-data
         "port": 8087,
-        "db": "tradesv3.dryrun.sqlite",
+        "db": "tradesv3.freqai_rebel.dryrun.sqlite",  # FIX-2026-06-06: bot-specific DB name
         "config": "/freqtrade/user_data/config.json",
-        "network": "freqai-rebel-net",
+        "network": "trading-freqai-rebel-1-net",
     },
 }
 
@@ -58,7 +61,8 @@ def run_cmd(cmd, timeout=15):
     """Run a shell command and return stdout, stderr."""
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, shell=True
+            cmd, capture_output=True, text=True, timeout=timeout, shell=True,
+            env={**os.environ, "DOCKER_HOST": _DOCKER_HOST}
         )
         return result.stdout.strip(), result.stderr.strip()
     except subprocess.TimeoutExpired:
@@ -84,7 +88,7 @@ def get_container_ip(container):
     # Determine network from BOTS config
     bot_info = BOTS.get(container, {})
     network = bot_info.get("network", DOCKER_NETWORK)
-    out, err = run_cmd(f"docker inspect {container} --format='{{{{.NetworkSettings.Networks.{network}.IPAddress}}}}'", timeout=5)
+    out, err = run_cmd(f'docker inspect {container} --format=\'{{{{.NetworkSettings.Networks.{network}.IPAddress}}}}\'', timeout=5)
     if out and out != "<no value>":
         CONTAINER_IPS[container] = out
         return out
@@ -127,7 +131,7 @@ def get_trade_stats(bot_name, bot_info):
     if out != "running":
         return {"error": f"container status: {out}", "total_trades": 0}
 
-    config_path = bot_info.get("config", "/freqtrade/config/config.json")
+    config_path = bot_info.get("config", "/freqtrade/user_data/config.json")
 
     # Get config info
     stats = {}
@@ -149,6 +153,8 @@ print(json.dumps({{
             stats["config"] = json.loads(out)
         except json.JSONDecodeError:
             stats["config"] = {"error": "parse failed"}
+    else:
+        stats["config"] = {"error": f"config read failed: {err[:80]}"}
 
     # Query trade metrics — using close_profit (profit ratio, not percentage)
     sql_cmd = f"""
@@ -251,7 +257,7 @@ FROM trades WHERE is_open = 1;
 
 def get_pair_whitelist(bot_name, bot_info):
     """Get the pair whitelist from the bot's config."""
-    config_path = bot_info.get("config", "/freqtrade/config/config.json")
+    config_path = bot_info.get("config", "/freqtrade/user_data/config.json")
 
     out, _ = docker_exec(bot_name, f"""python3 -c "
 import json
