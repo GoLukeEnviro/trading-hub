@@ -49,6 +49,16 @@ MAX_POSITION_SIZE_USDT = 100.0    # max per-trade exposure
 MAX_CONCURRENT_SIGNALS = 5        # max pairs with ACCEPTED verdict
 SCHEMA_VERSION = "0.3"
 
+# Per-pair confidence overrides (BTC needs higher conviction)
+PAIR_CONFIDENCE_OVERRIDES = {
+    "BTC/USDT:USDT": 0.85,
+}
+
+
+def get_pair_confidence_threshold(pair: str) -> float:
+    """Return per-pair override or global default."""
+    return PAIR_CONFIDENCE_OVERRIDES.get(pair, CONFIDENCE_THRESHOLD)
+
 # MCP Execution Layer config
 MCP_SERVER_SCRIPT = PROJECT_DIR / "orchestrator/scripts/bitget_mcp_server.py"
 MCP_DRY_RUN = True                # HARDCODED — never execute live orders
@@ -195,8 +205,9 @@ def riskguard_checks(
     else:
         action = "HOLD"
 
-    # RG-2: Confidence hard limit
-    if confidence < CONFIDENCE_THRESHOLD:
+    # RG-2: Confidence hard limit (supports per-pair override)
+    threshold = get_pair_confidence_threshold(pair_key)
+    if confidence < threshold:
         return {
             "verdict": "WATCH_ONLY",
             "action": "HOLD",
@@ -204,7 +215,7 @@ def riskguard_checks(
             "quantity": 0.0,
             "allow_long_bias": False,
             "allow_short_bias": False,
-            "riskguard_reason": f"RG-2: confidence {confidence:.2f} < {CONFIDENCE_THRESHOLD:.2f}",
+            "riskguard_reason": f"RG-2: confidence {confidence:.2f} < {threshold:.2f}",
         }
 
     # RG-3: Unknown bias
