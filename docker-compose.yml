@@ -165,7 +165,7 @@ services:
     mem_limit: 512m
     cpus: '1.0'
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/ping >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/ping')\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -186,7 +186,7 @@ services:
     mem_limit: 512m
     cpus: '1.0'
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/ping >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/ping')\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -225,7 +225,7 @@ services:
     mem_limit: 2g
     cpus: '2.0'
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/ping >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/ping')\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -244,7 +244,7 @@ services:
     mem_limit: 256m
     cpus: '0.5'
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/ping >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/ping')\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -349,6 +349,8 @@ networks:
     driver: bridge
     internal: true
   ki-fabrik:
+    external: true
+  trading_hermes-net:
     external: true
 volumes:
   green-qdrant-data:
