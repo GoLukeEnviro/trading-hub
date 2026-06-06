@@ -43,22 +43,22 @@ snapshot and `docs/context/` for append-only historical reports.
 - Working directory: `/home/hermes/projects/trading`.
 - Project identity lives in `~/.hermes/profiles/orchestrator/SOUL.md`.
 
-### RiskGuard / Judge — Safety Layer (SPEC ONLY)
+### RiskGuard / Judge — Safety Layer (DEPLOYED — trading_pipeline.py)
 
-- This layer is a design reference in AGENTS.md only.
-- No deployed service, container, cron job, or script currently implements it as
-  a standalone component.
-- Planned checks: schema validation, freshness, allowlist validation, action /
-  confidence validation, and baseline-vs-LLM disagreement handling.
+- Deployed in: `orchestrator/scripts/trading_pipeline.py` (function `riskguard_checks`)
+- Global threshold: `CONFIDENCE_THRESHOLD = 0.65`
+- Per-pair overrides: `PAIR_CONFIDENCE_OVERRIDES` (z.B. `BTC/USDT:USDT` → 0.85)
+- Schema version: `0.3`
 - Verdicts: `ACCEPTED`, `WATCH_ONLY`, `BLOCK_ENTRY`.
 - Rules: BUY/SELL only for entries; TREND_HOLD / WATCH / HOLD never force an
   entry; weak or unknown signals degrade or block.
 
-### ShadowLogger — Evidence Layer (SPEC ONLY)
+### ShadowLogger — Evidence Layer (PARTIALLY DEPLOYED)
 
-- This layer is the append-only audit concept for signal-cycle decisions.
-- No deployed service currently implements it as a standalone component.
-- Planned output: JSONL decision log, state snapshot, and snapshot directory.
+- Runtime log: `tools/riskguard/decisions.jsonl` (gitignored, lokal)
+- Kein standalone Container, läuft embedded in `trading_pipeline.py`
+- Append-only JSONL: signal cycles, verdicts, risk decisions
+- State snapshot: `orchestrator/logs/shadow_decisions.jsonl`
 - Principle: no side effects, no order execution, no hidden branching.
 
 ### FreqForge Shadow Evaluator — v0.1 (PASSIVE)
@@ -77,13 +77,28 @@ snapshot and `docs/context/` for append-only historical reports.
 
 | Bot | Container | Port | Strategy | Mode |
 |-----|-----------|------|----------|------|
-| FreqForge | `freqtrade-freqforge` | 8086 | `FreqForge_Override` | dry-run |
-| Regime-Hybrid | `freqtrade-regime-hybrid` | 8085 | `RegimeSwitchingHybrid_v7_v04_Integration` | dry-run |
-| FreqForge-Canary | `freqtrade-freqforge-canary` | 8081 | `FreqForge_Override` | dry-run |
-| FreqAI-Rebel | `freqai-rebel` | 8087 | `RebelLiquidation + RebelXGBoostClassifier` | dry-run |
+| FreqForge | `trading-freqtrade-freqforge-1` | 8086 | `FreqForge_Override` | dry-run |
+| Regime-Hybrid | `trading-freqtrade-regime-hybrid-1` | 8085 | `RegimeSwitchingHybrid_v7_v04_Integration` | dry-run |
+| FreqForge-Canary | `trading-freqtrade-freqforge-canary-1` | 8081 | `FreqForge_Override` | dry-run |
+| FreqAI-Rebel | `trading-freqai-rebel-1` | 8087 | `RebelLiquidation + RebelXGBoostClassifier` | dry-run |
 | Momentum | — | — | DECOMMISSIONED | — |
 | MVS | — | — | NOT_DEPLOYED | — |
-| Webserver | `freqtrade-webserver` | — | UI only | — |
+| Webserver | `trading-freqtrade-webserver-1` | — | UI only | — |
+
+> Docker-Compose project name: `trading`. Container-Namen folgen dem
+> Schema `trading-{service}-1`. Alle Monitor-Scripts müssen diese
+> Namen verwenden. Gefixt: 2026-06-06 (commit: fix container naming drift).
+
+### FreqAI-Rebel — Custom Docker Image
+
+FreqAI-Rebel verwendet ein Custom Docker Image:
+
+- Base: `freqtradeorg/freqtrade:stable`
+- Zusatzpakete: `datasieve`, `xgboost`
+- Image-Name: `freqtrade-freqai-rebel:custom`
+- Dockerfile: `freqtrade/Dockerfile.freqai-rebel`
+- DB: `tradesv3.freqai_rebel.dryrun.sqlite`
+- Status: Trainingsphase seit 2026-06-06 (0 Trades, max_open_trades=0)
 
 ### Decommissioned / historical
 
