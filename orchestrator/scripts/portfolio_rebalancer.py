@@ -1,189 +1,139 @@
 #!/usr/bin/env python3
 """
-Portfolio Rebalancer v2 – Semi-automatisch
-Shannon's Demon + Half-Kelly + Volatility-Drag-Korrektur
+portfolio_rebalancer.py — Portfolio weight rebalancing for active bots.
 
-Liest SQLite-DBs direkt vom Host (bind-mounts).
-KEIN numpy required – pure Python stdlib.
-KEIN Live-Trading – gibt nur Empfehlungen aus.
+Runs weekly (Monday 06:00 UTC). Reads bot SQLite DBs, computes current
+performance weights, and writes updated config suggestions to state.
+
+Safety: dry_run=True always. No direct API calls.
 """
 
-import json, sqlite3, math
-from datetime import datetime, timedelta, timezone
+import json
+import sqlite3
+import os
+import sys
 from pathlib import Path
-from typing import Dict
+from datetime import datetime, timezone
 
-REBALANCE_INTERVAL_DAYS = 7
-LOOKBACK_DAYS = 30
-HALF_KELLY_MULTIPLIER = 0.5
-MIN_TRADES_FOR_KELLY = 15
+STATE_DIR = Path("/opt/data/profiles/orchestrator/state")
+BOT_DB_BASE = Path("/home/hermes/projects/trading/freqtrade/bots")
 
 BOTS = {
     "freqforge": {
-        "name": "FreqForge MAIN",
-        "container": "trading-freqtrade-freqforge-1",
-        "db_path": "/home/hermes/projects/trading/freqforge/user_data/tradesv3.freqforge.dryrun.sqlite",
-        "current_weight": 0.40,
+        "name": "FreqForge",
+        "container": "freqtrade-freqforge",
+        "db_path": str(BOT_DB_BASE / "freqforge/user_data/tradesv3.freqforge.dryrun.sqlite"),
+        "current_weight": 0.30,
         "max_open_trades_limit": 5,
-        "stoploss": -0.09,
+        "stoploss": -0.05,
     },
     "canary": {
-        "name": "FreqForge Canary",
-        "container": "trading-freqtrade-freqforge-canary-1",
-        "db_path": "/home/hermes/projects/trading/freqforge-canary/user_data/tradesv3.freqforge_canary.dryrun.sqlite",
-        "current_weight": 0.25,
+        "name": "FreqForge-Canary",
+        "container": "freqtrade-freqforge-canary",
+        "db_path": str(BOT_DB_BASE / "freqforge-canary/user_data/tradesv3.canary.dryrun.sqlite"),
+        "current_weight": 0.20,
         "max_open_trades_limit": 3,
-        "stoploss": -0.08,
+        "stoploss": -0.05,
     },
     "regime_hybrid": {
         "name": "Regime-Hybrid",
-        "container": "trading-freqtrade-regime-hybrid-1",
-        "db_path": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/tradesv3.regime_hybrid.dryrun.sqlite",
-        "current_weight": 0.20,
-        "max_open_trades_limit": 3,
-        "stoploss": -0.07,
-    },
-    "momentum": {
-        "name": "Momentum",
-        "container": "freqtrade-momentum",
-        "db_path": "/home/hermes/projects/trading/freqtrade/bots/momentum/user_data/tradesv3.momentum.dryrun.sqlite",
-        "current_weight": 0.10,
-        "max_open_trades_limit": 2,
+        "container": "freqtrade-regime-hybrid",
+        "db_path": str(BOT_DB_BASE / "regime-hybrid/user_data/tradesv3.regime_hybrid.dryrun.sqlite"),
+        "current_weight": 0.30,
+        "max_open_trades_limit": 5,
         "stoploss": -0.06,
     },
     "rebel": {
         "name": "FreqAI-rebel",
-        "container": "trading-freqai-rebel-1",
-        "db_path": None,  # Uses Docker volume, not bind-mounted
-        "current_weight": 0.05,
-        "max_open_trades_limit": 3,
-        "stoploss": -0.08,
+        "container": "freqai-rebel",
+        "db_path": str(BOT_DB_BASE / "freqai-rebel/user_data/tradesv3.rebel.dryrun.sqlite"),
+        "current_weight": 0.20,
+        "max_open_trades_limit": 2,
+        "stoploss": -0.07,
     },
 }
 
-STATE_FILE = Path("/opt/data/profiles/orchestrator/state/rebalance_state.json")
-LOG_FILE   = Path("/opt/data/profiles/orchestrator/logs/rebalancer.log")
+
+def ts():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def log(msg):
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    line = f"[{ts}] {msg}"
-    print(line)
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
+def query_bot_stats(db_path: str) -> dict:
+    """Read trade stats from bot SQLite DB."""
+    if not os.path.exists(db_path):
+        return {"error": f"DB not found: {db_path}", "total_profit": 0.0, "trade_count": 0, "win_rate": 0.0}
+    try:
+        conn = sqlite3.connect(db_path, timeout=5)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*), SUM(close_profit_abs), "
+            "SUM(CASE WHEN close_profit_abs > 0 THEN 1 ELSE 0 END) "
+            "FROM trades WHERE is_open = 0"
+        )
+        row = cursor.fetchone()
+        conn.close()
+        count = row[0] or 0
+        total_profit = row[1] or 0.0
+        wins = row[2] or 0
+        win_rate = (wins / count) if count > 0 else 0.0
+        return {"trade_count": count, "total_profit": round(total_profit, 4), "win_rate": round(win_rate, 4)}
+    except Exception as e:
+        return {"error": str(e), "total_profit": 0.0, "trade_count": 0, "win_rate": 0.0}
 
 
-def get_bot_performance(db_path, days=30):
-    """Read closed trade performance from SQLite. Pure Python, no numpy."""
-    if not db_path or not Path(db_path).exists():
-        return {"winrate": 0.5, "avg_win": 0.01, "avg_loss": -0.02,
-                "trades": 0, "profit_std": 0.02, "valid": False}
+def compute_weights(stats: dict) -> dict:
+    """Compute new weights based on profit scores. Falls back to equal weight on errors."""
+    scores = {}
+    for bot_id, data in stats.items():
+        if "error" in data:
+            scores[bot_id] = 0.0
+        else:
+            # Score = win_rate * 0.5 + clipped_profit_factor * 0.5
+            profit = max(min(data["total_profit"], 20.0), -20.0)
+            profit_factor = (profit + 20.0) / 40.0
+            scores[bot_id] = round(data["win_rate"] * 0.5 + profit_factor * 0.5, 4)
 
-    conn = sqlite3.connect(db_path)
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-    rows = [r[0] for r in conn.execute(
-        "SELECT close_profit FROM trades WHERE close_date >= ? AND is_open = 0", (since,)
-    ).fetchall()]
-    conn.close()
+    total_score = sum(scores.values())
+    if total_score <= 0:
+        equal = round(1.0 / len(scores), 4)
+        return {bot_id: equal for bot_id in scores}
 
-    if len(rows) < 5:
-        return {"winrate": 0.5, "avg_win": 0.01, "avg_loss": -0.02,
-                "trades": len(rows), "profit_std": 0.02, "valid": False}
-
-    wins = [r for r in rows if r > 0]
-    losses = [r for r in rows if r < 0]
-    mean = sum(rows) / len(rows)
-    variance = sum((r - mean) ** 2 for r in rows) / len(rows)
-
-    return {
-        "winrate": len(wins) / len(rows),
-        "avg_win":  sum(wins) / len(wins) if wins else 0.01,
-        "avg_loss": sum(losses) / len(losses) if losses else -0.02,
-        "trades": len(rows),
-        "profit_std": math.sqrt(variance),
-        "valid": len(rows) >= MIN_TRADES_FOR_KELLY,
-    }
+    return {bot_id: round(score / total_score, 4) for bot_id, score in scores.items()}
 
 
-def calc_kelly(w, aw, al):
-    """Kelly fraction: f* = W - (1-W)/R where R = |avg_win/avg_loss|"""
-    if abs(al) < 1e-6:
-        return 0.01
-    R = abs(aw / al)
-    return max(0.005, min(w - (1 - w) / R, 0.30))
+def main():
+    print(f"[{ts()}] portfolio_rebalancer.py — START")
+    print(f"  Active bots: {list(BOTS.keys())}")
 
-
-def drag_adjust(weight, std):
-    """Volatility-Drag-Korrektur: reduziert Weight bei hoher Volatilitaet"""
-    return max(0.005, weight * (1 - (std ** 2) / 2))
-
-
-def run_rebalancer(dry_run=True):
-    log("=" * 60)
-    log(f"Rebalancer START (dry_run={dry_run})")
-    log(f"Method: Half-Kelly + Volatility-Drag + Shannon-Rebalancing")
-
-    scores, total = {}, 0.0
+    stats = {}
     for bot_id, cfg in BOTS.items():
-        perf = get_bot_performance(cfg["db_path"])
-        kelly = calc_kelly(perf["winrate"], perf["avg_win"], perf["avg_loss"])
-        hk = drag_adjust(kelly * HALF_KELLY_MULTIPLIER, perf["profit_std"])
-        scores[bot_id] = {"perf": perf, "kelly": kelly, "hk": hk}
-        total += hk
-        log(f"  {cfg['name']:20s}: Kelly={kelly:.3f} HalfKelly={hk:.3f} "
-            f"WR={perf['winrate']:.1%} Trades={perf['trades']:3d} "
-            f"{'VALID' if perf['valid'] else 'LOW-N'}")
+        stats[bot_id] = query_bot_stats(cfg["db_path"])
+        print(f"  {bot_id}: {stats[bot_id]}")
 
-    if total == 0:
-        total = 1.0
-        log("  WARNING: total=0, normalizing to equal weight")
-
-    recs = {}
-    for bot_id, s in scores.items():
-        cfg = BOTS[bot_id]
-        tw = max(0.05, min(s["hk"] / total, 0.50))
-        delta = tw - cfg["current_weight"]
-        new_mot = max(1, min(int(round(tw * cfg["max_open_trades_limit"] / 0.40)),
-                             cfg["max_open_trades_limit"]))
-        action = "INCREASE" if delta > 0.05 else "DECREASE" if delta < -0.05 else "HOLD"
-        recs[bot_id] = {
-            "name": cfg["name"],
-            "container": cfg["container"],
-            "current_weight": cfg["current_weight"],
-            "target_weight": round(tw, 4),
-            "delta": round(delta, 4),
-            "new_max_open_trades": new_mot,
-            "action": action,
-        }
-        log(f"  -> {cfg['name']:20s}: {cfg['current_weight']:.0%} -> {tw:.0%} "
-            f"({'+' if delta >= 0 else ''}{delta:.0%}) mot={new_mot} [{action}]")
+    new_weights = compute_weights(stats)
+    print(f"  Computed weights: {new_weights}")
 
     output = {
-        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
-        "dry_run": dry_run,
-        "method": "Half-Kelly + Volatility-Drag + Shannon-Rebalancing",
-        "interval_days": REBALANCE_INTERVAL_DAYS,
-        "min_trades_for_kelly": MIN_TRADES_FOR_KELLY,
-        "recommendations": recs,
-        "next_due": (datetime.now(timezone.utc) + timedelta(days=REBALANCE_INTERVAL_DAYS)).isoformat() + "Z",
+        "timestamp": ts(),
+        "bots": {
+            bot_id: {
+                **BOTS[bot_id],
+                "stats": stats[bot_id],
+                "suggested_weight": new_weights[bot_id],
+            }
+            for bot_id in BOTS
+        },
+        "note": "dry_run=True — no live config changes applied",
     }
 
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(STATE_FILE, "w") as f:
+    out_path = STATE_DIR / "portfolio_rebalance_latest.json"
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w") as f:
         json.dump(output, f, indent=2)
-    log(f"State written -> {STATE_FILE}")
 
-    # Summary
-    active = sum(1 for r in recs.values() if r["action"] != "HOLD")
-    log(f"Summary: {active}/{len(recs)} bots need rebalancing")
-    log("Rebalancer END")
-    return output
+    print(f"  Written: {out_path}")
+    print(f"[{ts()}] portfolio_rebalancer.py — DONE")
 
 
 if __name__ == "__main__":
-    import sys
-    result = run_rebalancer(dry_run="--live" not in sys.argv)
-    # Print final JSON for cron capture
-    print("\n--- JSON OUTPUT ---")
-    print(json.dumps(result, indent=2))
+    main()
