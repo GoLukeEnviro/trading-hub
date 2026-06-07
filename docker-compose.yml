@@ -234,6 +234,15 @@ services:
     - caddy_data:/data
     - caddy_config:/config
     restart: unless-stopped
+  shadowlock:
+    build: ./shadowlock
+    restart: unless-stopped
+    volumes:
+    - ./var/trading-shadowlock:/app/var/trading-shadowlock
+    environment:
+    - POLL_INTERVAL_SECONDS=60
+    - LOG_LEVEL=INFO
+
 networks:
   hermes-net:
     driver: bridge

@@ -47,7 +47,18 @@ backtests/daily_lab/config*.json
 # ---- Runtime / Logs / Generated State ----
 logs/
 *.log
-var/
+var/*
+!var/trading-shadowlock/
+var/trading-shadowlock/*
+!var/trading-shadowlock/inbox/
+!var/trading-shadowlock/processed/
+!var/trading-shadowlock/state/
+var/trading-shadowlock/inbox/*
+var/trading-shadowlock/processed/*
+var/trading-shadowlock/state/*
+!var/trading-shadowlock/inbox/.gitkeep
+!var/trading-shadowlock/processed/.gitkeep
+!var/trading-shadowlock/state/.gitkeep
 cache/
 output/
 outputs/
