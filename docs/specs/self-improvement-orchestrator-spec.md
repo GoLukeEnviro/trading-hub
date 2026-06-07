@@ -31,7 +31,7 @@ Episode IDs MUST match:
 Where:
 - `{bot}` = target bot identifier
 - `{YYYYMMDD}` = UTC date for episode start
-- `{short-hash}` = short deterministic identifier for proposal content
+- `{short-hash}` = short deterministic identifier derived from proposal payload content (e.g., first 8 chars of SHA-256 over normalized proposal JSON)
 
 ## Proposal Schema
 
@@ -64,7 +64,7 @@ An episode is **FAIL** if either condition is true:
 - `PF < 1.0`
 - `max_DD >= 15%` (**hard stop**)
 
-If neither explicit pass nor explicit fail criteria are met, status MUST be recorded as `NO_PASS` and treated as non-promotable.
+If neither explicit pass nor explicit fail criteria are met (for example `1.0 <= PF < 1.5` or `10% <= max_DD < 15%`), status MUST be recorded as `NO_PASS` and treated as non-promotable.
 
 ## Integration Points
 

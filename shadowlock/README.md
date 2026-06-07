@@ -44,7 +44,7 @@ The service will validate and enrich entries with:
 - Valid entries: appended to `var/trading-shadowlock/logs/YYYY/MM/DD.jsonl`, input moved to `processed/`
 - Validation failures: input moved to `quarantine/`
 - Write failures after 3 retries: input moved to `dead-letter/`
-- Heartbeat every 5 minutes: `event_type = shadowlock_heartbeat`
+- Heartbeat every 5 minutes (`HEARTBEAT_INTERVAL_SECONDS=300`): `event_type = shadowlock_heartbeat`
 
 ## Directory layout
 

@@ -173,7 +173,13 @@ def write_entry_with_retries(entry: dict[str, Any]) -> None:
             return
         except Exception as exc:  # noqa: BLE001
             last_error = exc
-            logging.exception("Write attempt %s failed for %s", attempt, log_path)
+            logging.exception(
+                "Write attempt %s/%s failed for %s (%s)",
+                attempt,
+                MAX_WRITE_ATTEMPTS,
+                log_path,
+                type(exc).__name__,
+            )
             if attempt >= MAX_WRITE_ATTEMPTS:
                 break
             time.sleep(delay_seconds)
@@ -203,7 +209,13 @@ def process_inbox_file(path: Path) -> None:
     try:
         write_entry_with_retries(entry)
     except Exception as exc:  # noqa: BLE001
-        logging.error("Write failed after retries for %s: %s", path.name, exc)
+        logging.error(
+            "Write failed after %s retries for %s (%s): %s",
+            MAX_WRITE_ATTEMPTS,
+            path.name,
+            type(exc).__name__,
+            exc,
+        )
         move_file(path, DEAD_LETTER_DIR)
         return
 
