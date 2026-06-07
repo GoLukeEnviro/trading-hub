@@ -234,6 +234,42 @@ services:
     - caddy_data:/data
     - caddy_config:/config
     restart: unless-stopped
+  shadowlock:
+    build:
+      context: ./shadowlock
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./var/trading-shadowlock:/app/var/trading-shadowlock
+    environment:
+      - POLL_INTERVAL_SECONDS=60
+      - HEARTBEAT_INTERVAL_SECONDS=300
+      - LOG_LEVEL=INFO
+    healthcheck:
+      test: >
+        python -c "
+        import os,json,glob,datetime;
+        b=os.environ.get('SHADOWLOCK_BASE_DIR','/app/var/trading-shadowlock');
+        n=datetime.datetime.utcnow();
+        c=n-datetime.timedelta(seconds=600);
+        d=os.path.join(b,'logs',str(n.year),f'{n.month:02d}');
+        if not os.path.isdir(d): exit(1);
+        fs=sorted(glob.glob(os.path.join(d,'*.jsonl')),reverse=True);
+        if not fs: exit(1);
+        for l in open(fs[0]):
+            l=l.strip();
+            if not l: continue;
+            e=json.loads(l);
+            if e.get('event_type')!='shadowlock_heartbeat': continue;
+            t=e.get('timestamp_utc','');
+            if t.endswith('Z') and datetime.datetime.strptime(t.replace('Z',''),'%Y-%m-%dT%H:%M:%S')>=c: exit(0);
+        exit(1)
+        "
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    networks:
+      - hermes-net
 networks:
   hermes-net:
     driver: bridge
