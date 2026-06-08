@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-06-05T20:23:32.747436+00:00",
+  "message": "\u2695 Hermes Alert \u2014 05.06.2026 20:23 UTC\n\nPROFITABILIT\u00c4T\n\u2022 Fleet Equity: 3500.00 USDT (High: 10017.09)\n\u2022 Drawdown: 65.1% \u2014 GRENZWERT \u00dcBERSCHRITTEN\n\nANALYSE\n\u2022 Alle Bots pausiert (max_open_trades=0)\n\nVORSCHL\u00c4GE\n1. Fleet pausiert bis Drawdown < 5%\n2. Manuelle \u00dcberpr\u00fcfung empfohlen\n\nStatus: \ud83d\udea8 FLEET PAUSIERT",
+  "delivered": false,
+  "inline_keyboard": [
+    [
+      {
+        "text": "max_open_trades wiederherstellen",
+        "callback_data": "restore_max_open_trades"
+      }
+    ],
+    [
+      {
+        "text": "Permissions jetzt fixen",
+        "callback_data": "fix_permissions"
+      }
+    ],
+    [
+      {
+        "text": "Canary SHORTs pr\u00fcfen",
+        "callback_data": "check_canary_shorts"
+      }
+    ],
+    [
+      {
+        "text": "Regime-Hybrid optimieren",
+        "callback_data": "optimize_regime_hybrid"
+      }
+    ],
+    [
+      {
+        "text": "Fleet Report jetzt",
+        "callback_data": "fleet_report_now"
+      }
+    ]
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-05-27T15:57:50.224831+00:00",
+  "message": "\u2695 Hermes Fleet Report \u2014 27.05.2026 15:57 UTC\n\nPROFITABILIT\u00c4T\n\u2022 Keine Fleet-Daten verf\u00fcgbar\n\nFLEET STATUS\n\nSIGNAL\n\u2022 Signal fresh | 3 min | 7 Paare | mode=risk_on\n\u2022 BTC SHORT 0.75; ETH SHORT 0.75; SOL SHORT 0.75\n\nSAFETY\n\u2022 Drawdown OK | Rebel quarantine intentional\n\u2022 Permissions CLEAN | max_open_trades: FreqForge=5, Regime-Hybrid=5, Canary=3\n\nVORSCHL\u00c4GE\n\u2022 Keine Sofortaktion n\u00f6tig\n\u2022 N\u00e4chster Optimizer-Lauf um 17:57 UTC",
+  "delivered": false,
+  "inline_keyboard": [
+    [
+      {
+        "text": "max_open_trades wiederherstellen",
+        "callback_data": "restore_max_open_trades"
+      }
+    ],
+    [
+      {
+        "text": "Permissions jetzt fixen",
+        "callback_data": "fix_permissions"
+      }
+    ],
+    [
+      {
+        "text": "Regime-Hybrid optimieren",
+        "callback_data": "optimize_regime_hybrid"
+      }
+    ],
+    [
+      {
+        "text": "Canary SHORTs pr\u00fcfen",
+        "callback_data": "check_canary_shorts"
+      }
+    ],
+    [
+      {
+        "text": "Fleet Report jetzt",
+        "callback_data": "fleet_report_now"
+      }
+    ]
+  ]
+}

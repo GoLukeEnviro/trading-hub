@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-05-25T04:59:32.821473+00:00",
+  "message": "\u2695 Hermes Fleet Report \u2014 25.05.2026 04:59 UTC\n\nPROFITABILIT\u00c4T\n\u2022 FreqForge: +5.92 USDT (85.7% WR) \u2014 BEST\n\u2022 Canary: +3.04 USDT (91.7% WR) \u2014 TOP\n\u2022 Rebel: -4.02 USDT (27.4% WR) \u2014 QUARANTINE\n\u2022 Regime-Hybrid: -7.02 USDT (78.6% WR) \u2014 LOSS\n\nANALYSE\n\u2022 Gesamt PnL: -2.08 USDT\n\u2022 2 offene Trades aktiv\n\u2022 Signal-Coverage: 7 Paare aktiv\n\u2022 Keine Alarme aktiv\n\nVORSCHL\u00c4GE\n1. Rebel bleibt pausiert (Quarant\u00e4ne)\n2. N\u00e4chster Optimierungs-Lauf um 06:59 UTC\n\nStatus: OPTIMIERUNGSMODUS AKTIV",
+  "delivered": false,
+  "inline_keyboard": [
+    [
+      {
+        "text": "max_open_trades wiederherstellen",
+        "callback_data": "restore_max_open_trades"
+      }
+    ],
+    [
+      {
+        "text": "Permissions jetzt fixen",
+        "callback_data": "fix_permissions"
+      }
+    ],
+    [
+      {
+        "text": "Regime-Hybrid optimieren",
+        "callback_data": "optimize_regime_hybrid"
+      }
+    ],
+    [
+      {
+        "text": "Canary SHORTs pr\u00fcfen",
+        "callback_data": "check_canary_shorts"
+      }
+    ],
+    [
+      {
+        "text": "Fleet Report jetzt",
+        "callback_data": "fleet_report_now"
+      }
+    ]
+  ]
+}

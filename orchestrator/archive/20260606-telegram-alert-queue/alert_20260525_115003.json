@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-05-25T11:50:03.315714+00:00",
+  "message": "\u2695 Hermes Fleet Report \u2014 25.05.2026 11:50 UTC\n\nPROFITABILIT\u00c4T\n\u2022 Fleet -2.08 USDT | offene Trades=2\n\u2022 Best FreqForge +5.92U | Worst Regime-Hybrid -7.02U\n\nFLEET STATUS\n\u2022 FreqForge: +5.92U | WR 85.7% | PF 1.19 | open 0 | BEST\n\u2022 Canary: +3.04U | WR 91.7% | PF 186.33 | open 2 | TOP\n\u2022 Rebel: -4.02U | WR 27.4% | PF 0.21 | open 0 | QUARANTINE\n\u2022 Regime-Hybrid: -7.02U | WR 78.6% | PF 0.55 | open 0 | LOSS\n\nSIGNAL\n\u2022 Signal fresh | 1 min | 7 Paare | mode=risk_on\n\u2022 BTC SHORT 0.85; ETH SHORT 0.85; SOL SHORT 0.85\n\nSAFETY\n\u2022 Drawdown OK | Rebel quarantine intentional\n\u2022 Permissions CLEAN | max_open_trades: FreqForge=5, Regime-Hybrid=5, Canary=3, Rebel=0\n\nVORSCHL\u00c4GE\n\u2022 Rebel pausiert lassen\n\u2022 Regime-Hybrid Exit-/RR-Logik pr\u00fcfen",
+  "delivered": false,
+  "inline_keyboard": [
+    [
+      {
+        "text": "max_open_trades wiederherstellen",
+        "callback_data": "restore_max_open_trades"
+      }
+    ],
+    [
+      {
+        "text": "Permissions jetzt fixen",
+        "callback_data": "fix_permissions"
+      }
+    ],
+    [
+      {
+        "text": "Regime-Hybrid optimieren",
+        "callback_data": "optimize_regime_hybrid"
+      }
+    ],
+    [
+      {
+        "text": "Canary SHORTs pr\u00fcfen",
+        "callback_data": "check_canary_shorts"
+      }
+    ],
+    [
+      {
+        "text": "Fleet Report jetzt",
+        "callback_data": "fleet_report_now"
+      }
+    ]
+  ]
+}

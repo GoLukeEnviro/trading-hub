@@ -1,0 +1,5 @@
+{
+  "timestamp": "2026-05-24T00:03:45.226496+00:00",
+  "message": "\u2695 Hermes Alert \u2014 24.05.2026 00:03 UTC\n\nPROFITABILIT\u00c4T\n\u2022 4 Verluste in Folge (fleet-weit)\n\u2022 FreqForge: OP/USDT:USDT (-3.55)\n\u2022 FreqForge: OP/USDT:USDT (-2.56)\n\u2022 FreqForge: ARB/USDT:USDT (-2.41)\n\u2022 Rebel: ETH/USDT:USDT (-0.05)\n\nANALYSE\n\u2022 Schwache Paare: OP/USDT:USDT\n\u2022 Pausierte Strategien: FreqForge until 2026-05-25T00:03\n\u2022 Fleet pausiert f\u00fcr 2h\n\nVORSCHL\u00c4GE\n1. Excluded pairs: OP/USDT:USDT\n2. Suspended FreqForge for 24h\n3. Signal confidence -> 0.75 for 2h\nResume: 02:03 UTC\n\nStatus: \ud83d\uded1 CONSECUTIVE LOSS PAUSE",
+  "delivered": false
+}
