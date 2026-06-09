@@ -19,24 +19,26 @@
 			flush_interval -1
 		}
 	}
-	@momentum host momentum.taile6801f.ts.net
-	handle @momentum {
-		reverse_proxy 127.0.0.1:8084 {
-			flush_interval -1
-		}
-	}
+	# STALE 2026-06-09: momentum bot decommissioned, backend :8084 DOWN (502)
+	# @momentum host momentum.taile6801f.ts.net
+	# handle @momentum {
+	# 	reverse_proxy 127.0.0.1:8084 {
+	# 		flush_interval -1
+	# 	}
+	# }
 	@regime host regime-hybrid.taile6801f.ts.net
 	handle @regime {
 		reverse_proxy 127.0.0.1:8085 {
 			flush_interval -1
 		}
 	}
-	@webserver host webserver.taile6801f.ts.net
-	handle @webserver {
-		reverse_proxy 127.0.0.1:8092 {
-			flush_interval -1
-		}
-	}
+	# STALE 2026-06-09: webserver on :8180 not :8092, backend :8092 DOWN (502)
+	# @webserver host webserver.taile6801f.ts.net
+	# handle @webserver {
+	# 	reverse_proxy 127.0.0.1:8092 {
+	# 		flush_interval -1
+	# 	}
+	# }
 	@rizzcoach host rizzcoach.taile6801f.ts.net
 	handle @rizzcoach {
 		reverse_proxy 127.0.0.1:8088 {
