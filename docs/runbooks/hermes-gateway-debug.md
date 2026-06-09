@@ -56,7 +56,7 @@ Zusätzlich:
 5. Logs sauber (keine neuen Restarts/Tracebacks in den letzten Minuten außer intentional).
 6. Neuer TUI/Desktop-Session Test: `/session-info`, einfacher Prompt, `/status` — neuer slash_worker Prozess erscheint, JSON-Protokoll funktioniert (kein immediate ok:false).
 7. Native `hermes desktop` / gui (falls genutzt) startet und chat antwortet.
-8. Ports 8083 + 8642 listening + erreichbar.
+8. Port 8083 listening + erreichbar (`curl -sf http://127.0.0.1:8083/api/status`). ~~8642~~ deprecated.
 9. Keine Permission/Claudio-Pfad-Fehler mehr beim MCP/Skills-Load in neuen Workern.
 10. Dashboard-Prozess mem nicht explodierend.
 
