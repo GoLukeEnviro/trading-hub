@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "bot_name": "freqforge",
+  "export_timestamp_utc": "2026-06-07T20:42:55Z",
+  "db_path": "/home/hermes/projects/trading/freqforge/user_data/tradesv3.freqforge.dryrun.sqlite",
+  "since": null,
+  "until": null,
+  "total_trades": 64,
+  "winning_trades": 54,
+  "losing_trades": 10,
+  "win_rate": 0.8438,
+  "gross_profit": 59.361,
+  "gross_loss": 36.1375,
+  "profit_factor": 1.6426,
+  "net_profit_usdt": 23.2235,
+  "avg_win": 1.0993,
+  "avg_loss": 3.6137,
+  "avg_risk_reward": 0.3042,
+  "max_drawdown_pct": 170.1705,
+  "avg_trade_duration_seconds": 53110
+}

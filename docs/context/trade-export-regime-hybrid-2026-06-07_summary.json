@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "bot_name": "regime-hybrid",
+  "export_timestamp_utc": "2026-06-07T20:42:55Z",
+  "db_path": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/tradesv3.regime_hybrid.dryrun.sqlite",
+  "since": null,
+  "until": null,
+  "total_trades": 48,
+  "winning_trades": 35,
+  "losing_trades": 13,
+  "win_rate": 0.7292,
+  "gross_profit": 9.5501,
+  "gross_loss": 16.369,
+  "profit_factor": 0.5834,
+  "net_profit_usdt": -6.819,
+  "avg_win": 0.2729,
+  "avg_loss": 1.2592,
+  "avg_risk_reward": 0.2167,
+  "max_drawdown_pct": 3676.726,
+  "avg_trade_duration_seconds": 13523
+}

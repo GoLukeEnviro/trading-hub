@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "bot_name": "freqforge-canary",
+  "export_timestamp_utc": "2026-06-07T20:42:55Z",
+  "db_path": "/home/hermes/projects/trading/freqforge-canary/user_data/tradesv3.freqforge_canary.dryrun.sqlite",
+  "since": null,
+  "until": null,
+  "total_trades": 44,
+  "winning_trades": 41,
+  "losing_trades": 3,
+  "win_rate": 0.9318,
+  "gross_profit": 7.4342,
+  "gross_loss": 0.0308,
+  "profit_factor": 241.7329,
+  "net_profit_usdt": 7.4034,
+  "avg_win": 0.1813,
+  "avg_loss": 0.0103,
+  "avg_risk_reward": 17.6019,
+  "max_drawdown_pct": 2.4414,
+  "avg_trade_duration_seconds": 58129
+}

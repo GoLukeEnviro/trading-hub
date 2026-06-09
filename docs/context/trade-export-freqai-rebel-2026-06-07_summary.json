@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "bot_name": "freqai-rebel",
+  "export_timestamp_utc": "2026-06-07T20:42:56Z",
+  "db_path": "/home/hermes/projects/trading/freqtrade/bots/freqai-rebel/user_data/tradesv3.freqai_rebel.dryrun.sqlite",
+  "since": null,
+  "until": null,
+  "total_trades": 0,
+  "winning_trades": 0,
+  "losing_trades": 0,
+  "win_rate": null,
+  "gross_profit": 0.0,
+  "gross_loss": 0.0,
+  "profit_factor": null,
+  "net_profit_usdt": 0.0,
+  "avg_win": null,
+  "avg_loss": null,
+  "avg_risk_reward": null,
+  "max_drawdown_pct": null,
+  "avg_trade_duration_seconds": null,
+  "NO_TRADE_DATA": true
+}

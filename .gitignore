@@ -257,3 +257,10 @@ freqtrade/shared/executed_signals.json
 **/shadow_decisions.jsonl
 **/*.bak.2026*
 orchestrator/backups/
+
+# Episode-Strategy-Kopien (temporär, nach Backtest wegwerfbar)
+**/user_data/strategies/*_episode_*.py
+**/user_data/config_episode_*.json
+
+# Trade-History CSV-Rohdaten (groß, jederzeit aus SQLite reproduzierbar)
+**/trade-export-*_trades.csv
