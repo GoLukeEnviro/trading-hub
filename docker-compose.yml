@@ -7,10 +7,30 @@ services:
       SERVICES: 1
       NETWORKS: 1
       INFO: 1
+      EXEC: 1
+      POST: 1
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
     - proxy-net
+  trading-dashboard:
+    build:
+      context: ./docker/dashboard
+      dockerfile: Dockerfile
+    image: trading-dashboard:stable
+    container_name: trading-dashboard
+    restart: unless-stopped
+    environment:
+      DOCKER_HOST: tcp://docker-proxy:2375
+    volumes:
+    - ./dashboard.py:/app/dashboard.py:ro
+    ports:
+    - 127.0.0.1:5000:5000
+    networks:
+    - proxy-net
+    - hermes-net
+    depends_on:
+    - docker-proxy
   ai-hedge-fund:
     image: trading-ai-hedge-fund-crypto:latest
     command:
@@ -72,7 +92,8 @@ services:
     env_file: /opt/hermes-green/.env
     ports:
     - 127.0.0.1:8083:9119
-    - 127.0.0.1:8642:8642
+    # DEPRECATED 2026-06-09: :8642 orphaned — API lives on :8083/api/* (dashboard :9119)
+    # - 127.0.0.1:8642:8642
     logging:
       driver: json-file
       options:
@@ -86,9 +107,6 @@ services:
     - hermes-net
     restart: unless-stopped
     container_name: green-qdrant
-    command:
-    - sleep
-    - infinity
     logging:
       driver: json-file
       options:
@@ -124,15 +142,12 @@ services:
     - green-qdrant
     - green-ollama
     container_name: green-mem0
-    command:
-    - sleep
-    - infinity
     environment:
       QDRANT_HOST: green-qdrant
       QDRANT_PORT: 6333
       OLLAMA_BASE_URL: http://green-ollama:11434
       MEM0_LLM_BASE_URL: https://ollama.com/v1
-      MEM0_LLM_MODEL: gpt-oss:20b
+      MEM0_LLM_MODEL: gemma3:27b
       MEM0_COLLECTION: hermes_memories_v2
       MEM0_EMBEDDER_MODEL: qwen3-embedding:4b
       MEM0_EMBEDDING_DIMS: 2560
@@ -140,10 +155,11 @@ services:
       MEM0_API_PORT: 8787
       OLLAMA_API_KEY: ${OLLAMA_API_KEY}
     env_file: /home/hermes/projects/trading/.env
-    # Bind-mount: live patch of app.py + extraction_policy_v1.txt (Dream Mode Recovery 2026-06-08).
+    # Bind-mount: live patch of app.py + extraction policies (Dream Mode Recovery 2026-06-08).
     # Mounts override the in-image copies; rollback = remove these volumes + recreate.
     volumes:
     - /opt/data/local-memory/app/app.py:/app/app.py:ro
+    - /opt/data/local-memory/app/extraction_policy_v2.txt:/app/extraction_policy_v2.txt:ro
     - /opt/data/local-memory/app/extraction_policy_v1.txt:/app/extraction_policy_v1.txt:ro
     ports:
     - 127.0.0.1:8788:8787
@@ -195,7 +211,7 @@ services:
     networks:
     - hermes-net
   freqai-rebel:
-    image: freqtradeorg/freqtrade:stable
+    image: freqtrade-freqai-rebel:custom
     command: trade --config /freqtrade/user_data/config.json --strategy RebelLiquidation
     ports:
     - 127.0.0.1:8087:8080
