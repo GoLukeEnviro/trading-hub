@@ -26,6 +26,17 @@ FORBIDDEN_PATTERNS: list[str] = [
     r"token\s*=",
 ]
 
+# Patterns that are forbidden in *source* (src/) but allowed in tests.
+FORBIDDEN_IN_SRC: list[str] = [
+    r"docker exec",
+]
+
+# Patterns that should never appear anywhere (src + tests).
+FORBIDDEN_IMPORTS: list[str] = [
+    r"^import (requests|urllib|httpx|docker|telegram)\b",
+    r"^from (requests|urllib|httpx|docker|telegram)\b",
+]
+
 
 def _find_py_files() -> list[Path]:
     """Find all .py files in the self_improvement_v2 directory."""
@@ -50,3 +61,41 @@ def test_no_forbidden_patterns(pattern: str) -> None:
                 violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{line_num}: {line.strip()}")
 
     assert len(violations) == 0, f"Forbidden pattern '{pattern}' found:\n" + "\n".join(violations)
+
+
+@pytest.mark.parametrize("pattern", FORBIDDEN_IN_SRC)
+def test_no_forbidden_patterns_in_src(pattern: str) -> None:
+    """No *source* file should contain patterns forbidden in production code."""
+    src_root = PROJECT_ROOT / "src"
+    py_files = sorted(src_root.rglob("*.py"))
+    regex = re.compile(pattern, re.IGNORECASE)
+    violations: list[str] = []
+
+    for py_file in py_files:
+        content = py_file.read_text()
+        for line_num, line in enumerate(content.splitlines(), start=1):
+            if regex.search(line):
+                # Skip self-check
+                if "test_no_forbidden" in str(py_file):
+                    continue
+                violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{line_num}: {line.strip()}")
+
+    assert len(violations) == 0, f"Forbidden pattern '{pattern}' found in src:\n" + "\n".join(violations)
+
+
+@pytest.mark.parametrize("pattern", FORBIDDEN_IMPORTS)
+def test_no_forbidden_imports(pattern: str) -> None:
+    """No .py file should import forbidden network/library packages."""
+    py_files = _find_py_files()
+    regex = re.compile(pattern)
+    violations: list[str] = []
+
+    for py_file in py_files:
+        content = py_file.read_text()
+        for line_num, line in enumerate(content.splitlines(), start=1):
+            if regex.search(line):
+                if "test_no_forbidden" in str(py_file):
+                    continue
+                violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{line_num}: {line.strip()}")
+
+    assert len(violations) == 0, f"Forbidden import '{pattern}' found:\n" + "\n".join(violations)
