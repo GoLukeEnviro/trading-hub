@@ -100,6 +100,7 @@ class FleetRiskManager:
         self.portfolio_peak: Optional[float] = None
         self.current_equity: Optional[float] = None
         self.current_drawdown: float = 0.0
+        self.state: Dict[str, Any] = {}
         self.refresh_from_disk()
 
     # ---------------------------------------------------------------------
@@ -271,6 +272,7 @@ class FleetRiskManager:
             self.current_equity = _safe_float(current) if current is not None else None
             self.current_drawdown = _safe_float(portfolio.get("current_drawdown"), 0.0)
 
+        self.state = state
         return state
 
     def _apply_global_equity(self, state: Dict[str, Any], current_equity: float) -> None:

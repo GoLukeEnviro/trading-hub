@@ -1,0 +1,44 @@
+bots:
+  - bot_id: bot_a
+    bot_name: "Bot A – FreqForge Core"
+    alias: bot_a
+    container: trading-freqtrade-freqforge-1
+    strategy: FreqForge_Override
+    schedules:
+      analyze: "*/15 * * * *"
+      backtest: "0 */6 * * *"
+      daily_report: "0 8 * * *"
+      walkforward: "0 2 * * 0"
+
+  - bot_id: bot_b
+    bot_name: "Bot B – Momentum Scalper"
+    alias: bot_b
+    container: trading-freqtrade-momentum-1
+    strategy: MomentumScalper
+    schedules:
+      analyze: "*/15 * * * *"
+      backtest: "0 */6 * * *"
+      daily_report: "0 8 * * *"
+      walkforward: "0 2 * * 0"
+
+  - bot_id: bot_c
+    bot_name: "Bot C – Mean Reversion"
+    alias: bot_c
+    container: trading-freqtrade-meanrev-1
+    strategy: MeanReversion
+    schedules:
+      analyze: "*/15 * * * *"
+      backtest: "0 */6 * * *"
+      daily_report: "0 8 * * *"
+      walkforward: "0 2 * * 0"
+
+  - bot_id: bot_d
+    bot_name: "Bot D – Breakout Hunter"
+    alias: bot_d
+    container: trading-freqtrade-breakout-1
+    strategy: BreakoutHunter
+    schedules:
+      analyze: "*/15 * * * *"
+      backtest: "0 */6 * * *"
+      daily_report: "0 8 * * *"
+      walkforward: "0 2 * * 0"

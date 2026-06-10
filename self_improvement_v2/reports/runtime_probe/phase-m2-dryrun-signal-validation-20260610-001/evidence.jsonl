@@ -1,0 +1,14 @@
+{"event": "preflight_complete", "timestamp": "2026-06-10T06:25:41.772094+00:00", "branch": "feat/si-v2-foundation", "head": "767a2df8a0d8247cfa44b7ca8e39ee86f874f2e6", "status": "OK"}
+{"event": "container_discovery", "running_count": 18, "total_count": 22, "exited_count": 2, "freqtrade_bots": 5, "signal_core": 1}
+{"event": "dry_run_confirmed", "method": "sqlite_filename", "evidence": "tradesv3.freqforge.dryrun.sqlite and similar files found in bot user_data", "verdict": "CONFIRMED_DRY_RUN"}
+{"event": "signal_bridge_found", "path": "/freqtrade/user_data/primo_signal_state.json", "schema_version": "0.3", "pairs": 3, "generated_at": "2026-06-09T15:30:29+00:00", "source": "trading_pipeline_v1.0"}
+{"event": "signal_flow", "pair": "BTC/USDT", "verdict": "WATCH_ONLY", "action": "HOLD", "confidence": 0.8, "riskguard_reason": "RG-2: confidence 0.80 < 0.85"}
+{"event": "signal_flow", "pair": "ETH/USDT", "verdict": "ACCEPTED", "action": "SHORT", "confidence": 0.8, "riskguard_reason": "PASS: all checks OK"}
+{"event": "signal_flow", "pair": "SOL/USDT", "verdict": "ACCEPTED", "action": "SHORT", "confidence": 0.8, "riskguard_reason": "PASS: all checks OK"}
+{"event": "bot_decision", "bot": "freqforge-1", "pair": "ETH/USDT", "signal": "SELL", "confidence": 0.8, "ai_verdict": "ACCEPTED", "risk_error": "FleetRiskManager.state missing", "outcome": "BLOCKED_BY_RISK"}
+{"event": "bot_decision", "bot": "freqforge-1", "pair": "SOL/USDT", "signal": "SELL", "confidence": 0.8, "ai_verdict": "ACCEPTED", "risk_error": "FleetRiskManager.state missing", "outcome": "BLOCKED_BY_RISK"}
+{"event": "bot_decision", "bot": "freqforge-canary-1", "signal": "SELL", "ai_verdict": "ACCEPTED", "risk_error": "FleetRiskManager.state missing", "outcome": "BLOCKED_BY_RISK"}
+{"event": "bot_decision", "bot": "regime-hybrid-1", "risk_error": "FleetRiskManager.state missing", "outcome": "BLOCKED_BY_RISK"}
+{"event": "bot_error", "bot": "freqai-rebel-1", "error": "Telegram Conflict: terminated by other getUpdates request", "severity": "WARNING"}
+{"event": "watchdog_status", "status": "running", "ports_checked": "8081,8085,8086,8087,8410", "all_timed_out": true, "issue": "host.docker.internal connectivity"}
+{"event": "redaction_verification", "passed": true, "method": "manual_inspection_of_reported_data"}

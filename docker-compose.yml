@@ -79,6 +79,7 @@ services:
     - /home/hermes/projects/trading/weatherhermes_persistent/weatherbot_master:/home/hermes/weatherbot_master:ro
     - /var/run/docker.sock:/var/run/docker.sock:ro
     - /opt/hermes-green/scripts/99-telegram-settle-delay:/etc/cont-init.d/99-telegram-settle-delay:ro
+    - /opt/hermes-green/config/plugins/memory/mem0/__init__.py:/opt/hermes/plugins/memory/mem0/__init__.py:ro
     restart: unless-stopped
     networks:
     - hermes-net
@@ -104,7 +105,7 @@ services:
     volumes:
     - green-qdrant-data:/qdrant/storage
     networks:
-    - hermes-net
+    - trading_hermes-net
     restart: unless-stopped
     container_name: green-qdrant
     logging:
@@ -117,7 +118,7 @@ services:
     volumes:
     - green-ollama-data:/root/.ollama
     networks:
-    - hermes-net
+    - trading_hermes-net
     restart: unless-stopped
     container_name: green-ollama
     # Fix G-02: removed broken "command: [sleep, infinity]" which collided
@@ -136,7 +137,7 @@ services:
   green-mem0:
     image: hermes-mem0-local-api:stable
     networks:
-    - hermes-net
+    - trading_hermes-net
     restart: unless-stopped
     depends_on:
     - green-qdrant
@@ -148,9 +149,9 @@ services:
       OLLAMA_BASE_URL: http://green-ollama:11434
       MEM0_LLM_BASE_URL: https://ollama.com/v1
       MEM0_LLM_MODEL: gemma3:27b
-      MEM0_COLLECTION: hermes_memories_v2
-      MEM0_EMBEDDER_MODEL: qwen3-embedding:4b
-      MEM0_EMBEDDING_DIMS: 2560
+      MEM0_COLLECTION: hermes_memories_v3
+      MEM0_EMBEDDER_MODEL: nomic-embed-text
+      MEM0_EMBEDDING_DIMS: 768
       MEM0_API_HOST: 0.0.0.0
       MEM0_API_PORT: 8787
       OLLAMA_API_KEY: ${OLLAMA_API_KEY}
@@ -173,6 +174,8 @@ services:
     ports:
     - 127.0.0.1:8086:8080
     command: trade --config /freqtrade/user_data/config.json --strategy FreqForge_Override
+    environment:
+    - FREQTRADE__TELEGRAM__ENABLED=false
     volumes:
     - ./freqforge/user_data:/freqtrade/user_data
     - ./freqtrade/shared:/freqtrade/shared
@@ -187,6 +190,8 @@ services:
     command: trade --config /freqtrade/user_data/config.json --strategy RegimeSwitchingHybrid_v7_v04_Integration
     ports:
     - 127.0.0.1:8085:8080
+    environment:
+    - FREQTRADE__TELEGRAM__ENABLED=false
     volumes:
     - ./freqtrade/bots/regime-hybrid/user_data:/freqtrade/user_data
     - ./freqtrade/shared:/freqtrade/shared
@@ -201,6 +206,8 @@ services:
     command: trade --config /freqtrade/user_data/config.json --strategy FreqForge_Override
     ports:
     - 127.0.0.1:8081:8080
+    environment:
+    - FREQTRADE__TELEGRAM__ENABLED=false
     volumes:
     - ./freqforge-canary/user_data:/freqtrade/user_data
     - ./freqtrade/shared:/freqtrade/shared
@@ -215,6 +222,8 @@ services:
     command: trade --config /freqtrade/user_data/config.json --strategy RebelLiquidation
     ports:
     - 127.0.0.1:8087:8080
+    environment:
+    - FREQTRADE__TELEGRAM__ENABLED=false
     volumes:
     - ./freqtrade/bots/freqai-rebel/user_data:/freqtrade/user_data
     - ./freqtrade/shared:/freqtrade/shared
@@ -238,12 +247,16 @@ services:
     - hermes-net
   hermes-watchdog:
     image: alpine:latest
-    command: "sh -c 'while true; do\n  for port in 8081 8085 8086 8087 8410; do\n\
-      \    wget -qO- --timeout=5 http://host.docker.internal:$$port/api/v1/ping \\\
-      \n      || echo \"ALERT: port $$port down at $$(date)\" >> /var/log/watchdog.log;\n\
-      \  done;\n  sleep 60;\ndone'\n"
-    extra_hosts:
-    - host.docker.internal:host-gateway
+    command: |
+      sh -c 'while true; do
+        wget -qO- --timeout=5 http://trading-freqtrade-freqforge-1:8080/api/v1/ping || echo "ALERT: freqforge down at $(date)" >> /var/log/watchdog.log
+        wget -qO- --timeout=5 http://trading-freqtrade-freqforge-canary-1:8080/api/v1/ping || echo "ALERT: freqforge-canary down at $(date)" >> /var/log/watchdog.log
+        wget -qO- --timeout=5 http://trading-freqtrade-regime-hybrid-1:8080/api/v1/ping || echo "ALERT: regime-hybrid down at $(date)" >> /var/log/watchdog.log
+        wget -qO- --timeout=5 http://trading-freqai-rebel-1:8080/api/v1/ping || echo "ALERT: rebel down at $(date)" >> /var/log/watchdog.log
+        wget -qO- --timeout=5 http://trading-freqtrade-webserver-1:8080/api/v1/ping || echo "ALERT: webserver down at $(date)" >> /var/log/watchdog.log
+        wget -qO- --timeout=5 http://trading-ai-hedge-fund-1:8080/health || echo "ALERT: ai-hedge-fund down at $(date)" >> /var/log/watchdog.log
+        sleep 60
+      done'
     volumes:
     - watchdog-logs:/var/log
     restart: unless-stopped
@@ -299,6 +312,8 @@ networks:
   proxy-net:
     driver: bridge
     internal: true
+  trading_hermes-net:
+    external: true
 volumes:
   green-qdrant-data:
     external: true
