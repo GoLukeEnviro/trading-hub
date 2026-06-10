@@ -104,7 +104,7 @@ services:
     volumes:
     - green-qdrant-data:/qdrant/storage
     networks:
-    - hermes-net
+    - trading_hermes-net
     restart: unless-stopped
     container_name: green-qdrant
     logging:
@@ -117,7 +117,7 @@ services:
     volumes:
     - green-ollama-data:/root/.ollama
     networks:
-    - hermes-net
+    - trading_hermes-net
     restart: unless-stopped
     container_name: green-ollama
     # Fix G-02: removed broken "command: [sleep, infinity]" which collided
@@ -136,7 +136,7 @@ services:
   green-mem0:
     image: hermes-mem0-local-api:stable
     networks:
-    - hermes-net
+    - trading_hermes-net
     restart: unless-stopped
     depends_on:
     - green-qdrant
@@ -148,9 +148,9 @@ services:
       OLLAMA_BASE_URL: http://green-ollama:11434
       MEM0_LLM_BASE_URL: https://ollama.com/v1
       MEM0_LLM_MODEL: gemma3:27b
-      MEM0_COLLECTION: hermes_memories_v2
-      MEM0_EMBEDDER_MODEL: qwen3-embedding:4b
-      MEM0_EMBEDDING_DIMS: 2560
+      MEM0_COLLECTION: hermes_memories_v3
+      MEM0_EMBEDDER_MODEL: nomic-embed-text
+      MEM0_EMBEDDING_DIMS: 768
       MEM0_API_HOST: 0.0.0.0
       MEM0_API_PORT: 8787
       OLLAMA_API_KEY: ${OLLAMA_API_KEY}
@@ -299,6 +299,8 @@ networks:
   proxy-net:
     driver: bridge
     internal: true
+  trading_hermes-net:
+    external: true
 volumes:
   green-qdrant-data:
     external: true
