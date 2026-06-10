@@ -12,6 +12,7 @@ Scope of this refreshed draft:
 - prepare an Option B candidate allowlist for a controlled read-only runtime observation
 - keep every command exact, bounded, and reviewable before execution
 - keep all runtime observation commands disabled until separate explicit human approval
+- avoid stale hardcoded HEAD values inside the draft itself
 - mark everything else as not approved
 
 ## 2. Canonical Post-Merge Context
@@ -22,12 +23,14 @@ Repository cleanup and SI v2 foundation integration are complete.
 |---|---|
 | Repository | `GoLukeEnviro/trading-hub` |
 | Canonical branch | `main` |
-| Canonical commit | `abbc6211cb462aa6683a006d566ad7a279280316` |
+| SI v2 foundation merge commit | `abbc6211cb462aa6683a006d566ad7a279280316` |
 | SI v2 foundation PR | `#36` |
 | Export-history extraction PR | `#42` |
 | Old feature branch | `feat/si-v2-foundation` deleted after merge |
 | Current local project path | `/home/hermes/projects/trading` |
 | Current expected test baseline | `484 pytest items` / `483 passed, 1 skipped` |
+
+Important: this file itself may receive documentation-only commits after `abbc621`. Therefore the final execution approval must capture the current `origin/main` SHA immediately before execution. `abbc621` is the SI v2 foundation merge anchor, not a permanent expected HEAD for future runs.
 
 Any stale reference to `feat/si-v2-foundation` or pre-merge SHAs is no longer canonical.
 
@@ -58,7 +61,8 @@ Mode: controlled read-only runtime probe review
 Repository: GoLukeEnviro/trading-hub
 Local path: /home/hermes/projects/trading
 Expected branch: main
-Expected commit: abbc6211cb462aa6683a006d566ad7a279280316
+SI v2 merge anchor: abbc6211cb462aa6683a006d566ad7a279280316
+Expected execution HEAD: <capture exact origin/main SHA immediately before approval>
 Probe ID: phase-m-readonly-runtime-probe-postmerge-20260610-001
 Evidence path: self_improvement_v2/reports/runtime_probe/phase-m-readonly-runtime-probe-postmerge-20260610-001/
 Raw output stored by default: false
@@ -84,7 +88,7 @@ Approved for preparation only:
 - local shell session on the project host
 - repository path `/home/hermes/projects/trading`
 - canonical branch `main`
-- canonical commit `abbc6211cb462aa6683a006d566ad7a279280316`
+- final execution HEAD captured immediately before approval
 - evidence directory under `self_improvement_v2/reports/runtime_probe/`
 - read-only observations only, if later separately approved
 
@@ -102,7 +106,7 @@ Not approved by this draft:
 
 ## 6. Option B Candidate Command Allowlist — Prepared, Not Executable Yet
 
-This allowlist is a **candidate execution allowlist**. It is not executable until a later approval repeats the exact commands, target context, evidence path, redaction policy, timeout policy, and abort criteria.
+This allowlist is a **candidate execution allowlist**. It is not executable until a later approval repeats the exact commands, target context, evidence path, redaction policy, timeout policy, abort criteria, and the exact execution HEAD.
 
 ### 6.1 Repository Preflight Commands
 
@@ -110,7 +114,7 @@ This allowlist is a **candidate execution allowlist**. It is not executable unti
 |---|---|---|---|---:|---|---|---|
 | A-01 | `pwd` | Confirm working directory | Prints current path only | 5s | One absolute path | No redaction expected | Abort if not `/home/hermes/projects/trading` |
 | A-02 | `git branch --show-current` | Confirm branch | Reads git metadata only | 5s | One branch name | No redaction expected | Abort if not `main` |
-| A-03 | `git rev-parse HEAD` | Confirm commit | Reads git metadata only | 5s | One full SHA | No redaction expected | Abort if not `abbc6211cb462aa6683a006d566ad7a279280316` |
+| A-03 | `git rev-parse HEAD` | Confirm commit | Reads git metadata only | 5s | One full SHA | No redaction expected | Abort if HEAD differs from the exact execution HEAD captured in final approval |
 | A-04 | `git status --short --untracked-files=all` | Confirm working tree cleanliness | Reads git index/worktree metadata only | 10s | Empty if clean; short status otherwise | Redact sensitive path names if present | Abort if dirty outside approved evidence path |
 | A-05 | `python -m py_compile self_improvement_v2/src/si_v2/runtime_probe/models.py self_improvement_v2/src/si_v2/runtime_probe/redaction.py` | Confirm runtime-probe support modules compile | Local Python compile only | 30s | Compile success/failure | No secrets expected | Abort on compile failure |
 | A-06 | `python -m pytest self_improvement_v2/tests/test_runtime_probe_models.py self_improvement_v2/tests/test_runtime_probe_redaction.py -q` | Confirm evidence/redaction tests | Local test run only | 120s | pytest summary | No secrets expected | Abort on test failure |
@@ -219,7 +223,7 @@ Wallet-specific redaction is not claimed as approved in this draft. Wallet-like 
 Abort the future probe immediately if any of the following occurs:
 
 1. branch drift from `main`
-2. HEAD drift from `abbc6211cb462aa6683a006d566ad7a279280316`
+2. HEAD differs from the exact execution HEAD captured in final approval
 3. working tree is dirty outside the approved evidence path
 4. any command differs from the exact allowlist in the final approval
 5. any command needs a value that is not explicitly approved
@@ -249,4 +253,4 @@ Before any execution, the operator must choose one of these paths:
 - **Option B:** controlled read-only runtime observation using the candidate allowlist above
 - **Option C:** stop and revise the payload again
 
-Recommended next step: review this refreshed payload and decide whether to request `APPROVE_PHASE_M_READ_ONLY_RUNTIME_PROBE_OPTION_B` as a separate execution approval.
+Recommended next step: capture the current `origin/main` SHA, review this refreshed payload, and decide whether to request `APPROVE_PHASE_M_READ_ONLY_RUNTIME_PROBE_OPTION_B` as a separate execution approval.
