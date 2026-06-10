@@ -5,57 +5,49 @@
 
 ## 1. Background
 
-The current SI v1 system has 16 cron jobs that are currently **paused**.
-Each job corresponds to one of 4 bots (Bot A–D) × 4 phases (analyze,
-backtest, daily report, walkforward).
+> **2026-06-10 Update:** Generic aliases `bot_a`–`bot_d` were replaced
+> with real bot names from [bot-registry.md](../docs/registry/bot-registry.md).
+> See `cron_defs/jobs.yaml` for the current configuration.
 
-## 2. Existing v1 Cron Jobs (Paused)
+The original SI v1 system had 16 cron jobs that were **paused**.
+Each job corresponded to one of 4 generic bot aliases (Bot A–D) × 4 phases.
 
-| # | Bot | Phase | Schedule | Status |
-|---|-----|-------|----------|--------|
-| 1 | bot_a | analyze | `*/15 * * * *` | Paused |
-| 2 | bot_a | backtest | `0 */6 * * *` | Paused |
-| 3 | bot_a | daily_report | `0 8 * * *` | Paused |
-| 4 | bot_a | walkforward | `0 2 * * 0` | Paused |
-| 5 | bot_b | analyze | `*/15 * * * *` | Paused |
-| 6 | bot_b | backtest | `0 */6 * * *` | Paused |
-| 7 | bot_b | daily_report | `0 8 * * *` | Paused |
-| 8 | bot_b | walkforward | `0 2 * * 0` | Paused |
-| 9 | bot_c | analyze | `*/15 * * * *` | Paused |
-| 10 | bot_c | backtest | `0 */6 * * *` | Paused |
-| 11 | bot_c | daily_report | `0 8 * * *` | Paused |
-| 12 | bot_c | walkforward | `0 2 * * 0` | Paused |
-| 13 | bot_d | analyze | `*/15 * * * *` | Paused |
-| 14 | bot_d | backtest | `0 */6 * * *` | Paused |
-| 15 | bot_d | daily_report | `0 8 * * *` | Paused |
-| 16 | bot_d | walkforward | `0 2 * * 0` | Paused |
+## 2. Current v2 Cron Jobs
 
-## 3. Proposed v2 Equivalents
+The current `cron_defs/jobs.yaml` defines 4 real bots with 4 schedules each:
 
-Each v1 job maps to a v2 `CronJobDef` with `enabled_default: false`,
-`dry_run_only: true`, and `no_agent: false`.
+| Bot ID | Bot Name | Container | Strategy |
+|--------|----------|-----------|----------|
+| `freqforge` | FreqForge | `trading-freqtrade-freqforge-1` | `FreqForge_Override` |
+| `freqforge_canary` | FreqForge Canary | `trading-freqtrade-freqforge-canary-1` | `FreqForge_Override` |
+| `regime_hybrid` | Regime Hybrid | `trading-freqtrade-regime-hybrid-1` | `RegimeSwitchingHybrid_v7_v04_Integration` |
+| `rebel` | Rebel | `trading-freqai-rebel-1` | `RebelLiquidation` |
 
-| v1 Job | v2 `job_id` | v2 Schedule | Command | Enabled? |
-|--------|------------|-------------|---------|----------|
-| bot_a/analyze | `bot_a_analyze` | `*/15 * * * *` | `si_v2_analyze` | No ❌ |
-| bot_a/backtest | `bot_a_backtest` | `0 */6 * * *` | `si_v2_backtest` | No ❌ |
-| bot_a/daily_report | `bot_a_daily_report` | `0 8 * * *` | `si_v2_daily_report` | No ❌ |
-| bot_a/walkforward | `bot_a_walkforward` | `0 2 * * 0` | `si_v2_walkforward` | No ❌ |
-| bot_b/analyze | `bot_b_analyze` | `*/15 * * * *` | `si_v2_analyze` | No ❌ |
-| bot_b/backtest | `bot_b_backtest` | `0 */6 * * *` | `si_v2_backtest` | No ❌ |
-| bot_b/daily_report | `bot_b_daily_report` | `0 8 * * *` | `si_v2_daily_report` | No ❌ |
-| bot_b/walkforward | `bot_b_walkforward` | `0 2 * * 0` | `si_v2_walkforward` | No ❌ |
-| bot_c/analyze | `bot_c_analyze` | `*/15 * * * *` | `si_v2_analyze` | No ❌ |
-| bot_c/backtest | `bot_c_backtest` | `0 */6 * * *` | `si_v2_backtest` | No ❌ |
-| bot_c/daily_report | `bot_c_daily_report` | `0 8 * * *` | `si_v2_daily_report` | No ❌ |
-| bot_c/walkforward | `bot_c_walkforward` | `0 2 * * 0` | `si_v2_walkforward` | No ❌ |
-| bot_d/analyze | `bot_d_analyze` | `*/15 * * * *` | `si_v2_analyze` | No ❌ |
-| bot_d/backtest | `bot_d_backtest` | `0 */6 * * *` | `si_v2_backtest` | No ❌ |
-| bot_d/daily_report | `bot_d_daily_report` | `0 8 * * *` | `si_v2_daily_report` | No ❌ |
-| bot_d/walkforward | `bot_d_walkforward` | `0 2 * * 0` | `si_v2_walkforward` | No ❌ |
+Each bot has 4 schedules:
 
-**Note:** The `*/15 * * * *` schedule (every 15 minutes) passes the
-`schedule_must_not_be_too_frequent` validator because 15 > 4.
+| Phase | Schedule |
+|-------|----------|
+| analyze | `*/30 * * * *` |
+| backtest | `0 */6 * * *` |
+| daily_report | `0 8 * * *` |
+| walkforward | `0 2 * * 0` |
+
+## 3. v1 → v2 Migration (Historical)
+
+The original v1 mapping used generic aliases. These are now replaced:
+
+| v1 Alias | Real Bot |
+|----------|----------|
+| `bot_a` | `freqforge` |
+| `bot_b` | `freqforge_canary` |
+| `bot_c` | `regime_hybrid` |
+| `bot_d` | `rebel` |
+
+All jobs in `cron_defs/jobs.yaml` are defined with `enabled_default: false`,
+`dry_run_only: true`, and `no_agent: false` per SI v2 safety rules.
+
+**Note:** The `*/30 * * * *` schedule (every 30 minutes) passes the
+`schedule_must_not_be_too_frequent` validator because 30 > 4.
 
 ## 4. Activation Ceremony (Future Phase)
 
