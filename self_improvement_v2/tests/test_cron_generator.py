@@ -35,7 +35,7 @@ class TestCronGenerator:
         """Each spec includes bot_id."""
         specs = generate_cron_specs(CRON_DEFS_PATH)
         bot_ids = {spec["bot_id"] for spec in specs}
-        assert bot_ids == {"bot_a", "bot_b", "bot_c", "bot_d"}
+        assert bot_ids == {"freqforge", "freqforge_canary", "regime_hybrid", "rebel"}
 
     def test_spec_has_task(self) -> None:
         """Each spec includes a task name."""
