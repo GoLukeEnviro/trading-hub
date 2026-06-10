@@ -79,17 +79,23 @@ services:
     - /home/hermes/projects/trading/weatherhermes_persistent/weatherbot_master:/home/hermes/weatherbot_master:ro
     - /var/run/docker.sock:/var/run/docker.sock:ro
     - /opt/hermes-green/scripts/99-telegram-settle-delay:/etc/cont-init.d/99-telegram-settle-delay:ro
-    - /opt/hermes-green/config/plugins/memory/mem0/__init__.py:/opt/hermes/plugins/memory/mem0/__init__.py:ro
+    # NOTE 2026-06-10: mem0/__init__.py explicit mount removed — file is delivered
+    # via the /opt/hermes-green/config:/opt/data tree mount. Duplicate explicit
+    # mount caused ambiguity on container recreate. Rollback: uncomment line below.
+    # - /opt/hermes-green/config/plugins/memory/mem0/__init__.py:/opt/hermes/plugins/memory/mem0/__init__.py:ro
     restart: unless-stopped
     networks:
     - hermes-net
     - proxy-net
+    - trading_hermes-net
     depends_on:
     - docker-proxy
     container_name: hermes-green
-    command:
-    - sleep
-    - infinity
+    # NOTE 2026-06-10: sleep infinity removed — Hermes uses its native
+    # s6 entrypoint (main-wrapper.sh). Docker restart policy and SIGTERM
+    # handling now work correctly. If Hermes fails to start, check:
+    #   docker logs hermes-green --tail 50
+    # Rollback: re-add `command: [sleep, infinity]` and recreate.
     env_file: /opt/hermes-green/.env
     ports:
     - 127.0.0.1:8083:9119
