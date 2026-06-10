@@ -32,7 +32,7 @@ jobs:
 
       - name: Compile SI v2
         run: |
-          python -m compileall -x 'tests/support' self_improvement_v2
+          python -m compileall -x '(support|fixtures)' self_improvement_v2
 
       - name: Run SI v2 tests
         run: |
