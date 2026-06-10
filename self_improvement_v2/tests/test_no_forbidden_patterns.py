@@ -36,6 +36,8 @@ FORBIDDEN_PATTERNS: list[str] = [
 # Patterns that are forbidden in *source* (src/) but allowed in tests.
 FORBIDDEN_IN_SRC: list[str] = [
     r"docker exec",
+    r":\s*Any\b",          # Any type annotations (must use concrete types)
+    r"shell\s*=\s*True",   # shell=True in subprocess (security risk)
 ]
 
 # Patterns that should never appear anywhere (src + tests).
@@ -46,9 +48,12 @@ FORBIDDEN_IMPORTS: list[str] = [
 
 
 def _find_py_files() -> list[Path]:
-    """Find all .py files in the self_improvement_v2 directory."""
+    """Find all .py files in the self_improvement_v2 directory, excluding .venv."""
     root = PROJECT_ROOT
-    return sorted(root.rglob("*.py"))
+    return sorted(
+        p for p in root.rglob("*.py")
+        if ".venv" not in p.parts
+    )
 
 
 @pytest.mark.parametrize("pattern", FORBIDDEN_PATTERNS)
@@ -106,3 +111,41 @@ def test_no_forbidden_imports(pattern: str) -> None:
                 violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{line_num}: {line.strip()}")
 
     assert len(violations) == 0, f"Forbidden import '{pattern}' found:\n" + "\n".join(violations)
+
+
+def test_no_any_in_source_types() -> None:
+    """Verify no source file uses bare 'Any' in type annotations."""
+    src_root = PROJECT_ROOT / "src"
+    py_files = sorted(src_root.rglob("*.py"))
+    regex = re.compile(r":\s*Any\b")
+    violations: list[str] = []
+
+    for py_file in py_files:
+        content = py_file.read_text()
+        for line_num, line in enumerate(content.splitlines(), start=1):
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith('"""') or stripped.startswith("'''"):
+                continue
+            if regex.search(stripped):
+                violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{line_num}: {stripped}")
+
+    assert len(violations) == 0, "Found 'Any' type annotations in src (use concrete types):\n" + "\n".join(violations)
+
+
+def test_no_shell_true_in_src() -> None:
+    """Verify no source file uses shell=True in subprocess calls."""
+    src_root = PROJECT_ROOT / "src"
+    py_files = sorted(src_root.rglob("*.py"))
+    regex = re.compile(r"shell\s*=\s*True")
+    violations: list[str] = []
+
+    for py_file in py_files:
+        content = py_file.read_text()
+        for line_num, line in enumerate(content.splitlines(), start=1):
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith('"""') or stripped.startswith("'''"):
+                continue
+            if regex.search(stripped):
+                violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{line_num}: {stripped}")
+
+    assert len(violations) == 0, "Found 'shell=True' in src (security risk):\n" + "\n".join(violations)
