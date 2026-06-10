@@ -8,7 +8,6 @@ blocked items by subsystem.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 
 
 @dataclass
@@ -97,7 +96,7 @@ def generate_dashboard() -> str:
     lines: list[str] = []
     lines.append("# SI v2 Implementation Progress Dashboard")
     lines.append("")
-    lines.append(f"*Generated: deterministic offline snapshot*")
+    lines.append("*Generated: deterministic offline snapshot*")
     lines.append("")
 
     # Overall counts
@@ -114,7 +113,7 @@ def generate_dashboard() -> str:
     lines.append(f"- **In progress:** {open_items}")
     lines.append(f"- **Pending:** {pending}")
     lines.append(f"- **Offline readiness:** {ready}")
-    lines.append(f"- **Live-readiness:** 🚫 BLOCKED (see #124)")
+    lines.append("- **Live-readiness:** 🚫 BLOCKED (see #124)")
     lines.append("")
 
     for group in _ISSUE_MAP:
