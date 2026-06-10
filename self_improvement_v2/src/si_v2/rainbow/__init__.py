@@ -10,6 +10,11 @@ The validator has no side effects and no stateful dependencies on
 external systems.
 """
 
+from si_v2.rainbow.drift_guard import (
+    DriftReport,
+    DriftVerdict,
+    RainbowContractDriftGuard,
+)
 from si_v2.rainbow.validator import (
     RainbowSignalEnvelopeValidator,
     ValidationResult,
@@ -18,6 +23,9 @@ from si_v2.rainbow.validator import (
 )
 
 __all__ = [
+    "DriftReport",
+    "DriftVerdict",
+    "RainbowContractDriftGuard",
     "RainbowSignalEnvelopeValidator",
     "ValidationResult",
     "ValidationVerdict",
