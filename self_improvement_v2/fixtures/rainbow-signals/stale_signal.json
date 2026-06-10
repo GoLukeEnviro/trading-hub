@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "event_type": "signal",
+  "source_system": "rainbow",
+  "source_id": "rainbow:ta",
+  "strategy_id": "rainbow_v1",
+  "model_id": null,
+  "symbol": "BTC/USDT:USDT",
+  "timeframe": "1h",
+  "timestamp_utc": "2026-06-09T06:00:00Z",
+  "emitted_at_utc": "2026-06-09T06:00:03Z",
+  "direction": "long",
+  "confidence": 0.80,
+  "signal_strength": 0.70,
+  "regime_hint": null,
+  "metadata": {
+    "reason_codes": ["ta_oversold"],
+    "data_quality": {"status": "stale", "freshness_seconds": 108000},
+    "features": {},
+    "raw_refs": []
+  },
+  "redaction_status": "clean"
+}
