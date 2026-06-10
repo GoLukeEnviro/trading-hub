@@ -181,4 +181,4 @@ ai-hedge-fund-core ──> sentiment/signal generation ──> /app/output/herme
 - No env vars inspected
 - No Docker mutation (no restart, exec, kill, rm)
 - No orders created
-- PR #36 remains draft and unmerged
+- PR #36 has been merged (abbc621). See docs/context/PR36_RECONCILIATION_REPORT.md for post-merge audit.
