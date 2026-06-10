@@ -73,6 +73,16 @@ class TestFleetRiskManagerInit(unittest.TestCase):
             self.assertEqual(len(mgr.state.get("open_trades", [])), 1)
             self.assertEqual(mgr.state["open_trades"][0]["pair"], "BTC/USDT")
 
+    def test_check_entry_allowed_handles_missing_state(self) -> None:
+        """Regression: _check_direction_bias must not crash if self.state is missing."""
+        mgr = FleetRiskManager.__new__(FleetRiskManager)
+        # Intentionally do NOT call __init__ — this simulates the edge case
+        # where self.state was never set (pickle/unpickle, race condition).
+        mgr.state_file = "/dev/null"
+        result = mgr._check_direction_bias("long")
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+
 
 class TestFleetRiskManagerDirectionBias(unittest.TestCase):
     """Direction bias gate — this method crashed before the fix."""
