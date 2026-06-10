@@ -186,3 +186,44 @@ The service currently writes and expects `schema_version: "1.0"`.
 - Entries with an unknown `schema_version` are **accepted with a warning** (not quarantined).
 - The WARNING is logged, and the entry is processed normally.
 - This ensures forward compatibility when new schema versions are introduced.
+
+---
+
+## Indexer
+
+The **Shadowlock Indexer** creates and maintains a fast SQLite read-cache over
+the append-only JSONL ledger.
+
+**Location:** `shadowlock/shadowlock_indexer.py`
+
+**Modes:**
+
+```bash
+# Full rebuild from all JSONL files
+python shadowlock/shadowlock_indexer.py --rebuild
+
+# Incremental update (only new entries since last index)
+python shadowlock/shadowlock_indexer.py --update
+
+# Run as continuous sidecar (poll every N seconds)
+python shadowlock/shadowlock_indexer.py --watch --interval 60
+```
+
+**SQLite DB:** `var/trading-shadowlock/state/shadowlock.db`
+
+**Schema:** Three tables — `episodes`, `forensics_runs`, `shadowlock_events`.
+
+**Principle:** The SQLite DB is always rebuildable from JSONL — never treat
+it as source of truth.
+
+**Query functions:** See `shadowlock/shadowlock_indexer_queries.py`:
+- `get_recent_episodes(bot, days)` — recent episodes for a bot
+- `get_episodes_by_outcome(bot, outcome)` — episodes filtered by outcome
+- `get_hard_stop_episodes(bot, within_days)` — hard-stop episodes
+- `get_baseline_PF(bot)` — median baseline performance factor
+- `get_forensics_runs(limit)` — recent forensics runs
+- `episode_id_exists(episode_id)` — dedup check
+- `get_recent_events(bot_name, limit)` — recent shadow events
+
+**Indexer trigger:** The writer calls the indexer in non-blocking mode after
+each successful write. Failures are silently ignored (best-effort).
