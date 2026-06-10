@@ -1,0 +1,1 @@
+Source: ai4trade-bot #56 (merged PR #60)

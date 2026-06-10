@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "event_type": "heartbeat",
+  "source_system": "rainbow",
+  "source_id": "system:health",
+  "strategy_id": "rainbow_v1",
+  "model_id": null,
+  "symbol": "*",
+  "timeframe": null,
+  "timestamp_utc": "2026-06-10T13:00:00Z",
+  "emitted_at_utc": "2026-06-10T13:00:01Z",
+  "direction": "no_signal",
+  "confidence": 0.0,
+  "signal_strength": 0.0,
+  "regime_hint": null,
+  "metadata": {
+    "status": "healthy",
+    "collectors": {
+      "ta": "running",
+      "news": "running",
+      "twitter": "running",
+      "reddit": "stopped"
+    },
+    "uptime_seconds": 3600
+  },
+  "redaction_status": "clean"
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "event_type": "no_signal",
+  "source_system": "rainbow",
+  "source_id": "rainbow:ta",
+  "strategy_id": "rainbow_v1",
+  "model_id": null,
+  "symbol": "SOL/USDT:USDT",
+  "timeframe": "1h",
+  "timestamp_utc": "2026-06-10T13:00:00Z",
+  "emitted_at_utc": "2026-06-10T13:00:03Z",
+  "direction": "no_signal",
+  "confidence": 0.0,
+  "signal_strength": 0.0,
+  "regime_hint": null,
+  "metadata": {
+    "reason_codes": ["no_signal_conditions"],
+    "data_quality": {"status": "ok", "freshness_seconds": 10},
+    "features": {},
+    "raw_refs": []
+  },
+  "redaction_status": "clean"
+}
