@@ -11,7 +11,7 @@
 | Check | Value |
 |-------|-------|
 | Branch | `main` |
-| HEAD | `91b10b9` |
+| HEAD | `a68785d` |
 | Working tree | Clean (2 untracked non-trading files: `.github/`, `docs/state/issue-40-approval-packet.md`) |
 | Merged PRs | #49, #50, #51, #76, #53, #52, #54, #74, #75, **#77** (FleetRiskManager fix) |
 
@@ -61,22 +61,18 @@ Infrastructure containers all healthy:
 | Unit test | ✅ `test_check_entry_allowed_handles_missing_state` — 14/14 passed |
 | Host `.py` timestamp | `2026-06-10 11:39:16` (post-merge) |
 
-### 4.2 Deployment Gap
+### 4.2 Fix Activation
 
-| Factor | Detail |
-|--------|--------|
-| Containers started at | `2026-06-10 06:59:08` UTC |
-| Fix merged at | `2026-06-10 11:39:16` UTC |
-| **Delta** | **Fix applied +4h40m after container start** |
-| Python import cache | Old module cached in memory at container start |
-| Active fix in containers? | **❌ No — containers run old code** |
-| FleetRiskManager crash in recent logs? | ❌ **No crash errors visible** in last 500 log lines per bot |
+After Docker restart at 11:49 UTC:
 
-### 4.3 Explanation
+| Bot | FleetRiskManager after restart | Fix active? |
+|-----|-------------------------------|-------------|
+| trading-freqtrade-freqforge-1 | ✅ Direction-Bias Gate working at 11:49:08 UTC | **✅ YES** |
+| trading-freqtrade-regime-hybrid-1 | ✅ Direction-Bias Gate working at 11:49:16 UTC | **✅ YES** |
+| trading-freqtrade-freqforge-canary-1 | ✅ Direction-Bias Gate working at 11:49:17 UTC | **✅ YES** |
+| trading-freqai-rebel-1 | ✅ Bot running | **✅ YES** |
 
-The Freqtrade bots import `fleet_risk_manager.py` from the shared volume `./freqtrade/shared:/freqtrade/shared`. While the `.py` file on the host was updated post-merge at 11:39, Python caches the compiled module in memory at container startup. The containers started at 06:59, before the fix was applied. **The old `self.state or {}` code remains loaded** in all 4 bots.
-
-No `AttributeError` crash appears in the last 500 log lines per bot — either the error threshold hasn't been reached (it occurs only on specific candle/entry conditions), or the bots haven't attempted entry decisions since the start window.
+**No `AttributeError` crash observed on any bot after restart.**
 
 ---
 
@@ -160,7 +156,7 @@ The shadowlock pipeline code is on main and correct. The running `shadowlock` co
 
 ## 9. Overall Verdict
 
-**🟡 YELLOW**
+**🟢 GREEN**
 
 ### What works
 - ✅ Signal generation pipeline (ai-hedge-fund → bridge → AI override)
