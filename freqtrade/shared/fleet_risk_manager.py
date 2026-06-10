@@ -768,7 +768,7 @@ class FleetRiskManager:
 
     def _check_direction_bias(self, pending_direction: str) -> Tuple[bool, str]:
         """Blockiert wenn >70% aller offenen Trades in eine Direction."""
-        state = self.state or {}
+        state = getattr(self, "state", {}) or {}
         open_trades = [t for t in state.get("open_trades", []) if isinstance(t, dict)]
         if len(open_trades) < 2:
             return True, "OK — zu wenige Trades für Bias-Check"
