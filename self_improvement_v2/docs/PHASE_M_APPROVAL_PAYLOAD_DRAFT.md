@@ -3,6 +3,7 @@
 > **Issue:** #16
 > **Status:** Draft payload only.
 > **No runtime command in this document has been executed.**
+> **Issue #19 note:** typed `RuntimeProbeEvidence` and fail-closed summary redaction helpers now exist, but no probe runner or runtime execution is implemented here.
 
 ---
 
@@ -38,6 +39,7 @@ ceremony.
 11. Abort if `dry_run=false`, if live trading is detected, or if dry-run status
     cannot be confirmed safely from approved evidence.
 12. Abort if redaction fails before user-facing output or evidence storage.
+13. Store sanitized `RuntimeProbeEvidence` records by default with `raw_output_stored=false`.
 
 ---
 
@@ -56,6 +58,7 @@ Expected branch: feat/si-v2-foundation
 Expected base commit: 6a7f118dc2f99c2d3b684dd9d4f13dcbe73f123e or a later explicitly reviewed SI v2 docs-only/backlog commit
 Evidence path: self_improvement_v2/reports/runtime_probe/TO_BE_FILLED_BY_HUMAN_PROBE_ID
 Raw output storage: false
+Sanitized evidence schema: RuntimeProbeEvidence
 Maximum runtime duration: 10 minutes
 Per-command timeout: 15 seconds unless explicitly overridden below
 Redaction policy: PHASE_M_REDACTION_POLICY_V1 from this document
@@ -198,7 +201,7 @@ retention, access control, and redaction/containment rationale.
 ## 7. Redaction Policy V1
 
 Apply redaction before any user-facing report or normal evidence write.
-The future probe must abort if redaction fails.
+The implemented summary helper is fail-closed and the future probe must abort if redaction fails.
 
 | Class | Replacement |
 |-------|-------------|

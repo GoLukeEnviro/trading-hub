@@ -1,7 +1,7 @@
 # Controlled Read-Only Runtime Probe Plan — SI v2 Phase L
 
-> **Status:** Planning document only.
-> **No runtime probe code exists in this phase.**
+> **Status:** Planning document plus schema/redaction groundwork.
+> **Runtime execution remains unimplemented in this phase; only typed evidence and fail-closed redaction helpers exist.**
 > **No Docker, Freqtrade, Telegram, ai4trade-bot, exchange, database, cron, Hermes scheduler, or live runtime command was executed to create this document.**
 
 ---
@@ -180,7 +180,9 @@ Every future command must be documented with:
 ## 6. Future RuntimeProbeEvidence Model
 
 The future evidence record should be schema-defined before any probe executes.
-Phase L defines the schema conceptually only; no code is implemented.
+Issue #19 now implements the typed `RuntimeProbeEvidence` model and sanitized
+summary types in `src/si_v2/runtime_probe/models.py`, while probe execution
+remains out of scope.
 
 | Field | Type concept | Required | Description |
 |-------|--------------|----------|-------------|
@@ -214,7 +216,8 @@ retention rule; redacted summaries remain the default evidence artifact.
 ## 7. Mandatory Redaction Rules
 
 Redaction must happen before output is printed in a user-facing report or stored
-as normal evidence. The future implementation must treat failed redaction as a
+as normal evidence. Issue #19 implements fail-closed summary redaction helpers
+in `src/si_v2/runtime_probe/redaction.py`. Failed redaction is treated as a
 probe abort, not as a warning to ignore.
 
 | Sensitive class | Redaction requirement |
@@ -384,6 +387,7 @@ Phase M still needs all of the following before execution:
 
 ## 12. Phase L Confirmation
 
-This document is a plan only. It does not implement a probe adapter, runtime
-runner, redactor, evidence schema class, cron job, or scheduler integration.
+This document still does not implement a probe adapter, runtime runner, cron
+job, or scheduler integration. It now includes repository support for the
+evidence schema class and fail-closed redaction helpers only.
 It does not approve runtime access. It does not change live trading state.
