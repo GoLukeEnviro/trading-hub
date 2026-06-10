@@ -209,3 +209,43 @@ it can be applied to a live system.
 2. Should we support per-bot strategy variants or a single shared file?
 3. What is the rollback procedure if a patched strategy causes losses?
 4. Should backtest results be cached per parameter combination?
+
+---
+
+## Phase I Implementation — Strategy Mutation Sandbox (Complete)
+
+| Aspect | Implementation |
+|--------|---------------|
+| Scope | Sandbox-only mutation for `rsi_period` and `cooldown_candles` |
+| Location | `src/si_v2/propose/strategy_adapter/` |
+| Mutation method | AST-based (Python `ast` module) — parse, walk Assign nodes, replace value, `ast.unparse()` |
+| Path guard | `SandboxPathGuard` — rejects traversal, symlink escape, and live strategy paths (`user_data/strategies`, `freqtrade/strategies`) |
+| Sandbox isolation | `StrategySandbox` copies source to `sandbox_root/sandbox_{name}_{sha[:8]}.py` and creates byte-identical backup |
+| Mutation engine | `StrategyMutator` — finds single assignments via AST, adds missing parameters, rejects ambiguous duplicates, validates ranges (rsi_period 2–50, cooldown_candles 0–100) |
+| Validation chain | `StrategySandboxValidator` — checks backup exists, diff non-empty, Python compile, parameter ranges |
+| Test coverage | Schemas, path guard, sandbox, mutator, validator, live-path safety, integration |
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `src/si_v2/propose/strategy_adapter/__init__.py` | Package init |
+| `src/si_v2/propose/strategy_adapter/schema.py` | Pydantic models: `StrategyParameterName`, `StrategyMutationRequest`, `StrategyMutationPlan`, `StrategyMutationResult` |
+| `src/si_v2/propose/strategy_adapter/path_guard.py` | `SandboxPathGuard` with `resolve_sandbox_path`, `is_live_strategy_path`, `assert_sandbox_path` |
+| `src/si_v2/propose/strategy_adapter/sandbox.py` | `StrategySandbox.create()` — copies source + backup into sandbox |
+| `src/si_v2/propose/strategy_adapter/mutator.py` | `StrategyMutator.apply()` — AST-based parameter replacement |
+| `src/si_v2/propose/strategy_adapter/validator.py` | `StrategySandboxValidator.validate()` — 4-step safety chain |
+| `tests/fixtures/strategies/simple_strategy.py` | Fixture with both params |
+| `tests/fixtures/strategies/missing_param_strategy.py` | Fixture missing cooldown_candles |
+| `tests/fixtures/strategies/ambiguous_strategy.py` | Fixture with duplicate rsi_period |
+| `tests/fixtures/strategies/invalid_python_strategy.py` | Fixture with syntax error |
+| `tests/test_strategy_sandbox.py` | Comprehensive tests for all components |
+
+### Remaining Steps for Live Mutation
+
+1. **Gating integration** — Wire `StrategySandboxValidator` into the SI v2 approval gate before live deployment
+2. **Docker/Freqtrade integration** — Implement safe file copy into running Freqtrade containers
+3. **Shadow mode deployment** — Use `StrategyMutationPlan` as input to shadow-mode deployment (Phase K–M)
+4. **Live strategy path discovery** — Resolve `source_path` from bot config / Freqtrade container state
+5. **Rollback support** — Leverage sandbox backups for revert operations
+6. **Extended parameter set** — Add `stoploss_pct`, `take_profit_pct`, `stake_factor`, `max_open_trades` when live mutation is required
