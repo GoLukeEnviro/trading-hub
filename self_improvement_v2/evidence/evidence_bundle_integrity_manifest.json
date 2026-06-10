@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0",
+  "created_by": "EvidenceBundleIntegrityManifest",
+  "generated_at": "",
+  "file_count": 23,
+  "files": [
+    {
+      "file": "evidence/evidence_bundle.schema.json",
+      "sha256": "ff1027518726225461a3b21f3c071e33f3325cb3bac22ed09afbd826e627ecd8",
+      "size_bytes": 742
+    },
+    {
+      "file": "evidence/external_evidence_record.schema.json",
+      "sha256": "293b9fdc4c65285d20294d43d6076a4e1e4a719e7b74cff851dff67b1c8f5acc",
+      "size_bytes": 3343
+    },
+    {
+      "file": "evidence/source_manifest.json",
+      "sha256": "f0e2449f8a30bc7308b1b87c934067d7d552d27baeaceef97cd17504f5ae3b66",
+      "size_bytes": 1279
+    },
+    {
+      "file": "reports/evidence/evidence_bundle.json",
+      "sha256": "ed82acdb496cd24e24c7adec241d4924d943a2fe4d310996ec2fb46bae9f406a",
+      "size_bytes": 686
+    },
+    {
+      "file": "reports/readiness/offline_quality_gate_report.md",
+      "sha256": "2658b42eabaf44bda703a65f176414e399bf01a280f2747a961dfdb703ec5782",
+      "size_bytes": 392
+    },
+    {
+      "file": "reports/attribution/offline_attribution_summary.json",
+      "sha256": "c628afac66b82e8a73cd4c876499152b8f1203f5416e7ba6d5f021d351e0f249",
+      "size_bytes": 536
+    },
+    {
+      "file": "reports/attribution/offline_attribution_summary.md",
+      "sha256": "cd9fc6b3d14e9b5f007135e872338407a88f2e551ece996f2921f5268ac08983",
+      "size_bytes": 360
+    },
+    {
+      "file": "episode/offline_episode_manifest.json",
+      "sha256": "24f637743a2f5a5cf31b7ad89f8f0af5bfdf19159f37a7560aefbebfac8334c2",
+      "size_bytes": 2336
+    },
+    {
+      "file": "reports/episode/offline_episode_report.md",
+      "sha256": "917135399bf37c66087775436e435995bd073b1b842d76e54ee1a7c2a62d1ce5",
+      "size_bytes": 1190
+    },
+    {
+      "file": "fixtures/rainbow-signals/heartbeat.json",
+      "sha256": "0faae9a7f777ae43e61ef8334af1cfb2777eab632cf32f37ede97f5bd54f1cf8",
+      "size_bytes": 624
+    },
+    {
+      "file": "fixtures/rainbow-signals/malformed_missing_required_fields.json",
+      "sha256": "45025b2b7b85c9f61d5e0ce4254685cadb5b569cdade7ec59d8f7c9fd68289a0",
+      "size_bytes": 85
+    },
+    {
+      "file": "fixtures/rainbow-signals/no_signal.json",
+      "sha256": "87b52a550f7a0fedf8a851a085d3fad4ee2b90cee5cc17d783eacc0d5678a58f",
+      "size_bytes": 600
+    },
+    {
+      "file": "fixtures/rainbow-signals/partial_metadata_signal.json",
+      "sha256": "a6bc256bf5f6b19eab558c627db5de41f17e13ffd22f711f4175820c263bcda9",
+      "size_bytes": 627
+    },
+    {
+      "file": "fixtures/rainbow-signals/stale_signal.json",
+      "sha256": "36137266d2976aea0f0688ae2fcb456f3dfffcc6b9b88e1641fe1f26b404bd05",
+      "size_bytes": 592
+    },
+    {
+      "file": "fixtures/rainbow-signals/valid_long_signal.json",
+      "sha256": "524707f0eb4fb66ebdbfa897d013ea7e02fe53895aa7908c27e6ec6f308e49de",
+      "size_bytes": 645
+    },
+    {
+      "file": "fixtures/rainbow-signals/valid_short_signal.json",
+      "sha256": "9bae730bae91f3e0bf4ed75624c84474525e7592793f603e6c243d1b0bac4192",
+      "size_bytes": 681
+    },
+    {
+      "file": "fixtures/regime-labels/bearish_regime.json",
+      "sha256": "9de7988525f64a46b929e506d3b03a9c40b132b17e5158c47526bce041e45289",
+      "size_bytes": 341
+    },
+    {
+      "file": "fixtures/regime-labels/bullish_regime.json",
+      "sha256": "c61e8236fcd24d1e6bf365bda2ba108b209487d650db25940539096eb660c75e",
+      "size_bytes": 341
+    },
+    {
+      "file": "fixtures/regime-labels/sideways_regime.json",
+      "sha256": "7bdc8c0edfb2eabfd8de95fee661218af6dd2560240bbbf643aacffa88d63399",
+      "size_bytes": 333
+    },
+    {
+      "file": "fixtures/regime-labels/unknown_regime.json",
+      "sha256": "7deb55564e57b0e95701d332784371d8ed34c422eb321d0eda3196f019430ab9",
+      "size_bytes": 282
+    },
+    {
+      "file": "fixtures/regime-labels/volatile_regime.json",
+      "sha256": "452899e6ee5026b754bb33042ec2e32c18498ae13b030d95ab915115c1d2bcc6",
+      "size_bytes": 348
+    },
+    {
+      "file": "fixtures/source-regime-stats/rainbow_llm_bearish.json",
+      "sha256": "2eb179ea7c10a2db777a119ed7c21da5f50fe81a175be6d466f2a29f5377f20d",
+      "size_bytes": 170
+    },
+    {
+      "file": "fixtures/source-regime-stats/rainbow_ta_bullish.json",
+      "sha256": "ab0113358484851d3a9ed5da412d9f1b76acca8c63c69ccb1023f8bf98c4a0f0",
+      "size_bytes": 170
+    }
+  ]
+}
