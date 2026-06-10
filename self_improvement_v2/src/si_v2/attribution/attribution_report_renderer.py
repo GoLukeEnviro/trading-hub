@@ -101,7 +101,7 @@ class AttributionReportRenderer:
                 1 for r in rows if isinstance(r, dict) and float(r.get("avg_confidence", 0)) < 0.6
             )
             lines.append(f"- **High (≥0.80):** {high_conf}")
-            lines.append(f"- **Medium (0.60–0.79):** {mid_conf}")
+            lines.append(f"- **Medium (0.60-0.79):** {mid_conf}")
             lines.append(f"- **Low (<0.60):** {low_conf}")
         else:
             lines.append("*No source-regime data available.*")
