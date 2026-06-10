@@ -1,0 +1,30 @@
+{
+  "comment": "Valid draft proposal — stage=draft with minimal required fields only (no approval packet details)",
+  "schema_version": "1.0",
+  "stage": "draft",
+  "proposal": {
+    "proposal_id": "rp-20250610-120001-efgh",
+    "proposal_name": "Draft Test Proposal",
+    "proposed_by": "draft-agent",
+    "proposed_date_utc": "2025-06-10T12:00:01Z",
+    "rehearsal_mode": "shadow-mode",
+    "scope_description": "Draft scope for testing",
+    "out_of_scope": "Nothing yet",
+    "duration_estimate": "TBD",
+    "target_components": ["component-x"],
+    "prerequisite_status": "Pending verification",
+    "stop_conditions": "Pending",
+    "evidence_plan": "Pending",
+    "observation_plan": "Pending",
+    "residual_risks": "Unknown",
+    "approval_token": "APPROVE_REHEARSAL_PROPOSAL_250610"
+  },
+  "planning_gate_reference": "controlled_rehearsal_planning_gate.md",
+  "stop_condition_reference": "rehearsal_stop_condition_matrix.json",
+  "evidence_plan_reference": "rehearsal_evidence_bundle_plan.md",
+  "approval_packet_reference": "operator_rehearsal_approval_packet.md",
+  "observation_plan_reference": "read_only_observation_plan.md",
+  "readiness_record_reference": "rehearsal_readiness_decision_record.md",
+  "non_production_confirmation": true,
+  "non_runtime_confirmation": true
+}

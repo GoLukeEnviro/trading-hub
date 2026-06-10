@@ -1,0 +1,30 @@
+{
+  "comment": "Unsafe paths — contains /home/hermes/ absolute paths which should be flagged by the redaction checker",
+  "schema_version": "1.0",
+  "stage": "draft",
+  "proposal": {
+    "proposal_id": "rp-20250610-120007-cdef",
+    "proposal_name": "Unsafe Paths Test",
+    "proposed_by": "test-agent",
+    "proposed_date_utc": "2025-06-10T12:00:07Z",
+    "rehearsal_mode": "read-only",
+    "scope_description": "Test detecting unsafe absolute paths in content",
+    "out_of_scope": "Nothing",
+    "duration_estimate": "5 minutes",
+    "target_components": ["test"],
+    "prerequisite_status": "All files verified in /home/hermes/projects/trading/",
+    "stop_conditions": "OK",
+    "evidence_plan": "See /home/hermes/projects/evidence.md",
+    "observation_plan": "OK",
+    "residual_risks": "The path /opt/data/config.json may contain secrets",
+    "approval_token": "APPROVE_REHEARSAL_PROPOSAL_250610"
+  },
+  "planning_gate_reference": "controlled_rehearsal_planning_gate.md",
+  "stop_condition_reference": "/home/hermes/projects/rehearsal_stop_condition_matrix.json",
+  "evidence_plan_reference": "rehearsal_evidence_bundle_plan.md",
+  "approval_packet_reference": "operator_rehearsal_approval_packet.md",
+  "observation_plan_reference": "read_only_observation_plan.md",
+  "readiness_record_reference": "rehearsal_readiness_decision_record.md",
+  "non_production_confirmation": true,
+  "non_runtime_confirmation": true
+}

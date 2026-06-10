@@ -1,0 +1,41 @@
+{
+  "comment": "Multiple errors — combines at least 3 error types: missing planning_gate_reference, unsafe paths (/home/ and /opt/data/), and unsafe content (unredacted api_key). Tests that the validator reports all errors.",
+  "schema_version": "1.0",
+  "stage": "final",
+  "proposal": {
+    "proposal_id": "rp-20250610-120009-klmn",
+    "proposal_name": "Multiple Errors Test",
+    "proposed_by": "test-agent",
+    "proposed_date_utc": "2025-06-10T12:00:09Z",
+    "rehearsal_mode": "read-only",
+    "scope_description": "Test combined error detection with unsafe paths in /home/hermes/projects/config and /opt/data/secrets",
+    "out_of_scope": "Nothing",
+    "duration_estimate": "5 minutes",
+    "target_components": ["test"],
+    "prerequisite_status": "api_key check needed in /home/hermes/projects/",
+    "stop_conditions": "api_secret must be redacted",
+    "evidence_plan": "Check wallet at 0x1234567890abcdef1234567890abcdef12345678",
+    "observation_plan": "OK",
+    "residual_risks": "Deploy path /opt/data/config.json has secrets",
+    "approval_token": "APPROVE_REHEARSAL_PROPOSAL_250610"
+  },
+  "stop_condition_reference": "rehearsal_stop_condition_matrix.json",
+  "evidence_plan_reference": "rehearsal_evidence_bundle_plan.md",
+  "approval_packet_reference": {
+    "operator_name": "Operator",
+    "review_date_utc": "2025-06-10T12:00:00Z",
+    "approval_token": "APPROVE_REHEARSAL_250610_abcd",
+    "allowed_actions_confirmed": true,
+    "forbidden_actions_acknowledged": true,
+    "non_live_confirmed": true
+  },
+  "observation_plan_reference": "read_only_observation_plan.md",
+  "readiness_record_reference": {
+    "readiness_verdict": "GREEN",
+    "blockers_identified": false,
+    "gaps_documented": false,
+    "residual_risks_assessed": true
+  },
+  "non_production_confirmation": true,
+  "non_runtime_confirmation": true
+}
