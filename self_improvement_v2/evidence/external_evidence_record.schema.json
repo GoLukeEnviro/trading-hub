@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/GoLukeEnviro/trading-hub/blob/main/self_improvement_v2/evidence/external_evidence_record.schema.json",
+  "title": "External Evidence Record",
+  "description": "Schema for evidence records from external signal providers (e.g. Rainbow). Aligned with the SI v2 evidence pipeline and Shadowlock audit event mapper (#81).",
+  "type": "object",
+  "version": "1",
+  "properties": {
+    "evidence_schema_version": {
+      "type": "integer",
+      "description": "Evidence schema version. Must be >= 1.",
+      "minimum": 1
+    },
+    "provider_id": {
+      "type": "string",
+      "description": "Provider identifier (e.g. 'rainbow').",
+      "examples": ["rainbow"]
+    },
+    "source_id": {
+      "type": "string",
+      "description": "Specific source within the provider (e.g. 'rainbow:ta', 'rainbow:llm').",
+      "examples": ["rainbow:ta", "rainbow:llm"]
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Evidence event type (aligned with Shadowlock audit event categories).",
+      "enum": [
+        "signal_validated",
+        "signal_rejected",
+        "signal_stale",
+        "heartbeat_observed",
+        "no_signal_observed",
+        "fixture_validation_summary"
+      ]
+    },
+    "validator_verdict": {
+      "type": "string",
+      "description": "Validation verdict from the SI v2 validator.",
+      "enum": ["pass", "warn", "fail"]
+    },
+    "is_actionable": {
+      "type": "boolean",
+      "description": "Whether the evidence is actionable. Non-actionable evidence includes heartbeats, no-signal events, stale signals, and rejected signals."
+    },
+    "direction": {
+      "type": "string",
+      "description": "Signal direction (trading-hub canonical values).",
+      "enum": ["long", "short", "flat", "no_signal", "unknown"]
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Signal confidence score. Range: 0.0–1.0.",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "symbol": {
+      "type": "string",
+      "description": "Trading pair symbol."
+    },
+    "timeframe": {
+      "type": ["string", "null"],
+      "description": "Optional candle timeframe."
+    },
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Signal timestamp in ISO-8601 UTC."
+    },
+    "observed_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the evidence was observed/recorded."
+    },
+    "redaction_status": {
+      "type": "string",
+      "enum": ["clean", "redacted", "unchecked"],
+      "description": "Redaction status of the evidence record."
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Non-fatal errors from validation or processing."
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Warnings from validation or processing."
+    },
+    "metadata_summary": {
+      "type": "string",
+      "description": "Summary of signal metadata (reason codes, data quality, etc.)."
+    }
+  },
+  "required": [
+    "evidence_schema_version",
+    "provider_id",
+    "event_type",
+    "validator_verdict",
+    "is_actionable",
+    "timestamp_utc",
+    "observed_at_utc",
+    "redaction_status"
+  ]
+}

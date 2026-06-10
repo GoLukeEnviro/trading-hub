@@ -1,0 +1,18 @@
+{
+  "evidence_schema_version": 1,
+  "provider_id": "rainbow",
+  "source_id": "rainbow:ta",
+  "event_type": "signal_validated",
+  "validator_verdict": "pass",
+  "is_actionable": true,
+  "direction": "long",
+  "confidence": 0.85,
+  "symbol": "BTC/USDT:USDT",
+  "timeframe": "1h",
+  "timestamp_utc": "2026-06-10T13:00:00Z",
+  "observed_at_utc": "2026-06-10T13:00:03Z",
+  "redaction_status": "clean",
+  "errors": [],
+  "warnings": [],
+  "metadata_summary": "reasons=ta_rsi_oversold,trend_reversal; data_quality=ok"
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-06-10",
+  "providers": [
+    {
+      "provider_id": "rainbow",
+      "source_type": "external_signal_provider",
+      "status": "fixture_only",
+      "contract_version": "1",
+      "contract_path": "self_improvement_v2/contracts/rainbow_signal_envelope.schema.json",
+      "fixture_path": "self_improvement_v2/fixtures/rainbow-signals",
+      "report_path": "self_improvement_v2/reports/rainbow/fixture_review_report.md",
+      "validator_path": "self_improvement_v2/src/si_v2/rainbow/validator.py",
+      "client_path": "self_improvement_v2/src/si_v2/rainbow/client.py",
+      "events_path": "self_improvement_v2/src/si_v2/rainbow/shadowlock_events.py",
+      "drift_report_path": "self_improvement_v2/reports/rainbow/contract_drift_report.md",
+      "shadowlock_preview_path": "self_improvement_v2/reports/rainbow/shadowlock_event_preview.md",
+      "owner_notes": "Rainbow is the first external signal provider integrated into the SI v2 evidence pipeline. Currently in fixture-only mode — live provider requires explicit opt-in via RainbowClientConfig."
+    }
+  ],
+  "notes": "This manifest registers known external signal providers for the SI v2 evidence pipeline. Additional providers may be added in future phases."
+}
