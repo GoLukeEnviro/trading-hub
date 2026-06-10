@@ -46,3 +46,25 @@
 
 - Alte Collection `hermes_memories_v2` bleibt als Backup
 - `MEM0_COLLECTION=hermes_memories_v2` + `docker compose restart green-mem0` = sofort zurück
+
+## Cron-Fixes (2026-06-10)
+
+**Problem (nicht klassischer Cron-Daemon):** Der Hermes Orchestrator Scheduler läuft zuverlässig (alle Jobs werden getriggert). Zwei spezifische Fehler betrafen die Memory-Cron-Jobs:
+
+1. **memory_backfill (alle 2h) → Timeout nach 120s**
+   - Root Cause: `_DEFAULT_SCRIPT_TIMEOUT = 120` in `/opt/hermes/cron/scheduler.py:919`
+   - Fix: `script_timeout_seconds: 300` in `/opt/data/config.yaml` (cron section)
+   - Wirkung: Nächster Lauf hat 300s statt 120s
+
+2. **dream_mode + ledger-watchdog → PermissionError in docs/context/**
+   - Root Cause: UID-Mismatch — Container läuft als UID 10000, aber `docs/context/` auf dem Host ist UID 1337 (`hermes`). Schreibzugriff blockiert.
+   - Fix: `setfacl -R -m u:10000:rwx /home/hermes/projects/trading/docs/context/`
+   - Wirkung: UID 10000 kann jetzt schreiben ✅
+
+3. **Qdrant Backup-Cron**
+   - Installiert: `/etc/cron.d/qdrant-backup`
+   - Schedule: täglich 03:00 UTC
+   - Kommando: `docker run alpine tar czf` → `/opt/backups/qdrant/`
+   - Retention: 7 Tage (mtime +7)
+   - Log: `/var/log/hermes-cron.log`
+   - Getestet: 11 MB für ~290 Points ✅
