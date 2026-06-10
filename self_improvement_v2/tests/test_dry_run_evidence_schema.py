@@ -17,6 +17,7 @@ from pydantic import (
     Field,
     ValidationError,
     field_validator,
+    model_validator,
 )
 
 SCHEMA_DIR = Path(__file__).resolve().parent.parent / "evidence"
@@ -62,7 +63,7 @@ class CommandClass(BaseModel, frozen=True):
         pattern=r"^(read_only_inspection|read_only_config|bot_status|trade_history_read|backtest|signal_read|config_comparison|report_generation|other_read_only)$"
     )
     target_bots: list[str] = Field(default_factory=list, max_length=64)
-    commands_executed: list[str] = Field(default_factory=list, max_length=256)
+    commands_executed: list[str] = Field(min_length=1, max_length=256)
 
 
 class SafetyState(BaseModel, frozen=True):
@@ -99,7 +100,7 @@ class Artifacts(BaseModel, frozen=True):
     log_paths: list[str] = Field(default_factory=list, max_length=512)
     report_paths: list[str] = Field(default_factory=list, max_length=512)
     evidence_paths: list[str] = Field(default_factory=list, max_length=512)
-    artifact_count: int = Field(ge=0)
+    artifact_count: int = Field(ge=1)
 
 
 class ValidationOutcome(BaseModel, frozen=True):
@@ -111,14 +112,21 @@ class ValidationOutcome(BaseModel, frozen=True):
 
 class DryRunEvidenceRecord(BaseModel, frozen=True):
     schema_version: int = Field(ge=1)
+    record_stage: str = Field(pattern=r"^(draft|final)$")
     run_identity: RunIdentity
     approval_refs: ApprovalRefs
     environment_summary: EnvironmentSummary
     command_class: CommandClass
     safety_state: SafetyState
-    artifacts: Artifacts | None = None
+    artifacts: Artifacts
     validation_outcome: ValidationOutcome
     notes: str | None = Field(None, max_length=4096)
+
+    @model_validator(mode="after")
+    def _final_records_must_validate(self) -> DryRunEvidenceRecord:
+        if self.record_stage == "final" and self.validation_outcome.status == "not_run":
+            raise ValueError("final dry-run evidence cannot have validation_outcome.status=not_run")
+        return self
 
 
 # ──────────────────────────────────────────────
@@ -127,6 +135,7 @@ class DryRunEvidenceRecord(BaseModel, frozen=True):
 
 VALID_RECORD = {
     "schema_version": 1,
+    "record_stage": "final",
     "run_identity": {
         "run_id": "dr-20260610-143000-a1b2c3d4",
         "run_name": "phase-m-rehearsal-signal-validation",
@@ -238,6 +247,40 @@ INVALID_RECORDS: list[tuple[str, dict]] = [
             },
         },
     ),
+    (
+        "missing required artifacts",
+        {k: v for k, v in VALID_RECORD.items() if k != "artifacts"},
+    ),
+    (
+        "missing required commands_executed",
+        {
+            **VALID_RECORD,
+            "command_class": {
+                k: v for k, v in VALID_RECORD["command_class"].items()
+                if k != "commands_executed"
+            },
+        },
+    ),
+    (
+        "empty artifact count is invalid",
+        {
+            **VALID_RECORD,
+            "artifacts": {
+                **VALID_RECORD["artifacts"],
+                "artifact_count": 0,
+            },
+        },
+    ),
+    (
+        "final record cannot have not_run validation",
+        {
+            **VALID_RECORD,
+            "validation_outcome": {
+                **VALID_RECORD["validation_outcome"],
+                "status": "not_run",
+            },
+        },
+    ),
 ]
 
 
@@ -265,12 +308,26 @@ class TestDryRunEvidenceSchema:
         assert record.safety_state.safety_verdict == "safe"
         assert record.validation_outcome.status == "passed"
 
-    def test_valid_record_without_optional_fields(self) -> None:
-        """A record without optional artifacts and notes must still validate."""
-        minimal = {k: v for k, v in VALID_RECORD.items() if k not in ("artifacts", "notes")}
+    def test_valid_record_without_optional_notes(self) -> None:
+        """A record without optional notes must still validate."""
+        minimal = {k: v for k, v in VALID_RECORD.items() if k != "notes"}
         record = DryRunEvidenceRecord(**minimal)
-        assert record.artifacts is None
+        assert record.artifacts.artifact_count == 3
         assert record.notes is None
+
+    def test_draft_record_can_have_not_run_validation(self) -> None:
+        """Draft evidence can explicitly mark validation as not_run."""
+        draft = {
+            **VALID_RECORD,
+            "record_stage": "draft",
+            "validation_outcome": {
+                **VALID_RECORD["validation_outcome"],
+                "status": "not_run",
+            },
+        }
+        record = DryRunEvidenceRecord(**draft)
+        assert record.record_stage == "draft"
+        assert record.validation_outcome.status == "not_run"
 
     @pytest.mark.parametrize("reason,record", INVALID_RECORDS)
     def test_invalid_records_fail(self, reason: str, record: dict) -> None:

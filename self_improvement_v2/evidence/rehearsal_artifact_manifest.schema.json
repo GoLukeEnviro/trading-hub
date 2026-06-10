@@ -43,7 +43,9 @@
           "description": "Scope of the approval."
         }
       },
-      "required": ["approval_token"],
+      "required": [
+        "approval_token"
+      ],
       "additionalProperties": false
     },
     "artifact_count": {
@@ -61,7 +63,11 @@
       "properties": {
         "policy": {
           "type": "string",
-          "enum": ["permanent", "archive_after_days", "delete_after_days"],
+          "enum": [
+            "permanent",
+            "archive_after_days",
+            "delete_after_days"
+          ],
           "description": "Retention policy for this artifact set."
         },
         "retention_days": {
@@ -75,7 +81,9 @@
           "description": "Explicit expiry timestamp."
         }
       },
-      "required": ["policy"],
+      "required": [
+        "policy"
+      ],
       "additionalProperties": false
     },
     "artifacts": {
@@ -86,7 +94,23 @@
           "path": {
             "type": "string",
             "maxLength": 512,
-            "description": "Relative path to the artifact file."
+            "description": "Relative path to the artifact file. Must not be absolute, contain path traversal, or contain secret-looking path components.",
+            "not": {
+              "anyOf": [
+                {
+                  "pattern": "^/"
+                },
+                {
+                  "pattern": "(^|/)\\.\\.(/|$)"
+                },
+                {
+                  "pattern": "(^|/)\\.env($|[./])"
+                },
+                {
+                  "pattern": "(^|/|[-_.])(token|secret|key|credential|wallet)([-_.]|/|$)"
+                }
+              ]
+            }
           },
           "sha256": {
             "type": "string",
@@ -118,7 +142,12 @@
             "description": "Human-readable description of the artifact."
           }
         },
-        "required": ["path", "sha256", "size_bytes", "artifact_type"],
+        "required": [
+          "path",
+          "sha256",
+          "size_bytes",
+          "artifact_type"
+        ],
         "additionalProperties": false
       },
       "minItems": 0,
@@ -148,12 +177,23 @@
           "description": "Paths found on disk but not listed in manifest."
         }
       },
-      "required": ["all_checksums_valid"],
+      "required": [
+        "all_checksums_valid"
+      ],
       "additionalProperties": false
+    },
+    "manifest_stage": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "final"
+      ],
+      "description": "Manifest lifecycle stage. Final manifests must contain at least one artifact."
     }
   },
   "required": [
     "schema_version",
+    "manifest_stage",
     "manifest_id",
     "run_ref",
     "generated_at_utc",
@@ -164,5 +204,23 @@
     "artifacts",
     "validation_summary"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "manifest_stage": {
+            "const": "final"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "artifacts": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
 }

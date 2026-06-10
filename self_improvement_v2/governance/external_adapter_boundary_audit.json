@@ -16,7 +16,7 @@
       "env_flag": null,
       "default_state": "enabled",
       "safe_for_rehearsal": true,
-      "rehearsal_notes": "Deterministic mock — always safe. No env var required.",
+      "rehearsal_notes": "Deterministic mock \u2014 always safe. No env var required.",
       "risk_level": "none",
       "write_capable": false
     },
@@ -29,7 +29,7 @@
       "env_flag": null,
       "default_state": "enabled",
       "safe_for_rehearsal": true,
-      "rehearsal_notes": "Deterministic mock — always safe. No env var required.",
+      "rehearsal_notes": "Deterministic mock \u2014 always safe. No env var required.",
       "risk_level": "none",
       "write_capable": false
     },
@@ -41,10 +41,15 @@
       "gate_required": true,
       "env_flag": "SI_V2_ENABLE_REAL_ADAPTERS",
       "default_state": "disabled-by-default",
-      "safe_for_rehearsal": true,
-      "rehearsal_notes": "Read-only Docker operations only. Limited to exec, status check, IP lookup. Requires SI_V2_ENABLE_REAL_ADAPTERS=1 to instantiate. All methods are read-only by design.",
+      "safe_for_rehearsal": false,
+      "rehearsal_notes": "Read-only Docker operations only. Limited to exec, status check, IP lookup. Requires SI_V2_ENABLE_REAL_ADAPTERS=1 to instantiate. All methods are read-only by design. Not safe by default: only eligible after explicit human approval, passed runtime preflight, and the required environment gate is intentionally enabled.",
       "risk_level": "low",
-      "write_capable": false
+      "write_capable": false,
+      "safe_only_after": [
+        "explicit_human_approval",
+        "runtime_preflight_passed",
+        "SI_V2_ENABLE_REAL_ADAPTERS=1"
+      ]
     },
     {
       "name": "RealFreqtradeAdapter",
@@ -54,10 +59,15 @@
       "gate_required": true,
       "env_flag": "SI_V2_ENABLE_REAL_ADAPTERS",
       "default_state": "disabled-by-default",
-      "safe_for_rehearsal": true,
-      "rehearsal_notes": "Read-only Freqtrade operations via docker exec. Limited to config read, trade history, backtest. Requires SI_V2_ENABLE_REAL_ADAPTERS=1.",
+      "safe_for_rehearsal": false,
+      "rehearsal_notes": "Read-only Freqtrade operations via docker exec. Limited to config read, trade history, backtest. Requires SI_V2_ENABLE_REAL_ADAPTERS=1. Not safe by default: only eligible after explicit human approval, passed runtime preflight, and the required environment gate is intentionally enabled.",
       "risk_level": "low",
-      "write_capable": false
+      "write_capable": false,
+      "safe_only_after": [
+        "explicit_human_approval",
+        "runtime_preflight_passed",
+        "SI_V2_ENABLE_REAL_ADAPTERS=1"
+      ]
     },
     {
       "name": "RealTelegramAdapterBase",
@@ -96,7 +106,7 @@
       "env_flag": null,
       "default_state": "enabled",
       "safe_for_rehearsal": true,
-      "rehearsal_notes": "Protocol class — defines the interface. No runtime side effects.",
+      "rehearsal_notes": "Protocol class \u2014 defines the interface. No runtime side effects.",
       "risk_level": "none",
       "write_capable": false
     },
@@ -109,7 +119,7 @@
       "env_flag": null,
       "default_state": "enabled",
       "safe_for_rehearsal": true,
-      "rehearsal_notes": "Protocol class — defines the interface. No runtime side effects.",
+      "rehearsal_notes": "Protocol class \u2014 defines the interface. No runtime side effects.",
       "risk_level": "none",
       "write_capable": false
     },
@@ -134,15 +144,16 @@
     "read_only_with_docker": 2,
     "write_capable": 2,
     "disabled_by_default": 5,
-    "safe_for_rehearsal": 6,
+    "safe_for_rehearsal": 4,
     "gate_required": 5,
-    "rehearsal_blocked": 3
+    "rehearsal_blocked": 5
   },
   "rules": [
     "All write-capable adapters require SI_V2_ENABLE_REAL_ADAPTERS=1 to instantiate.",
     "All write-capable adapters are disabled-by-default and NOT safe for rehearsal.",
     "Read-only adapters with Docker access require SI_V2_ENABLE_REAL_ADAPTERS=1 gate.",
     "No adapter may be reclassified from disabled-by-default to enabled without human approval.",
-    "The env flag SI_V2_ENABLE_REAL_ADAPTERS must remain unset in all non-rehearsal environments."
+    "The env flag SI_V2_ENABLE_REAL_ADAPTERS must remain unset in all non-rehearsal environments.",
+    "Read-only real adapters are not safe by default; they are only eligible after explicit approval, passed preflight, and intentional gate enablement."
   ]
 }

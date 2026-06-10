@@ -70,8 +70,13 @@ class TestExternalAdapterBoundaryAudit:
                 )
 
     def test_read_only_with_docker_adapters_require_gate(self) -> None:
-        """Read-only adapters with Docker access must require a gate."""
+        """Read-only adapters with Docker access must require gate, preflight, and approval."""
         data = json.loads(AUDIT_PATH.read_text(encoding="utf-8"))
+        required_conditions = {
+            "explicit_human_approval",
+            "runtime_preflight_passed",
+            "SI_V2_ENABLE_REAL_ADAPTERS=1",
+        }
         for adapter in data["adapters"]:
             if adapter["classification"] == "read-only-with-docker":
                 assert adapter["gate_required"] is True, (
@@ -80,6 +85,14 @@ class TestExternalAdapterBoundaryAudit:
                 assert adapter["default_state"] == "disabled-by-default", (
                     f"Docker adapter '{adapter['name']}' must be disabled-by-default"
                 )
+                assert adapter["safe_for_rehearsal"] is False, (
+                    f"Docker adapter '{adapter['name']}' must not be safe by default"
+                )
+                assert set(adapter["safe_only_after"]) == required_conditions
+                notes = adapter["rehearsal_notes"].lower()
+                assert "explicit human approval" in notes
+                assert "preflight" in notes
+                assert "gate" in notes
 
     def test_no_unsafe_adapters_safe_for_rehearsal(self) -> None:
         """No adapter with risk_level >= medium may be safe for rehearsal."""

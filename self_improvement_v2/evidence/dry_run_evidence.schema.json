@@ -33,7 +33,12 @@
           "description": "Agent or user who initiated the run."
         }
       },
-      "required": ["run_id", "run_name", "created_at_utc", "created_by"],
+      "required": [
+        "run_id",
+        "run_name",
+        "created_at_utc",
+        "created_by"
+      ],
       "additionalProperties": false
     },
     "approval_refs": {
@@ -60,7 +65,11 @@
           "description": "Optional expiry for time-limited approval."
         }
       },
-      "required": ["approval_token", "approval_timestamp_utc", "approval_scope"],
+      "required": [
+        "approval_token",
+        "approval_timestamp_utc",
+        "approval_scope"
+      ],
       "additionalProperties": false
     },
     "environment_summary": {
@@ -92,7 +101,11 @@
           "description": "Must always be true for dry-run evidence."
         }
       },
-      "required": ["git_branch", "git_commit", "dry_run_flag"],
+      "required": [
+        "git_branch",
+        "git_commit",
+        "dry_run_flag"
+      ],
       "additionalProperties": false
     },
     "command_class": {
@@ -128,10 +141,14 @@
             "type": "string",
             "maxLength": 256
           },
-          "description": "Redacted list of commands or API calls executed."
+          "description": "Redacted list of commands or API calls executed.",
+          "minItems": 1
         }
       },
-      "required": ["category"],
+      "required": [
+        "category",
+        "commands_executed"
+      ],
       "additionalProperties": false
     },
     "safety_state": {
@@ -140,17 +157,17 @@
         "live_forbidden_confirmed": {
           "type": "boolean",
           "const": true,
-          "description": "Must be true — confirms LIVE_FORBIDDEN state."
+          "description": "Must be true \u2014 confirms LIVE_FORBIDDEN state."
         },
         "dry_run_mode_confirmed": {
           "type": "boolean",
           "const": true,
-          "description": "Must be true — confirms all bots are in dry_run=true."
+          "description": "Must be true \u2014 confirms all bots are in dry_run=true."
         },
         "no_secrets_exposed": {
           "type": "boolean",
           "const": true,
-          "description": "Must be true — confirms no credentials in output."
+          "description": "Must be true \u2014 confirms no credentials in output."
         },
         "riskguard_available": {
           "type": "boolean",
@@ -162,7 +179,11 @@
         },
         "safety_verdict": {
           "type": "string",
-          "enum": ["safe", "degraded", "blocked"],
+          "enum": [
+            "safe",
+            "degraded",
+            "blocked"
+          ],
           "description": "Overall safety verdict for this run."
         }
       },
@@ -183,7 +204,8 @@
             "type": "string",
             "maxLength": 512
           },
-          "description": "Relative paths to log files produced."
+          "description": "Relative paths to log files produced.",
+          "minItems": 0
         },
         "report_paths": {
           "type": "array",
@@ -191,7 +213,8 @@
             "type": "string",
             "maxLength": 512
           },
-          "description": "Relative paths to report files produced."
+          "description": "Relative paths to report files produced.",
+          "minItems": 0
         },
         "evidence_paths": {
           "type": "array",
@@ -199,15 +222,18 @@
             "type": "string",
             "maxLength": 512
           },
-          "description": "Relative paths to evidence files produced."
+          "description": "Relative paths to evidence files produced.",
+          "minItems": 0
         },
         "artifact_count": {
           "type": "integer",
-          "minimum": 0,
+          "minimum": 1,
           "description": "Total count of all artifacts produced."
         }
       },
-      "required": ["artifact_count"],
+      "required": [
+        "artifact_count"
+      ],
       "additionalProperties": false
     },
     "validation_outcome": {
@@ -215,7 +241,12 @@
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["passed", "failed", "degraded", "not_run"],
+          "enum": [
+            "passed",
+            "failed",
+            "degraded",
+            "not_run"
+          ],
           "description": "Validation status."
         },
         "failures": {
@@ -240,13 +271,23 @@
           "description": "When validation completed."
         }
       },
-      "required": ["status"],
+      "required": [
+        "status"
+      ],
       "additionalProperties": false
     },
     "notes": {
       "type": "string",
       "maxLength": 4096,
       "description": "Optional free-form notes about this run."
+    },
+    "record_stage": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "final"
+      ],
+      "description": "Record lifecycle stage. Final records must contain executable evidence and validation results."
     }
   },
   "required": [
@@ -256,7 +297,35 @@
     "environment_summary",
     "command_class",
     "safety_state",
-    "validation_outcome"
+    "validation_outcome",
+    "record_stage",
+    "artifacts"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "record_stage": {
+            "const": "final"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "validation_outcome": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "passed",
+                  "failed",
+                  "degraded"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

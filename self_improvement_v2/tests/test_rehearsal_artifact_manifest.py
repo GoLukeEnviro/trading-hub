@@ -16,6 +16,8 @@ from pydantic import (
     BaseModel,
     Field,
     ValidationError,
+    field_validator,
+    model_validator,
 )
 
 SCHEMA_DIR = Path(__file__).resolve().parent.parent / "evidence"
@@ -47,6 +49,21 @@ class ArtifactEntry(BaseModel, frozen=True):
     )
     description: str | None = Field(None, max_length=256)
 
+    @field_validator("path")
+    @classmethod
+    def _path_must_be_safe(cls, v: str) -> str:
+        lowered = v.lower()
+        blocked_terms = ("token", "secret", "key", "credential", "wallet")
+        if v.startswith("/"):
+            raise ValueError("artifact path must be relative")
+        if ".." in Path(v).parts:
+            raise ValueError("artifact path must not contain traversal")
+        if any(part == ".env" for part in Path(v).parts):
+            raise ValueError("artifact path must not point at env files")
+        if any(term in lowered for term in blocked_terms):
+            raise ValueError("artifact path must not look like a sensitive path")
+        return v
+
 
 class ValidationSummary(BaseModel, frozen=True):
     all_checksums_valid: bool
@@ -56,6 +73,7 @@ class ValidationSummary(BaseModel, frozen=True):
 
 class RehearsalArtifactManifest(BaseModel, frozen=True):
     schema_version: str = Field(pattern=r"^\d+\.\d+$")
+    manifest_stage: str = Field(pattern=r"^(draft|final)$")
     manifest_id: str = Field(pattern=r"^mf-[0-9]{8}-[0-9]{6}-[a-z0-9]{8}$")
     run_ref: str = Field(pattern=r"^dr-[0-9]{8}-[0-9]{6}-[a-z0-9]{8}$")
     generated_at_utc: str
@@ -67,6 +85,14 @@ class RehearsalArtifactManifest(BaseModel, frozen=True):
     artifacts: list[ArtifactEntry]
     validation_summary: ValidationSummary
 
+    @model_validator(mode="after")
+    def _manifest_must_be_consistent(self) -> RehearsalArtifactManifest:
+        if self.artifact_count != len(self.artifacts):
+            raise ValueError("artifact_count must equal len(artifacts)")
+        if self.manifest_stage == "final" and not self.artifacts:
+            raise ValueError("final manifest must contain at least one artifact")
+        return self
+
 
 # ──────────────────────────────────────────────
 # Test data
@@ -74,6 +100,7 @@ class RehearsalArtifactManifest(BaseModel, frozen=True):
 
 VALID_MANIFEST = {
     "schema_version": "1.0",
+    "manifest_stage": "final",
     "manifest_id": "mf-20260610-143000-a1b2c3d4",
     "run_ref": "dr-20260610-143000-a1b2c3d4",
     "generated_at_utc": "2026-06-10T14:35:00Z",
@@ -166,6 +193,45 @@ INVALID_MANIFESTS: list[tuple[str, dict]] = [
         "missing approval_ref",
         {k: v for k, v in VALID_MANIFEST.items() if k != "approval_ref"},
     ),
+    (
+        "artifact count mismatch",
+        {**VALID_MANIFEST, "artifact_count": 1},
+    ),
+    (
+        "final manifest cannot be empty",
+        {**VALID_MANIFEST, "artifact_count": 0, "artifacts": []},
+    ),
+    (
+        "absolute artifact path rejected",
+        {
+            **VALID_MANIFEST,
+            "artifacts": [{**VALID_MANIFEST["artifacts"][0], "path": "/tmp/report.md"}],
+        },
+    ),
+    (
+        "path traversal rejected",
+        {
+            **VALID_MANIFEST,
+            "artifacts": [{**VALID_MANIFEST["artifacts"][0], "path": "reports/../.env"}],
+            "artifact_count": 1,
+        },
+    ),
+    (
+        "env path rejected",
+        {
+            **VALID_MANIFEST,
+            "artifacts": [{**VALID_MANIFEST["artifacts"][0], "path": "reports/.env"}],
+            "artifact_count": 1,
+        },
+    ),
+    (
+        "sensitive-looking path rejected",
+        {
+            **VALID_MANIFEST,
+            "artifacts": [{**VALID_MANIFEST["artifacts"][0], "path": "reports/token-dump.md"}],
+            "artifact_count": 1,
+        },
+    ),
 ]
 
 
@@ -194,14 +260,16 @@ class TestRehearsalArtifactManifest:
         manifest = RehearsalArtifactManifest(**minimal)
         assert manifest.total_size_bytes is None
 
-    def test_valid_manifest_empty_artifacts(self) -> None:
-        """A manifest with zero artifacts is valid (edge case)."""
+    def test_draft_manifest_empty_artifacts(self) -> None:
+        """A draft manifest may be empty when explicitly marked draft."""
         empty = {
             **VALID_MANIFEST,
+            "manifest_stage": "draft",
             "artifact_count": 0,
             "artifacts": [],
         }
         manifest = RehearsalArtifactManifest(**empty)
+        assert manifest.manifest_stage == "draft"
         assert manifest.artifact_count == 0
         assert len(manifest.artifacts) == 0
 
