@@ -247,12 +247,16 @@ services:
     - hermes-net
   hermes-watchdog:
     image: alpine:latest
-    command: "sh -c 'while true; do\n  for port in 8081 8085 8086 8087 8410; do\n\
-      \    wget -qO- --timeout=5 http://host.docker.internal:$$port/api/v1/ping \\\
-      \n      || echo \"ALERT: port $$port down at $$(date)\" >> /var/log/watchdog.log;\n\
-      \  done;\n  sleep 60;\ndone'\n"
-    extra_hosts:
-    - host.docker.internal:host-gateway
+    command: |
+      sh -c 'while true; do
+        wget -qO- --timeout=5 http://trading-freqtrade-freqforge-1:8080/api/v1/ping || echo "ALERT: freqforge down at $(date)" >> /var/log/watchdog.log
+        wget -qO- --timeout=5 http://trading-freqtrade-freqforge-canary-1:8080/api/v1/ping || echo "ALERT: freqforge-canary down at $(date)" >> /var/log/watchdog.log
+        wget -qO- --timeout=5 http://trading-freqtrade-regime-hybrid-1:8080/api/v1/ping || echo "ALERT: regime-hybrid down at $(date)" >> /var/log/watchdog.log
+        wget -qO- --timeout=5 http://trading-freqai-rebel-1:8080/api/v1/ping || echo "ALERT: rebel down at $(date)" >> /var/log/watchdog.log
+        wget -qO- --timeout=5 http://trading-freqtrade-webserver-1:8080/api/v1/ping || echo "ALERT: webserver down at $(date)" >> /var/log/watchdog.log
+        wget -qO- --timeout=5 http://trading-ai-hedge-fund-1:8080/health || echo "ALERT: ai-hedge-fund down at $(date)" >> /var/log/watchdog.log
+        sleep 60
+      done'
     volumes:
     - watchdog-logs:/var/log
     restart: unless-stopped
