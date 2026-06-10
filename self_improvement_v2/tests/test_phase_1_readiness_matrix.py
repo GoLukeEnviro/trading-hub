@@ -12,9 +12,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from readiness.phase_1_readiness_matrix import (
     Phase1ReadinessMatrix,
     ReadinessVerdict,

@@ -10,7 +10,6 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import NoReturn
 
 from si_v2.status import (
     Blocker,

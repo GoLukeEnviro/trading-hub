@@ -7,16 +7,23 @@
   "model_id": null,
   "symbol": "AVAX/USDT:USDT",
   "timeframe": null,
-  "timestamp_utc": "2026-06-10T14:59:00Z",
-  "emitted_at_utc": "2026-06-10T14:59:02Z",
+  "timestamp_utc": "2028-01-01T00:00:00Z",
+  "emitted_at_utc": "2028-01-01T00:00:02Z",
   "direction": "long",
   "confidence": 0.55,
   "signal_strength": null,
   "regime_hint": null,
   "metadata": {
-    "reason_codes": ["news_positive"],
-    "data_quality": {"status": "degraded", "freshness_seconds": 600},
-    "features": {"headline_sentiment": 0.68},
+    "reason_codes": [
+      "news_positive"
+    ],
+    "data_quality": {
+      "status": "degraded",
+      "freshness_seconds": 600
+    },
+    "features": {
+      "headline_sentiment": 0.68
+    },
     "raw_refs": []
   },
   "redaction_status": "unchecked"

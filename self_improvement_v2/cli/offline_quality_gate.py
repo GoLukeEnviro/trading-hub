@@ -62,7 +62,7 @@ class OfflineQualityGate:
                     QaCheck(
                         name=f"JSON parse: {f}",
                         passed=False,
-                        details=f"Failed to parse",
+                        details="Failed to parse",
                     )
                 )
         if json_ok:

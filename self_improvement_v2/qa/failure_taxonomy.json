@@ -1,0 +1,181 @@
+{
+  "schema_version": "1.0",
+  "taxonomy": [
+    {
+      "id": "JSON-001",
+      "area": "JSON",
+      "title": "Invalid JSON file in evidence bundle or fixtures",
+      "severity": "blocking",
+      "description": "A .json file under self_improvement_v2/ does not parse correctly.",
+      "detection": "python -m json.tool <file> or OfflineQualityGate JSON parse check",
+      "remediation": "Fix the malformed JSON. Validate with python -m json.tool before committing.",
+      "references": ["#112", "#120"]
+    },
+    {
+      "id": "JSON-002",
+      "area": "JSON",
+      "title": "Missing expected JSON output file",
+      "severity": "blocking",
+      "description": "A required evidence bundle or attribution output file does not exist.",
+      "detection": "OfflineQualityGate or OfflineEpisode file-existence checks",
+      "remediation": "Run the corresponding builder/aggregator to regenerate the missing file.",
+      "references": ["#108", "#111", "#112"]
+    },
+    {
+      "id": "RNB-001",
+      "area": "Rainbow",
+      "title": "Signal validator fails on valid fixture",
+      "severity": "blocking",
+      "description": "A fixture that should validate as PASS produces WARN or FAIL.",
+      "detection": "pytest test_rainbow_signal_validator.py or golden path test",
+      "remediation": "Check if fixture timestamps are stale (update to recent time) or validator threshold changed.",
+      "references": ["#51", "#107"]
+    },
+    {
+      "id": "RNB-002",
+      "area": "Rainbow",
+      "title": "Contract drift detected",
+      "severity": "warning",
+      "description": "Signal envelope structure diverges from contract snapshot.",
+      "detection": "ContractDriftGuard or test_rainbow_contract_drift_guard.py",
+      "remediation": "Review drift report. If expected, update contract snapshot. If unexpected, fix signal structure.",
+      "references": ["#82", "#83"]
+    },
+    {
+      "id": "RNB-003",
+      "area": "Rainbow",
+      "title": "Shadowlock event mapping fails",
+      "severity": "warning",
+      "description": "Signal event type not recognized in shadowlock event mapper.",
+      "detection": "test_rainbow_shadowlock_events.py",
+      "remediation": "Add missing event type to ShadowlockEventMapper or fix signal source.",
+      "references": ["#81"]
+    },
+    {
+      "id": "EVI-001",
+      "area": "Evidence",
+      "title": "Evidence bundle builder fails",
+      "severity": "blocking",
+      "description": "EvidenceBundleBuilder cannot build a valid bundle from source manifest and fixtures.",
+      "detection": "test_evidence_bundle_builder.py",
+      "remediation": "Check source_manifest.json and fixture directory structure.",
+      "references": ["#108"]
+    },
+    {
+      "id": "EVI-002",
+      "area": "Evidence",
+      "title": "Integrity manifest file count mismatch",
+      "severity": "warning",
+      "description": "The integrity manifest lists a different number of files than expected.",
+      "detection": "test_evidence_bundle_integrity_manifest.py",
+      "remediation": "Regenerate integrity manifest with evidence_bundle_integrity.py.",
+      "references": ["#115"]
+    },
+    {
+      "id": "EVI-003",
+      "area": "Evidence",
+      "title": "Referenced file missing in integrity manifest",
+      "severity": "warning",
+      "description": "A file listed in the integrity manifest does not exist on disk.",
+      "detection": "test_evidence_bundle_integrity_manifest.py::test_referenced_files_exist",
+      "remediation": "Restore the missing file or regenerate the integrity manifest.",
+      "references": ["#115"]
+    },
+    {
+      "id": "RGM-001",
+      "area": "Regime",
+      "title": "Regime fixture has wrong schema",
+      "severity": "blocking",
+      "description": "A regime-label fixture is missing required fields (timestamp_utc, symbol_or_pair, regime_label, confidence, source, metadata).",
+      "detection": "test_regime_label_fixtures.py::TestRequiredFields",
+      "remediation": "Fix the fixture JSON to include all required fields per the schema.",
+      "references": ["#109"]
+    },
+    {
+      "id": "RGM-002",
+      "area": "Regime",
+      "title": "Source-regime stats fixture missing",
+      "severity": "blocking",
+      "description": "Source-regime stats fixtures are missing and attribution aggregator returns degraded.",
+      "detection": "test_offline_attribution_aggregator.py or OfflineEpisode run",
+      "remediation": "Create missing source-regime-stats fixture files.",
+      "references": ["#110", "#111"]
+    },
+    {
+      "id": "ATR-001",
+      "area": "Attribution",
+      "title": "Attribution aggregator returns degraded",
+      "severity": "blocking",
+      "description": "OfflineAttributionAggregator cannot load stats data and returns degraded status.",
+      "detection": "test_offline_attribution_aggregator.py",
+      "remediation": "Check source-regime-stats fixture directory or aggregator configuration.",
+      "references": ["#111"]
+    },
+    {
+      "id": "ATR-002",
+      "area": "Attribution",
+      "title": "Attribution report renderer missing input",
+      "severity": "warning",
+      "description": "AttributionReportRenderer cannot find attribution summary JSON. Returns degraded report.",
+      "detection": "test_attribution_report_renderer.py",
+      "remediation": "Run attribution aggregator first or restore offline_attribution_summary.json.",
+      "references": ["#116"]
+    },
+    {
+      "id": "EPI-001",
+      "area": "Episode",
+      "title": "Offline episode returns RED verdict",
+      "severity": "blocking",
+      "description": "OfflineEpisode cannot load one or more required artifacts.",
+      "detection": "run_offline_episode.py exit code 1 or test_offline_episode_skeleton.py",
+      "remediation": "Check which required artifact is missing from the episode result output.",
+      "references": ["#97"]
+    },
+    {
+      "id": "EPI-002",
+      "area": "Episode",
+      "title": "Episode report renderer produces degraded output",
+      "severity": "warning",
+      "description": "OfflineEpisodeReportRenderer produces YELLOW report due to missing optional artifacts.",
+      "detection": "test_offline_episode_report.py",
+      "remediation": "Add missing optional artifacts (golden path, attribution) or accept YELLOW status.",
+      "references": ["#114"]
+    },
+    {
+      "id": "RDN-001",
+      "area": "Readiness",
+      "title": "Phase 1 readiness matrix shows RED or YELLOW",
+      "severity": "info",
+      "description": "Required artifacts are missing, producing a non-GREEN readiness verdict.",
+      "detection": "phase_1_readiness_matrix.py generate_markdown()",
+      "remediation": "Implement the missing artifacts listed in the readiness matrix.",
+      "references": ["#117"]
+    },
+    {
+      "id": "GOV-001",
+      "area": "Governance",
+      "title": "Missing governance artifacts",
+      "severity": "info",
+      "description": "Governance items (#120-#125) are not yet implemented.",
+      "detection": "Phase 1 readiness matrix governance section",
+      "remediation": "Implement governance issues in order: CI smoke, taxonomy, approval gate, dashboard, blockers, runbook.",
+      "references": ["#120", "#121", "#122", "#123", "#124", "#125"]
+    },
+    {
+      "id": "RHL-001",
+      "area": "Rehearsal",
+      "title": "Controlled dry-run rehearsal not yet performed",
+      "severity": "info",
+      "description": "No controlled dry-run rehearsal has been executed yet.",
+      "detection": "Manual — controlled_dry_run_rehearsal.md is a runbook, not an execution log.",
+      "remediation": "Follow the rehearsal runbook (#125) after governance layer is complete.",
+      "references": ["#125"]
+    }
+  ],
+  "severity_definitions": {
+    "info": "Informational — no action required, but noted for planning.",
+    "warning": "Non-blocking issue that should be reviewed before moving to next phase.",
+    "blocking": "Blocks progression to live-readiness assessment. Must be resolved first.",
+    "critical": "Reserved for live-trading safety violations. Immediate stop and escalate."
+  }
+}

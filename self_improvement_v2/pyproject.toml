@@ -13,7 +13,8 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+exclude = ["tests*", "fixtures*", "docs*"]
 
 [tool.ruff]
 line-length = 120

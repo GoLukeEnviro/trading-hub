@@ -1,0 +1,65 @@
+name: SI v2 Offline Smoke
+
+on:
+  pull_request:
+    paths:
+      - "self_improvement_v2/**"
+      - ".github/workflows/si-v2-offline-smoke.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ./self_improvement_v2
+          python -m pip install pytest ruff httpx
+
+      - name: Compile SI v2
+        run: |
+          python -m compileall -x '(support|fixtures)' self_improvement_v2
+
+      - name: Run SI v2 tests
+        run: |
+          pytest self_improvement_v2 -q
+
+      - name: Ruff check
+        run: |
+          ruff check self_improvement_v2
+
+      - name: Validate JSON files
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          roots = [Path("self_improvement_v2")]
+          failures = []
+
+          for root in roots:
+              for path in root.rglob("*.json"):
+                  try:
+                      json.loads(path.read_text(encoding="utf-8"))
+                  except Exception as exc:
+                      failures.append(f"{path}: {exc}")
+
+          if failures:
+              raise SystemExit("\n".join(failures))
+
+          print("JSON validation passed")
+          PY

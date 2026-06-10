@@ -70,6 +70,13 @@ def test_no_forbidden_patterns(pattern: str) -> None:
                 # Allow in test files that check for patterns as strings
                 if "test_no_forbidden" in str(py_file):
                     continue
+                # Allow test files that assert safety documentation contains patterns
+                if py_file.name in (
+                    "test_controlled_dry_run_rehearsal_runbook.py",
+                    "test_human_approval_gate_checklist.py",
+                    "test_live_readiness_blocker_inventory.py",
+                ):
+                    continue
                 violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{line_num}: {line.strip()}")
 
     assert len(violations) == 0, f"Forbidden pattern '{pattern}' found:\n" + "\n".join(violations)
