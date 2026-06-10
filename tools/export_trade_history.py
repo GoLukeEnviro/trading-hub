@@ -129,39 +129,106 @@ def connect_db(db_path):
         sys.exit(1)
 
 
+def get_trade_columns(conn):
+    """Return the set of column names present in the trades table."""
+    cursor = conn.execute("PRAGMA table_info(trades)")
+    return {row[1] for row in cursor.fetchall()}
+
+
+def pick_column(columns, *candidates):
+    """Return the first matching column name from candidates, else None."""
+    for name in candidates:
+        if name in columns:
+            return name
+    return None
+
+
 def fetch_trades(conn, since, until):
     """Fetch closed trades with optional date filters.
 
     Returns list of dicts with TRADE_FIELDS keys.
+    Supports multiple Freqtrade schema variants (id vs trade_id,
+    close_profit_abs vs profit_abs, close_profit vs profit_ratio, etc.).
     """
-    query = """
+    columns = get_trade_columns(conn)
+
+    id_col = pick_column(columns, "trade_id", "id")
+    open_date_col = pick_column(columns, "open_date", "open_date_utc")
+    close_date_col = pick_column(columns, "close_date", "close_date_utc")
+    pair_col = pick_column(columns, "pair")
+    stake_col = pick_column(columns, "stake_amount")
+    open_rate_col = pick_column(columns, "open_rate")
+    close_rate_col = pick_column(columns, "close_rate")
+    is_open_col = pick_column(columns, "is_open")
+    exchange_col = pick_column(columns, "exchange")
+    strategy_col = pick_column(columns, "strategy")
+    profit_abs_col = pick_column(columns, "profit_abs", "close_profit_abs", "realized_profit")
+    profit_ratio_col = pick_column(columns, "profit_ratio", "close_profit")
+
+    if id_col is None or open_date_col is None or close_date_col is None or pair_col is None:
+        missing = [
+            name for name, col in [
+                ("id/trade_id", id_col),
+                ("open_date", open_date_col),
+                ("close_date", close_date_col),
+                ("pair", pair_col),
+            ] if col is None
+        ]
+        raise sqlite3.OperationalError(f"unsupported trades schema, missing columns: {', '.join(missing)}")
+
+    if profit_abs_col is None and profit_ratio_col is None:
+        raise sqlite3.OperationalError(
+            "unsupported trades schema, cannot derive profit columns (need profit_abs/close_profit_abs or profit_ratio/close_profit)"
+        )
+
+    if profit_abs_col is None:
+        profit_abs_expr = f"({profit_ratio_col} * {stake_col})" if profit_ratio_col and stake_col else "NULL"
+    else:
+        profit_abs_expr = profit_abs_col
+
+    if profit_ratio_col is None:
+        profit_ratio_expr = f"CASE WHEN {stake_col} != 0 THEN ({profit_abs_expr} / {stake_col}) END" if profit_abs_col and stake_col else "NULL"
+    else:
+        profit_ratio_expr = profit_ratio_col
+
+    trade_duration_expr = f"CAST((julianday({close_date_col}) - julianday({open_date_col})) * 86400 AS INTEGER)"
+
+    select_fields = [
+        f"{id_col} AS trade_id",
+        f"{open_date_col} AS open_date_utc",
+        f"{close_date_col} AS close_date_utc",
+        f"{pair_col} AS pair",
+        f"{profit_abs_expr} AS profit_abs",
+        f"{profit_ratio_expr} AS profit_ratio",
+        f"{stake_col} AS stake_amount" if stake_col else "NULL AS stake_amount",
+        f"{open_rate_col} AS open_rate" if open_rate_col else "NULL AS open_rate",
+        f"{close_rate_col} AS close_rate" if close_rate_col else "NULL AS close_rate",
+        f"{trade_duration_expr} AS trade_duration_seconds",
+        f"{is_open_col} AS is_open" if is_open_col else "NULL AS is_open",
+        f"{exchange_col} AS exchange" if exchange_col else "NULL AS exchange",
+        f"{strategy_col} AS strategy" if strategy_col else "NULL AS strategy",
+    ]
+
+    closed_trade_filter = (
+        f"{is_open_col} = 0"
+        if is_open_col
+        else f"{close_date_col} IS NOT NULL"
+    )
+
+    query = f"""
         SELECT
-            trade_id,
-            open_date AS open_date_utc,
-            close_date AS close_date_utc,
-            pair,
-            profit_abs,
-            profit_ratio,
-            stake_amount,
-            open_rate,
-            close_rate,
-            CAST(
-                (julianday(close_date) - julianday(open_date)) * 86400 AS INTEGER
-            ) AS trade_duration_seconds,
-            is_open,
-            exchange,
-            strategy
+            {',\n            '.join(select_fields)}
         FROM trades
-        WHERE is_open = 0
+        WHERE {closed_trade_filter}
     """
     params = []
     if since is not None:
-        query += " AND close_date >= ?"
+        query += f" AND {close_date_col} >= ?"
         params.append(since)
     if until is not None:
-        query += " AND close_date <= ?"
+        query += f" AND {close_date_col} <= ?"
         params.append(until + "T23:59:59Z" if "T" not in until else until)
-    query += " ORDER BY close_date ASC"
+    query += f" ORDER BY {close_date_col} ASC"
 
     cursor = conn.execute(query, params)
     rows = []
