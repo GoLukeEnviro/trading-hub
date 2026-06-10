@@ -320,7 +320,7 @@ class TestStrategyMutator:
         assert "cooldown_candles = 10" in content or "cooldown_candles=10" in content
 
     def test_missing_parameter_fail_closed(self, tmp_path: Path) -> None:
-        """Verify that a missing parameter gets added rather than failing open."""
+        """Verify that missing parameter raises ValueError (fail-closed)."""
         mutator = StrategyMutator()
         sandbox_mgr = StrategySandbox()
         request = StrategyMutationRequest(
@@ -332,15 +332,18 @@ class TestStrategyMutator:
             candidate_sha="missingparam01",
         )
         plan = sandbox_mgr.create(request)
-        plan = mutator.apply(
-            plan,
-            {StrategyParameterName.COOLDOWN_CANDLES: 10},
-        )
 
-        assert StrategyParameterName.COOLDOWN_CANDLES in plan.changed_parameters
-        content = plan.sandbox_path.read_text(encoding="utf-8")
-        assert "cooldown_candles" in content
-        assert "10" in content
+        with pytest.raises(ValueError, match=r"Missing required parameter"):
+            mutator.apply(
+                plan,
+                {StrategyParameterName.COOLDOWN_CANDLES: 10},
+            )
+
+        # Verify sandbox copy was NOT modified (fail-closed preserves state)
+        sandbox_content = plan.sandbox_path.read_text(encoding="utf-8")
+        assert sandbox_content == MISSING_PARAM_STRATEGY.read_text(encoding="utf-8")
+        # Verify no assignment for cooldown_candles exists (docstring mention is fine)
+        assert "cooldown_candles = " not in sandbox_content
 
     def test_ambiguous_duplicates_rejected(self, tmp_path: Path) -> None:
         """Verify ambiguous (duplicate) rsi_period assignments raise ValueError."""

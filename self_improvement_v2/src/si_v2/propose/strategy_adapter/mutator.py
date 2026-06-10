@@ -1,7 +1,8 @@
 """AST-based strategy mutation engine — mutates strategy source files in sandbox.
 
 Uses Python's ast module to precisely find and replace parameter assignments
-for rsi_period and cooldown_candles.
+for rsi_period and cooldown_candles. Fails closed if a target parameter is
+missing from the strategy file.
 """
 
 from __future__ import annotations
@@ -91,11 +92,14 @@ class StrategyMutator:
                 changed_parameters.append(param_name)
                 param_names.discard(param_name)
 
-        # Phase 4: Add missing parameters (no occurrence found)
+        # Phase 4: Missing parameters — FAIL CLOSED
         missing = list(param_names)
-        for param_name in missing:
-            self._add_missing_assignment(tree, param_name, changes)
-            changed_parameters.append(param_name)
+        if missing:
+            missing_str = ", ".join(sorted(missing))
+            raise ValueError(
+                f"Missing required parameter(s) in strategy file: {missing_str}. "
+                f"Strategy mutation requires all target parameters to exist in the source file."
+            )
 
         # Write the mutated AST back
         mutated_source = ast.unparse(tree)
@@ -132,41 +136,3 @@ class StrategyMutator:
         lo, hi = _PARAMETER_RANGES[param_name]
         if not lo <= value <= hi:
             raise ValueError(f"Value {value} for '{param_name}' is outside allowed range [{lo}, {hi}]")
-
-    @staticmethod
-    def _add_missing_assignment(
-        tree: ast.Module,
-        param_name: str,
-        changes: dict[StrategyParameterName, int],
-    ) -> None:
-        """Add a missing parameter assignment to the end of the module body.
-
-        Inserts the assignment after the last import-like or comment-like
-        statement, or at the end of the module.
-
-        Args:
-            tree: The AST module to modify.
-            param_name: The parameter name to add.
-            changes: The full changes dict to get the value from.
-        """
-        new_value = changes[StrategyParameterName(param_name)]
-        new_assign = ast.Assign(
-            targets=[ast.Name(id=param_name, ctx=ast.Store())],
-            value=ast.Constant(value=new_value),
-        )
-
-        # Find insertion index: after the last import-like or docstring statement
-        insert_after = -1
-        for i, stmt in enumerate(tree.body):
-            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
-                insert_after = i
-            elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
-                # Docstrings or other constant expressions
-                insert_after = i
-
-        # Insert after the last found position (or at the beginning)
-        insertion_point = insert_after + 1
-        tree.body.insert(insertion_point, new_assign)
-
-        # Fix missing locations so ast.unparse() works correctly
-        ast.fix_missing_locations(tree)
