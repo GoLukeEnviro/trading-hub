@@ -10,11 +10,9 @@ Verifies:
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from si_v2.cli.offline_quality_gate import (
-    QaVerdict,
     OfflineQualityGate,
+    QaVerdict,
 )
 
 

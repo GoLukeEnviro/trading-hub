@@ -85,7 +85,7 @@ class TestLoader:
         """The loader module should be importable and work."""
         import sys
         sys.path.insert(0, str(_ROOT))
-        from qa.failure_taxonomy import load_taxonomy, lookup_failure, failure_ids
+        from qa.failure_taxonomy import failure_ids, load_taxonomy, lookup_failure
         tax = load_taxonomy(_TAXONOMY_PATH)
         assert "taxonomy" in tax
         entry = lookup_failure("JSON-001", tax)
@@ -98,7 +98,7 @@ class TestLoader:
     def test_lookup_missing_returns_none(self) -> None:
         import sys
         sys.path.insert(0, str(_ROOT))
-        from qa.failure_taxonomy import lookup_failure, load_taxonomy
+        from qa.failure_taxonomy import load_taxonomy, lookup_failure
         tax = load_taxonomy(_TAXONOMY_PATH)
         entry = lookup_failure("NONEXISTENT-999", tax)
         assert entry is None
