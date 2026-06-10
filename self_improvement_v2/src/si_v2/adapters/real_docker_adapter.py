@@ -108,7 +108,7 @@ class RealDockerAdapter(RealDockerAdapterBase, DockerAdapter):
             )
             raise TimeoutError(
                 f"docker-exec timed out after {_EXEC_TIMEOUT}s"
-            )
+            ) from None
 
     def container_is_running(self, container: str) -> bool:
         """Check whether *container* is currently running.
@@ -209,4 +209,4 @@ class RealDockerAdapter(RealDockerAdapterBase, DockerAdapter):
                 duration_ms=duration,
                 error="TimeoutExpired",
             )
-            raise TimeoutError(f"docker inspect timed out for {container}")
+            raise TimeoutError(f"docker inspect timed out for {container}") from None

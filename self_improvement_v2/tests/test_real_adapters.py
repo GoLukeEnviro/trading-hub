@@ -8,7 +8,6 @@ gate prevents instantiation in test environments.
 from __future__ import annotations
 
 import os
-from typing import Any
 
 import pytest
 
@@ -31,7 +30,7 @@ def audit_sink() -> InMemoryAdapterAuditSink:
 
 
 @pytest.fixture
-def enable_gate() -> Any:
+def enable_gate() -> object:
     """Temporarily set SI_V2_ENABLE_REAL_ADAPTERS=1 for a test."""
     old = os.environ.get("SI_V2_ENABLE_REAL_ADAPTERS")
     os.environ["SI_V2_ENABLE_REAL_ADAPTERS"] = "1"
@@ -45,7 +44,7 @@ def enable_gate() -> Any:
 @pytest.fixture
 def docker_adapter(
     audit_sink: InMemoryAdapterAuditSink,
-    enable_gate: Any,
+    enable_gate: object,
 ) -> RealDockerAdapter:
     """Return a RealDockerAdapter with gate enabled and audit sink."""
     return RealDockerAdapter(audit_sink=audit_sink)
@@ -54,7 +53,7 @@ def docker_adapter(
 @pytest.fixture
 def freqtrade_adapter(
     audit_sink: InMemoryAdapterAuditSink,
-    enable_gate: Any,
+    enable_gate: object,
 ) -> RealFreqtradeAdapter:
     """Return a RealFreqtradeAdapter with gate enabled and audit sink."""
     return RealFreqtradeAdapter(audit_sink=audit_sink)
@@ -145,7 +144,7 @@ class TestCallBudget:
     def test_docker_budget_exhausted(
         self,
         audit_sink: InMemoryAdapterAuditSink,
-        enable_gate: Any,
+        enable_gate: object,
     ) -> None:
         """After exhausting the budget, calls should raise RuntimeError."""
         from si_v2.adapters.call_budget import CallBudgetChecker, CallBudgetConfig
@@ -170,7 +169,7 @@ class TestCallBudget:
     def test_freqtrade_budget_exhausted(
         self,
         audit_sink: InMemoryAdapterAuditSink,
-        enable_gate: Any,
+        enable_gate: object,
     ) -> None:
         """After exhausting the budget, calls should raise RuntimeError."""
         from si_v2.adapters.call_budget import CallBudgetChecker, CallBudgetConfig
@@ -203,7 +202,7 @@ class TestAuditEvents:
     def test_docker_audit_event_recorded(
         self,
         audit_sink: InMemoryAdapterAuditSink,
-        enable_gate: Any,
+        enable_gate: object,
     ) -> None:
         """Calling a Docker adapter method should record an audit event."""
         adapter = RealDockerAdapter(audit_sink=audit_sink)
@@ -220,7 +219,7 @@ class TestAuditEvents:
     def test_freqtrade_audit_event_recorded(
         self,
         audit_sink: InMemoryAdapterAuditSink,
-        enable_gate: Any,
+        enable_gate: object,
     ) -> None:
         """Calling a Freqtrade adapter method should record an audit event."""
         adapter = RealFreqtradeAdapter(audit_sink=audit_sink)

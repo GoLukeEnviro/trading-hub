@@ -114,7 +114,7 @@ class RealFreqtradeAdapter(RealFreqtradeAdapterBase, FreqtradeAdapter):
         except subprocess.TimeoutExpired:
             raise TimeoutError(
                 f"freqtrade command timed out after {timeout}s in {container}"
-            )
+            ) from None
 
     # ── Protocol implementation ────────────────────────────────────────────
 
