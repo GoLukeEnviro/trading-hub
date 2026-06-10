@@ -1,0 +1,12 @@
+{
+  "timestamp_utc": "2026-06-10T12:00:00Z",
+  "symbol_or_pair": "SOL/USDT:USDT",
+  "timeframe": "4h",
+  "regime_label": "sideways",
+  "confidence": 0.65,
+  "source": "rainbow:ta",
+  "metadata": {
+    "indicators": {"rsi_14": 48.0, "macd": "flat", "trend": "ranging"},
+    "notes": "Price consolidating within Bollinger Bands"
+  }
+}

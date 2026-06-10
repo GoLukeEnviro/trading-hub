@@ -1,0 +1,12 @@
+{
+  "timestamp_utc": "2026-06-10T12:00:00Z",
+  "symbol_or_pair": "BTC/USDT:USDT",
+  "timeframe": "1h",
+  "regime_label": "bullish",
+  "confidence": 0.85,
+  "source": "rainbow:ta",
+  "metadata": {
+    "indicators": {"rsi_14": 65.0, "macd": "positive", "trend": "uptrend"},
+    "notes": "Strong upward momentum with volume confirmation"
+  }
+}
