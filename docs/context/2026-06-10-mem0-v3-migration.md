@@ -14,6 +14,18 @@
 - `embedding_model_dims` in `app.py` von 1024 auf 768 gefixt
 - Docker-Netzwerk: green-mem0 läuft jetzt auf `trading_hermes-net` (war fälschlich auf `hermes-net`)
 
+## Mem0-Plugin Fix (Hermes Agent)
+
+- **Problem:** Das Mem0-Plugin im Hermes-Agent (`/opt/hermes/plugins/memory/mem0/__init__.py`) nutzte `MemoryClient(api_key=...)` gegen die Mem0-Cloud und bekam 401 (ungültiger Key). Alle `sync_turn()`, `mem0_search`, `mem0_conclude` waren funktionslos.
+- **Fix:** Kompletter Austausch gegen lokale HTTP-Aufrufe an `green-mem0:8787`. Kein API-Key nötig. Kein Cloud-Call.
+- **Datei:** `/opt/hermes-green/config/plugins/memory/mem0/__init__.py` (Host) → via docker-compose Bind-Mount ins Container-Verzeichnis `/opt/hermes/plugins/memory/mem0/__init__.py`
+- **Status:** ✅ Funktionstüchtig – `mem0_profile` (276 Memories), `mem0_search` (20 Treffer), `mem0_conclude` getestet
+
+## Sonstiges
+
+- `mem0ai[nlp]` in green-mem0 installiert (spaCy-Warnings beseitigt)
+- Alte Collection `hermes_memories_v2` bleibt als Backup (kann nach 2–3 Tagen gelöscht werden)
+
 ## Dateien
 
 - `/opt/hermes/hermes_memory.py` — Migration + Validierung + PrefixedMemory Wrapper

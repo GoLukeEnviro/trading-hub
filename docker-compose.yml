@@ -79,6 +79,7 @@ services:
     - /home/hermes/projects/trading/weatherhermes_persistent/weatherbot_master:/home/hermes/weatherbot_master:ro
     - /var/run/docker.sock:/var/run/docker.sock:ro
     - /opt/hermes-green/scripts/99-telegram-settle-delay:/etc/cont-init.d/99-telegram-settle-delay:ro
+    - /opt/hermes-green/config/plugins/memory/mem0/__init__.py:/opt/hermes/plugins/memory/mem0/__init__.py:ro
     restart: unless-stopped
     networks:
     - hermes-net
