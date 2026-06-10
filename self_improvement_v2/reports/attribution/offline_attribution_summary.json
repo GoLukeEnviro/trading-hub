@@ -1,0 +1,27 @@
+{
+  "status": "ok",
+  "total_samples": 75,
+  "overall_win_rate": 0.693,
+  "source_count": 2,
+  "rows": [
+    {
+      "source_id": "rainbow:llm",
+      "regime_label": "bearish",
+      "sample_count": 30,
+      "win_count": 20,
+      "loss_count": 7,
+      "win_rate": 0.667,
+      "avg_confidence": 0.76
+    },
+    {
+      "source_id": "rainbow:ta",
+      "regime_label": "bullish",
+      "sample_count": 45,
+      "win_count": 32,
+      "loss_count": 8,
+      "win_rate": 0.711,
+      "avg_confidence": 0.82
+    }
+  ],
+  "errors": []
+}
