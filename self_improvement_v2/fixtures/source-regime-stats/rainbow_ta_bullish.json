@@ -1,0 +1,10 @@
+{
+  "source_id": "rainbow:ta",
+  "regime_label": "bullish",
+  "sample_count": 100,
+  "win_count": 65,
+  "loss_count": 35,
+  "summary": {
+    "avg_confidence": 0.78
+  }
+}

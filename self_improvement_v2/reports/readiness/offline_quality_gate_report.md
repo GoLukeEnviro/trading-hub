@@ -5,7 +5,7 @@
 
 ## Checks
 
-- ✅ **All JSON files parse (27 files)**: 
+- ✅ **All JSON files parse (27 files)**:
 - ✅ **Offline episode manifest**: Found
 - ✅ **Evidence bundle output**: Found
 - ✅ **Attribution summary output**: Found
