@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/GoLukeEnviro/trading-hub/blob/main/self_improvement_v2/contracts/rainbow_signal_envelope.schema.json",
+  "title": "Rainbow Signal Envelope",
+  "description": "Contract snapshot for the trading-hub Rainbow Signal Envelope. Derived from ai4trade-bot Issue #51 (CanonicalSignalEnvelope). This is a local copy — the upstream source of truth is the ai4trade-bot repository.",
+  "type": "object",
+  "version": "1",
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "description": "Envelope schema version. Current version: 1. Must be >= 1.",
+      "minimum": 1
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Type of event. Determines how the envelope is classified.",
+      "enum": ["signal", "no_signal", "heartbeat"]
+    },
+    "source_system": {
+      "type": "string",
+      "description": "Origin system identifier. Expected: 'rainbow'.",
+      "examples": ["rainbow"]
+    },
+    "source_id": {
+      "type": "string",
+      "description": "Specific source within the system (e.g. 'rainbow:ta', 'rainbow:llm', 'system:health').",
+      "examples": ["rainbow:ta", "rainbow:llm", "system:health"]
+    },
+    "strategy_id": {
+      "type": "string",
+      "description": "Strategy identifier that produced the signal.",
+      "examples": ["rainbow_v1"]
+    },
+    "model_id": {
+      "type": ["string", "null"],
+      "description": "Optional model identifier (e.g. 'claude-sonnet-4'). Null when not applicable."
+    },
+    "symbol": {
+      "type": "string",
+      "description": "Trading pair symbol. Must be a non-empty string. Use '*' for system-wide events.",
+      "examples": ["BTC/USDT:USDT", "ETH/USDT:USDT", "*"]
+    },
+    "timeframe": {
+      "type": ["string", "null"],
+      "description": "Candle timeframe if applicable (e.g. '1h', '15m'). Null for non-candle signals."
+    },
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp of signal generation. Must be parseable by datetime.fromisoformat().",
+      "examples": ["2026-06-10T12:00:00Z"]
+    },
+    "emitted_at_utc": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp when the envelope was emitted. May differ from timestamp_utc."
+    },
+    "direction": {
+      "type": "string",
+      "description": "Signal direction. Uses trading-hub canonical values. Accepts both Rainbow (bullish/bearish/neutral) and trading-hub (long/short/flat) conventions — normalized to trading-hub values.",
+      "enum": ["long", "short", "flat", "no_signal", "unknown"]
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Signal confidence score. Range: 0.0–1.0.",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "signal_strength": {
+      "type": ["number", "null"],
+      "description": "Optional signal strength. Range: 0.0–1.0. Null when not applicable.",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "regime_hint": {
+      "type": ["string", "null"],
+      "description": "Optional regime context hint (e.g. 'bearish', 'bullish', 'ranging')."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Arbitrary metadata container. May include reason_codes, data_quality, features, raw_refs, and other signal-specific fields.",
+      "properties": {
+        "reason_codes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Machine-readable reasons for the signal."
+        },
+        "data_quality": {
+          "type": "object",
+          "description": "Data quality assessment.",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["ok", "degraded", "stale", "unavailable"]
+            },
+            "freshness_seconds": {
+              "type": "integer",
+              "description": "Age of the source data in seconds."
+            }
+          },
+          "required": ["status"]
+        },
+        "features": {
+          "type": "object",
+          "description": "Arbitrary feature map for model/analysis metadata."
+        },
+        "raw_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "References to raw input data that produced this signal."
+        }
+      }
+    },
+    "redaction_status": {
+      "type": "string",
+      "description": "Redaction status of the envelope. Indicates whether sensitive data has been redacted.",
+      "enum": ["clean", "redacted", "unchecked"]
+    }
+  },
+  "required": [
+    "event_type",
+    "schema_version",
+    "source_system",
+    "source_id",
+    "strategy_id",
+    "symbol",
+    "timestamp_utc",
+    "direction",
+    "confidence",
+    "metadata",
+    "redaction_status"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": { "event_type": { "const": "signal" } }
+      },
+      "then": {
+        "description": "Signal events must have a non-empty symbol."
+      }
+    }
+  ]
+}
