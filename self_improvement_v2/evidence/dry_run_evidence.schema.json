@@ -1,0 +1,262 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Dry-run Evidence Record",
+  "description": "Schema for controlled dry-run rehearsal evidence. Each evidence record captures a single rehearsal run with identity, approval, environment, command classification, safety state, artifacts, and validation outcome.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Schema version for forward compatibility."
+    },
+    "run_identity": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^dr-[0-9]{8}-[0-9]{6}-[a-z0-9]{8}$",
+          "description": "Unique identifier: dr-YYYYMMDD-HHMMSS-random8."
+        },
+        "run_name": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Human-readable run name."
+        },
+        "created_at_utc": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Run creation timestamp in UTC ISO 8601."
+        },
+        "created_by": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Agent or user who initiated the run."
+        }
+      },
+      "required": ["run_id", "run_name", "created_at_utc", "created_by"],
+      "additionalProperties": false
+    },
+    "approval_refs": {
+      "type": "object",
+      "properties": {
+        "approval_token": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Human approval token that authorised this run."
+        },
+        "approval_timestamp_utc": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When approval was granted."
+        },
+        "approval_scope": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Scope of approval: which bots, strategies, commands."
+        },
+        "approval_expires_at_utc": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional expiry for time-limited approval."
+        }
+      },
+      "required": ["approval_token", "approval_timestamp_utc", "approval_scope"],
+      "additionalProperties": false
+    },
+    "environment_summary": {
+      "type": "object",
+      "properties": {
+        "git_branch": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Git branch at time of run."
+        },
+        "git_commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{7,40}$",
+          "description": "Git commit hash at time of run."
+        },
+        "python_version": {
+          "type": "string",
+          "maxLength": 16,
+          "description": "Python version string."
+        },
+        "si_v2_version": {
+          "type": "string",
+          "maxLength": 16,
+          "description": "SI v2 package version."
+        },
+        "dry_run_flag": {
+          "type": "boolean",
+          "const": true,
+          "description": "Must always be true for dry-run evidence."
+        }
+      },
+      "required": ["git_branch", "git_commit", "dry_run_flag"],
+      "additionalProperties": false
+    },
+    "command_class": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "read_only_inspection",
+            "read_only_config",
+            "bot_status",
+            "trade_history_read",
+            "backtest",
+            "signal_read",
+            "config_comparison",
+            "report_generation",
+            "other_read_only"
+          ],
+          "description": "Command category for safety classification."
+        },
+        "target_bots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "uniqueItems": true,
+          "description": "List of bot IDs this command was executed against."
+        },
+        "commands_executed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "description": "Redacted list of commands or API calls executed."
+        }
+      },
+      "required": ["category"],
+      "additionalProperties": false
+    },
+    "safety_state": {
+      "type": "object",
+      "properties": {
+        "live_forbidden_confirmed": {
+          "type": "boolean",
+          "const": true,
+          "description": "Must be true — confirms LIVE_FORBIDDEN state."
+        },
+        "dry_run_mode_confirmed": {
+          "type": "boolean",
+          "const": true,
+          "description": "Must be true — confirms all bots are in dry_run=true."
+        },
+        "no_secrets_exposed": {
+          "type": "boolean",
+          "const": true,
+          "description": "Must be true — confirms no credentials in output."
+        },
+        "riskguard_available": {
+          "type": "boolean",
+          "description": "Whether RiskGuard was available during the run."
+        },
+        "shadowlogger_available": {
+          "type": "boolean",
+          "description": "Whether ShadowLogger was available during the run."
+        },
+        "safety_verdict": {
+          "type": "string",
+          "enum": ["safe", "degraded", "blocked"],
+          "description": "Overall safety verdict for this run."
+        }
+      },
+      "required": [
+        "live_forbidden_confirmed",
+        "dry_run_mode_confirmed",
+        "no_secrets_exposed",
+        "safety_verdict"
+      ],
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "object",
+      "properties": {
+        "log_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "description": "Relative paths to log files produced."
+        },
+        "report_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "description": "Relative paths to report files produced."
+        },
+        "evidence_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "description": "Relative paths to evidence files produced."
+        },
+        "artifact_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total count of all artifacts produced."
+        }
+      },
+      "required": ["artifact_count"],
+      "additionalProperties": false
+    },
+    "validation_outcome": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["passed", "failed", "degraded", "not_run"],
+          "description": "Validation status."
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "description": "List of validation failure descriptions."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "description": "List of validation warnings."
+        },
+        "completed_at_utc": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When validation completed."
+        }
+      },
+      "required": ["status"],
+      "additionalProperties": false
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 4096,
+      "description": "Optional free-form notes about this run."
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_identity",
+    "approval_refs",
+    "environment_summary",
+    "command_class",
+    "safety_state",
+    "validation_outcome"
+  ],
+  "additionalProperties": false
+}
