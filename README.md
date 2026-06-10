@@ -17,6 +17,9 @@ state, orchestrator automation, and audit documentation.
 - No `dry_run=false` changes without a separate, explicit go-ahead.
 - No exchange credentials belong in this repository.
 
+> [📋 Implementation Roadmap →](docs/roadmap/implementation-roadmap.md)
+> Phase overview, completed issues, next priorities.
+
 ## Trading dashboard
 
 `dashboard.py` is the read-only observability surface for the fleet.

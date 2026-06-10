@@ -264,3 +264,14 @@ orchestrator/backups/
 
 # Trade-History CSV-Rohdaten (groß, jederzeit aus SQLite reproduzierbar)
 **/trade-export-*_trades.csv
+
+# ── SI v2 generated artifacts (not versioned) ──────────────
+# Dream-mode memory artifacts — large, regenerable, local-only
+docs/context/mem0-dream-mode-*.json
+docs/context/mem0-dream-mode-*.md
+
+# .bak.* files (not just .bak) — e.g. docker-compose.yml.bak.issue41
+**/*.bak.*
+
+# SI v2 runtime probe evidence (generated, not committed)
+self_improvement_v2/reports/runtime_probe/**/*.jsonl
