@@ -55,7 +55,7 @@ class TestReportGenerator:
         report1 = _generator().generate()
         report2 = _generator().generate()
         assert report1.total_fixtures == report2.total_fixtures
-        for e1, e2 in zip(report1.entries, report2.entries):
+        for e1, e2 in zip(report1.entries, report2.entries, strict=True):
             assert e1.file_name == e2.file_name
             assert e1.verdict == e2.verdict
 
@@ -106,9 +106,7 @@ class TestFixtureTypes:
     def test_valid_signal_type(self) -> None:
         report = _generator().generate()
         for entry in report.entries:
-            if "valid_long_signal" in entry.file_name:
-                assert entry.expected_type == "valid_signal"
-            elif "valid_short_signal" in entry.file_name:
+            if "valid_long_signal" in entry.file_name or "valid_short_signal" in entry.file_name:
                 assert entry.expected_type == "valid_signal"
 
     def test_malformed_type(self) -> None:

@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
-
 # ── Status modes ─────────────────────────────────────────────────────────────
 
 
@@ -131,7 +130,7 @@ class RainbowStatusResolver:
         # ── Validator ───────────────────────────────────────────────────
         validator_available = True
         try:
-            from si_v2.rainbow.validator import (  # noqa: F401
+            from si_v2.rainbow.validator import (
                 RainbowSignalEnvelopeValidator,
             )
 

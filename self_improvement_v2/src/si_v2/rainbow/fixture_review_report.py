@@ -8,12 +8,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import ClassVar
 
 from si_v2.rainbow.validator import (
     RainbowSignalEnvelopeValidator,
-    ValidationVerdict,
 )
-
 
 # ── Data classes ─────────────────────────────────────────────────────────────
 
@@ -62,7 +61,7 @@ class RainbowFixtureReviewReportGenerator:
     """
 
     # Fixture type classification based on file naming conventions
-    _FIXTURE_TYPES: dict[str, str] = {
+    _FIXTURE_TYPES: ClassVar[dict[str, str]] = {
         "valid_long_signal.json": "valid_signal",
         "valid_short_signal.json": "valid_signal",
         "no_signal.json": "no_signal",
@@ -145,20 +144,20 @@ class RainbowFixtureReviewReportGenerator:
         lines.append("# Rainbow Fixture Review Report")
         lines.append("")
         lines.append(
-            f"> **Generated:** Offline — deterministic output"
+            "> **Generated:** Offline — deterministic output"
         )
         lines.append(f"> **Fixture directory:** `{report.fixture_dir}`")
-        lines.append(f"> **Validator:** `RainbowSignalEnvelopeValidator` (#79)")
+        lines.append("> **Validator:** `RainbowSignalEnvelopeValidator` (#79)")
         lines.append("")
         lines.append("---")
         lines.append("")
         lines.append("## Summary")
         lines.append("")
         lines.append(
-            f"| Metric | Value |"
+            "| Metric | Value |"
         )
         lines.append(
-            f"|--------|-------|"
+            "|--------|-------|"
         )
         lines.append(
             f"| Total fixtures | {report.total_fixtures} |"

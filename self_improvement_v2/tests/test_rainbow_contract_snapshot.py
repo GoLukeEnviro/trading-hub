@@ -99,7 +99,7 @@ class TestRequiredFields:
             )
         # Check no unexpected required fields
         for field in schema_required:
-            assert field in _EXPECTED_REQUIRED_FIELDS + ("timeframe",), (
+            assert field in (*_EXPECTED_REQUIRED_FIELDS, "timeframe"), (
                 f"Unexpected required field '{field}' in schema"
             )
             # timeframe is optional in the validator but could be required
