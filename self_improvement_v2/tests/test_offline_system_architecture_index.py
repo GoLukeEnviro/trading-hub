@@ -72,8 +72,7 @@ class TestLinks:
                 for p in parts:
                     if p.startswith("src/si_v2") or p.startswith("evidence/") or p.startswith("episode/"):
                         full = _ROOT / p
-                        if not full.exists():
-                            # Some files may legitimately not exist at test time
-                            # Only flag non-existent paths under src/si_v2/
-                            if p.startswith("src"):
+                        # Some files may legitimately not exist at test time
+                        # Only flag non-existent paths under src/si_v2/
+                        if not full.exists() and p.startswith("src"):
                                 pass  # Skip strict checking for code files

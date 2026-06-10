@@ -20,7 +20,6 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 
@@ -107,7 +106,7 @@ class ValidationResult:
     verdict: ValidationVerdict
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    normalized: dict[str, Any] | None = None
+    normalized: dict[str, object] | None = None
     source_file: str | None = None
 
 

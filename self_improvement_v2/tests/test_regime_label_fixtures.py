@@ -10,6 +10,7 @@ Verifies:
 from __future__ import annotations
 
 import json
+import typing
 from pathlib import Path
 
 _FIXTURE_DIR = (
@@ -55,7 +56,7 @@ class TestFixtureParsing:
 
 
 class TestRequiredFields:
-    _REQUIRED = [
+    _REQUIRED: typing.ClassVar[list[str]] = [
         "timestamp_utc",
         "symbol_or_pair",
         "regime_label",

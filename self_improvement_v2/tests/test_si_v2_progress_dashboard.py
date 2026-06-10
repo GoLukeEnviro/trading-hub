@@ -20,7 +20,7 @@ _DASHBOARD_PATH = (
 )
 
 sys.path.insert(0, str(_ROOT / "reports" / "progress"))
-from progress_dashboard import generate_dashboard
+from progress_dashboard import generate_dashboard  # noqa: E402
 
 
 class TestDashboardExists:
