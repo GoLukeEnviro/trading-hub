@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "stage": "final",
+  "proposal": {
+    "proposal_id": "rp-20260610-185600-test",
+    "proposal_name": "Test Valid Proposal",
+    "proposed_by": "SI v2 Validator Test",
+    "proposed_date_utc": "2026-06-10T18:56:00Z",
+    "rehearsal_mode": "read-only",
+    "scope_description": "Validate that the planning pipeline passes for a well-formed proposal.",
+    "out_of_scope": "No runtime actions, no trading, no deployments.",
+    "duration_estimate_minutes": 30,
+    "target_components": ["test-validator"],
+    "planning_fields_complete": true
+  },
+  "planning_gate_reference": {
+    "artifact_path": "self_improvement_v2/rehearsal/controlled_rehearsal_planning_gate.md",
+    "gate_verdict": "GREEN",
+    "prerequisites_verified": true,
+    "forbidden_conditions_checked": [
+      {"condition_id": "F-01", "status": false},
+      {"condition_id": "F-02", "status": false},
+      {"condition_id": "F-03", "status": false},
+      {"condition_id": "F-04", "status": false},
+      {"condition_id": "F-05", "status": false},
+      {"condition_id": "F-06", "status": false},
+      {"condition_id": "F-07", "status": false},
+      {"condition_id": "F-08", "status": false},
+      {"condition_id": "F-09", "status": false},
+      {"condition_id": "F-10", "status": false}
+    ]
+  },
+  "stop_condition_reference": {
+    "artifact_path": "self_improvement_v2/rehearsal/rehearsal_stop_condition_matrix.json",
+    "conditions_evaluated": [
+      {"condition_id": "SC-01", "verdict": "GREEN"},
+      {"condition_id": "SC-02", "verdict": "GREEN"},
+      {"condition_id": "SC-05", "verdict": "GREEN"},
+      {"condition_id": "SC-08", "verdict": "GREEN"}
+    ]
+  },
+  "evidence_plan_reference": {
+    "artifact_path": "self_improvement_v2/rehearsal/rehearsal_evidence_bundle_plan.md",
+    "evidence_categories_planned": ["Preflight Results", "Config Snapshots", "Health Check Results"],
+    "integrity_method": "SHA-256"
+  },
+  "approval_packet_reference": {
+    "artifact_path": "self_improvement_v2/rehearsal/operator_rehearsal_approval_packet.md",
+    "operator_name": "Test Operator",
+    "review_date_utc": "2026-06-10T19:00:00Z",
+    "approval_token": "APPROVE_REHEARSAL_240610_t3st",
+    "allowed_actions_confirmed": true,
+    "forbidden_actions_acknowledged": true,
+    "non_live_confirmed": true
+  },
+  "observation_plan_reference": {
+    "artifact_path": "self_improvement_v2/rehearsal/read_only_observation_plan.md",
+    "read_only_confirmed": true,
+    "conditional_sources_approved": []
+  },
+  "readiness_record_reference": {
+    "artifact_path": "self_improvement_v2/rehearsal/rehearsal_readiness_decision_record.md",
+    "readiness_verdict": "GREEN",
+    "blockers_identified": [],
+    "gaps_documented": [],
+    "residual_risks_assessed": true
+  },
+  "non_production_confirmation": true,
+  "non_runtime_confirmation": true
+}

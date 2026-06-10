@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "stage": "final",
+  "proposal": {
+    "proposal_id": "rp-20260610-185600-bad",
+    "proposal_name": "",
+    "proposed_by": "",
+    "proposed_date_utc": "",
+    "rehearsal_mode": "invalid-mode",
+    "scope_description": "",
+    "out_of_scope": "",
+    "duration_estimate_minutes": 0,
+    "target_components": [],
+    "planning_fields_complete": false
+  },
+  "planning_gate_reference": {
+    "artifact_path": "self_improvement_v2/rehearsal/controlled_rehearsal_planning_gate.md",
+    "gate_verdict": "GREEN",
+    "prerequisites_verified": false,
+    "forbidden_conditions_checked": [
+      {"condition_id": "F-01", "status": false}
+    ]
+  },
+  "stop_condition_reference": {
+    "artifact_path": "self_improvement_v2/rehearsal/rehearsal_stop_condition_matrix.json",
+    "conditions_evaluated": []
+  },
+  "evidence_plan_reference": {
+    "artifact_path": "",
+    "evidence_categories_planned": [],
+    "integrity_method": "SHA-256"
+  },
+  "approval_packet_reference": {
+    "artifact_path": "",
+    "operator_name": "",
+    "review_date_utc": "",
+    "approval_token": "INVALID",
+    "allowed_actions_confirmed": false,
+    "forbidden_actions_acknowledged": false,
+    "non_live_confirmed": false
+  },
+  "observation_plan_reference": {
+    "artifact_path": "",
+    "read_only_confirmed": false,
+    "conditional_sources_approved": ["RealDockerAdapter"]
+  },
+  "readiness_record_reference": {
+    "artifact_path": "",
+    "readiness_verdict": "INVALID",
+    "blockers_identified": [],
+    "gaps_documented": [],
+    "residual_risks_assessed": false
+  },
+  "non_runtime_confirmation": false
+}

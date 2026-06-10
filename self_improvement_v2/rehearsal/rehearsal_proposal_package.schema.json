@@ -1,0 +1,250 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "self_improvement_v2/rehearsal/rehearsal_proposal_package.schema.json",
+  "title": "Rehearsal Proposal Package Schema",
+  "description": "Machine-readable schema for a rehearsal proposal package. Validates that a complete, internally consistent, and safe proposal has been prepared before operator review.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "stage",
+    "proposal",
+    "planning_gate_reference",
+    "stop_condition_reference",
+    "evidence_plan_reference",
+    "approval_packet_reference",
+    "observation_plan_reference",
+    "readiness_record_reference",
+    "non_production_confirmation",
+    "non_runtime_confirmation"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "description": "Schema version for forward compatibility."
+    },
+    "stage": {
+      "type": "string",
+      "enum": ["draft", "final"],
+      "description": "Draft proposals may have incomplete approval/evidence references. Final proposals must be fully complete."
+    },
+    "proposal": {
+      "type": "object",
+      "description": "Core proposal fields matching the #135 planning gate requirements.",
+      "required": [
+        "proposal_id",
+        "proposal_name",
+        "proposed_by",
+        "proposed_date_utc",
+        "rehearsal_mode",
+        "scope_description",
+        "out_of_scope",
+        "duration_estimate_minutes",
+        "target_components"
+      ],
+      "properties": {
+        "proposal_id": {
+          "type": "string",
+          "pattern": "^rp-[0-9]{8}-[0-9]{6}-[a-z0-9]{4}$",
+          "description": "Unique proposal identifier, e.g. rp-YYYYMMDD-HHMMSS-rand4."
+        },
+        "proposal_name": { "type": "string", "minLength": 3 },
+        "proposed_by": { "type": "string", "minLength": 1 },
+        "proposed_date_utc": { "type": "string", "format": "date-time" },
+        "rehearsal_mode": {
+          "type": "string",
+          "enum": ["read-only", "shadow-mode", "controlled-dry-run"]
+        },
+        "scope_description": { "type": "string", "minLength": 10 },
+        "out_of_scope": { "type": "string", "minLength": 3 },
+        "duration_estimate_minutes": { "type": "integer", "minimum": 1 },
+        "target_components": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "planning_fields_complete": {
+          "type": "boolean",
+          "description": "Whether all 15 planning fields from #135 are present and populated."
+        }
+      }
+    },
+    "planning_gate_reference": {
+      "type": "object",
+      "required": [
+        "artifact_path",
+        "gate_verdict",
+        "prerequisites_verified",
+        "forbidden_conditions_checked"
+      ],
+      "properties": {
+        "artifact_path": {
+          "type": "string",
+          "pattern": "^self_improvement_v2/rehearsal/controlled_rehearsal_planning_gate\\.md$"
+        },
+        "gate_verdict": {
+          "type": "string",
+          "enum": ["GREEN", "YELLOW"]
+        },
+        "prerequisites_verified": { "type": "boolean" },
+        "forbidden_conditions_checked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["condition_id", "status"],
+            "properties": {
+              "condition_id": { "type": "string", "pattern": "^F-\\d{2}$" },
+              "status": { "type": "boolean", "description": "false = condition not triggered (safe)" }
+            }
+          },
+          "minItems": 10,
+          "maxItems": 10
+        }
+      }
+    },
+    "stop_condition_reference": {
+      "type": "object",
+      "required": ["artifact_path", "conditions_evaluated"],
+      "properties": {
+        "artifact_path": {
+          "type": "string",
+          "pattern": "^self_improvement_v2/rehearsal/rehearsal_stop_condition_matrix\\.json$"
+        },
+        "conditions_evaluated": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["condition_id", "verdict"],
+            "properties": {
+              "condition_id": { "type": "string", "pattern": "^SC-\\d{2}$" },
+              "verdict": { "type": "string", "enum": ["GREEN", "YELLOW", "RED"] }
+            }
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "evidence_plan_reference": {
+      "type": "object",
+      "required": ["artifact_path", "evidence_categories_planned", "integrity_method"],
+      "properties": {
+        "artifact_path": {
+          "type": "string",
+          "pattern": "^self_improvement_v2/rehearsal/rehearsal_evidence_bundle_plan\\.md$"
+        },
+        "evidence_categories_planned": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "integrity_method": {
+          "type": "string",
+          "enum": ["SHA-256"]
+        }
+      }
+    },
+    "approval_packet_reference": {
+      "type": "object",
+      "required": [
+        "artifact_path",
+        "operator_name",
+        "review_date_utc",
+        "approval_token",
+        "allowed_actions_confirmed",
+        "forbidden_actions_acknowledged",
+        "non_live_confirmed"
+      ],
+      "properties": {
+        "artifact_path": {
+          "type": "string",
+          "pattern": "^self_improvement_v2/rehearsal/operator_rehearsal_approval_packet\\.md$"
+        },
+        "operator_name": { "type": "string", "minLength": 1 },
+        "review_date_utc": { "type": "string", "format": "date-time" },
+        "approval_token": { "type": "string", "pattern": "^APPROVE_REHEARSAL_[0-9]{6}_[a-z0-9]{4}$" },
+        "allowed_actions_confirmed": { "type": "boolean" },
+        "forbidden_actions_acknowledged": { "type": "boolean" },
+        "non_live_confirmed": { "type": "boolean" }
+      }
+    },
+    "observation_plan_reference": {
+      "type": "object",
+      "required": ["artifact_path", "read_only_confirmed", "conditional_sources_approved"],
+      "properties": {
+        "artifact_path": {
+          "type": "string",
+          "pattern": "^self_improvement_v2/rehearsal/read_only_observation_plan\\.md$"
+        },
+        "read_only_confirmed": { "type": "boolean" },
+        "conditional_sources_approved": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "readiness_record_reference": {
+      "type": "object",
+      "required": [
+        "artifact_path",
+        "readiness_verdict",
+        "blockers_identified",
+        "gaps_documented",
+        "residual_risks_assessed"
+      ],
+      "properties": {
+        "artifact_path": {
+          "type": "string",
+          "pattern": "^self_improvement_v2/rehearsal/rehearsal_readiness_decision_record\\.md$"
+        },
+        "readiness_verdict": {
+          "type": "string",
+          "enum": ["GREEN", "YELLOW", "RED"]
+        },
+        "blockers_identified": { "type": "array", "items": { "type": "string" } },
+        "gaps_documented": { "type": "array", "items": { "type": "string" } },
+        "residual_risks_assessed": { "type": "boolean" }
+      }
+    },
+    "non_production_confirmation": {
+      "type": "boolean",
+      "description": "Confirms this proposal is for rehearsal only, not production trading."
+    },
+    "non_runtime_confirmation": {
+      "type": "boolean",
+      "description": "Confirms no runtime action has been executed during proposal creation."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "stage": { "const": "final" } }
+      },
+      "then": {
+        "required": [
+          "approval_packet_reference",
+          "readiness_record_reference"
+        ],
+        "properties": {
+          "approval_packet_reference": {
+            "required": [
+              "operator_name",
+              "review_date_utc",
+              "approval_token",
+              "allowed_actions_confirmed",
+              "forbidden_actions_acknowledged",
+              "non_live_confirmed"
+            ]
+          },
+          "readiness_record_reference": {
+            "required": [
+              "readiness_verdict",
+              "blockers_identified",
+              "gaps_documented",
+              "residual_risks_assessed"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

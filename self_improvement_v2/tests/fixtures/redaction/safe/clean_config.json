@@ -1,0 +1,18 @@
+{
+  "comment": "Safe fixture — all sensitive material redacted.",
+  "api_key": "[REDACTED_API_KEY]",
+  "api_secret": "[REDACTED_API_SECRET]",
+  "telegram_token": "[REDACTED_BOT_TOKEN]",
+  "config": {
+    "key_file": "~/config/key.pem",
+    "content": "[REDACTED_PRIVATE_KEY]"
+  },
+  "paths": {
+    "config_file": "config/config.json",
+    "data_dir": "data/fixtures/"
+  },
+  "network": {
+    "host": "api.example.com",
+    "ip": "[REDACTED_IP]"
+  }
+}
