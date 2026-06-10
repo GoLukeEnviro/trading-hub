@@ -15,6 +15,8 @@ jobs:
   offline-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}/self_improvement_v2/src
 
     steps:
       - name: Checkout
