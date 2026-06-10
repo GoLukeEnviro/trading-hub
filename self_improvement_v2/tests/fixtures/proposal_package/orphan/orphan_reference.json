@@ -1,0 +1,30 @@
+{
+  "comment": "Orphan reference — readiness_record_reference references #999 which does not exist in the artifact set, tests REFERENCE_ORPHAN detection",
+  "schema_version": "1.0",
+  "stage": "draft",
+  "proposal": {
+    "proposal_id": "rp-20250610-120006-yzab",
+    "proposal_name": "Orphan Reference Test",
+    "proposed_by": "test-agent",
+    "proposed_date_utc": "2025-06-10T12:00:06Z",
+    "rehearsal_mode": "read-only",
+    "scope_description": "Test orphan reference detection",
+    "out_of_scope": "Nothing",
+    "duration_estimate": "5 minutes",
+    "target_components": ["test"],
+    "prerequisite_status": "OK",
+    "stop_conditions": "OK",
+    "evidence_plan": "OK",
+    "observation_plan": "OK",
+    "residual_risks": "None",
+    "approval_token": "APPROVE_REHEARSAL_PROPOSAL_250610"
+  },
+  "planning_gate_reference": "controlled_rehearsal_planning_gate.md",
+  "stop_condition_reference": "rehearsal_stop_condition_matrix.json",
+  "evidence_plan_reference": "rehearsal_evidence_bundle_plan.md",
+  "approval_packet_reference": "operator_rehearsal_approval_packet.md",
+  "observation_plan_reference": "read_only_observation_plan.md",
+  "readiness_record_reference": "#999",
+  "non_production_confirmation": true,
+  "non_runtime_confirmation": true
+}

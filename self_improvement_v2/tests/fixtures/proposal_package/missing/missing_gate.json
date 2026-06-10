@@ -1,0 +1,29 @@
+{
+  "comment": "Missing planning_gate_reference — tests detection of missing required field",
+  "schema_version": "1.0",
+  "stage": "draft",
+  "proposal": {
+    "proposal_id": "rp-20250610-120002-ijkl",
+    "proposal_name": "Missing Gate Test",
+    "proposed_by": "test-agent",
+    "proposed_date_utc": "2025-06-10T12:00:02Z",
+    "rehearsal_mode": "read-only",
+    "scope_description": "Test missing gate reference",
+    "out_of_scope": "Nothing",
+    "duration_estimate": "15 minutes",
+    "target_components": ["test"],
+    "prerequisite_status": "OK",
+    "stop_conditions": "OK",
+    "evidence_plan": "OK",
+    "observation_plan": "OK",
+    "residual_risks": "None",
+    "approval_token": "APPROVE_REHEARSAL_PROPOSAL_250610"
+  },
+  "stop_condition_reference": "rehearsal_stop_condition_matrix.json",
+  "evidence_plan_reference": "rehearsal_evidence_bundle_plan.md",
+  "approval_packet_reference": "operator_rehearsal_approval_packet.md",
+  "observation_plan_reference": "read_only_observation_plan.md",
+  "readiness_record_reference": "rehearsal_readiness_decision_record.md",
+  "non_production_confirmation": true,
+  "non_runtime_confirmation": true
+}
