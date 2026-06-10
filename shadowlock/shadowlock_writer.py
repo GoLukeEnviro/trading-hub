@@ -21,6 +21,7 @@ import signal
 import glob
 import shutil
 import pathlib
+import subprocess
 
 # ── Platform-specific locking ────────────────────────────────────────────────
 
@@ -363,6 +364,8 @@ def write_with_retry(log_path, entry, seq):
                     f.write(line)
             finally:
                 lock.release()
+            # Non-blocking indexer trigger
+            _trigger_indexer()
             return True
         except (OSError, IOError) as e:
             if attempt < max_retries:
@@ -375,6 +378,21 @@ def write_with_retry(log_path, entry, seq):
                 log.error("Write failed after %d attempts for seq=%d: %s",
                           max_retries, seq, e)
     return False
+
+
+
+
+def _trigger_indexer():
+    """Non-blocking indexer call. Best-effort, never fails the write."""
+    try:
+        subprocess.run(
+            [sys.executable, "shadowlock_indexer.py", "--update"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            timeout=10,
+            capture_output=True,
+        )
+    except Exception:
+        pass
 
 
 # ── Heartbeat ───────────────────────────────────────────────────────────────
