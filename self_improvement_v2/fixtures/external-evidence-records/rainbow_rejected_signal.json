@@ -1,0 +1,18 @@
+{
+  "evidence_schema_version": 1,
+  "provider_id": "rainbow",
+  "source_id": "rainbow:ta",
+  "event_type": "signal_rejected",
+  "validator_verdict": "fail",
+  "is_actionable": false,
+  "direction": "unknown",
+  "confidence": 0.0,
+  "symbol": "",
+  "timeframe": null,
+  "timestamp_utc": "2026-06-10T13:05:00Z",
+  "observed_at_utc": "2026-06-10T13:05:02Z",
+  "redaction_status": "clean",
+  "errors": ["Missing required field: event_type"],
+  "warnings": [],
+  "metadata_summary": ""
+}
