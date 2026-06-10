@@ -111,9 +111,10 @@ LIVE_ACTIVE
 
 ## Related Documents
 
-| Document | Location |
-|----------|----------|
-| SI v2 Documentation Index | `self_improvement_v2/docs/README.md` |
-| Phase 0 Tracker | [#48](https://github.com/GoLukeEnviro/trading-hub/issues/48) |
-| Issue Backlog | [GitHub Issues](https://github.com/GoLukeEnviro/trading-hub/issues) |
-| AGENTS.md | `AGENTS.md` |
+| Document | Location | Status |
+|----------|----------|--------|
+| Implementation Roadmap (this doc) | `docs/roadmap/implementation-roadmap.md` | ✅ Current |
+| SI v2 Documentation Index | `self_improvement_v2/docs/README.md` | 🔶 Pending merge of #32 (PR #51) |
+| Phase 0 Tracker | [#48](https://github.com/GoLukeEnviro/trading-hub/issues/48) | ✅ Current |
+| Issue Backlog | [GitHub Issues](https://github.com/GoLukeEnviro/trading-hub/issues) | ✅ Current |
+| AGENTS.md | `AGENTS.md` | ✅ Current |
