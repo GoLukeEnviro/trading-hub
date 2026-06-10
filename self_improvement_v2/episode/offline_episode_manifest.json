@@ -1,0 +1,51 @@
+{
+  "manifest_version": "1.0",
+  "generated_at": "2026-06-10",
+  "description": "Offline episode manifest listing input files, expected output reports, and required checks for SI v2 offline episodes.",
+  "input_files": {
+    "contracts": [
+      "self_improvement_v2/contracts/rainbow_signal_envelope.schema.json"
+    ],
+    "fixtures": [
+      "self_improvement_v2/fixtures/rainbow-signals"
+    ],
+    "evidence_schema": [
+      "self_improvement_v2/evidence/external_evidence_record.schema.json"
+    ],
+    "evidence_samples": [
+      "self_improvement_v2/fixtures/external-evidence-records"
+    ]
+  },
+  "output_reports": [
+    "self_improvement_v2/reports/rainbow/fixture_review_report.md",
+    "self_improvement_v2/reports/rainbow/contract_drift_report.md",
+    "self_improvement_v2/reports/rainbow/shadowlock_event_preview.md",
+    "self_improvement_v2/reports/source_readiness_summary.md"
+  ],
+  "required_checks": [
+    "rainbow validator (40 tests)",
+    "rainbow contract snapshot (15 tests)",
+    "rainbow drift guard (15 tests)",
+    "rainbow fixture review report (18 tests)",
+    "rainbow source status (16 tests)",
+    "rainbow read-only client (19 tests)",
+    "rainbow shadowlock events (21 tests)",
+    "source manifest (7 tests)",
+    "external evidence record schema (9 tests)",
+    "source readiness summary (13 tests)",
+    "client fixture harness (8 tests)",
+    "offline episode manifest (this file)"
+  ],
+  "components": {
+    "validator": "self_improvement_v2/src/si_v2/rainbow/validator.py",
+    "drift_guard": "self_improvement_v2/src/si_v2/rainbow/drift_guard.py",
+    "client": "self_improvement_v2/src/si_v2/rainbow/client.py",
+    "client_fixture_harness": "self_improvement_v2/src/si_v2/rainbow/client_fixture_harness.py",
+    "fixture_review": "self_improvement_v2/src/si_v2/rainbow/fixture_review_report.py",
+    "source_status": "self_improvement_v2/src/si_v2/rainbow/status.py",
+    "shadowlock_events": "self_improvement_v2/src/si_v2/rainbow/shadowlock_events.py",
+    "source_manifest": "self_improvement_v2/evidence/source_manifest.json",
+    "readiness_summary": "self_improvement_v2/src/si_v2/evidence/source_readiness_summary.py"
+  },
+  "notes": "This manifest lists the components required for an offline SI v2 episode. Additional components may be added as the evidence pipeline expands."
+}

@@ -12,10 +12,8 @@ from pathlib import Path
 
 from si_v2.rainbow.client import (
     RainbowClientConfig,
-    RainbowClientResult,
     RainbowSignalProviderClient,
 )
-
 
 # ── Harness result ────────────────────────────────────────────────────────────
 
@@ -57,7 +55,6 @@ class RainbowClientFixtureHarness:
             fixture_path=str(self._fixture_dir),
         )
         client = RainbowSignalProviderClient.from_config(config)
-        result: RainbowClientResult = client.get_latest_signals()
 
         # Try to load from fixture path
         load_result = client.load_from_fixture_path(self._fixture_dir)
