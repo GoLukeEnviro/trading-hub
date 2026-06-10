@@ -1,0 +1,12 @@
+{
+  "timestamp_utc": "2026-06-10T12:00:00Z",
+  "symbol_or_pair": "AVAX/USDT:USDT",
+  "timeframe": "1h",
+  "regime_label": "volatile",
+  "confidence": 0.72,
+  "source": "rainbow:ta",
+  "metadata": {
+    "indicators": {"atr": "high", "bb_width": "expanded", "volume": "spike"},
+    "notes": "High volatility regime — wider stops recommended"
+  }
+}

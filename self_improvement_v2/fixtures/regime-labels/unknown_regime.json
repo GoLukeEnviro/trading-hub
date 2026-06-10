@@ -1,0 +1,12 @@
+{
+  "timestamp_utc": "2026-06-10T12:00:00Z",
+  "symbol_or_pair": "UNI/USDT:USDT",
+  "timeframe": null,
+  "regime_label": "unknown",
+  "confidence": 0.0,
+  "source": "rainbow:ta",
+  "metadata": {
+    "indicators": {},
+    "notes": "Insufficient data for regime classification"
+  }
+}

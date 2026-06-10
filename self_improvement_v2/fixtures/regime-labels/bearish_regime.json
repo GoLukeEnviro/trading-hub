@@ -1,0 +1,12 @@
+{
+  "timestamp_utc": "2026-06-10T12:00:00Z",
+  "symbol_or_pair": "ETH/USDT:USDT",
+  "timeframe": "1h",
+  "regime_label": "bearish",
+  "confidence": 0.78,
+  "source": "rainbow:llm",
+  "metadata": {
+    "indicators": {"rsi_14": 32.0, "macd": "negative", "trend": "downtrend"},
+    "notes": "Bearish sentiment confirmed by on-chain data"
+  }
+}
