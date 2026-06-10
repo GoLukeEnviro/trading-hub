@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY shadowlock_indexer.py shadowlock_indexer_queries.py ./
+
+RUN pip install --no-cache-dir pandas
+
+# Default: rebuild index
+CMD ["python", "shadowlock_indexer.py"]
