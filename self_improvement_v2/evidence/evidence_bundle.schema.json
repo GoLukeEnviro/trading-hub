@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Evidence Bundle",
+  "type": "object",
+  "version": "1",
+  "properties": {
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "provider_id": { "type": "string" },
+    "source_refs": { "type": "array", "items": { "type": "string" } },
+    "evidence_record_refs": { "type": "array", "items": { "type": "string" } },
+    "fixture_count": { "type": "integer", "minimum": 0 },
+    "report_refs": { "type": "array", "items": { "type": "string" } },
+    "status": { "type": "string", "enum": ["ok", "degraded", "error"] },
+    "errors": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["schema_version", "provider_id", "source_refs", "status"]
+}
