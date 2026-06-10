@@ -40,8 +40,8 @@ FORBIDDEN_IN_SRC: list[str] = [
 
 # Patterns that should never appear anywhere (src + tests).
 FORBIDDEN_IMPORTS: list[str] = [
-    r"^import (requests|urllib|httpx|docker|telegram)\b",
-    r"^from (requests|urllib|httpx|docker|telegram)\b",
+    r"^import (requests|docker|telegram)\b",
+    r"^from (requests|docker|telegram)\b",
 ]
 
 

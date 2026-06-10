@@ -25,7 +25,7 @@ class AdvisorySignal(BaseModel):
     CanonicalSignalEnvelope, keeping only fields relevant to SI v2.
     """
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     signal_id: str
     asset: str
@@ -46,7 +46,7 @@ class SignalOutcome(BaseModel):
     outcomes to evaluate signal quality over time.
     """
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     signal_id: str
     asset: str
