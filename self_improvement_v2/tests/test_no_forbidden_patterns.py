@@ -24,6 +24,13 @@ FORBIDDEN_PATTERNS: list[str] = [
     r"secret\s*=",
     r"password\s*=",
     r"token\s*=",
+    r"cron apply",
+    r"cron install",
+    r"cron write",
+    r"cron enable",
+    r"cron disable",
+    r"cron delete",
+    r"cron reactivate",
 ]
 
 # Patterns that are forbidden in *source* (src/) but allowed in tests.
