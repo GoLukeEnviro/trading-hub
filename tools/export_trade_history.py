@@ -209,11 +209,17 @@ def fetch_trades(conn, since, until):
         f"{strategy_col} AS strategy" if strategy_col else "NULL AS strategy",
     ]
 
+    closed_trade_filter = (
+        f"{is_open_col} = 0"
+        if is_open_col
+        else f"{close_date_col} IS NOT NULL"
+    )
+
     query = f"""
         SELECT
             {',\n            '.join(select_fields)}
         FROM trades
-        WHERE {is_open_col or 'is_open'} = 0
+        WHERE {closed_trade_filter}
     """
     params = []
     if since is not None:
