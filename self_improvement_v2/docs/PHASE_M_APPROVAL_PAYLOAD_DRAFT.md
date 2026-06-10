@@ -1,256 +1,171 @@
-# Phase M.0 Approval Payload Draft — Controlled Read-Only Runtime Probe
-
-> **Issue:** #16
-> **Status:** Draft payload only.
-> **No runtime command in this document has been executed.**
-> **Issue #19 note:** typed `RuntimeProbeEvidence` and fail-closed summary redaction helpers now exist, but no probe runner or runtime execution is implemented here.
-
----
+# Phase M Approval Payload Draft — Controlled Read-Only Runtime Probe
 
 ## 1. Purpose
 
-This document converts the Phase L planning document into a concrete human
-approval payload draft for the future Phase M:
+This document is the human-facing approval payload for **Issue #17**.
+It is **approval-review-only**. It does **not** execute Phase M and it does **not** authorize any runtime mutation.
 
-> **Controlled Read-Only Runtime Probe Execution**
+Scope of this draft:
+- review a controlled read-only probe plan
+- keep the target context explicit
+- keep every approved command exact and read-only
+- mark everything else as not approved until the human supplies exact values
 
-This is not approval. Phase M remains blocked until a human operator replaces
-all placeholders, verifies every command, and explicitly signs the approval
-ceremony.
+## 2. Non-Negotiable Safety Statement
 
----
+The future probe, if approved, must not:
+- touch Docker
+- touch Freqtrade runtime, configs, strategies, databases, RPC, REST, or WebSocket endpoints
+- touch Telegram APIs, tokens, or chat IDs
+- touch exchanges or live accounts
+- touch cron or Hermes scheduler state
+- touch ai4trade-bot runtime endpoints
+- expose secrets
+- store raw output by default
+- mutate files, services, jobs, or runtime state
 
-## 2. Non-Negotiable Safety Rules
-
-1. No mutation of Docker, Freqtrade, configs, strategies, databases, cron,
-   Hermes scheduler state, orders, credentials, or live trading state.
-2. No command may run unless it appears exactly in the approved allowlist.
-3. No `docker restart`, `docker stop`, `docker start`, `docker reload`,
-   `docker rebuild`, `docker recreate`, `docker prune`, or equivalent mutation.
-4. No Freqtrade order, trade, config-write, strategy-write, database-write, or
-   backtest command.
-5. No Telegram API calls and no Telegram token/chat ID reads.
-6. No ai4trade-bot runtime HTTP calls, imports, source copy, vendor, submodule,
-   or clone.
-7. No exchange access.
-8. No live database access.
-9. No cron activation, scheduler mutation, or `jobs.json` edit.
-10. No secret, wallet, credential, API key, or token reads.
-11. Abort if `dry_run=false`, if live trading is detected, or if dry-run status
-    cannot be confirmed safely from approved evidence.
-12. Abort if redaction fails before user-facing output or evidence storage.
-13. Store sanitized `RuntimeProbeEvidence` records by default with `raw_output_stored=false`.
-
----
-
-## 3. Approval Payload Template
-
-The operator must fill every `TO_BE_FILLED_BY_HUMAN` value before Phase M can
-start. Any remaining placeholder is an automatic abort.
+## 3. Approval-Ready Payload Text
 
 ```text
 APPROVE_PHASE_M_READ_ONLY_RUNTIME_PROBE
 
-Phase title: Controlled Read-Only Runtime Probe Execution
-Target context: TO_BE_FILLED_BY_HUMAN
-Repository path: /home/hermes/projects/trading
+Issue: #17
+Phase: M
+Mode: controlled read-only runtime probe review
+Target context: repository-local shell context for /home/hermes/projects/trading on branch feat/si-v2-foundation; no Docker/container host, Freqtrade runtime, Telegram endpoint, exchange endpoint, live database, cron target, or scheduler target is approved in this draft.
+Repository: GoLukeEnviro/trading-hub
+Local path: /home/hermes/projects/trading
 Expected branch: feat/si-v2-foundation
-Expected base commit: 6a7f118dc2f99c2d3b684dd9d4f13dcbe73f123e or a later explicitly reviewed SI v2 docs-only/backlog commit
-Evidence path: self_improvement_v2/reports/runtime_probe/TO_BE_FILLED_BY_HUMAN_PROBE_ID
-Raw output storage: false
+Expected base commit: ffd603116fa78e2765d3c7fcc7fbe54ec4adbd7e
+Probe ID: phase-m-readonly-runtime-probe-20260610-001
+Evidence path: self_improvement_v2/reports/runtime_probe/phase-m-readonly-runtime-probe-20260610-001/
+Raw output stored by default: false
 Sanitized evidence schema: RuntimeProbeEvidence
-Maximum runtime duration: 10 minutes
-Per-command timeout: 15 seconds unless explicitly overridden below
-Redaction policy: PHASE_M_REDACTION_POLICY_V1 from this document
-Abort conditions: PHASE_M_ABORT_CRITERIA_V1 from this document
-No-op confirmation: I understand this phase must not mutate Docker, Freqtrade,
-configs, strategies, databases, cron, scheduler state, orders, credentials, or
-live runtime state. I understand a GREEN verdict authorizes no live trading.
+Redaction policy: PHASE_M_REDACTION_POLICY_V3
+Abort policy: PHASE_M_ABORT_CRITERIA_V3
+Human approval required: yes
+Execution authorization: no
+
+I confirm this payload is limited to read-only review only.
+I confirm no runtime command may be executed until a human explicitly approves this payload.
+I confirm no live trading, live config reads, live strategy reads, live DB reads, cron access, scheduler access, or external runtime access is approved here.
 ```
 
----
+## 4. Target Context Decision
 
-## 4. Target Context Draft
+**Decision:** keep the target context strictly local and repository-bound.
 
-The exact target context is intentionally not guessed in this repository.
-The human approval must provide:
+Approved context:
+- local shell session
+- repository path `/home/hermes/projects/trading`
+- branch `feat/si-v2-foundation`
+- review commit `ffd603116fa78e2765d3c7fcc7fbe54ec4adbd7e`
 
-| Field | Required value |
-|-------|----------------|
-| Host/context | Exact shell/profile/host where the read-only probe is allowed |
-| Repo path | `/home/hermes/projects/trading` unless explicitly changed |
-| Docker host | Exact Docker context or socket path, if Docker metadata is allowed |
-| Container aliases | Exact approved aliases and exact container names |
-| Freqtrade status source | Exact safe method for `dry_run` confirmation |
-| API endpoints | Exact local/read-only health URLs, if any |
-| Log sources | Exact approved log source and max line/time bounds, if any |
+Not approved in this draft:
+- any Docker host or container name
+- any Freqtrade bot name or endpoint
+- any Telegram endpoint or token-bearing target
+- any exchange endpoint
+- any live database URL or file
+- any cron or Hermes scheduler target
 
-If exact container names, endpoints, or log sources are not provided, their
-corresponding allowlist entries remain disabled.
+## 5. Approval-Ready Command Allowlist
 
----
+These commands are exact, bounded, and read-only.
+They can be used for preflight verification only.
 
-## 5. Exact Command Allowlist Draft
+| ID | Exact command | Purpose | Read-only justification | Timeout | Expected output shape | Redaction requirement | Abort condition |
+|---|---|---|---|---:|---|---|---|
+| A-01 | `pwd` | Confirm the working directory | Prints the current path only | 5s | One absolute path line | No redaction expected | Abort if path is not `/home/hermes/projects/trading` |
+| A-02 | `git branch --show-current` | Confirm current branch | Reads repo metadata only | 5s | One branch name line | No redaction expected | Abort if branch is not `feat/si-v2-foundation` |
+| A-03 | `git rev-parse HEAD` | Confirm current commit | Reads repo metadata only | 5s | One full SHA line | No redaction expected | Abort if HEAD drifts from `ffd603116fa78e2765d3c7fcc7fbe54ec4adbd7e` |
+| A-04 | `git status --short --untracked-files=all` | Confirm working tree cleanliness | Reads git index and worktree state only | 10s | Empty output if clean; otherwise short status lines | If any sensitive path names appear unexpectedly, redact them before human-facing reporting | Abort if unrelated dirty files exist |
 
-Commands below are a draft allowlist for the approval payload. They must be
-copied into the final approval with all placeholders replaced by exact values.
-Commands marked `DISABLED_UNTIL_FILLED` must not run while placeholders remain.
+## 6. NOT APPROVED / NEEDS HUMAN VALUES
 
-### 5.1 Repository Preflight Commands
+These categories remain out of scope until the human provides exact values.
+No executable command is approved here.
 
-These commands prove the repository context before any runtime observation.
-They do not access Docker, Freqtrade, Telegram, ai4trade, exchanges, live DBs,
-cron, or strategy paths.
+| Category | Missing human value | Why it cannot be inferred safely |
+|---|---|---|
+| Docker metadata observation | exact Docker host/socket path and exact container name(s) | guessing a host or container could target the wrong runtime or imply a forbidden runtime path |
+| Freqtrade dry-run confirmation | exact approved safe method and exact target instance | live config, runtime, and strategy targets are explicitly off-limits in this draft |
+| Read-only health checks for any runtime endpoint | exact endpoint URL and exact output bounds | endpoint guesses can hit live services or leak secrets |
+| Log snippet review | exact log source, exact time/line bounds, exact component filter | unbounded logs can expose secrets and unrelated runtime state |
+| Telegram target inspection | exact allowed target and exact redaction-safe fields | Telegram tokens and chat IDs are explicitly disallowed here |
+| Wallet-specific redaction claim | an explicit approved wallet rule and tests | this draft does not claim a dedicated wallet redaction rule; wallet-like values must remain an abort trigger until separately approved |
 
-| ID | Status | Command | Purpose | Timeout |
-|----|--------|---------|---------|---------|
-| `repo-01` | enabled | `pwd` | Confirm current directory | 5s |
-| `repo-02` | enabled | `git branch --show-current` | Confirm branch | 5s |
-| `repo-03` | enabled | `git rev-parse HEAD` | Confirm commit | 5s |
-| `repo-04` | enabled | `git status --short --untracked-files=all` | Abort on dirty tree outside evidence path | 5s |
+## 7. Evidence Path Decision
 
-### 5.2 Docker Metadata Commands
+**Decision:** use one explicit evidence directory only.
 
-These commands are read-only Docker metadata observations. They are disabled
-until the human approval names exact target containers. Do not use globs or
-broad unbounded output.
+Approved evidence path:
+- `self_improvement_v2/reports/runtime_probe/phase-m-readonly-runtime-probe-20260610-001/`
 
-| ID | Status | Command | Purpose | Timeout |
-|----|--------|---------|---------|---------|
-| `docker-presence-01` | `DISABLED_UNTIL_FILLED` | `docker --host TO_BE_FILLED_BY_HUMAN_DOCKER_HOST ps --filter name=TO_BE_FILLED_EXACT_CONTAINER_NAME --format '{{.Names}}\t{{.Status}}\t{{.Image}}'` | Confirm exact container presence/status | 15s |
-| `docker-health-01` | `DISABLED_UNTIL_FILLED` | `docker --host TO_BE_FILLED_BY_HUMAN_DOCKER_HOST inspect --format '{{json .State.Health}}' TO_BE_FILLED_EXACT_CONTAINER_NAME` | Read health object only; no full inspect | 15s |
-| `docker-state-01` | `DISABLED_UNTIL_FILLED` | `docker --host TO_BE_FILLED_BY_HUMAN_DOCKER_HOST inspect --format '{{.Name}}\t{{.State.Status}}\t{{.State.Running}}\t{{.State.Restarting}}\t{{.State.OOMKilled}}' TO_BE_FILLED_EXACT_CONTAINER_NAME` | Read bounded state fields only | 15s |
-| `docker-process-01` | `DISABLED_UNTIL_FILLED` | `docker --host TO_BE_FILLED_BY_HUMAN_DOCKER_HOST top TO_BE_FILLED_EXACT_CONTAINER_NAME -eo pid,comm` | Confirm process presence without command args/env | 15s |
+Evidence files expected there, if the human later approves execution:
+- probe summary
+- sanitized output summary
+- command transcript metadata
+- abort notes, if any
 
-Forbidden Docker forms for Phase M include but are not limited to:
-`restart`, `stop`, `start`, `reload`, `kill`, `exec`, `cp`, `compose up`,
-`compose down`, `build`, `recreate`, `prune`, and full unfiltered `inspect`.
+Raw output policy:
+- `raw_output_stored=false` by default
+- raw output may only be enabled by a separate explicit human decision
 
-### 5.3 Freqtrade Dry-Run Confirmation
+## 8. Redaction Policy Alignment
 
-No default Freqtrade command is approved in this draft because full config,
-REST, RPC, WebSocket, and database reads may expose secrets or live state.
-The human operator must provide a minimal, redacted, read-only method before
-Phase M can claim `dry_run_confirmed`.
+This draft aligns the approval payload with the currently approved runtime-probe redaction behavior by using only redaction classes that are already covered by the payload text.
 
-| ID | Status | Command/API | Purpose | Timeout |
-|----|--------|-------------|---------|---------|
-| `freqtrade-dry-run-01` | `DISABLED_PENDING_HUMAN_METHOD` | `TO_BE_FILLED_BY_HUMAN_SAFE_DRY_RUN_STATUS_METHOD` | Confirm `dry_run` without full config or secret exposure | 15s |
+Approved redaction classes in this draft:
+- API-key-like values
+- exchange-secret-like values
+- Telegram-token-like values
+- credentials embedded in URLs
+- Authorization headers
+- Cookie headers
+- account identifiers
+- private host/IP fragments
+- high-entropy strings
 
-Abort if this method is missing, if it returns `dry_run=false`, or if it
-requires reading secrets, full configs, live databases, or strategy files.
+Canonical placeholders used by this draft:
+- `[REDACTED_API_KEY]`
+- `[REDACTED_EXCHANGE_SECRET]`
+- `[REDACTED_TELEGRAM_TOKEN]`
+- `[REDACTED_CREDENTIALS]`
+- `[REDACTED_QUERY_VALUE]`
+- `[REDACTED_AUTH_HEADER]`
+- `[REDACTED_COOKIE]`
+- `[REDACTED_ACCOUNT_IDENTIFIER]`
+- `[REDACTED_PRIVATE_HOST]`
+- `[REDACTED_HIGH_ENTROPY]`
+- `[REDACTED_VALUE]` when a generic sensitive field cannot be classified more specifically
 
-### 5.4 Read-Only API Health Commands
+**Wallet-specific redaction is not claimed as approved in this draft.**
+If wallet-like content appears during any future probe, it must trigger abort or a separate approved revision before execution.
 
-No API health endpoint is enabled by default. The human approval must list exact
-localhost or explicitly approved health endpoints. Authenticated endpoints are
-disallowed unless the approval also describes how auth can be checked without
-reading or printing secrets.
+## 9. Abort Criteria
 
-| ID | Status | Command/API | Purpose | Timeout |
-|----|--------|-------------|---------|---------|
-| `api-health-01` | `DISABLED_UNTIL_FILLED` | `TO_BE_FILLED_BY_HUMAN_EXACT_HEALTH_REQUEST` | Confirm health-only endpoint | 15s |
+Abort the future probe immediately if any of the following occurs:
 
-Abort if the endpoint is not health-only, not exact, not local/approved, or
-returns credentials, account identifiers, order data, trade payloads, or secrets.
+1. branch drift from `feat/si-v2-foundation`
+2. HEAD drift from `ffd603116fa78e2765d3c7fcc7fbe54ec4adbd7e`
+3. working tree is dirty outside the approved evidence path
+4. any command differs from the exact allowlist in Section 5
+5. any command needs a value that is not explicitly approved in Section 4 or 6
+6. any output contains secrets, tokens, credentials, wallet-like values, or account IDs
+7. any redaction failure occurs
+8. any runtime mutation, live config read, live strategy read, live DB read, cron access, scheduler access, exchange access, or Telegram access is attempted
+9. `raw_output_stored` would be set to `true` without explicit human approval
+10. the evidence path differs from the exact path in Section 7
+11. the target context becomes ambiguous at execution time
+12. any Docker/Freqtrade/runtime endpoint appears without a human-supplied exact value
+13. any future probe reveals a mismatch between payload text and implemented redaction behavior
+14. any safety rule from the Phase L plan is violated
 
-### 5.5 Redacted Log Snippet Commands
+## 10. Submission Verdict
 
-No log snippet command is enabled by default. If approved, log reads must be
-bounded by exact source, max lines, and component/time filter.
+This draft is now suitable to be presented to the human for explicit approval **as a read-only review payload only**.
 
-| ID | Status | Command | Purpose | Timeout |
-|----|--------|---------|---------|---------|
-| `logs-01` | `DISABLED_UNTIL_FILLED` | `TO_BE_FILLED_BY_HUMAN_EXACT_BOUNDED_LOG_SNIPPET_COMMAND` | Collect redacted warning/error snippet | 15s |
-
-Abort if redaction cannot be applied before display/storage, if logs contain
-credentials, or if the requested tail is unbounded.
-
----
-
-## 6. Evidence Path
-
-Default draft evidence path:
-
-```text
-self_improvement_v2/reports/runtime_probe/TO_BE_FILLED_BY_HUMAN_PROBE_ID/
-```
-
-Required files for Phase M:
-
-```text
-APPROVAL.md
-COMMAND_ALLOWLIST.md
-evidence.jsonl
-redaction_report.md
-abort_report.md        # only if any RED condition occurs
-```
-
-Default raw-output policy:
-
-```text
-raw_output_stored=false
-```
-
-Raw output storage is not approved by this draft. If the human operator wants
-raw output storage, that must be explicitly added to the approval with path,
-retention, access control, and redaction/containment rationale.
-
----
-
-## 7. Redaction Policy V1
-
-Apply redaction before any user-facing report or normal evidence write.
-The implemented summary helper is fail-closed and the future probe must abort if redaction fails.
-
-| Class | Replacement |
-|-------|-------------|
-| API keys | `[REDACTED_API_KEY]` |
-| Exchange keys/secrets | `[REDACTED_EXCHANGE_SECRET]` |
-| Telegram bot tokens | `[REDACTED_TELEGRAM_TOKEN]` |
-| Telegram chat IDs | `[REDACTED_TELEGRAM_CHAT_ID]` when user/account-linked |
-| Credential-bearing URLs | Remove userinfo and secret query parameters |
-| Authorization headers | `[REDACTED_AUTH_HEADER]` |
-| Cookies/session IDs | `[REDACTED_SESSION]` |
-| Wallet addresses | `[REDACTED_WALLET]` unless explicitly approved |
-| Account identifiers | Stable non-reversible alias when needed |
-| Private infrastructure identifiers | Redact private IPs/internal hostnames/host paths when needed |
-
-The probe must never intentionally read secrets. Redaction is only a containment
-backstop for accidental exposure.
-
----
-
-## 8. Abort Criteria V1
-
-Phase M must abort immediately on any of the following:
-
-1. Approval payload missing or ambiguous.
-2. Dirty working tree outside the approved evidence path.
-3. Unexpected branch or HEAD drift.
-4. Any command/API request not exactly on the allowlist.
-5. Any command attempts mutation or ambiguous side effects.
-6. Docker or Freqtrade state contradicts safety assumptions.
-7. Live trading detected or `dry_run=false`.
-8. `dry_run` cannot be confirmed from approved evidence.
-9. Secret exposure risk detected before execution.
-10. Output contains credentials, tokens, wallet data, or account secrets.
-11. Redaction fails or cannot be verified.
-12. RiskGuard unavailable during a safety-relevant decision.
-13. ShadowLogger unavailable during evidence/decision logging.
-14. API endpoint requires unapproved auth.
-15. Log source includes secrets or unbounded content.
-16. Runtime duration or call budget exceeded.
-
----
-
-## 9. Phase M Status
-
-Phase M remains **BLOCKED** until a human operator approves the final payload.
-This draft intentionally leaves target-specific placeholders unfilled rather
-than guessing live infrastructure details.
-
-A complete approval must name exact targets and exact commands. A GREEN verdict
-from Phase M would authorize only the approved read-only observations; it would
-not authorize live trading, strategy mutation, cron activation, real adapter
-deployment, restarts, or order creation.
+It is **not** approval of execution.
+It is **not** approval of runtime access.
+It is **not** approval to execute Phase M.
