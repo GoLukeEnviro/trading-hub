@@ -1,0 +1,159 @@
+{
+  "title": "External Adapter Boundary Audit",
+  "version": "1.0",
+  "description": "Classification of all external adapters by access mode, safety gate, and rehearsal readiness. This audit determines which adapters are safe to include in controlled rehearsals and which require explicit gates.",
+  "generated_at": "",
+  "generated_by": "SI v2 Governance (#131)",
+  "safety_notice": "This document is a static audit. It does not authorise any runtime execution, real adapter usage, or live trading. All classifications are subject to review and approval.",
+  "default_state": "disabled-by-default",
+  "adapters": [
+    {
+      "name": "DryRunStubDocker",
+      "module": "si_v2.adapters.dry_run_stub",
+      "class": "DryRunStubDocker",
+      "classification": "read-only",
+      "gate_required": false,
+      "env_flag": null,
+      "default_state": "enabled",
+      "safe_for_rehearsal": true,
+      "rehearsal_notes": "Deterministic mock \u2014 always safe. No env var required.",
+      "risk_level": "none",
+      "write_capable": false
+    },
+    {
+      "name": "DryRunStubFreqtrade",
+      "module": "si_v2.adapters.dry_run_stub",
+      "class": "DryRunStubFreqtrade",
+      "classification": "read-only",
+      "gate_required": false,
+      "env_flag": null,
+      "default_state": "enabled",
+      "safe_for_rehearsal": true,
+      "rehearsal_notes": "Deterministic mock \u2014 always safe. No env var required.",
+      "risk_level": "none",
+      "write_capable": false
+    },
+    {
+      "name": "RealDockerAdapter",
+      "module": "si_v2.adapters.real_docker_adapter",
+      "class": "RealDockerAdapter",
+      "classification": "read-only-with-docker",
+      "gate_required": true,
+      "env_flag": "SI_V2_ENABLE_REAL_ADAPTERS",
+      "default_state": "disabled-by-default",
+      "safe_for_rehearsal": false,
+      "rehearsal_notes": "Read-only Docker operations only. Limited to exec, status check, IP lookup. Requires SI_V2_ENABLE_REAL_ADAPTERS=1 to instantiate. All methods are read-only by design. Not safe by default: only eligible after explicit human approval, passed runtime preflight, and the required environment gate is intentionally enabled.",
+      "risk_level": "low",
+      "write_capable": false,
+      "safe_only_after": [
+        "explicit_human_approval",
+        "runtime_preflight_passed",
+        "SI_V2_ENABLE_REAL_ADAPTERS=1"
+      ]
+    },
+    {
+      "name": "RealFreqtradeAdapter",
+      "module": "si_v2.adapters.real_freqtrade_adapter",
+      "class": "RealFreqtradeAdapter",
+      "classification": "read-only-with-docker",
+      "gate_required": true,
+      "env_flag": "SI_V2_ENABLE_REAL_ADAPTERS",
+      "default_state": "disabled-by-default",
+      "safe_for_rehearsal": false,
+      "rehearsal_notes": "Read-only Freqtrade operations via docker exec. Limited to config read, trade history, backtest. Requires SI_V2_ENABLE_REAL_ADAPTERS=1. Not safe by default: only eligible after explicit human approval, passed runtime preflight, and the required environment gate is intentionally enabled.",
+      "risk_level": "low",
+      "write_capable": false,
+      "safe_only_after": [
+        "explicit_human_approval",
+        "runtime_preflight_passed",
+        "SI_V2_ENABLE_REAL_ADAPTERS=1"
+      ]
+    },
+    {
+      "name": "RealTelegramAdapterBase",
+      "module": "si_v2.adapters.real_base",
+      "class": "RealTelegramAdapterBase",
+      "classification": "write-capable",
+      "gate_required": true,
+      "env_flag": "SI_V2_ENABLE_REAL_ADAPTERS",
+      "default_state": "disabled-by-default",
+      "safe_for_rehearsal": false,
+      "rehearsal_notes": "NOT safe for rehearsal. Telegram sends external messages. Must remain disabled-by-default.",
+      "risk_level": "medium",
+      "write_capable": true,
+      "write_capable_notes": "Can send messages to Telegram. Potential information disclosure."
+    },
+    {
+      "name": "RealAi4tradeAdapterBase",
+      "module": "si_v2.adapters.real_base",
+      "class": "RealAi4tradeAdapterBase",
+      "classification": "disabled-by-default",
+      "gate_required": true,
+      "env_flag": "SI_V2_ENABLE_REAL_ADAPTERS",
+      "default_state": "disabled-by-default",
+      "safe_for_rehearsal": false,
+      "rehearsal_notes": "NOT safe for rehearsal. External API integration. Must remain disabled-by-default.",
+      "risk_level": "medium",
+      "write_capable": false,
+      "write_capable_notes": "Not yet determined (spec only)."
+    },
+    {
+      "name": "DockerAdapter",
+      "module": "si_v2.adapters.docker_adapter",
+      "class": "DockerAdapter",
+      "classification": "read-only",
+      "gate_required": false,
+      "env_flag": null,
+      "default_state": "enabled",
+      "safe_for_rehearsal": true,
+      "rehearsal_notes": "Protocol class \u2014 defines the interface. No runtime side effects.",
+      "risk_level": "none",
+      "write_capable": false
+    },
+    {
+      "name": "FreqtradeAdapter",
+      "module": "si_v2.adapters.freqtrade_adapter",
+      "class": "FreqtradeAdapter",
+      "classification": "read-only",
+      "gate_required": false,
+      "env_flag": null,
+      "default_state": "enabled",
+      "safe_for_rehearsal": true,
+      "rehearsal_notes": "Protocol class \u2014 defines the interface. No runtime side effects.",
+      "risk_level": "none",
+      "write_capable": false
+    },
+    {
+      "name": "TelegramAdapter",
+      "module": "si_v2.adapters.telegram_adapter",
+      "class": "TelegramAdapter",
+      "classification": "write-capable",
+      "gate_required": true,
+      "env_flag": "SI_V2_ENABLE_REAL_ADAPTERS",
+      "default_state": "disabled-by-default",
+      "safe_for_rehearsal": false,
+      "rehearsal_notes": "Protocol class only. Real Telegram adapter (RealTelegramAdapterBase) also requires gate. Both must remain disabled-by-default.",
+      "risk_level": "medium",
+      "write_capable": true,
+      "write_capable_notes": "Can send messages and approval requests. Protocol defines the interface; real implementation is gated."
+    }
+  ],
+  "summary": {
+    "total_adapters": 9,
+    "read_only": 5,
+    "read_only_with_docker": 2,
+    "write_capable": 2,
+    "disabled_by_default": 5,
+    "safe_for_rehearsal": 4,
+    "gate_required": 5,
+    "rehearsal_blocked": 5
+  },
+  "rules": [
+    "All write-capable adapters require SI_V2_ENABLE_REAL_ADAPTERS=1 to instantiate.",
+    "All write-capable adapters are disabled-by-default and NOT safe for rehearsal.",
+    "Read-only adapters with Docker access require SI_V2_ENABLE_REAL_ADAPTERS=1 gate.",
+    "No adapter may be reclassified from disabled-by-default to enabled without human approval.",
+    "The env flag SI_V2_ENABLE_REAL_ADAPTERS must remain unset in all non-rehearsal environments.",
+    "Read-only real adapters are not safe by default; they are only eligible after explicit approval, passed preflight, and intentional gate enablement."
+  ]
+}

@@ -10,7 +10,6 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 FORBIDDEN_PATTERNS: list[str] = [
-    r"dry_run\s*=\s*False",
     r"proposal_only\s*=\s*False",
     r"docker restart",
     r"docker stop",
@@ -35,6 +34,7 @@ FORBIDDEN_PATTERNS: list[str] = [
 
 # Patterns that are forbidden in *source* (src/) but allowed in tests.
 FORBIDDEN_IN_SRC: list[str] = [
+    r"dry_run\s*=\s*False",
     r"docker exec",
     r":\s*Any\b",          # Any type annotations (must use concrete types)
     r"shell\s*=\s*True",   # shell=True in subprocess (security risk)

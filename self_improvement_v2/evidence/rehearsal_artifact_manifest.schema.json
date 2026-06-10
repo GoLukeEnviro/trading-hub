@@ -1,0 +1,226 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Rehearsal Artifact Archive Manifest",
+  "description": "Schema for the rehearsal artifact archive manifest. Each manifest describes a set of artifacts produced during a controlled rehearsal run, with checksums, approval references, and retention metadata.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+$",
+      "description": "Schema version for forward compatibility."
+    },
+    "manifest_id": {
+      "type": "string",
+      "pattern": "^mf-[0-9]{8}-[0-9]{6}-[a-z0-9]{8}$",
+      "description": "Unique manifest identifier: mf-YYYYMMDD-HHMMSS-random8."
+    },
+    "run_ref": {
+      "type": "string",
+      "pattern": "^dr-[0-9]{8}-[0-9]{6}-[a-z0-9]{8}$",
+      "description": "Reference to the run ID that produced these artifacts."
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this manifest was generated."
+    },
+    "generated_by": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Agent or tool that generated this manifest."
+    },
+    "approval_ref": {
+      "type": "object",
+      "properties": {
+        "approval_token": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Approval token that authorised the run."
+        },
+        "approval_scope": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Scope of the approval."
+        }
+      },
+      "required": [
+        "approval_token"
+      ],
+      "additionalProperties": false
+    },
+    "artifact_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of artifacts in this manifest."
+    },
+    "total_size_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total size of all artifacts in bytes."
+    },
+    "retention": {
+      "type": "object",
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": [
+            "permanent",
+            "archive_after_days",
+            "delete_after_days"
+          ],
+          "description": "Retention policy for this artifact set."
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of days to retain (if policy is archive_after_days or delete_after_days)."
+        },
+        "expires_at_utc": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Explicit expiry timestamp."
+        }
+      },
+      "required": [
+        "policy"
+      ],
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Relative path to the artifact file. Must not be absolute, contain path traversal, or contain secret-looking path components.",
+            "not": {
+              "anyOf": [
+                {
+                  "pattern": "^/"
+                },
+                {
+                  "pattern": "(^|/)\\.\\.(/|$)"
+                },
+                {
+                  "pattern": "(^|/)\\.env($|[./])"
+                },
+                {
+                  "pattern": "(^|/|[-_.])(token|secret|key|credential|wallet)([-_.]|/|$)"
+                }
+              ]
+            }
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA-256 checksum of the artifact."
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "File size in bytes."
+          },
+          "artifact_type": {
+            "type": "string",
+            "enum": [
+              "log",
+              "report",
+              "evidence",
+              "schema",
+              "config_snapshot",
+              "trade_history",
+              "signal_output",
+              "manifest"
+            ],
+            "description": "Type of artifact."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Human-readable description of the artifact."
+          }
+        },
+        "required": [
+          "path",
+          "sha256",
+          "size_bytes",
+          "artifact_type"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "validation_summary": {
+      "type": "object",
+      "properties": {
+        "all_checksums_valid": {
+          "type": "boolean",
+          "description": "Whether all checksums were verified."
+        },
+        "missing_artifacts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "description": "Paths listed in manifest but not found on disk."
+        },
+        "extra_artifacts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "description": "Paths found on disk but not listed in manifest."
+        }
+      },
+      "required": [
+        "all_checksums_valid"
+      ],
+      "additionalProperties": false
+    },
+    "manifest_stage": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "final"
+      ],
+      "description": "Manifest lifecycle stage. Final manifests must contain at least one artifact."
+    }
+  },
+  "required": [
+    "schema_version",
+    "manifest_stage",
+    "manifest_id",
+    "run_ref",
+    "generated_at_utc",
+    "generated_by",
+    "approval_ref",
+    "artifact_count",
+    "retention",
+    "artifacts",
+    "validation_summary"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "manifest_stage": {
+            "const": "final"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "artifacts": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}
