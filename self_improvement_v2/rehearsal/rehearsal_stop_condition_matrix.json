@@ -1,0 +1,305 @@
+{
+  "title": "Rehearsal Stop-Condition and Abort Matrix",
+  "version": "1.0",
+  "description": "Deterministic decision mapping for stopping, aborting, escalating, or failing closed during future rehearsal proposals. This matrix is evaluated before any rehearsal proposal is created and during rehearsal execution.",
+  "generated_at": "",
+  "generated_by": "SI v2 Governance (#136)",
+  "safety_notice": "This matrix is a static governance artifact. It does not approve any runtime execution, rehearsal execution, or live trading. All conditions must be evaluated by an operator or automated check before proceeding.",
+  "default_verdict": "BLOCKED",
+  "conditions": [
+    {
+      "id": "SC-01",
+      "name": "dry_run_false_detected",
+      "description": "A Freqtrade config or adapter has dry_run=false set",
+      "category": "hard_blocker",
+      "severity": "critical",
+      "action": "ABORT",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-02",
+      "name": "live_state_active",
+      "description": "LIVE_APPROVED or LIVE_ACTIVE state is detected in the system",
+      "category": "hard_blocker",
+      "severity": "critical",
+      "action": "ABORT",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-03",
+      "name": "exchange_credentials_accessible",
+      "description": "Exchange API keys, secrets, tokens, or wallet data are accessible in configs, env, or source",
+      "category": "hard_blocker",
+      "severity": "critical",
+      "action": "ABORT",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-04",
+      "name": "real_adapters_enabled",
+      "description": "SI_V2_ENABLE_REAL_ADAPTERS=1 is set in the environment",
+      "category": "hard_blocker",
+      "severity": "critical",
+      "action": "ABORT",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-05",
+      "name": "riskguard_unavailable",
+      "description": "RiskGuard is not available during a safety-relevant decision",
+      "category": "safety_blocker",
+      "severity": "high",
+      "action": "STOP",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-06",
+      "name": "shadowlogger_unavailable",
+      "description": "ShadowLogger is not available during a decision or write action",
+      "category": "safety_blocker",
+      "severity": "high",
+      "action": "STOP",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-07",
+      "name": "prerequisite_missing",
+      "description": "A required prerequisite artifact from #127–#132 is missing or invalid",
+      "category": "hard_blocker",
+      "severity": "high",
+      "action": "STOP",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-08",
+      "name": "evidence_missing",
+      "description": "Required evidence for a stop-condition check is missing or cannot be collected without runtime action",
+      "category": "evidence_gap",
+      "severity": "high",
+      "action": "STOP",
+      "escalate": true,
+      "verdict": "YELLOW",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-09",
+      "name": "evidence_stale",
+      "description": "Existing evidence is older than its validity window and has not been refreshed",
+      "category": "evidence_gap",
+      "severity": "medium",
+      "action": "WARN",
+      "escalate": false,
+      "verdict": "YELLOW",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-10",
+      "name": "evidence_ambiguous",
+      "description": "Evidence exists but its meaning or integrity cannot be determined (e.g. missing checksums, untrusted source)",
+      "category": "evidence_gap",
+      "severity": "medium",
+      "action": "STOP",
+      "escalate": true,
+      "verdict": "YELLOW",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-11",
+      "name": "scope_boundary_violation",
+      "description": "Proposal scope includes components, services, or actions outside the approved rehearsal boundary",
+      "category": "scope_violation",
+      "severity": "high",
+      "action": "ABORT",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-12",
+      "name": "runtime_action_in_scope",
+      "description": "Proposal scope includes any runtime action (Docker, Freqtrade, exchange, deployment, service call)",
+      "category": "scope_violation",
+      "severity": "critical",
+      "action": "ABORT",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-13",
+      "name": "approval_token_missing",
+      "description": "Required approval token is missing, expired, or does not match the proposal scope",
+      "category": "approval",
+      "severity": "high",
+      "action": "STOP",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-14",
+      "name": "approval_scope_mismatch",
+      "description": "Approval token scope does not match the proposed rehearsal scope",
+      "category": "approval",
+      "severity": "high",
+      "action": "STOP",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-15",
+      "name": "financial_exposure_possible",
+      "description": "Any path exists through which the proposal could create financial exposure",
+      "category": "hard_blocker",
+      "severity": "critical",
+      "action": "ABORT",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-16",
+      "name": "proposal_fields_incomplete",
+      "description": "Required planning fields from #135 are missing or incomplete",
+      "category": "validation",
+      "severity": "medium",
+      "action": "WARN",
+      "escalate": false,
+      "verdict": "YELLOW",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "planning"
+    },
+    {
+      "id": "SC-17",
+      "name": "rehearsal_runtime_abort_signal",
+      "description": "An abort signal was received during rehearsal execution (e.g. forbidden condition became true mid-run)",
+      "category": "runtime_safety",
+      "severity": "critical",
+      "action": "ABORT",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "execution"
+    },
+    {
+      "id": "SC-18",
+      "name": "rehearsal_runtime_drift_detected",
+      "description": "A monitored metric or condition drifted outside its allowed range during rehearsal execution",
+      "category": "runtime_safety",
+      "severity": "high",
+      "action": "STOP",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "execution"
+    },
+    {
+      "id": "SC-19",
+      "name": "rehearsal_time_exceeded",
+      "description": "Rehearsal execution has exceeded its planned duration",
+      "category": "runtime_safety",
+      "severity": "medium",
+      "action": "WARN",
+      "escalate": false,
+      "verdict": "YELLOW",
+      "evidence_required": false,
+      "fail_closed": false,
+      "rehearsal_phase": "execution"
+    },
+    {
+      "id": "SC-20",
+      "name": "rehearsal_evidence_corrupted",
+      "description": "Evidence collected during rehearsal has an integrity failure (checksum mismatch, truncated, unreadable)",
+      "category": "evidence_gap",
+      "severity": "high",
+      "action": "STOP",
+      "escalate": true,
+      "verdict": "RED",
+      "evidence_required": true,
+      "fail_closed": true,
+      "rehearsal_phase": "execution"
+    }
+  ],
+  "verdict_map": {
+    "RED": {
+      "meaning": "Hard blocker — do not proceed. Escalate immediately.",
+      "action_required": "Document evidence, escalate to governance contact, do not override.",
+      "proceed_without_resolution": false
+    },
+    "YELLOW": {
+      "meaning": "Gap or warning — proceed with caution and operator awareness.",
+      "action_required": "Document gap, inform operator, obtain explicit acknowledgment.",
+      "proceed_without_resolution": true
+    },
+    "GREEN": {
+      "meaning": "No stop conditions triggered — safe to proceed.",
+      "action_required": "None.",
+      "proceed_without_resolution": true
+    }
+  },
+  "action_map": {
+    "ABORT": {
+      "meaning": "Immediately terminate all activity. Do not create proposal or continue rehearsal.",
+      "reversible": false,
+      "requires_escalation": true
+    },
+    "STOP": {
+      "meaning": "Halt current activity. Do not proceed until the condition is resolved.",
+      "reversible": true,
+      "requires_escalation": true
+    },
+    "WARN": {
+      "meaning": "Issue a warning to the operator. Activity may continue with awareness.",
+      "reversible": true,
+      "requires_escalation": false
+    }
+  }
+}
