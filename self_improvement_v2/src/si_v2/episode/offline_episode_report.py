@@ -1,0 +1,139 @@
+"""Offline Episode Output Report Renderer.
+
+Reads the offline episode result, episode manifest, evidence bundle,
+and quality gate output to produce a deterministic Markdown summary
+with GREEN/YELLOW/RED verdict.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from si_v2.episode.offline_episode import OfflineEpisode
+
+
+class OfflineEpisodeReportRenderer:
+    """Render an offline episode report to Markdown."""
+
+    def __init__(self, root: Path | None = None) -> None:
+        self._root = root or Path("self_improvement_v2")
+
+    def _resolve(self, *parts: str) -> Path:
+        return self._root.joinpath(*parts)
+
+    def _read_json(self, rel_path: str) -> dict[str, object] | None:
+        p = self._resolve(*rel_path.split("/"))
+        if not p.exists():
+            return None
+        try:
+            with open(p) as f:
+                return dict(json.load(f))
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def render(self) -> str:
+        """Render a deterministic Markdown report.
+
+        Missing input files produce YELLOW, not a crash.
+        """
+        episode = OfflineEpisode(root=self._root)
+        result = episode.run()
+
+        lines: list[str] = []
+        lines.append("# Offline Episode Report")
+        lines.append("")
+        lines.append(f"**Verdict:** {result.verdict.value}")
+        lines.append("")
+        lines.append("## Artifacts")
+        lines.append("")
+        lines.append("| Artifact | Status |")
+        lines.append("|----------|--------|")
+
+        for a in result.artifacts:
+            icon = "✅" if a.found else ("⚠️" if a.severity == "optional" else "❌")
+            lines.append(f"| {a.name} | {icon} {'Found' if a.found else 'Missing'} |")
+
+        # Episode manifest details
+        manifest = self._read_json("episode/offline_episode_manifest.json")
+        if manifest:
+            checks = manifest.get("required_checks", [])
+            if isinstance(checks, list) and checks:
+                lines.append("")
+                lines.append("## Required Checks")
+                lines.append("")
+                for check in checks:
+                    lines.append(f"- {check}")
+
+        # Evidence bundle details
+        bundle = self._read_json("reports/evidence/evidence_bundle.json")
+        if bundle:
+            lines.append("")
+            lines.append("## Evidence Bundle")
+            lines.append("")
+            provider = bundle.get("provider_id", "unknown")
+            fixture_count = bundle.get("fixture_count", 0)
+            status = bundle.get("status", "unknown")
+            lines.append(f"- **Provider:** {provider}")
+            lines.append(f"- **Fixtures:** {fixture_count}")
+            lines.append(f"- **Status:** {status}")
+
+        # Quality gate details
+        qg_path = "reports/readiness/offline_quality_gate_report.md"
+        qg_file = self._resolve(*qg_path.split("/"))
+        if qg_file.exists():
+            lines.append("")
+            lines.append("## Quality Gate")
+            lines.append("")
+            try:
+                qg_text = qg_file.read_text()
+                for line in qg_text.splitlines():
+                    if line.strip().startswith("**"):
+                        stripped = line.strip().strip("*")
+                        if stripped:
+                            lines.append(f"- {stripped}")
+            except OSError:
+                lines.append("- Quality gate report unreadable")
+
+        # Attribution summary
+        attr = self._read_json("reports/attribution/offline_attribution_summary.json")
+        if attr:
+            lines.append("")
+            lines.append("## Attribution Summary")
+            lines.append("")
+            total = attr.get("total_samples", 0)
+            win_rate = attr.get("overall_win_rate", 0.0)
+            src_count = attr.get("source_count", 0)
+            lines.append(f"- **Total Samples:** {total}")
+            lines.append(f"- **Overall Win Rate:** {win_rate}")
+            lines.append(f"- **Source-Regime Combinations:** {src_count}")
+        else:
+            lines.append("")
+            lines.append("## Attribution Summary")
+            lines.append("")
+            lines.append("- ⚠️ Attribution summary not available (optional)")
+
+        # Errors and warnings
+        if result.errors:
+            lines.append("")
+            lines.append("## Errors")
+            lines.append("")
+            for err in result.errors:
+                lines.append(f"- ❌ {err}")
+
+        if result.warnings:
+            lines.append("")
+            lines.append("## Warnings")
+            lines.append("")
+            for warn in result.warnings:
+                lines.append(f"- ⚠️ {warn}")
+
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append(
+            "*Report generated by OfflineEpisodeReportRenderer — "
+            "deterministic, offline, no service calls*"
+        )
+
+        return "\n".join(lines)
