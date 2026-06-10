@@ -2,17 +2,19 @@
 
 ## Overview
 
-This document describes the complete 9-stage Self-Improvement v2 pipeline
+This document describes the complete 10-stage Self-Improvement v2 pipeline
 as implemented for Phase K. The pipeline orchestrates all SI v2 components
 through a single `DryRunPipelineHarness` using **only** stub/dry-run/in-memory
 implementations. No real adapters, no network calls, no live config writes,
 and no Docker operations occur at any point.
 
 The pipeline is designed to be fully testable, deterministic, and safe for CI.
+Stage numbering is zero-based: `Stage 0: Signal Check` is an explicit pipeline
+stage, so stages 0 through 9 are ten stages total.
 
 ---
 
-## 9 Pipeline Stages
+## 10 Pipeline Stages
 
 ### Stage 0: Signal Check
 - **Component:** `InMemorySignalProvider`
