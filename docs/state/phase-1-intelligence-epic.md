@@ -4,8 +4,8 @@
 > performance attribution, and automated reporting against live Freqtrade
 > trade data.
 >
-> **Status:** ⬜ **Not started** — all issues OPEN, no code written.
-> Issues #55–#61 form the Phase 1 Intelligence Layer epic for SI v2.
+> **Status:** 🟡 **Active** — #55 completed (merged PR #161), #56 in development.
+> Issues #57–#61 remain open and depend on #56.
 >
 > **Current controller state:** PAUSED (AWAITING_NEXT_APPROVED_EPIC).
 > Activation of this epic requires human approval and a dedicated controller
@@ -39,12 +39,12 @@ graph LR
 
 | Property | Value |
 |----------|-------|
-| **State** | OPEN |
-| **Code** | None |
-| **PR** | None |
+| **State** | **✅ CLOSED (MERGED)** |
+| **Code** | Spec document + 19 structural tests |
+| **PR** | [#161](https://github.com/GoLukeEnviro/trading-hub/pull/161) (merged at `9017dd4`) |
 | **Depends on** | Nothing (foundational) |
 | **Description** | Define the canonical Regime Detector schema (regime labels, confidence thresholds, update cadence) and the integration boundary between the Regime Detector and Shadowlock enrichment pipeline. |
-| **Evidence of work** | None — issue is purely a design specification task |
+| **Evidence of work** | `docs/specs/si-v2-regime-detector-schema.md`, 19 structural tests |
 
 ### 2. [#56 — Implement Regime Detector run and Shadowlock enrichment](https://github.com/GoLukeEnviro/trading-hub/issues/56)
 
@@ -141,4 +141,4 @@ Before this epic can begin execution:
 
 ---
 
-*Grounded at commit fdac27c, 2026-06-11*
+*Updated at commit 9017dd4, 2026-06-11. Issue #55 completed and merged.*

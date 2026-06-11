@@ -76,7 +76,7 @@ The continuous controller (introduced during the PR #158–#160 cycle) is:
 | 0 | Stabilization & Foundation | ✅ Complete (all 12 issues closed) |
 | 1 | Shadowlock & Foundation | ✅ Complete (#12, #45, #47 merged) |
 | — | Controller Layer (PR #158–#160) | ✅ Complete (merged) |
-| 1 (Real-Data Intelligence) | Issues #55–#61 | ⬜ **Not started** (all OPEN) |
+| 1 (Real-Data Intelligence) | Issues #55–#61 | 🟡 In progress: #55 merged (PR #161), #56 in development |
 | 2 | Runtime Blockers (#43, #44, #40) | ⬜ Not started |
 | 3 | Rainbow Signal Integration | ⬜ Not started |
 
