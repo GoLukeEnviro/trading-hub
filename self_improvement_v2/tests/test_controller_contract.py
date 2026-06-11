@@ -589,7 +589,7 @@ AGENT_COMMAND={fake_agent}
 
     def test_ready_invokes_agent_once(self, tmp_path: Path) -> None:
         """READY → AGENT_COMMAND invoked exactly once."""
-        _, state_root, counter = self._write_fake_env(
+        _, _, counter = self._write_fake_env(
             tmp_path, controller_status="READY",
         )
         result = subprocess.run(
@@ -605,10 +605,10 @@ AGENT_COMMAND={fake_agent}
 
     def test_running_invokes_agent_once(self, tmp_path: Path) -> None:
         """RUNNING → AGENT_COMMAND invoked exactly once (recovery re-entry)."""
-        _, state_root, counter = self._write_fake_env(
+        _, _, counter = self._write_fake_env(
             tmp_path, controller_status="RUNNING",
         )
-        result = subprocess.run(
+        subprocess.run(
             ["bash", str(self.RUNNER_SCRIPT)],
             env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
             capture_output=True, text=True,
@@ -620,7 +620,7 @@ AGENT_COMMAND={fake_agent}
 
     def test_paused_invokes_zero_times(self, tmp_path: Path) -> None:
         """PAUSED → zero agent invocations."""
-        _, state_root, counter = self._write_fake_env(
+        _, _, counter = self._write_fake_env(
             tmp_path, controller_status="PAUSED",
         )
         subprocess.run(
@@ -632,7 +632,7 @@ AGENT_COMMAND={fake_agent}
 
     def test_blocked_invokes_zero_times(self, tmp_path: Path) -> None:
         """BLOCKED → zero agent invocations."""
-        _, state_root, counter = self._write_fake_env(
+        _, _, counter = self._write_fake_env(
             tmp_path, controller_status="BLOCKED",
         )
         subprocess.run(
@@ -644,7 +644,7 @@ AGENT_COMMAND={fake_agent}
 
     def test_failed_invokes_zero_times(self, tmp_path: Path) -> None:
         """FAILED → zero agent invocations (schema-runner parity)."""
-        _, state_root, counter = self._write_fake_env(
+        _, _, counter = self._write_fake_env(
             tmp_path, controller_status="FAILED",
         )
         subprocess.run(
@@ -656,7 +656,7 @@ AGENT_COMMAND={fake_agent}
 
     def test_complete_invokes_zero_times(self, tmp_path: Path) -> None:
         """COMPLETE → zero agent invocations."""
-        _, state_root, counter = self._write_fake_env(
+        _, _, counter = self._write_fake_env(
             tmp_path, controller_status="COMPLETE",
         )
         subprocess.run(
@@ -672,7 +672,7 @@ AGENT_COMMAND={fake_agent}
 
     def test_missing_state_root_fails_closed(self, tmp_path: Path) -> None:
         """Missing SI_V2_STATE_ROOT → non-zero exit, zero agent invocations."""
-        config_root, state_root, counter = self._write_fake_env(
+        config_root, _, counter = self._write_fake_env(
             tmp_path, controller_status="READY",
         )
         # Write env WITHOUT SI_V2_STATE_ROOT
@@ -855,8 +855,7 @@ exit {exit_code}
 
     def test_lock_released_after_failure(self, tmp_path: Path) -> None:
         """Lock is released even when agent fails."""
-        _, state_root, _ = self._write_failing_env(tmp_path, exit_code=1)
-        lock_file = tmp_path / "controller.lock"
+        _, _, _ = self._write_failing_env(tmp_path, exit_code=1)
         result = subprocess.run(
             ["bash", str(self.RUNNER_SCRIPT)],
             env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
@@ -879,7 +878,7 @@ exit {exit_code}
 
     def test_successful_run_runs_pre_and_post_validation(self, tmp_path: Path) -> None:
         """Successful agent run invokes validator before AND after agent."""
-        _, state_root, counter = self._write_fake_env(
+        _, _, _ = self._write_fake_env(
             tmp_path, controller_status="READY",
         )
         result = subprocess.run(
@@ -904,7 +903,7 @@ exit {exit_code}
     def test_failed_run_runs_post_validation(self, tmp_path: Path) -> None:
         """Failed agent run STILL runs post-validation."""
         _, _, _ = self._write_failing_env(tmp_path, exit_code=1)
-        result = subprocess.run(
+        subprocess.run(
             ["bash", str(self.RUNNER_SCRIPT)],
             env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
             capture_output=True, text=True,
