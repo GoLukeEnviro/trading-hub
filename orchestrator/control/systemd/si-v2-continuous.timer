@@ -1,11 +1,27 @@
 [Unit]
 Description=Run SI v2 Continuous Repository Controller after each completed interval
 
+# INACTIVE PILOT TEMPLATE — DO NOT ENABLE WITHOUT APPROVAL.
+#
+# This timer template uses a conservative pilot cadence:
+#   - First activation: 30 minutes after boot (avoid race with startup).
+#   - Recurrence: every 6 hours after the last completed run.
+#   - Randomised jitter: up to 10 minutes (avoid stampeding).
+#   - Persistent=false: missed runs are NOT caught up after a power cycle.
+#
+# Activation requires a separate human approval ceremony:
+#   1. Manual one-shot proof with a real but harmless work item.
+#   2. Explicit approval token from the operator.
+#   3. Timer enable/start as a separate gated step.
+#
+# This timer must NOT be enabled by repository automation, CI, or
+# post-merge scripts.  Automatic merges and runtime changes remain
+# forbidden.
 [Timer]
-OnBootSec=10min
-OnUnitInactiveSec=30min
-RandomizedDelaySec=3min
-Persistent=true
+OnBootSec=30min
+OnUnitInactiveSec=6h
+RandomizedDelaySec=10min
+Persistent=false
 Unit=si-v2-continuous.service
 
 [Install]

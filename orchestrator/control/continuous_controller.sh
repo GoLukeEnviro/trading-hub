@@ -8,8 +8,15 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 20
 fi
 
+# Export all variables to subprocesses automatically.
+# The AGENT_COMMAND runs via `bash -lc` which is a login shell and does not
+# inherit non-exported shell variables. Using set -a / set +a ensures every
+# variable in controller.env is exported to child processes without requiring
+# explicit `export` prefixes on individual lines.
+set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
+set +a
 
 : "${AGENT_COMMAND:?AGENT_COMMAND is required}"
 : "${REPO_ROOT:?REPO_ROOT is required}"
