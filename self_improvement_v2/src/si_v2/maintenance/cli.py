@@ -19,8 +19,20 @@ import json
 import sys
 from pathlib import Path
 
-from .models import MaintenanceRequest, MaintenanceResult
+from .models import (
+    MaintenanceMode,
+    MaintenanceRequest,
+    MaintenanceResult,
+)
 from .operations import MaintenanceRunner
+
+_MODE_MAP: dict[str, MaintenanceMode] = {
+    "inspect": MaintenanceMode.INSPECT,
+    "dry-run": MaintenanceMode.DRY_RUN,
+    "execute-analyze": MaintenanceMode.EXECUTE_ANALYZE,
+    "execute-optimize": MaintenanceMode.EXECUTE_OPTIMIZE,
+    "execute-vacuum": MaintenanceMode.EXECUTE_VACUUM,
+}
 
 
 def _resolve_path(path_str: str) -> Path:
@@ -33,7 +45,7 @@ def _result_to_json(result: MaintenanceResult) -> str:
     payload: dict[str, object] = {
         "verdict": result.verdict.value,
         "db_path": str(result.request.db_path),
-        "mode": result.request.mode,
+        "mode": result.request.mode.value,
         "force": result.request.force,
         "executed_at": result.executed_at.isoformat(),
         "operation": result.operation.name if result.operation is not None else None,
@@ -60,6 +72,12 @@ def _result_to_json(result: MaintenanceResult) -> str:
     if result.backup_path is not None:
         payload["backup_path"] = str(result.backup_path)
 
+    if result.promoted_path is not None:
+        payload["promoted_path"] = str(result.promoted_path)
+
+    if result.original_backup_path is not None:
+        payload["original_backup_path"] = str(result.original_backup_path)
+
     if result.messages:
         payload["messages"] = result.messages
 
@@ -70,10 +88,10 @@ def _print_summary(result: MaintenanceResult) -> None:
     """Print a human-readable summary to stderr."""
     verdict = result.verdict.value
     db_path = result.request.db_path
-    mode = result.request.mode
+    mode_str = result.request.mode.value
 
     print(f"Cache:         {db_path}", file=sys.stderr)
-    print(f"Mode:          {mode}", file=sys.stderr)
+    print(f"Mode:          {mode_str}", file=sys.stderr)
     print(f"Verdict:       {verdict}", file=sys.stderr)
     print(file=sys.stderr)
 
@@ -88,6 +106,7 @@ def _print_summary(result: MaintenanceResult) -> None:
     print(f"  Fingerprint: {ev.source_fingerprint or 'N/A'}", file=sys.stderr)
     print(f"  Rebuildable: {ev.rebuildable}", file=sys.stderr)
     print(file=sys.stderr)
+
     def _fmt_bool(val: bool | None) -> str:
         """Format an optional boolean for display."""
         return "OK" if val else "FAIL" if val is False else "N/A"
@@ -98,11 +117,17 @@ def _print_summary(result: MaintenanceResult) -> None:
 
     if result.operation_ok is not None:
         print(file=sys.stderr)
-        print(f"  Operation:   {result.operation.name if result.operation else 'N/A'}", file=sys.stderr)
+        print(
+            f"  Operation:   {result.operation.name if result.operation else 'N/A'}",
+            file=sys.stderr,
+        )
         print(f"  Status:      {'OK' if result.operation_ok else 'FAILED'}", file=sys.stderr)
 
     if result.backup_path is not None:
         print(f"  Backup:      {result.backup_path}", file=sys.stderr)
+
+    if result.promoted_path is not None:
+        print(f"  Promoted:    {result.promoted_path}", file=sys.stderr)
 
     if result.messages:
         print(file=sys.stderr)
@@ -115,24 +140,19 @@ def _cmd_maintain(args: argparse.Namespace) -> int:
     db_path = _resolve_path(args.db_path)
 
     # Resolve mode
-    if args.command == "inspect":
-        mode = "inspect"
-    elif args.command == "dry-run":
-        mode = "dry-run"
-    elif args.command == "execute-analyze":
-        mode = "execute-analyze"
-    elif args.command == "execute-optimize":
-        mode = "execute-optimize"
-    elif args.command == "execute-vacuum":
-        mode = "execute-vacuum"
-    else:
+    mode = _MODE_MAP.get(args.command)
+    if mode is None:
         print(f"Unknown command: {args.command}", file=sys.stderr)
         return 1
 
     # Verify --execute flag for mutating modes
-    if mode.startswith("execute-") and not args.execute:
+    if mode in (
+        MaintenanceMode.EXECUTE_ANALYZE,
+        MaintenanceMode.EXECUTE_OPTIMIZE,
+        MaintenanceMode.EXECUTE_VACUUM,
+    ) and not args.execute:
         print(
-            f"Error: Mutating mode '{mode}' requires --execute flag",
+            f"Error: Mutating mode '{args.command}' requires --execute flag",
             file=sys.stderr,
         )
         return 1
@@ -150,7 +170,7 @@ def _cmd_maintain(args: argparse.Namespace) -> int:
     request = MaintenanceRequest(
         db_path=db_path,
         mode=mode,
-        force=getattr(args, 'force', False),
+        force=getattr(args, "force", False),
         backup_dir=backup_dir,
     )
 
