@@ -1,0 +1,4 @@
+# Inactive fallback example.
+# Prefer the reviewed systemd timer.
+# Do not install this line automatically.
+# */30 * * * * SI_V2_CONTROLLER_ENV=/opt/data/si-v2-controller/controller.env /home/hermes/projects/trading/orchestrator/control/continuous_controller.sh
