@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "epic_id": "SI_V2_PLANNING_AUTOMATION_143_154",
+  "base_commit": "790187fb500ac86df9f61fe92fa9485b09be1d3a",
+  "branch": "feat/si-v2-canonical-planning-reconciliation",
+  "worktree": "/tmp/trading-reconcile-155-156",
+  "items": [
+    {
+      "id": "RECONCILE-PR-155-156",
+      "title": "Compare overlapping planning PRs and establish one canonical branch",
+      "issue_numbers": [143,144,145,146,147,148,149,150,151,152,153,154],
+      "depends_on": [],
+      "priority": 120,
+      "status": "COMPLETED",
+      "work_package": "release-reconciliation",
+      "entry_gate": "Read-only comparison before any mutation"
+    },
+    {
+      "id": "RECOVER-CI-145",
+      "title": "Recover and push the offline planning CI gate on the canonical PR",
+      "issue_numbers": [145],
+      "depends_on": [],
+      "priority": 115,
+      "status": "COMPLETED",
+      "work_package": "ci"
+    },
+    {
+      "id": "CANONICAL-PR-FULL-VALIDATION",
+      "title": "Run complete planning automation validation on canonical PR",
+      "issue_numbers": [143,144,145,146,147,148,149,150,151,152,153,154],
+      "depends_on": [],
+      "priority": 110,
+      "status": "COMPLETED",
+      "work_package": "validation"
+    },
+    {
+      "id": "CANONICAL-PR-INTERNAL-REVIEW",
+      "title": "Perform merge-readiness audit and fix BLOCKER/MAJOR findings",
+      "issue_numbers": [143,144,145,146,147,148,149,150,151,152,153,154],
+      "depends_on": [],
+      "priority": 105,
+      "status": "COMPLETED",
+      "work_package": "review-hardening"
+    },
+    {
+      "id": "PHASE0-RCA-PR72-PR73",
+      "title": "Reconcile stale Phase 0 RCA PRs for issues 38 and 39",
+      "issue_numbers": [38,39],
+      "depends_on": [],
+      "priority": 70,
+      "status": "COMPLETED",
+      "work_package": "documentation-hygiene",
+      "entry_gate": "Planning PR must be review-ready; no runtime mutation"
+    },
+    {
+      "id": "PHASE0-OPEN-AUDIT",
+      "title": "Refresh Phase 0 tracker truth for issues 40, 44, 46, 48",
+      "issue_numbers": [40,44,46,48],
+      "depends_on": [],
+      "priority": 60,
+      "status": "COMPLETED",
+      "work_package": "read-only-audit"
+    },
+    {
+      "id": "FINAL-HANDOFF",
+      "title": "Write morning handoff and stop for human merge decisions",
+      "issue_numbers": [],
+      "depends_on": ["CANONICAL-PR-INTERNAL-REVIEW"],
+      "priority": 50,
+      "status": "READY",
+      "work_package": "handoff"
+    }
+  ]
+}
