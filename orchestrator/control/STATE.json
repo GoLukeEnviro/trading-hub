@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "project": "trading-hub / SI v2",
+  "controller_mode": "continuous_implementation",
+  "controller_status": "READY",
+  "operation_level": "L3_REPOSITORY_ONLY",
+  "runtime_policy": "FORBIDDEN",
+  "merge_policy": "HUMAN_ONLY",
+  "current_epic": "SI_V2_PLANNING_AUTOMATION_143_154",
+  "canonical_main_commit": "790187fb500ac86df9f61fe92fa9485b09be1d3a",
+  "active_work_item_id": "RECONCILE-PR-155-156",
+  "active_branch": "feat/si-v2-canonical-planning-reconciliation",
+  "active_worktree": "/tmp/trading-reconcile-155-156",
+  "active_pr": null,
+  "last_completed_work_item_id": "RECONCILE-PR-155-156",
+  "last_run_id": "manual-reconciliation-20260611",
+  "last_run_status": "GREEN",
+  "consecutive_failures": 0,
+  "pause_reason": null,
+  "updated_at": "2026-06-11T10:55:00Z"
+}
