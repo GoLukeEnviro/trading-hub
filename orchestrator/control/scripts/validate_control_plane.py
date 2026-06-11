@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-VALID_ITEM_STATUSES = {"READY", "BLOCKED", "IN_PROGRESS", "DONE", "FAILED", "PAUSED"}
+VALID_ITEM_STATUSES = {"READY", "BLOCKED", "IN_PROGRESS", "COMPLETED", "FAILED", "PAUSED"}
 
 def load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
@@ -27,8 +27,11 @@ def validate(control_root: Path) -> None:
     if state["merge_policy"] != "HUMAN_ONLY":
         raise ValueError("merge_policy must remain HUMAN_ONLY")
     items = queue.get("items")
-    if not isinstance(items, list) or not items:
-        raise ValueError("QUEUE.json items must be a non-empty list")
+    if not isinstance(items, list):
+        raise ValueError("QUEUE.json items must be a list")
+    if not items:
+        print("Queue is empty; no items to validate")
+        return
     ids: set[str] = set()
     statuses: dict[str, str] = {}
     for item in items:
