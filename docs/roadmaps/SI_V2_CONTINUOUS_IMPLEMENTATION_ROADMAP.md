@@ -1,97 +1,140 @@
 # SI v2 Continuous Implementation Roadmap
 
-## Objective
+## 1. Objective
 
-Create a durable repository-native control plane so Hermes can continue SI v2 work in bounded, reviewable packages without repeated chat handoffs.
+Create a durable, repository-native control plane that allows Hermes to continue implementing SI v2 in bounded, reviewable work packages without requiring repeated copy/paste handoffs.
 
-## Sources of Truth
+The controller must:
+
+- resume existing branches and pull requests before starting new work;
+- select the next ready work package from a machine-readable queue;
+- remain offline-only for the current planning-automation epic;
+- preserve human-only merge authority;
+- update durable state and handoff records after every run;
+- fail closed when repository state, CI, approvals, or dependencies are ambiguous.
+
+## 2. Canonical Sources of Truth
+
+Priority order:
 
 1. `orchestrator/control/POLICY.md`
 2. `orchestrator/control/STATE.json`
 3. `orchestrator/control/QUEUE.json`
-4. GitHub issues and pull requests
+4. GitHub pull requests and issues
 5. `orchestrator/control/HANDOFF.md`
-6. Immutable run reports under `orchestrator/control/runs/`
+6. `orchestrator/control/runs/`
 
-Repository state must override conversational memory.
+The agent must never rely on chat memory as the only source of project state.
 
-## Continuous Loop
+## 3. Operating Model
 
-Each scheduled run performs one bounded package:
+Each scheduled run performs exactly one bounded work package.
 
-1. Acquire an exclusive lock.
-2. Validate control-plane files.
-3. Read policy, state, queue, and handoff.
-4. Resume an active branch or pull request before starting new work.
-5. Repair in-scope CI or review findings first.
+A work package may include:
+
+- one major issue;
+- up to three tightly coupled smaller issues;
+- one CI repair cycle;
+- one PR review and hardening cycle;
+- one post-merge main validation cycle.
+
+Default bounds:
+
+- maximum wall-clock budget: 90 minutes;
+- maximum internal fix rounds: 3;
+- maximum commits per run: 8;
+- no merge without a separate explicit approval token;
+- no runtime, Docker, Freqtrade, exchange, production, or credential operations.
+
+## 4. Continuous Loop
+
+1. Acquire controller lock.
+2. Validate control-plane JSON files.
+3. Read policy, state, queue, and latest handoff.
+4. Inspect GitHub for:
+   - active PRs from the current epic;
+   - pending CI;
+   - review findings;
+   - merged work awaiting main validation;
+   - ready issues.
+5. Resume existing work before starting new work.
 6. Select the highest-priority ready queue item.
-7. Work only in the dedicated epic worktree.
-8. Run targeted and full SI v2 validation.
-9. Apply up to three scoped fix rounds.
-10. Commit and push issue-grouped changes.
-11. Create or update one pull request.
-12. Update state, queue, handoff, and the immutable run report.
-13. Release the lock and exit.
+7. Create or reuse a dedicated worktree.
+8. Implement the bounded package.
+9. Run targeted tests.
+10. Run full SI v2 validation.
+11. Perform an internal review.
+12. Apply up to three scoped fix rounds.
+13. Commit and push issue-grouped changes.
+14. Open or update one PR.
+15. Update `STATE.json`.
+16. Rewrite `HANDOFF.md`.
+17. Write an immutable run report under `runs/`.
+18. Release the lock and exit.
 
-## Current Epic
+## 5. Current Epic: Planning Automation and Quality
 
-Planning Automation and Quality, issues #143 through #154.
+Target issues:
 
-Recommended order:
+- #143 End-to-end planning pipeline validator
+- #144 Rehearsal proposal package schema
+- #145 Offline planning CI gate
+- #146 Artifact redaction policy
+- #147 Merge-readiness review checklist
+- #148 Offline observation interface contracts
+- #149 Planning package index
+- #150 Planning package checker command
+- #151 Semantic consistency engine
+- #152 Negative-test fixture corpus
+- #153 Deterministic status report renderer
+- #154 Golden regression suite
 
-1. Verify and close completed #135–#140 work.
-2. #144 proposal schema and typed models.
-3. #151 semantic consistency engine.
-4. #146 artifact redaction and path policy.
-5. #143 end-to-end planning validator.
-6. #150 planning package checker command.
-7. #152 negative-test fixture corpus.
-8. #153 deterministic status report renderer.
-9. #147 review checklist and #149 package index.
-10. #148 offline interface contracts after prior gates pass.
-11. #154 golden regression suite.
-12. #145 offline CI integration.
-13. Final internal review and one unmerged pull request.
+Recommended dependency order:
 
-## Work Bounds
+1. Administrative closure of #135–#140
+2. #144 proposal schema and typed models
+3. #151 semantic consistency
+4. #146 redaction and path policy
+5. #143 end-to-end validator
+6. #150 checker command
+7. #152 negative fixture corpus
+8. #153 deterministic report renderer
+9. #147 review checklist
+10. #149 package index
+11. #148 offline interface contracts
+12. #154 golden regression suite
+13. #145 CI integration
+14. Final internal review and PR readiness audit
 
-- One major issue or up to three tightly coupled smaller issues per run.
-- Maximum duration: 90 minutes.
-- Maximum internal fix rounds: 3.
-- Maximum commits per run: 8.
-- Pull-request merge remains a separate human-approved action.
-- Restricted operational actions remain outside this controller.
+## 6. Merge Policy
 
-## Required Validation
+The continuous controller may:
 
-Before push:
+- create branches and dedicated worktrees;
+- edit files inside the dedicated worktree;
+- commit and push;
+- create or update pull requests;
+- repair CI failures within the approved epic scope;
+- comment on related issues and PRs;
+- update control-plane state.
 
-- compile all SI v2 Python sources;
-- run the full SI v2 test suite;
-- run Ruff;
-- run `git diff --check`;
-- parse all project and control-plane JSON files;
-- verify deterministic output for repeated fixture runs;
-- complete an internal review with no unresolved BLOCKER or MAJOR finding.
+The continuous controller may not:
 
-## Scheduling
+- merge pull requests;
+- delete branches or worktrees;
+- close newly implemented issues before their PR is merged;
+- execute runtime or trading operations;
+- alter production services;
+- access credentials or live environment values.
 
-Preferred: a locked systemd oneshot service with a persistent timer every 30 minutes.
+## 7. Completion Definition
 
-Fallback: cron every 30 minutes calling the same locked wrapper.
+The epic is complete only when:
 
-The scheduler must enforce a single active run, a 90-minute timeout, external logs, and pause/block states. Installation and enablement require a separate privileged-change review.
-
-## Durable Files
-
-- `orchestrator/control/POLICY.md`
-- `orchestrator/control/STATE.json`
-- `orchestrator/control/QUEUE.json`
-- `orchestrator/control/HANDOFF.md`
-- `orchestrator/control/CURRENT_EPIC.md`
-- `orchestrator/control/MASTER_AGENT_PROMPT.xml`
-- `orchestrator/control/runs/<timestamp>-<run-id>.md`
-
-## Completion Definition
-
-The epic is complete when all target issues are merged and closed, main is validated from a clean worktree, all quality checks pass, the queue has no active item, and the final handoff identifies the next separately approved epic.
+- all target issues are merged;
+- all related issues are closed as completed;
+- `origin/main` is validated from a clean worktree;
+- full SI v2 tests, Ruff, compileall, JSON validation, and golden tests pass;
+- the queue contains no ready or in-progress item for the epic;
+- the final handoff points to the next approved epic;
+- no unresolved BLOCKER or MAJOR review finding remains.

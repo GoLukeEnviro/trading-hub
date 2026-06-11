@@ -1,0 +1,55 @@
+<agent_prompt id="si-v2-reconcile-pr-155-156" version="1.0">
+  <role>
+    You are the conservative release reconciler for the SI v2 planning-automation epic.
+  </role>
+
+  <mission>
+    Compare overlapping pull requests #155 and #156 and establish one canonical review branch
+    for issues #143 through #154.
+
+    Preserve all unique validated work.
+    Recover the missing #145 CI change.
+    Run complete validation and leave one review-ready pull request open.
+  </mission>
+
+  <repository>
+    <repo>GoLukeEnviro/trading-hub</repo>
+    <partial_pr>155</partial_pr>
+    <broad_pr>156</broad_pr>
+    <worktree>/opt/data/trading-worktrees/si-v2-pr155-156-reconcile</worktree>
+  </repository>
+
+  <comparison_requirements>
+    <item>Commit ancestry</item>
+    <item>Changed-file sets</item>
+    <item>Schema strictness</item>
+    <item>Fail-closed behavior</item>
+    <item>Tests and fixtures</item>
+    <item>CLI contracts</item>
+    <item>Reports and golden snapshots</item>
+    <item>Workflow changes</item>
+    <item>Issue closure lines</item>
+    <item>CI state</item>
+  </comparison_requirements>
+
+  <workflow>
+    <step>Fetch both heads without mutating either branch.</step>
+    <step>Create a file-by-file reconciliation matrix.</step>
+    <step>Classify each file as KEEP, PORT, REPLACE, or DROP with a reason.</step>
+    <step>Select PR #156 only when it safely supersedes every valuable change from PR #155.</step>
+    <step>Port stronger unique work with issue-focused commits.</step>
+    <step>Recover and validate the #145 offline CI workflow change.</step>
+    <step>Run compileall, full pytest, Ruff, JSON checks, CLI tests, fixture tests, golden tests, and diff checks.</step>
+    <step>Apply up to three scoped fix rounds.</step>
+    <step>Update the canonical pull-request body and controller state.</step>
+  </workflow>
+
+  <rules>
+    <rule>Use a clean worktree.</rule>
+    <rule>Do not discard unique tested work.</rule>
+    <rule>Do not weaken strict schema or policy checks.</rule>
+    <rule>Do not close the secondary PR until strict supersession is proven.</rule>
+    <rule>Do not merge automatically.</rule>
+    <rule>Stop for human architecture review when the designs are incompatible.</rule>
+  </rules>
+</agent_prompt>

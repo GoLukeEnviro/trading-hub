@@ -1,0 +1,12 @@
+[Unit]
+Description=Run SI v2 Continuous Repository Controller after each completed interval
+
+[Timer]
+OnBootSec=10min
+OnUnitInactiveSec=30min
+RandomizedDelaySec=3min
+Persistent=true
+Unit=si-v2-continuous.service
+
+[Install]
+WantedBy=timers.target

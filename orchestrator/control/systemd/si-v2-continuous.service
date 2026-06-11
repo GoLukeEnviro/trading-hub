@@ -1,0 +1,21 @@
+[Unit]
+Description=SI v2 Continuous Repository Controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=hermes
+WorkingDirectory=/home/hermes/projects/trading
+Environment=SI_V2_CONTROLLER_ENV=/opt/data/si-v2-controller/controller.env
+ExecStart=/home/hermes/projects/trading/orchestrator/control/continuous_controller.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+ReadWritePaths=/home/hermes/projects/trading
+ReadWritePaths=/opt/data/trading-worktrees
+ReadWritePaths=/opt/data/si-v2-controller

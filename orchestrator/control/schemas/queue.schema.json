@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SI v2 Continuous Controller Queue",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "epic_id", "base_commit", "branch", "worktree", "items"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "epic_id": {"type": "string", "minLength": 1},
+    "base_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "branch": {"type": "string", "minLength": 1},
+    "worktree": {"type": "string", "minLength": 1},
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "issue_numbers", "depends_on", "priority", "status", "work_package"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "title": {"type": "string", "minLength": 1},
+          "issue_numbers": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+          "depends_on": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "priority": {"type": "integer"},
+          "status": {"enum": ["READY", "BLOCKED", "IN_PROGRESS", "DONE", "FAILED", "PAUSED"]},
+          "work_package": {"type": "string", "minLength": 1},
+          "entry_gate": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
