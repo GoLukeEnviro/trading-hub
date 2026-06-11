@@ -39,16 +39,16 @@
       "issue_numbers": [143,144,145,146,147,148,149,150,151,152,153,154],
       "depends_on": [],
       "priority": 105,
-      "status": "READY",
+      "status": "COMPLETED",
       "work_package": "review-hardening"
     },
     {
       "id": "PHASE0-RCA-PR72-PR73",
       "title": "Reconcile stale Phase 0 RCA PRs for issues 38 and 39",
       "issue_numbers": [38,39],
-      "depends_on": ["CANONICAL-PR-INTERNAL-REVIEW"],
+      "depends_on": [],
       "priority": 70,
-      "status": "BLOCKED",
+      "status": "COMPLETED",
       "work_package": "documentation-hygiene",
       "entry_gate": "Planning PR must be review-ready; no runtime mutation"
     },
@@ -56,9 +56,9 @@
       "id": "PHASE0-OPEN-AUDIT",
       "title": "Refresh Phase 0 tracker truth for issues 40, 44, 46, 48",
       "issue_numbers": [40,44,46,48],
-      "depends_on": ["PHASE0-RCA-PR72-PR73"],
+      "depends_on": [],
       "priority": 60,
-      "status": "BLOCKED",
+      "status": "COMPLETED",
       "work_package": "read-only-audit"
     },
     {
@@ -67,7 +67,7 @@
       "issue_numbers": [],
       "depends_on": ["CANONICAL-PR-INTERNAL-REVIEW"],
       "priority": 50,
-      "status": "BLOCKED",
+      "status": "READY",
       "work_package": "handoff"
     }
   ]
