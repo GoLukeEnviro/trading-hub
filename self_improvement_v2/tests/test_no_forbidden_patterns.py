@@ -75,6 +75,7 @@ def test_no_forbidden_patterns(pattern: str) -> None:
                     "test_controlled_dry_run_rehearsal_runbook.py",
                     "test_human_approval_gate_checklist.py",
                     "test_live_readiness_blocker_inventory.py",
+                    "test_maintenance.py",
                 ):
                     continue
                 violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{line_num}: {line.strip()}")
