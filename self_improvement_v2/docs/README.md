@@ -1,12 +1,17 @@
 # SI v2 Documentation Index
 
-> **Self-Improvement v2** — Foundation for autonomous trading bot optimization.
+> **[HISTORICAL] Self-Improvement v2** — Foundation for autonomous trading bot optimization.
 > Central index linking all active documents, ADRs, issues, and current state.
-
-**Last updated:** 2026-06-10  
-**Current commit (main):** `f4a5665` — docs(si-v2): decide watchdog ownership boundary between SI v2 and ai4trade-bot  
-**Branch:** `main` (2 commits ahead of origin/main)  
-**Issue backlog:** [GitHub Issues](https://github.com/GoLukeEnviro/trading-hub/issues)
+>
+> **⚠️ Historical notice:** This document was last updated before the controller
+> layer (PR #158–#160) merged. Its issue-number references for Rainbow core
+> (#51–#56, #79–#85) refer to **ai4trade-bot** repo issues, not trading-hub
+> Phase 1 issues. For current canonical state, see `docs/state/` documents.
+>
+> **Last updated:** 2026-06-10 (pre-controller merge)
+> **Current commit (main):** `fdac27c` — Merge pull request #160 (controller contract layer)
+> **Branch:** `main`
+> **Issue backlog:** [GitHub Issues](https://github.com/GoLukeEnviro/trading-hub/issues)
 
 ---
 

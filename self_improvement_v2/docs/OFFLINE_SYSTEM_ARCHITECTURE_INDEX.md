@@ -1,7 +1,12 @@
 # Offline System Architecture Index
 
-> **SI v2 — Offline Episode Architecture**
+> **[HISTORICAL] SI v2 — Offline Episode Architecture**
 > Agent-readable, concise, no stale references.
+>
+> **⚠️ Historical notice:** Issue-number references for Rainbow core (#51–#56)
+> refer to **ai4trade-bot** repo issues, not trading-hub Phase 1 issues (#55–#61).
+> For current canonical state and Phase 1 intelligence planning, see
+> `docs/state/` documents.
 
 ---
 
