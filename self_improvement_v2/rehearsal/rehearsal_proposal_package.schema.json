@@ -1,0 +1,165 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://si-v2.nousresearch.com/schemas/rehearsal_proposal_package.schema.json",
+  "title": "Rehearsal Proposal Package",
+  "description": "Machine-readable schema for a rehearsal proposal package. DRAFT stage carries minimal requirements; FINAL stage adds operator approval and readiness verdict fields.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "stage",
+    "proposal",
+    "planning_gate_reference",
+    "stop_condition_reference",
+    "evidence_plan_reference",
+    "approval_packet_reference",
+    "observation_plan_reference",
+    "readiness_record_reference",
+    "non_production_confirmation",
+    "non_runtime_confirmation"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+$",
+      "description": "Schema version — must match ^1\\.\\d+$"
+    },
+    "stage": {
+      "type": "string",
+      "enum": ["draft", "final"],
+      "description": "Proposal life-cycle stage"
+    },
+    "proposal": {
+      "type": "object",
+      "description": "Rehearsal proposal fields defined in #135 planning gate",
+      "required": [
+        "proposal_id",
+        "proposal_name",
+        "proposed_by",
+        "proposed_date_utc",
+        "rehearsal_mode",
+        "scope_description",
+        "out_of_scope",
+        "duration_estimate",
+        "target_components",
+        "prerequisite_status",
+        "stop_conditions",
+        "evidence_plan",
+        "observation_plan",
+        "residual_risks",
+        "approval_token"
+      ],
+      "properties": {
+        "proposal_id": {
+          "type": "string",
+          "pattern": "^rp-\\d{8}-\\d{6}-[a-z0-9]{4}$",
+          "description": "Unique proposal identifier: rp-<YYYYMMDD>-<HHMMSS>-<random4>"
+        },
+        "proposal_name": { "type": "string" },
+        "proposed_by": { "type": "string" },
+        "proposed_date_utc": { "type": "string", "format": "date-time" },
+        "rehearsal_mode": {
+          "type": "string",
+          "enum": ["read-only", "shadow-mode", "controlled-dry-run"]
+        },
+        "scope_description": { "type": "string" },
+        "out_of_scope": { "type": "string" },
+        "duration_estimate": { "type": "string" },
+        "target_components": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "prerequisite_status": { "type": "string" },
+        "stop_conditions": { "type": "string" },
+        "evidence_plan": { "type": "string" },
+        "observation_plan": { "type": "string" },
+        "residual_risks": { "type": "string" },
+        "approval_token": {
+          "type": "string",
+          "pattern": "^APPROVE_REHEARSAL_PROPOSAL_"
+        }
+      }
+    },
+    "planning_gate_reference": { "type": "string" },
+    "stop_condition_reference": { "type": "string" },
+    "evidence_plan_reference": { "type": "string" },
+    "approval_packet_reference": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "description": "Operator approval packet details — required in FINAL stage",
+          "required": [
+            "operator_name",
+            "review_date_utc",
+            "approval_token",
+            "allowed_actions_confirmed",
+            "forbidden_actions_acknowledged",
+            "non_live_confirmed"
+          ],
+          "properties": {
+            "operator_name": { "type": "string" },
+            "review_date_utc": { "type": "string", "format": "date-time" },
+            "approval_token": {
+              "type": "string",
+              "pattern": "^APPROVE_REHEARSAL_"
+            },
+            "allowed_actions_confirmed": { "type": "boolean" },
+            "forbidden_actions_acknowledged": { "type": "boolean" },
+            "non_live_confirmed": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "observation_plan_reference": { "type": "string" },
+    "readiness_record_reference": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "description": "Readiness record details — required in FINAL stage",
+          "required": [
+            "readiness_verdict",
+            "blockers_identified",
+            "gaps_documented",
+            "residual_risks_assessed"
+          ],
+          "properties": {
+            "readiness_verdict": {
+              "type": "string",
+              "enum": ["GREEN", "YELLOW", "RED"]
+            },
+            "blockers_identified": { "type": "boolean" },
+            "gaps_documented": { "type": "boolean" },
+            "residual_risks_assessed": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "non_production_confirmation": { "type": "boolean" },
+    "non_runtime_confirmation": { "type": "boolean" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "stage": { "const": "final" } }
+      },
+      "then": {
+        "properties": {
+          "approval_packet_reference": {
+            "type": "object"
+          },
+          "readiness_record_reference": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "non_production_confirmation",
+          "non_runtime_confirmation"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

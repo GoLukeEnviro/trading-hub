@@ -1,0 +1,42 @@
+{
+  "comment": "Valid complete proposal package — all required fields present, FINAL stage",
+  "schema_version": "1.0",
+  "stage": "final",
+  "proposal": {
+    "proposal_id": "rp-20250610-120000-abcd",
+    "proposal_name": "Test Proposal",
+    "proposed_by": "test-agent",
+    "proposed_date_utc": "2025-06-10T12:00:00Z",
+    "rehearsal_mode": "read-only",
+    "scope_description": "Test scope",
+    "out_of_scope": "Nothing",
+    "duration_estimate": "30 minutes",
+    "target_components": ["test-component"],
+    "prerequisite_status": "All prerequisites verified",
+    "stop_conditions": "Reference to #136",
+    "evidence_plan": "Reference to #137",
+    "observation_plan": "Reference to #139",
+    "residual_risks": "None identified",
+    "approval_token": "APPROVE_REHEARSAL_PROPOSAL_250610"
+  },
+  "planning_gate_reference": "controlled_rehearsal_planning_gate.md",
+  "stop_condition_reference": "rehearsal_stop_condition_matrix.json",
+  "evidence_plan_reference": "rehearsal_evidence_bundle_plan.md",
+  "approval_packet_reference": {
+    "operator_name": "Test Operator",
+    "review_date_utc": "2025-06-10T12:00:00Z",
+    "approval_token": "APPROVE_REHEARSAL_250610_abcd",
+    "allowed_actions_confirmed": true,
+    "forbidden_actions_acknowledged": true,
+    "non_live_confirmed": true
+  },
+  "observation_plan_reference": "read_only_observation_plan.md",
+  "readiness_record_reference": {
+    "readiness_verdict": "GREEN",
+    "blockers_identified": false,
+    "gaps_documented": false,
+    "residual_risks_assessed": true
+  },
+  "non_production_confirmation": true,
+  "non_runtime_confirmation": true
+}

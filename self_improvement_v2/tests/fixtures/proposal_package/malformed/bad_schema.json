@@ -1,0 +1,9 @@
+{
+  "comment": "Malformed proposal — structurally valid JSON but missing required fields per schema",
+  "stage": "draft",
+  "proposal": {
+    "proposal_id": "rp-20250610-120003-mnop",
+    "proposal_name": "Malformed Test",
+    "proposed_by": "test-agent"
+  }
+}

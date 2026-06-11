@@ -42,6 +42,50 @@ jobs:
         run: |
           ruff check self_improvement_v2
 
+      - name: Planning checker CLI smoke test (#145)
+        run: |
+          python -m cli.planning_checker explain-finding SCHEMA_INVALID
+
+      - name: Planning package smoke test (#145)
+        run: |
+          python - <<'PY'
+          """Offline planning CI gate — verify planning pipeline works on fixture data."""
+          from pathlib import Path
+
+          import cli.planning_checker
+
+          # 1. Verify the CLI tool builds its parser correctly
+          parser = cli.planning_checker.build_parser()
+          assert parser is not None, "CLI parser must build"
+
+          # 2. Test explain-finding for every ReasonCode
+          from rehearsal.planning_models import ReasonCode
+          for rc in ReasonCode:
+              code = cli.planning_checker.cmd_explain_finding(
+                  type("Args", (), {"reason_code": rc.value})()
+              )
+              assert code == 0, f"explain-finding {rc.value} returned {code}"
+
+          # 3. Verify redaction checker can load and scan fixtures
+          from rehearsal.redaction_checker import RedactionChecker
+          checker = RedactionChecker()
+          fixture_root = Path("self_improvement_v2/tests/fixtures/proposal_package")
+          for fixture_file in sorted(fixture_root.rglob("*.json")):
+              text = fixture_file.read_text(encoding="utf-8")
+              findings = checker.check_artifact(text)
+              # Valid fixtures should pass clean; invalid fixtures may have findings
+              print(f"  {fixture_file.relative_to(fixture_root.parent)}: {len(findings)} findings")
+
+          # 4. Verify semantic consistency is importable
+          from rehearsal.semantic_consistency import run_semantic_consistency
+          from rehearsal.planning_models import ValidationResult
+          result = ValidationResult(package_path=str(fixture_root))
+          result = run_semantic_consistency(result, [])
+          assert result is not None, "Semantic consistency must return a result"
+
+          print("✅ Planning CI gate: ALL checks passed")
+          PY
+
       - name: Validate JSON files
         run: |
           python - <<'PY'
