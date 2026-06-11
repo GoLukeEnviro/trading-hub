@@ -1,29 +1,25 @@
-# Final Handoff — SI v2 Planning Automation Epic
+# Post-Merge Handoff — SI v2 Planning Automation Epic
 
-## Epic Status: 🟢 COMPLETE — PR #158 FULLY FINALIZED
+## Epic Status: ✅ EPIC COMPLETE
 
-All queue items complete. #145 CI gate pushed to remote and GREEN on GitHub CI.
-Final merge-readiness audit: 🟢 GREEN — 0 BLOCKER/MAJOR findings.
+PR #158 merged. All 12 issues (#143–#154) closed. Superseded PRs closed.
 
-## PR #158 Final State
+## Merge Summary
 
 | Attribute | Value |
 |-----------|-------|
-| Head SHA | `c20aa0a` |
-| Files | 37 (+5589 lines) |
-| CI | ✅ SUCCESS |
-| Mergeable | ✅ MERGEABLE + CLEAN |
-| Audit | 🟢 GREEN |
+| PR #158 | Merged at `796760a` |
+| Head SHA | `c20aa0a` (guarded) |
+| Main commit | `796760a` |
+| Post-merge validation | 🟢 GREEN — 1177 tests pass |
+| Issues closed | #143–#154 |
+| Superseded PRs closed | #155, #156, #72, #73 |
 
-## Single Human Action Required
+## Remaining
 
-**Merge PR #158** when ready:
-```
-gh --repo GoLukeEnviro/trading-hub pr merge 158 --merge --match-head-commit c20aa0a11737fd0106795dec81f45f5b77eba7d6
-```
+- **Issue #44** — Runtime/Docker ownership audit. Still OPEN. Needs Docker scope approval.
+- **PR #157** (controller) — DRAFT, unmerged. Controller timer/service remains deactivated.
 
-After merging, close superseded PRs: #155, #156, #72, #73.
+## Next
 
-## Remaining Open Issues
-
-- **#44** (Runtime/Docker ownership) — blocked by runtime policy FORBIDDEN, needs human approval
+Awaiting next epic decision. Controller state: PAUSED.
