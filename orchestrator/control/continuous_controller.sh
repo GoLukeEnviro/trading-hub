@@ -25,12 +25,17 @@ set +a
 : "${LOCK_FILE:?LOCK_FILE is required}"
 : "${RUN_TIMEOUT_SECONDS:=5400}"
 
+# SI_V2_STATE_ROOT is mandatory for scheduled/continuous execution.
+# Mutable state (STATE.json, QUEUE.json, HANDOFF.md, run logs) must never
+# silently fall back to repository paths. The backward-compat default
+# STATE_ROOT="${SI_V2_STATE_ROOT:-$CONTROL_ROOT}" is removed.
+: "${SI_V2_STATE_ROOT:?SI_V2_STATE_ROOT is required for scheduled controller execution}"
+
 # Separate config (immutable, in repo) from state (mutable, external).
 # CONFIG_ROOT: repo path to orchestrator/control/ (schemas, scripts, prompts)
-# STATE_ROOT:  external path for mutable runtime state (STATE.json, QUEUE.json)
-# Backward compat: if STATE_ROOT is not set, fall back to CONTROL_ROOT.
+# STATE_ROOT:  external path for mutable runtime state (STATE.json, QUEUE.json, HANDOFF.md)
 CONFIG_ROOT="${SI_V2_CONFIG_ROOT:-$CONTROL_ROOT}"
-STATE_ROOT="${SI_V2_STATE_ROOT:-$CONTROL_ROOT}"
+STATE_ROOT="${SI_V2_STATE_ROOT}"
 
 mkdir -p "$LOG_ROOT" "$(dirname "$LOCK_FILE")"
 
@@ -69,11 +74,16 @@ PY
   )"
 
   case "$controller_status" in
-    PAUSED|BLOCKED|COMPLETE)
-      echo "controller_status=$controller_status; no agent invocation"
+    # NON-INVOCATION states: skip agent, exit cleanly.
+    # The canonical set is PAUSED, BLOCKED, COMPLETE, FAILED.
+    # Schema parity: every schema-valid controller_status has an explicit
+    # runner branch.  No status falls through to the default error case.
+    PAUSED|BLOCKED|COMPLETE|FAILED)
+      echo "controller_status=$controller_status; no agent invocation (non-invocation state)"
       exit 0
       ;;
-    READY|RUNNING|IN_PROGRESS)
+    # INVOCATION states: proceed to AGENT_COMMAND.
+    READY|RUNNING)
       ;;
     *)
       echo "Unsupported controller status: $controller_status" >&2
@@ -86,14 +96,73 @@ PY
     exit 21
   fi
 
+  # ── AGENT INVOCATION WITH FAIL-CLOSED HANDLING ──────────────────────
+  # set -e is disabled during the agent call so we can capture the exit code
+  # and run deterministic failure recovery.  Post-failure, STATE.json is
+  # updated atomically before the script returns.
+  agent_exit_code=0
+  set +e
   timeout --signal=TERM --kill-after=30s \
     "$RUN_TIMEOUT_SECONDS" \
     bash -lc "$AGENT_COMMAND"
+  agent_exit_code=$?
+  set -e
 
-  # Post-run validation: check config AND state again
+  if [[ $agent_exit_code -ne 0 ]]; then
+    echo "AGENT_COMMAND exited with code $agent_exit_code; entering fail-closed recovery" >&2
+
+    # Determine failure reason
+    if [[ $agent_exit_code -eq 124 ]]; then
+      reason="timeout after ${RUN_TIMEOUT_SECONDS}s"
+    else
+      reason="agent exit code $agent_exit_code"
+    fi
+
+    # Atomically update STATE.json to BLOCKED.
+    # Uses tempfile + os.replace() so the file is never partially written.
+    python3 - "$STATE_ROOT/STATE.json" "$reason" <<'PY'
+import json
+import os
+import sys
+import tempfile
+from datetime import datetime, timezone
+
+state_path = sys.argv[1]
+reason = sys.argv[2]
+
+with open(state_path, "r", encoding="utf-8") as handle:
+    state = json.load(handle)
+
+state["controller_status"] = "BLOCKED"
+state["pause_reason"] = reason
+state["last_run_status"] = "FAILED"
+state["consecutive_failures"] = state.get("consecutive_failures", 0) + 1
+state["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+# Atomic write: temp file + rename
+tmp_fd, tmp_path = tempfile.mkstemp(
+    dir=os.path.dirname(state_path), suffix=".tmp"
+)
+try:
+    with os.fdopen(tmp_fd, "w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2)
+    os.replace(tmp_path, state_path)
+finally:
+    if os.path.exists(tmp_path):
+        os.unlink(tmp_path)
+PY
+
+    echo "Controller transitioned to BLOCKED ($reason)"
+  fi
+
+  # Post-run validation ALWAYS runs — even after agent failure.
   python3 "$CONFIG_ROOT/scripts/validate_control_plane.py" \
     --config-root "$CONFIG_ROOT" \
     --state-root "$STATE_ROOT"
 
   echo "run_finished_at=$(date -u +%Y%m%dT%H%M%SZ)"
 } >>"$log_file" 2>&1
+
+# Propagate agent exit code to the scheduler.
+# Non-invocation states exit 0 before reaching this line.
+exit $agent_exit_code

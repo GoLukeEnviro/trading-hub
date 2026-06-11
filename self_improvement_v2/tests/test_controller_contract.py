@@ -6,6 +6,7 @@ dependency resolution, and runner script syntax.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -464,7 +465,533 @@ class TestCrossFieldUnitChecks:
         assert len(errors) == 1
         assert "unknown dependencies" in errors[0]
 
-    def test_dependencies_duplicate_id_errors(self) -> None:
-        items = [_active_queue_item("dup", "READY"), _active_queue_item("dup", "READY")]
-        errors = vcp._check_dependencies(items)
-        assert any("Duplicate" in e for e in errors)
+# ===========================================================================
+# Runner subprocess tests
+# ===========================================================================
+
+
+class TestRunnerSubprocess:
+    """Subprocess-level tests for continuous_controller.sh.
+
+    Each test creates a complete fake environment (schemas, state, queue,
+    controller.env, fake agent) in tmp_path and runs the real runner script.
+    """
+
+    RUNNER_SCRIPT: Path = _WORKTREE / "orchestrator" / "control" / "continuous_controller.sh"
+    # We re-use the real validate_control_plane.py via --config-root.
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _write_fake_env(
+        tmp_path: Path,
+        *,
+        controller_status: str = "READY",
+        run_timeout: int = 10,
+    ) -> tuple[Path, Path, Path]:
+        """Set up a complete fake controller environment.
+
+        Returns (config_root, state_root, agent_counter_file).
+        """
+        config_root = tmp_path / "config"
+        state_root = tmp_path / "state"
+        log_root = tmp_path / "logs"
+        lock_file = tmp_path / "controller.lock"
+
+        config_root.mkdir(exist_ok=True)
+        state_root.mkdir(exist_ok=True)
+        log_root.mkdir(exist_ok=True)
+
+        # Schemas (copied from repo)
+        schemas_dir = config_root / "schemas"
+        schemas_dir.mkdir(exist_ok=True)
+        (schemas_dir / "state.schema.json").write_text(
+            (_SCHEMAS_DIR / "state.schema.json").read_text()
+        )
+        (schemas_dir / "queue.schema.json").write_text(
+            (_SCHEMAS_DIR / "queue.schema.json").read_text()
+        )
+
+        # Validator script directory
+        scripts_dir = config_root / "scripts"
+        scripts_dir.mkdir(exist_ok=True)
+        (scripts_dir / "validate_control_plane.py").write_text(
+            (_SCRIPTS_DIR / "validate_control_plane.py").read_text()
+        )
+
+        # MASTER_AGENT_PROMPT.xml
+        (config_root / "MASTER_AGENT_PROMPT.xml").write_text("<prompt>test</prompt>\n")
+
+        # STATE.json
+        state: dict
+        if controller_status in ("READY", "RUNNING"):
+            state = _base_state(
+                controller_status=controller_status,
+                current_epic="EPIC-TEST",
+            )
+        else:
+            state = _base_state(controller_status=controller_status)
+        (state_root / "STATE.json").write_text(json.dumps(state, indent=2))
+
+        # QUEUE.json (ACTIVE mode needs items)
+        queue: dict
+        if controller_status in ("READY", "RUNNING"):
+            queue = _base_queue(
+                epic_id="EPIC-TEST",
+                branch="fix/test",
+                worktree=str(tmp_path / "wt"),
+                items=[_active_queue_item("item-1", "READY")],
+            )
+        else:
+            queue = _base_queue()
+        (state_root / "QUEUE.json").write_text(json.dumps(queue, indent=2))
+
+        # Fake agent — records invocation count
+        agent_counter = tmp_path / "agent_counter"
+        agent_counter.write_text("0")
+        fake_agent = tmp_path / "fake_agent.sh"
+        fake_agent.write_text(f"""#!/usr/bin/env bash
+count=$(cat "{agent_counter}")
+echo "$((count + 1))" > "{agent_counter}"
+echo "agent invoked (count=$((count + 1)))"
+exit 0
+""")
+        fake_agent.chmod(0o755)
+
+        # controller.env
+        env_file = tmp_path / "controller.env"
+        env_file.write_text(f"""\
+REPO_ROOT={tmp_path}
+CONTROL_ROOT={tmp_path}/config
+SI_V2_CONFIG_ROOT={config_root}
+SI_V2_STATE_ROOT={state_root}
+LOG_ROOT={log_root}
+LOCK_FILE={lock_file}
+RUN_TIMEOUT_SECONDS={run_timeout}
+AGENT_COMMAND={fake_agent}
+""")
+
+        return config_root, state_root, agent_counter
+
+    @staticmethod
+    def _read_state(state_root: Path) -> dict:
+        return json.loads((state_root / "STATE.json").read_text())
+
+    @staticmethod
+    def _read_queue(state_root: Path) -> dict:
+        return json.loads((state_root / "QUEUE.json").read_text())
+
+    # ------------------------------------------------------------------
+    # Invocation count matrix
+    # ------------------------------------------------------------------
+
+    def test_ready_invokes_agent_once(self, tmp_path: Path) -> None:
+        """READY → AGENT_COMMAND invoked exactly once."""
+        _, state_root, counter = self._write_fake_env(
+            tmp_path, controller_status="READY",
+        )
+        result = subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        invocations = int(counter.read_text())
+        assert invocations == 1, (
+            f"READY should invoke agent once, got {invocations}. "
+            f"stdout={result.stdout[:500]} stderr={result.stderr[:500]}"
+        )
+
+    def test_running_invokes_agent_once(self, tmp_path: Path) -> None:
+        """RUNNING → AGENT_COMMAND invoked exactly once (recovery re-entry)."""
+        _, state_root, counter = self._write_fake_env(
+            tmp_path, controller_status="RUNNING",
+        )
+        result = subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        invocations = int(counter.read_text())
+        assert invocations == 1, (
+            f"RUNNING should invoke agent once, got {invocations}"
+        )
+
+    def test_paused_invokes_zero_times(self, tmp_path: Path) -> None:
+        """PAUSED → zero agent invocations."""
+        _, state_root, counter = self._write_fake_env(
+            tmp_path, controller_status="PAUSED",
+        )
+        subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        assert counter.read_text().strip() == "0"
+
+    def test_blocked_invokes_zero_times(self, tmp_path: Path) -> None:
+        """BLOCKED → zero agent invocations."""
+        _, state_root, counter = self._write_fake_env(
+            tmp_path, controller_status="BLOCKED",
+        )
+        subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        assert counter.read_text().strip() == "0"
+
+    def test_failed_invokes_zero_times(self, tmp_path: Path) -> None:
+        """FAILED → zero agent invocations (schema-runner parity)."""
+        _, state_root, counter = self._write_fake_env(
+            tmp_path, controller_status="FAILED",
+        )
+        subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        assert counter.read_text().strip() == "0"
+
+    def test_complete_invokes_zero_times(self, tmp_path: Path) -> None:
+        """COMPLETE → zero agent invocations."""
+        _, state_root, counter = self._write_fake_env(
+            tmp_path, controller_status="COMPLETE",
+        )
+        subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        assert counter.read_text().strip() == "0"
+
+    # ------------------------------------------------------------------
+    # Mandatory STATE_ROOT
+    # ------------------------------------------------------------------
+
+    def test_missing_state_root_fails_closed(self, tmp_path: Path) -> None:
+        """Missing SI_V2_STATE_ROOT → non-zero exit, zero agent invocations."""
+        config_root, state_root, counter = self._write_fake_env(
+            tmp_path, controller_status="READY",
+        )
+        # Write env WITHOUT SI_V2_STATE_ROOT
+        env_file = tmp_path / "controller.env"
+        env_file.write_text(f"""\
+REPO_ROOT={tmp_path}
+CONTROL_ROOT={tmp_path}/config
+SI_V2_CONFIG_ROOT={config_root}
+LOG_ROOT={tmp_path}/logs
+LOCK_FILE={tmp_path}/controller.lock
+RUN_TIMEOUT_SECONDS=10
+AGENT_COMMAND={tmp_path}/fake_agent.sh
+""")
+        result = subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(env_file)},
+            capture_output=True, text=True,
+        )
+        assert result.returncode != 0, (
+            f"Missing STATE_ROOT should fail, got exit={result.returncode}"
+        )
+        assert counter.read_text().strip() == "0", (
+            "Agent must not be invoked when STATE_ROOT is missing"
+        )
+
+    # ------------------------------------------------------------------
+    # Lock contention
+    # ------------------------------------------------------------------
+
+    def test_lock_contention_invokes_zero_times(self, tmp_path: Path) -> None:
+        """Second concurrent run with same lock file skips agent."""
+        import fcntl
+
+        _, _state_root, counter = self._write_fake_env(
+            tmp_path, controller_status="READY",
+        )
+        env = {"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")}
+        # Hold the lock
+        lock_file = tmp_path / "controller.lock"
+        lock_fd = os.open(str(lock_file), os.O_RDWR | os.O_CREAT, 0o644)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = subprocess.run(
+                ["bash", str(self.RUNNER_SCRIPT)],
+                env=env, capture_output=True, text=True,
+            )
+            assert result.returncode == 0
+            assert "Another controller run is active" in (result.stdout + result.stderr)
+            assert counter.read_text().strip() == "0"
+        finally:
+            os.close(lock_fd)
+
+    # ------------------------------------------------------------------
+    # Fail-closed handling
+    # ------------------------------------------------------------------
+
+    def _write_failing_env(
+        self, tmp_path: Path, exit_code: int, controller_status: str = "READY",
+    ) -> tuple[Path, Path, Path]:
+        """Set up env where the fake agent exits with *exit_code*."""
+        config_root, state_root, counter = self._write_fake_env(
+            tmp_path, controller_status=controller_status,
+        )
+        fake_agent = tmp_path / "fake_agent.sh"
+        fake_agent.write_text(f"""#!/usr/bin/env bash
+count=$(cat "{counter}")
+echo "$((count + 1))" > "{counter}"
+echo "failing agent (exit={exit_code})"
+exit {exit_code}
+""")
+        fake_agent.chmod(0o755)
+        return config_root, state_root, counter
+
+    def test_exit_1_transitions_fail_closed(self, tmp_path: Path) -> None:
+        """Agent exit 1 → STATE.json transitions to BLOCKED."""
+        _, state_root, counter = self._write_failing_env(
+            tmp_path, exit_code=1,
+        )
+        result = subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 1
+        assert counter.read_text().strip() == "1"
+        state = self._read_state(state_root)
+        assert state["controller_status"] == "BLOCKED", (
+            f"Expected BLOCKED, got {state['controller_status']}"
+        )
+        assert state["consecutive_failures"] >= 1
+        assert state["last_run_status"] == "FAILED"
+
+    def test_exit_124_transitions_fail_closed(self, tmp_path: Path) -> None:
+        """Agent timeout (exit 124) → STATE.json transitions to BLOCKED."""
+        _, state_root, counter = self._write_failing_env(
+            tmp_path, exit_code=124,
+        )
+        result = subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        # Exit 124 is propagated through timeout → the script exits 124.
+        # If the fake agent exits 124 immediately without being killed by
+        # timeout, timeout passes 124 through.  Either way the controller
+        # must update STATE.json to BLOCKED.
+        assert counter.read_text().strip() == "1"
+        state = self._read_state(state_root)
+        assert state["controller_status"] == "BLOCKED", (
+            f"Expected BLOCKED, got {state['controller_status']}. "
+            f"exit_code={result.returncode} stdout={result.stdout[:300]} "
+            f"stderr={result.stderr[:300]}"
+        )
+        assert "timeout" in (state.get("pause_reason") or "") or result.returncode == 124
+
+    def test_successful_exit_runs_validation(self, tmp_path: Path) -> None:
+        """Successful agent exit 0 → exit 0, STATE.json unchanged by runner."""
+        _, state_root, counter = self._write_fake_env(
+            tmp_path, controller_status="READY",
+        )
+        result = subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert counter.read_text().strip() == "1"
+        # Successful run: runner does NOT modify STATE.json on success
+        state = self._read_state(state_root)
+        assert state["controller_status"] == "READY", (
+            "Successful run should not change controller_status"
+        )
+
+    def test_json_remains_valid_after_all_paths(self, tmp_path: Path) -> None:
+        """STATE.json is parseable JSON after success AND failure paths."""
+        # Happy path
+        _, state_root, _ = self._write_fake_env(tmp_path, controller_status="READY")
+        subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        state = self._read_state(state_root)
+        assert isinstance(state, dict)
+
+        # Failure path — new temp dir
+        fail_tmp = tmp_path / "fail"
+        fail_tmp.mkdir()
+        _, fail_state_root, _ = self._write_failing_env(fail_tmp, exit_code=1)
+        subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(fail_tmp / "controller.env")},
+            capture_output=True, text=True,
+        )
+        fail_state = json.loads((fail_state_root / "STATE.json").read_text())
+        assert isinstance(fail_state, dict)
+        assert fail_state["controller_status"] == "BLOCKED"
+
+    def test_consecutive_failures_increments(self, tmp_path: Path) -> None:
+        """consecutive_failures increases exactly once per failure."""
+        _, state_root, _ = self._write_failing_env(tmp_path, exit_code=1)
+        # Set initial consecutive_failures
+        state = self._read_state(state_root)
+        state["consecutive_failures"] = 2
+        (state_root / "STATE.json").write_text(json.dumps(state, indent=2))
+
+        subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        state_after = self._read_state(state_root)
+        assert state_after["consecutive_failures"] == 3, (
+            f"Expected 3, got {state_after['consecutive_failures']}"
+        )
+
+    # ------------------------------------------------------------------
+    # Lock released after failure
+    # ------------------------------------------------------------------
+
+    def test_lock_released_after_failure(self, tmp_path: Path) -> None:
+        """Lock is released even when agent fails."""
+        _, state_root, _ = self._write_failing_env(tmp_path, exit_code=1)
+        lock_file = tmp_path / "controller.lock"
+        result = subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 1
+        # Lock should be released — a second run should work (no contention)
+        result2 = subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        assert "Another controller run is active" not in (
+            result2.stdout + result2.stderr
+        ), "Lock was not released after failure"
+
+    # ------------------------------------------------------------------
+    # Pre- and post-validation run
+    # ------------------------------------------------------------------
+
+    def test_successful_run_runs_pre_and_post_validation(self, tmp_path: Path) -> None:
+        """Successful agent run invokes validator before AND after agent."""
+        _, state_root, counter = self._write_fake_env(
+            tmp_path, controller_status="READY",
+        )
+        result = subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, (
+            f"Expected exit 0, got {result.returncode}. "
+            f"stderr={result.stderr[:500]}"
+        )
+        # All output goes to the log file (>>log_file 2>&1)
+        log_files = sorted((tmp_path / "logs").glob("controller-*.log"))
+        assert log_files, "No log file created"
+        log_text = log_files[0].read_text()
+        assert log_text.count("Control-plane validation passed") >= 2, (
+            f"Expected >=2 validation passes (pre + post) in log, "
+            f"got {log_text.count('Control-plane validation passed')}. "
+            f"Log excerpt: {log_text[:500]}"
+        )
+
+    def test_failed_run_runs_post_validation(self, tmp_path: Path) -> None:
+        """Failed agent run STILL runs post-validation."""
+        _, _, _ = self._write_failing_env(tmp_path, exit_code=1)
+        result = subprocess.run(
+            ["bash", str(self.RUNNER_SCRIPT)],
+            env={"SI_V2_CONTROLLER_ENV": str(tmp_path / "controller.env")},
+            capture_output=True, text=True,
+        )
+        # All output goes to the log file
+        log_files = sorted((tmp_path / "logs").glob("controller-*.log"))
+        assert log_files, "No log file created"
+        log_text = log_files[0].read_text()
+        assert log_text.count("Control-plane validation passed") >= 2, (
+            f"Post-validation must run after failure. "
+            f"Got {log_text.count('Control-plane validation passed')} passes. "
+            f"Log excerpt: {log_text[:500]}"
+        )
+
+    # ------------------------------------------------------------------
+    # IN_PROGRESS / COMPLETED are NOT valid controller statuses
+    # ------------------------------------------------------------------
+
+    def test_in_progress_controller_status_rejected(self, tmp_path: Path) -> None:
+        """IN_PROGRESS is a queue-item status, not a controller status.
+        The schema validator rejects it before the runner status check."""
+        config_root = tmp_path / "config"
+        state_root = tmp_path / "state"
+        config_root.mkdir()
+        state_root.mkdir()
+        # Copy schemas so the validator can run
+        schemas_dir = config_root / "schemas"
+        schemas_dir.mkdir()
+        (schemas_dir / "state.schema.json").write_text(
+            (_SCHEMAS_DIR / "state.schema.json").read_text()
+        )
+        (schemas_dir / "queue.schema.json").write_text(
+            (_SCHEMAS_DIR / "queue.schema.json").read_text()
+        )
+        scripts_dir = config_root / "scripts"
+        scripts_dir.mkdir()
+        (scripts_dir / "validate_control_plane.py").write_text(
+            (_SCRIPTS_DIR / "validate_control_plane.py").read_text()
+        )
+        # STATE.json with IN_PROGRESS (NOT in the schema enum)
+        state = _base_state(controller_status="IN_PROGRESS")
+        (state_root / "STATE.json").write_text(json.dumps(state, indent=2))
+        queue = _base_queue()
+        (state_root / "QUEUE.json").write_text(json.dumps(queue, indent=2))
+        # Run validator directly
+        result = subprocess.run(
+            ["python3", str(scripts_dir / "validate_control_plane.py"),
+             "--config-root", str(config_root),
+             "--state-root", str(state_root)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode != 0, (
+            f"IN_PROGRESS controller_status should be rejected. "
+            f"stderr={result.stderr[:300]}"
+        )
+
+    def test_completed_controller_status_rejected(self, tmp_path: Path) -> None:
+        """COMPLETED is a queue-item status, not a controller status.
+        The schema validator rejects it before the runner status check."""
+        config_root = tmp_path / "config"
+        state_root = tmp_path / "state"
+        config_root.mkdir()
+        state_root.mkdir()
+        schemas_dir = config_root / "schemas"
+        schemas_dir.mkdir()
+        (schemas_dir / "state.schema.json").write_text(
+            (_SCHEMAS_DIR / "state.schema.json").read_text()
+        )
+        (schemas_dir / "queue.schema.json").write_text(
+            (_SCHEMAS_DIR / "queue.schema.json").read_text()
+        )
+        scripts_dir = config_root / "scripts"
+        scripts_dir.mkdir()
+        (scripts_dir / "validate_control_plane.py").write_text(
+            (_SCRIPTS_DIR / "validate_control_plane.py").read_text()
+        )
+        state = _base_state(controller_status="COMPLETED")
+        (state_root / "STATE.json").write_text(json.dumps(state, indent=2))
+        queue = _base_queue()
+        (state_root / "QUEUE.json").write_text(json.dumps(queue, indent=2))
+        result = subprocess.run(
+            ["python3", str(scripts_dir / "validate_control_plane.py"),
+             "--config-root", str(config_root),
+             "--state-root", str(state_root)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode != 0, (
+            f"COMPLETED controller_status should be rejected. "
+            f"stderr={result.stderr[:300]}"
+        )

@@ -13,11 +13,11 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 VALID_CONTROLLER_STATUSES = frozenset({
-    "READY", "RUNNING", "BLOCKED", "IN_PROGRESS", "COMPLETED", "FAILED", "PAUSED", "COMPLETE"
+    "READY", "RUNNING", "BLOCKED", "FAILED", "PAUSED", "COMPLETE"
 })
 
-IDLE_STATUSES = frozenset({"PAUSED", "COMPLETE"})
-ACTIVE_STATUSES = frozenset({"READY", "RUNNING", "IN_PROGRESS"})
+NON_INVOCATION_STATUSES = frozenset({"PAUSED", "BLOCKED", "COMPLETE", "FAILED"})
+INVOCATION_STATUSES = frozenset({"READY", "RUNNING"})
 
 VALID_ITEM_STATUSES = frozenset({
     "READY", "BLOCKED", "IN_PROGRESS", "COMPLETED", "FAILED", "PAUSED"
@@ -116,18 +116,21 @@ def _validate_against_schema(data: dict, schema: dict, path: str = "") -> list[s
 # ---------------------------------------------------------------------------
 
 def _check_cross_field_invariants(state: dict, queue: dict) -> list[str]:
-    """Validate idle/active mode consistency. Returns list of error strings."""
+    """Validate non-invocation / invocation mode consistency. Returns list of error strings."""
     errors: list[str] = []
     status = state.get("controller_status")
     current_epic = state.get("current_epic")
     active_work_item_id = state.get("active_work_item_id")
     items = queue.get("items", [])
 
-    if status in IDLE_STATUSES:
-        # IDLE mode: must not have active epic
-        if current_epic is not None:
+    if status in NON_INVOCATION_STATUSES:
+        # NON_INVOCATION mode: PAUSED and COMPLETE (clean terminal states)
+        # must not have active epic.  BLOCKED and FAILED may preserve
+        # current_epic for human recovery — they represent a failed or
+        # blocked active state.
+        if status in ("PAUSED", "COMPLETE") and current_epic is not None:
             errors.append(
-                f"IDLE state ({status}) must not have current_epic set, "
+                f"NON_INVOCATION state ({status}) must not have current_epic set, "
                 f"got {current_epic!r}"
             )
         # PAUSED with active work item is inconsistent
@@ -137,27 +140,28 @@ def _check_cross_field_invariants(state: dict, queue: dict) -> list[str]:
                 f"got {active_work_item_id!r}"
             )
 
-    elif status in ACTIVE_STATUSES:
-        # ACTIVE mode: must have current_epic
+    elif status in INVOCATION_STATUSES:
+        # INVOCATION mode: must have current_epic
         if not isinstance(current_epic, str) or not current_epic:
             errors.append(
-                f"ACTIVE state ({status}) requires current_epic to be a non-empty string, "
+                f"INVOCATION state ({status}) requires current_epic to be a non-empty string, "
                 f"got {current_epic!r}"
             )
-        # ACTIVE mode: must have non-empty queue
+        # INVOCATION mode: must have non-empty queue
         if not items:
             errors.append(
-                f"ACTIVE state ({status}) requires at least one queue item, "
+                f"INVOCATION state ({status}) requires at least one queue item, "
                 f"but queue.items is empty"
             )
-        # ACTIVE mode: queue epic_id/branch/worktree must be non-null
+        # INVOCATION mode: queue epic_id/branch/worktree must be non-null
         for field in ("epic_id", "branch", "worktree"):
             val = queue.get(field)
             if val is None:
                 errors.append(
-                    f"ACTIVE state ({status}) requires queue.{field} to be non-null"
+                    f"INVOCATION state ({status}) requires queue.{field} to be non-null"
                 )
-    # BLOCKED, FAILED are neutral — no strict idle/active constraint
+    # Every status is covered by NON_INVOCATION_STATUSES or INVOCATION_STATUSES.
+    # No fallthrough to an unknown/neutral bucket.
 
     return errors
 
@@ -271,10 +275,10 @@ def validate(*, config_root: Path, state_root: Path) -> None:
     # Summarise result
     status = state.get("controller_status", "UNKNOWN")
     n_items = len(queue.get("items", []))
-    if status in IDLE_STATUSES:
-        print(f"Control-plane validation passed (IDLE mode, status={status})")
-    elif status in ACTIVE_STATUSES:
-        print(f"Control-plane validation passed (ACTIVE mode, status={status}, {n_items} queue item(s))")
+    if status in NON_INVOCATION_STATUSES:
+        print(f"Control-plane validation passed (non-invocation mode, status={status})")
+    elif status in INVOCATION_STATUSES:
+        print(f"Control-plane validation passed (invocation mode, status={status}, {n_items} queue item(s))")
     else:
         print(f"Control-plane validation passed (status={status})")
 
