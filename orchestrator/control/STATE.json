@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "project": "trading-hub / SI v2",
+  "controller_mode": "continuous_implementation",
+  "controller_status": "PAUSED",
+  "operation_level": "L3_REPOSITORY_ONLY",
+  "runtime_policy": "FORBIDDEN",
+  "merge_policy": "HUMAN_ONLY",
+  "canonical_main_commit": "796760a5c3902fd053387c3f30d87ddfce414e4f",
+  "last_completed_work_item_id": "FULL-EPIC-SI_V2_PLANNING_AUTOMATION",
+  "last_run_id": "controller-activate-pr157-20260611",
+  "last_run_status": "GREEN",
+  "consecutive_failures": 0,
+  "pause_reason": "AWAITING_NEXT_EPIC — Controller PR #157 merged. Queue cleared. Ready for next epic assignment.",
+  "updated_at": "2026-06-11T14:30:00Z"
+}
