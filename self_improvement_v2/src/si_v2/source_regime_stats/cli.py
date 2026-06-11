@@ -1,6 +1,7 @@
 """CLI for source_regime_stats cache management.
 
 Modes: rebuild, update, verify, inspect-summary.
+Rejects identical/unsafe input and output paths.
 """
 
 from __future__ import annotations
@@ -13,6 +14,21 @@ from pathlib import Path
 from .db import integrity_check, open_db
 from .rebuild import FullRebuilder
 from .update import IncrementalUpdater
+
+
+def _resolve(path_str: str) -> Path:
+    """Resolve a path string to an absolute Path, expanding ~."""
+    return Path(path_str).expanduser().resolve()
+
+
+def _check_path_safety(input_path: Path | None, output_path: Path | None) -> None:
+    """Reject unsafe path combinations that could cause data loss."""
+    if input_path is not None and output_path is not None:
+        resolved_in = input_path.resolve()
+        resolved_out = output_path.resolve()
+        if resolved_in == resolved_out:
+            msg = f"Input and output paths resolve to the same file: {input_path}"
+            raise ValueError(msg)
 
 
 def _load_jsonl(path: str | Path) -> list[dict]:
@@ -28,10 +44,19 @@ def _load_jsonl(path: str | Path) -> list[dict]:
 
 def _cmd_rebuild(args: argparse.Namespace) -> int:
     """Run a full rebuild from a JSONL input file."""
-    facts = _load_jsonl(args.input_jsonl)
+    input_path = _resolve(args.input_jsonl)
+    output_path = _resolve(args.output_db)
+
+    if not input_path.exists():
+        print(f"Error: input file not found: {input_path}", file=sys.stderr)
+        return 1
+
+    _check_path_safety(input_path, output_path)
+
+    facts = _load_jsonl(input_path)
     rebuilder = FullRebuilder()
     try:
-        result = rebuilder.build(facts, args.output_db)
+        result = rebuilder.build(facts, output_path)
         print(f"Rebuild complete: {result}")
         print(f"  Facts: {len(facts)}")
         return 0
@@ -41,10 +66,23 @@ def _cmd_rebuild(args: argparse.Namespace) -> int:
 
 def _cmd_update(args: argparse.Namespace) -> int:
     """Run an incremental update from a JSONL input file."""
-    facts = _load_jsonl(args.input_jsonl)
+    input_path = _resolve(args.input_jsonl)
+    db_path_resolved = _resolve(args.existing_db)
+
+    if not input_path.exists():
+        print(f"Error: input file not found: {input_path}", file=sys.stderr)
+        return 1
+
+    if not db_path_resolved.exists():
+        print(f"Error: database not found: {db_path_resolved}", file=sys.stderr)
+        return 1
+
+    _check_path_safety(input_path, db_path_resolved)
+
+    facts = _load_jsonl(input_path)
     updater = IncrementalUpdater()
     try:
-        result = updater.update(args.existing_db, facts)
+        result = updater.update(db_path_resolved, facts)
         print(f"Update complete: {result}")
         print(f"  New facts: {len(facts)}")
         return 0
@@ -54,7 +92,7 @@ def _cmd_update(args: argparse.Namespace) -> int:
 
 def _cmd_verify(args: argparse.Namespace) -> int:
     """Verify an existing cache database."""
-    db_path = Path(args.db_path)
+    db_path = _resolve(args.db_path)
     if not db_path.exists():
         print(f"Error: database not found: {db_path}", file=sys.stderr)
         return 1
@@ -100,7 +138,7 @@ def _cmd_verify(args: argparse.Namespace) -> int:
 
 def _cmd_inspect_summary(args: argparse.Namespace) -> int:
     """Inspect top N rows from source_regime_stats."""
-    db_path = Path(args.db_path)
+    db_path = _resolve(args.db_path)
     if not db_path.exists():
         print(f"Error: database not found: {db_path}", file=sys.stderr)
         return 1
