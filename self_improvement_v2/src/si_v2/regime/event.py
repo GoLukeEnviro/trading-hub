@@ -68,10 +68,15 @@ class RegimeEvent(BaseModel):
     @field_validator("detected_at")
     @classmethod
     def _ensure_utc(cls, v: datetime) -> datetime:
-        """Ensure detected_at is timezone-aware and in UTC."""
+        """Ensure detected_at is timezone-aware and in UTC (zero offset)."""
         if v.tzinfo is None:
             raise ValueError(
                 "detected_at must be timezone-aware; use timezone.utc"
+            )
+        offset = v.utcoffset()
+        if offset is None or offset.total_seconds() != 0:
+            raise ValueError(
+                f"detected_at must have zero UTC offset; got offset={offset}"
             )
         return v
 

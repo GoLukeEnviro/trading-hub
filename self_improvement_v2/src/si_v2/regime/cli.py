@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from si_v2.regime.detection_request import RegimeDetectionRequest
 from si_v2.regime.detector import ThresholdRegimeDetector
 from si_v2.regime.shadowlock_enrichment import (
     DuplicateConflictError,
@@ -55,6 +57,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _validate_paths(input_file: str, output_file: str) -> None:
+    """H10: Validate that input and output resolve to different paths."""
+    real_input = os.path.realpath(input_file)
+    real_output = os.path.realpath(output_file)
+    if real_input == real_output:
+        print(
+            f"ERROR: input_file and output_file must be different paths; "
+            f"both resolve to {real_input!r}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def _read_jsonl(path: str) -> list[dict[str, object]]:
     """Read a JSONL file, yielding dicts per line."""
     records: list[dict[str, object]] = []
@@ -95,19 +110,29 @@ def _run_detect_mode(
     # Build synthetic ledger records with detection results
     ledger_records: list[dict[str, object]] = []
     for i, obs in enumerate(records):
-        event = detector.detect(obs)
+        request = RegimeDetectionRequest(
+            observations=obs,
+            timeframe=str(obs.get("timeframe", "1h")),
+            data_source=detector.data_source,
+            detected_at=datetime.now(UTC),
+        )
+        event = detector.detect(request)
         ledger_records.append(
             {
                 "source_event_id": f"detect_{i}",
                 "regime_label": str(event.regime),
                 "confidence": event.confidence,
-                "detected_at": datetime.now(UTC).strftime(
+                "detected_at": event.detected_at.strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
                 ),
             }
         )
 
-    enrichments = writer.process_ledger(ledger_records, output_path)
+    enrichments = writer.process_ledger(
+        ledger_records,
+        output_path,
+        enrichment_created_at=datetime.now(UTC),
+    )
 
     return {
         "mode": "detect",
@@ -124,7 +149,9 @@ def _run_enrich_mode(input_path: str, output_path: str) -> dict[str, object]:
     writer = ShadowlockEnrichmentWriter()
 
     try:
-        enrichments = writer.process_ledger(records, output_path)
+        enrichments = writer.process_ledger(
+            records, output_path, enrichment_created_at=datetime.now(UTC)
+        )
     except DuplicateConflictError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(2)
@@ -141,6 +168,9 @@ def _run_enrich_mode(input_path: str, output_path: str) -> dict[str, object]:
 def main(argv: list[str] | None = None) -> None:
     """CLI entry point."""
     args = _parse_args(argv)
+
+    # H10: Validate paths before doing any work
+    _validate_paths(args.input_file, args.output_file)
 
     if args.mode in ("enrich", "enrich-only"):
         summary = _run_enrich_mode(args.input_file, args.output_file)
