@@ -6,6 +6,7 @@
   "operation_level": "L3_REPOSITORY_ONLY",
   "runtime_policy": "FORBIDDEN",
   "merge_policy": "HUMAN_ONLY",
+  "current_epic": "NONE",
   "canonical_main_commit": "796760a5c3902fd053387c3f30d87ddfce414e4f",
   "last_completed_work_item_id": "FULL-EPIC-SI_V2_PLANNING_AUTOMATION",
   "last_run_id": "controller-activate-pr157-20260611",

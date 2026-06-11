@@ -8,8 +8,8 @@
     "schema_version": {"type": "integer", "const": 1},
     "epic_id": {"type": "string", "minLength": 1},
     "base_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-    "branch": {"type": "string", "minLength": 1},
-    "worktree": {"type": "string", "minLength": 1},
+    "branch": {"type": "string"},
+    "worktree": {"type": "string"},
     "items": {
       "type": "array",
       "minItems": 0,
