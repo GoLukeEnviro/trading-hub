@@ -1,5 +1,12 @@
 # Phase 1 Readiness Matrix
 
+> **[HISTORICAL] — Pre-controller, fixture-only readiness check.**
+>
+> **⚠️ Notice:** This matrix checks artifact **existence only** (fixture-based).
+> It does NOT assess live-readiness, real-data capability, or production
+> suitability. Governance artifacts are marked optional and pending.
+> For current capability assessment, see `docs/state/si-v2-capability-matrix.md`.
+
 **Verdict:** yellow
 
 **Required:** 24/24 found

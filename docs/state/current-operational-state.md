@@ -1,86 +1,153 @@
-# Current Operational State
+# Trading Hub — Current Operational State
 
-Generated at: 2026-06-05T20:42:32.642012+00:00
+> **Canonical current-state snapshot** — validated against merged main at commit
+> `fdac27c` (PR #160 merge, controller contract layer finalized).
+>
+> **Last updated:** 2026-06-11
+> **Branch:** `main` (HEAD = fdac27c, PR #160)
 
-Canonical status artifact:
-- /home/hermes/projects/trading/docs/state/canonical-trading-status.md
-- /home/hermes/projects/trading/orchestrator/reports/canonical_trading_status_latest.json
+---
 
-Overall verdict: WARNING
-Runtime health: GREEN
-Reporting health: WARNING
-Live risk source: STALE / UNKNOWN (drawdown_state is not verified current)
-Ledger risk source: WARNING (current secondary ledger; stale backtest source REMOVED 2026-06-05)
-Paper book: SANDBOX_ONLY
+## 1. System State
 
-## At a Glance
+| Property | Value |
+|----------|-------|
+| Live trading | 🔴 `FORBIDDEN` — all bots `dry_run=true` |
+| Deployment mode | Containerized (Docker Compose) |
+| State machine | `LIVE_FORBIDDEN` — no path to live without RiskGuard validation + human approval |
+| Signal source | `ai-hedge-fund-crypto` (Bitget Futures OHLCV) |
+| Meta-orchestrator | `hermes-agent` in the `orchestrator` profile |
 
-- Active trading bots: 4
-- Dry-run only: yes
-- Live trading enabled: no
-- Signal core: 2026-06-05T09:47:04.312649+00:00
-- Signal bridge: 2026-06-05T09:50:29+00:00 (reported age: 3.1 min)
-- RiskGuard state: 2026-06-05T12:01:58.484167+00:00 (signal age: 15.1 min)
-- Rebel classification: VISIBILITY_GAP
+### Bot Fleet
 
-## Active Fleet
+| Bot | Mode | Strategy |
+|-----|------|----------|
+| FreqForge | dry-run | `FreqForge_Override` |
+| Regime-Hybrid | dry-run | `RegimeSwitchingHybrid_v7_v04_Integration` |
+| FreqForge-Canary | dry-run | `FreqForge_Override` |
+| FreqAI-Rebel | dry-run | `RebelLiquidation + RebelXGBoostClassifier` |
 
-| Bot | Container | Verdict | Classification | Dry-run | Strategy match | State file |
-|-----|-----------|---------|----------------|---------|----------------|------------|
-| freqforge | freqtrade-freqforge | GREEN | LIVE_RUNTIME | yes | True | True |
-| regime-hybrid | freqtrade-regime-hybrid | GREEN | LIVE_RUNTIME | yes | True | True |
-| freqforge-canary | freqtrade-freqforge-canary | GREEN | LIVE_RUNTIME | yes | True | True |
-| freqai-rebel | freqai-rebel | YELLOW | VISIBILITY_GAP | yes | True | False |
+---
 
-## Source Freshness
+## 2. SI v2 Controller Status (PR #160 Post-Merge)
 
-| Source | Timestamp | Freshness |
-|--------|-----------|-----------|
-| Signal Core | 2026-06-05T09:47:04.312649+00:00 | fresh |
-| Signal Bridge | 2026-06-05T09:50:29+00:00 | reported_age_minutes=3.1 |
-| RiskGuard State | 2026-06-05T12:01:58.484167+00:00 | reported_signal_age_minutes=15.1 |
-| RiskGuard Health | 2026-06-05T12:01:58.485273+00:00 | fresh |
-| Drawdown State | 2026-06-01T04:01:25.183014+00:00 | STALE (4d old, not verified current) |
-| Ledger Risk | 2026-06-05T12:07:13.705954+00:00 | current (stale backtest source removed) |
+The continuous controller (introduced during the PR #158–#160 cycle) is:
 
-## Risk Separation
+| Property | Value |
+|----------|-------|
+| **Status** | **PAUSED** |
+| **Mode** | `continuous_implementation` |
+| **Operation level** | `L3_REPOSITORY_ONLY` |
+| **Merge policy** | `HUMAN_ONLY` |
+| **Runtime policy** | `FORBIDDEN` |
+| **Pause reason** | `AWAITING_NEXT_APPROVED_EPIC` |
+| **Active epic** | None |
+| **Last controller merge** | PR #160 (`fdac27c`) |
+| **External state dir** | `/opt/data/si-v2-controller/state/` |
+| **Active worktree** | None |
+| **Active PR** | None |
 
-| Scope | Timestamp | Status | Notes |
-|-------|-----------|--------|-------|
-| LIVE_RISK | 2026-06-01T04:01:25.183014+00:00 | STALE | Do not use until refreshed. 4d old, equity not verifiable. |
-| LEDGER_RISK | 2026-06-05T12:07:13.705954+00:00 | WARNING | current secondary ledger; regime_hybrid_backtest source REMOVED; equity/drawdown recalculated. **INCOMPLETE**: rebel source MISSING (1061.62 USDT gap, see reconciliation audit 2026-06-05). |
+### Controller Layer Completed by PR #160
 
-## Risk Note: LEDGER drawdown threshold proximity
+- ✅ State contract finalized (separate mutable state, full validator rewrite)
+- ✅ 4-defect repair hardening (env export, inactive pilot timer policy, subprocess tests, ruff violations)
+- ✅ Production state stored at `/opt/data/si-v2-controller/state/`
+- ✅ Controller proven operational (proof report @ `runs/proof-report-20260611T154454Z.md`)
 
-- LEDGER_RISK current_drawdown = 3.42%
-- `fleet_risk_auto_params.py` R2 threshold = 3.0% (halve all stakes)
-- Status: LEDGER view now sits above the R2 trigger threshold.
-  This is a WATCH flag only — the auto-param-adjuster reads LIVE_RISK
-  (drawdown_state) for its rules, not LEDGER_RISK. Confirm during next
-  fleet_risk_auto_params audit.
+### Timer and Dedicated-User Activation — BLOCKED
 
-## Legacy / Non-Canonical Surfaces
+- **Timer-based automation** (cron-driven controller activation) is **not installed**.
+  `orchestrator/control/README.md` states: *"Runner and scheduler installation remain
+  a separate local VPS step. Their installation and activation require explicit
+  manual review. Nothing in this branch activates a scheduler or changes a running
+  service."*
+- **Dedicated-user / credential isolation** is **not implemented**. The controller
+  runs within the existing orchestrator profile. A dedicated Unix user with
+  scoped git+GitHub credentials has not been created.
+- Both require a **future root-level phase** and explicit human approval before
+  activation.
 
-| Path | Status | Why |
-|------|--------|-----|
-| /home/hermes/projects/trading/docs/state/autopilot/latest.md | HISTORICAL | Older autopilot snapshot; not canonical. |
-| /home/hermes/projects/trading/orchestrator/reports/fleet_health_latest.json | NON-CANONICAL | Diagnostic fleet report. |
-| /home/hermes/projects/trading/orchestrator/reports/multicycle_validation_latest.json | NON-CANONICAL | Legacy validator output. |
+---
 
-## Decommissioned Inventory
+## 3. Phase Progress Summary
 
-| Bot | Artifact Present | Status | Path | Note |
-|-----|------------------|--------|------|------|
-| rsi | no | DECOMMISSIONED | /home/hermes/projects/trading/freqtrade/bots/rsi/user_data/primo_signal_state.json | No current state artifact found; excluded from live fleet. |
-| momentum | yes | DECOMMISSIONED | /home/hermes/projects/trading/freqtrade/bots/momentum/user_data/primo_signal_state.json | Historical state artifact still present; excluded from live fleet. |
+| Phase | Name | Status |
+|-------|------|--------|
+| 0 | Stabilization & Foundation | ✅ Complete (all 12 issues closed) |
+| 1 | Shadowlock & Foundation | ✅ Complete (#12, #45, #47 merged) |
+| — | Controller Layer (PR #158–#160) | ✅ Complete (merged) |
+| 1 (Real-Data Intelligence) | Issues #55–#61 | 🟡 In progress: #55 merged (PR #161), #56 in development |
+| 2 | Runtime Blockers (#43, #44, #40) | ⬜ Not started |
+| 3 | Rainbow Signal Integration | ⬜ Not started |
 
-## Notes
+### Phase 0 — Completed Issues
 
+All 12 Phase 0 issues (#22, #23, #32, #30, #31, #20, #21, #25, #26, #27, #38,
+#39, #12, #45, #47) have been completed via PRs #49–#54, #68–#75.
 
-- ledger-integrity-watchdog last run: 2026-06-05T12:44:46.327173+00:00 — ISSUES: freqai-rebel | drawdown > R2.
-- Current live risk truth is not drawdown_state until it is refreshed and verified.
-- Bitget MCP paper outputs are synthetic and must never be used for live decisions.
-- Rebel remains a visibility gap; it is running and dry_run=true, but its audit surface is incomplete.
-- Regime-hybrid-backtest stale source removal recorded in
-  `docs/context/2026-06-05-regime-hybrid-backtest-source-removal.md` and
-  embedded in `fleet_risk_state.json:_audit[0]`.
+### Open Phase 2 Runtime Blockers
+
+| Issue | Title | Priority | Status |
+|-------|-------|----------|--------|
+| [#43](https://github.com/GoLukeEnviro/trading-hub/issues/43) | Fix FleetRiskManager dry-run entry blocker | 🔴 Critical | OPEN |
+| [#44](https://github.com/GoLukeEnviro/trading-hub/issues/44) | Runtime / Docker Compose ownership | 🟠 High | OPEN |
+| [#46](https://github.com/GoLukeEnviro/trading-hub/issues/46) | Branch/PR/worktree hygiene | 🟡 Medium | OPEN |
+| [#40](https://github.com/GoLukeEnviro/trading-hub/issues/40) | Re-run dry-run signal validation | 🟡 Medium | Blocked by #43 |
+
+---
+
+## 4. SI v2 Implementation Progress (Offline-Only)
+
+> **Note:** The SI v2 progress dashboard at
+> `self_improvement_v2/reports/progress/si_v2_progress_dashboard.md` is a
+> **deterministic offline snapshot** generated by a script. It does NOT make
+> GitHub API calls. The issue numbering in that dashboard references the
+> **ai4trade-bot** repo for Rainbow core issues (#51–#56, #79–#85), NOT the
+> trading-hub repo issue numbers.
+
+### Offline-Only Status — RED
+
+| Area | Issues | Status |
+|------|--------|--------|
+| Rainbow core (validator, snapshot, drift guard) | #79–#85 | ✅ Complete (offline/fixture-only) |
+| Post-Rainbow foundation (fixture harness, manifests) | #100–#104 | ✅ Complete |
+| Offline pipeline (golden path, evidence, regime fixtures) | #107–#112 | ✅ Complete |
+| Episode + readiness (skeleton, report, readiness matrix) | #97, #114–#118 | ✅ Complete |
+| Governance / CI / Approval | #120–#125 | 🔶 #124–#125 in progress, rest complete |
+| Rehearsal Control | #127–#132 | ⏳ Pending |
+
+### Live-Readiness Status — 🚫 BLOCKED
+
+- All SI v2 evidence, attribution, and readiness artifacts run on **fixtures only**
+- No real (live) market data pipeline is connected
+- No real Freqtrade trade data is ingested
+- Timer and dedicated-user activation are **blocked**
+- See [#124](https://github.com/GoLukeEnviro/trading-hub/issues/124) for blocker inventory
+
+---
+
+## 5. Safety Layer Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `dry_run` | ✅ `True` (all bots) | Enforced |
+| RiskGuard contract | ✅ Defined | `docs/specs/runtime-safety-contract.md` |
+| ShadowLogger contract | ✅ Defined | `docs/specs/runtime-safety-contract.md` |
+| RiskGuard implementation | 🔶 SI v2 spec only | Not a standalone service |
+| ShadowLogger implementation | ✅ Deployed | JSONL audit trail (`orchestrator/logs/shadow_decisions.jsonl`) |
+| FleetRiskManager | ✅ Deployed | With dry-run entry bug (#43) |
+| CI safety gates | ✅ Implemented | PR #53 (#31) |
+
+---
+
+## 6. Related Documents
+
+| Document | Location | Status |
+|----------|----------|--------|
+| Implementation Roadmap | `docs/roadmap/implementation-roadmap.md` | ✅ Current (this PR updates it) |
+| SI v2 Documentation Index | `self_improvement_v2/docs/README.md` | 🔶 Historical (commit refs pre-date controller merge) |
+| SI v2 Architecture Index | `self_improvement_v2/docs/OFFLINE_SYSTEM_ARCHITECTURE_INDEX.md` | 🔶 Historical (uses old ai4trade-bot issue refs) |
+| SI v2 Progress Dashboard | `self_improvement_v2/reports/progress/si_v2_progress_dashboard.md` | 🔶 Historical (deterministic offline snapshot) |
+| Phase 1 Readiness Matrix | `self_improvement_v2/reports/readiness/phase_1_readiness_matrix.md` | 🔶 Historical (fixture-only, pre-controller) |
+| Controller Control README | `orchestrator/control/README.md` | ✅ Current |
+| AGENTS.md | `AGENTS.md` | ✅ Current |

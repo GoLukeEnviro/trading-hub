@@ -2,8 +2,9 @@
 
 > **Canonical roadmap** — Source of truth for implementation phases, current
 > state, and next priorities.
-
-**Last updated:** 2026-06-10
+>
+> **Last updated:** 2026-06-11
+> **Current HEAD:** `fdac27c` (PR #160 — controller contract layer merged)
 
 ---
 
@@ -11,8 +12,10 @@
 
 | Phase | Name | Status | Tracker |
 |-------|------|--------|---------|
-| 0 | Stabilization & Foundation | 🔶 In progress | [#48](https://github.com/GoLukeEnviro/trading-hub/issues/48) |
-| 1 | Shadowlock & Foundation | ⬜ Not started | #12/#45 |
+| 0 | Stabilization & Foundation | ✅ Complete | [#48](https://github.com/GoLukeEnviro/trading-hub/issues/48) |
+| 1 | Shadowlock & Foundation | ✅ Complete | #12/#45/#47 |
+| — | Controller Layer (PR #158–#160) | ✅ Complete | — |
+| 1i | Intelligence Layer (Real-Data) | ⬜ Not started | [#55–#61](https://github.com/GoLukeEnviro/trading-hub/issues/55) |
 | 2 | Runtime Blockers | ⬜ Not started | #43/#44 |
 | 3 | Rainbow Signal Integration | ⬜ Not started | ai4trade-bot #55 |
 
@@ -22,6 +25,8 @@
 
 **Goal:** Stabilize the codebase, define safety contracts, and establish
 documentation baseline before deeper changes.
+
+**Status:** ✅ **Complete** — all 12 issues closed via PRs #49–#54, #68–#75.
 
 ### Completed Issues
 
@@ -41,7 +46,7 @@ documentation baseline before deeper changes.
 | #39 | Watchdog Connectivity RCA | docs | [#73](https://github.com/GoLukeEnviro/trading-hub/pull/73) |
 | #12 | Shadowlock Indexer | code + tests | [#74](https://github.com/GoLukeEnviro/trading-hub/pull/74) |
 | #45 | Writer→Indexer Trigger | tests | [#75](https://github.com/GoLukeEnviro/trading-hub/pull/75) |
-| #47 | Roadmap/README/.gitignore Baseline | docs | *(this PR)* |
+| #47 | Roadmap/README/.gitignore Baseline | docs | *(see PR #75)* |
 
 ### Open Issues
 
@@ -65,6 +70,48 @@ repository baseline.
 | #45 | Writer→Indexer Trigger | ✅ Complete | #12 |
 | #47 | Roadmap/README/.gitignore | ✅ Complete | None |
 | #46 | Branch/PR/Worktree Hygiene | 🟡 Medium | None |
+
+---
+
+## Controller Layer (PR #158–#160)
+
+**Goal:** Build and harden the SI v2 continuous controller — a repository-level
+control plane for deterministic, offline implementation.
+
+**Status:** ✅ **Complete** — merged at `fdac27c`.
+
+| Work | PR/Commit | Status |
+|------|-----------|--------|
+| Planning automation and quality (issues #143–#154) | [#158](https://github.com/GoLukeEnviro/trading-hub/pull/158) | ✅ Merged |
+| Controller state contract, validator rewrite | [#160](https://github.com/GoLukeEnviro/trading-hub/pull/160) | ✅ Merged |
+| 4-defect hardening (subprocess tests, ruff, env export) | Commits in #160 | ✅ Merged |
+
+**Controller operational state:** `PAUSED` — awaiting next approved epic.
+External state at `/opt/data/si-v2-controller/state/`.
+
+---
+
+## Phase 1i — Intelligence Layer (Real-Data)
+
+**Goal:** Enable real-data intelligence pipeline — regime detection,
+performance attribution, and automated reporting against live Freqtrade
+trade data.
+
+**Status:** ⬜ **Not started** — all issues OPEN, no code written.
+
+| Issue | Title | Priority | Dependencies |
+|-------|-------|----------|-------------|
+| [#55](https://github.com/GoLukeEnviro/trading-hub/issues/55) | Define canonical Regime Detector schema | 🔴 Critical | None |
+| [#56](https://github.com/GoLukeEnviro/trading-hub/issues/56) | Implement Regime Detector run and Shadowlock enrichment | 🔴 Critical | #55 |
+| [#57](https://github.com/GoLukeEnviro/trading-hub/issues/57) | Build Performance Attribution Engine by source and regime | 🔴 Critical | #56 |
+| [#58](https://github.com/GoLukeEnviro/trading-hub/issues/58) | Implement source_regime_stats summary table | 🟠 High | #56 |
+| [#59](https://github.com/GoLukeEnviro/trading-hub/issues/59) | Generate automated Attribution Reports | 🟠 High | #57, #58 |
+| [#60](https://github.com/GoLukeEnviro/trading-hub/issues/60) | Shadowlock SQLite maintenance and daily job plan | 🟡 Medium | #57 |
+| [#61](https://github.com/GoLukeEnviro/trading-hub/issues/61) | Tracker — Intelligence Layer implementation | 🟢 Low (tracker) | All above |
+
+**Timer and dedicated-user activation remain blocked** — cron-based scheduler
+not installed, credential isolation not created. Both require a separate
+root-level phase and human approval.
 
 ---
 
@@ -114,7 +161,10 @@ LIVE_ACTIVE
 | Document | Location | Status |
 |----------|----------|--------|
 | Implementation Roadmap (this doc) | `docs/roadmap/implementation-roadmap.md` | ✅ Current |
-| SI v2 Documentation Index | `self_improvement_v2/docs/README.md` | 🔶 Pending merge of #32 (PR #51) |
-| Phase 0 Tracker | [#48](https://github.com/GoLukeEnviro/trading-hub/issues/48) | ✅ Current |
-| Issue Backlog | [GitHub Issues](https://github.com/GoLukeEnviro/trading-hub/issues) | ✅ Current |
+| Current Operational State | `docs/state/current-operational-state.md` | ✅ Current |
+| SI v2 Capability Matrix | `docs/state/si-v2-capability-matrix.md` | ✅ Current |
+| Post-PR-160 Architecture Diagram | `docs/state/post-pr-160-architecture.md` | ✅ Current |
+| Phase 1 Intelligence Epic | `docs/state/phase-1-intelligence-epic.md` | ✅ Current |
+| Issues #55–#61 Evidence Matrix | `docs/state/issues-55-61-evidence-matrix.md` | ✅ Current |
+| SI v2 Documentation Index | `self_improvement_v2/docs/README.md` | 🔶 Historical (pre-controller) |
 | AGENTS.md | `AGENTS.md` | ✅ Current |
