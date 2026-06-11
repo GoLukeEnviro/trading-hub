@@ -11,11 +11,11 @@
   "active_work_item_id": "RECONCILE-PR-155-156",
   "active_branch": "feat/si-v2-canonical-planning-reconciliation",
   "active_worktree": "/tmp/trading-reconcile-155-156",
-  "active_pr": null,
+  "active_pr": 158,
   "last_completed_work_item_id": "RECONCILE-PR-155-156",
   "last_run_id": "manual-reconciliation-20260611",
   "last_run_status": "GREEN",
   "consecutive_failures": 0,
   "pause_reason": null,
-  "updated_at": "2026-06-11T10:55:00Z"
+  "updated_at": "2026-06-11T11:00:00Z"
 }
