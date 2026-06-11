@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "epic_id": "CONTROLLER-ACTIVE-PROOF",
+  "base_commit": "467f34f7ee742e653254df097d59d58b0c94452f",
+  "branch": "feat/si-v2-controller-active-proof",
+  "worktree": "/tmp/trading-controller-proof",
+  "items": [
+    {
+      "id": "CONTROLLER-ACTIVE-PROOF",
+      "title": "Read-only controller validation: run validator, write proof report, update state",
+      "issue_numbers": [],
+      "depends_on": [],
+      "priority": 100,
+      "status": "COMPLETED",
+      "work_package": "proof",
+      "entry_gate": "Read-only validation only. No product code changes. No merge. No Docker."
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "project": "trading-hub / SI v2",
+  "controller_mode": "continuous_implementation",
+  "controller_status": "PAUSED",
+  "operation_level": "L3_REPOSITORY_ONLY",
+  "runtime_policy": "FORBIDDEN",
+  "merge_policy": "HUMAN_ONLY",
+  "current_epic": "NONE",
+  "canonical_main_commit": "467f34f7ee742e653254df097d59d58b0c94452f",
+  "active_work_item_id": null,
+  "active_branch": null,
+  "active_worktree": null,
+  "active_pr": null,
+  "last_completed_work_item_id": "CONTROLLER-ACTIVE-PROOF",
+  "last_run_id": "controller-active-proof-20260611",
+  "last_run_status": "GREEN",
+  "consecutive_failures": 0,
+  "pause_reason": "CONTROLLER-ACTIVE-PROOF complete. Validator-schema consistency finding noted. Awaiting next epic.",
+  "updated_at": "2026-06-11T17:00:00Z"
+}
