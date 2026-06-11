@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against merged main at commit
-> `81884db` (PR #166 merge, issue #59 attribution reports finalized).
+> commit `0557b70` (PR #169 merge, issue #60 cache maintenance finalized).
 >
 > **Last updated:** 2026-06-11
-> **Branch:** `main` (HEAD = 81884db, PR #166)
+> **Branch:** `main` (HEAD = 0557b70, PR #169)
 
 ---
 
@@ -43,7 +43,7 @@ The continuous controller (introduced during the PR #158–#160 cycle) is:
 | **Pause reason** | `AWAITING_NEXT_APPROVED_EPIC` |
 | **Active epic** | None |
 | **Last controller merge** | PR #160 (`fdac27c`) |
-| **Last merge (overall)** | PR #166 (`81884db`) — #59 attribution reports |
+| **Last merge (overall)** | PR #169 (`0557b70`) — #60 cache maintenance |
 | **External state dir** | `/opt/data/si-v2-controller/state/` |
 | **Active worktree** | None |
 | **Active PR** | None |

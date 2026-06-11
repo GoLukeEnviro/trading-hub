@@ -4,7 +4,7 @@
 > state, and next priorities.
 >
 > **Last updated:** 2026-06-11
-> **Current HEAD:** `81884db` (PR #166 — issue #59 attribution reports merged)
+> **HEAD:** `0557b70` (PR #169 — cache maintenance)  
 
 ---
 
