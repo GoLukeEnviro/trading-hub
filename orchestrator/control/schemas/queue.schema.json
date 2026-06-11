@@ -1,15 +1,16 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "SI v2 Continuous Controller Queue",
+  "description": "Work-item queue. In IDLE mode (controller PAUSED/COMPLETE), epic_id/branch/worktree may be null and items may be empty. In ACTIVE mode, all must be populated.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "epic_id", "base_commit", "branch", "worktree", "items"],
   "properties": {
     "schema_version": {"type": "integer", "const": 1},
-    "epic_id": {"type": "string", "minLength": 1},
+    "epic_id": {"type": ["string", "null"]},
     "base_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-    "branch": {"type": "string", "minLength": 1},
-    "worktree": {"type": "string", "minLength": 1},
+    "branch": {"type": ["string", "null"]},
+    "worktree": {"type": ["string", "null"]},
     "items": {
       "type": "array",
       "minItems": 0,
