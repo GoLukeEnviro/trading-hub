@@ -18,6 +18,13 @@ source "$ENV_FILE"
 : "${LOCK_FILE:?LOCK_FILE is required}"
 : "${RUN_TIMEOUT_SECONDS:=5400}"
 
+# Separate config (immutable, in repo) from state (mutable, external).
+# CONFIG_ROOT: repo path to orchestrator/control/ (schemas, scripts, prompts)
+# STATE_ROOT:  external path for mutable runtime state (STATE.json, QUEUE.json)
+# Backward compat: if STATE_ROOT is not set, fall back to CONTROL_ROOT.
+CONFIG_ROOT="${SI_V2_CONFIG_ROOT:-$CONTROL_ROOT}"
+STATE_ROOT="${SI_V2_STATE_ROOT:-$CONTROL_ROOT}"
+
 mkdir -p "$LOG_ROOT" "$(dirname "$LOCK_FILE")"
 
 exec 9>"$LOCK_FILE"
@@ -32,15 +39,18 @@ log_file="$LOG_ROOT/controller-$timestamp.log"
 {
   echo "run_started_at=$timestamp"
   echo "repo_root=$REPO_ROOT"
-  echo "control_root=$CONTROL_ROOT"
+  echo "config_root=$CONFIG_ROOT"
+  echo "state_root=$STATE_ROOT"
 
   cd "$REPO_ROOT"
 
-  python3 "$CONTROL_ROOT/scripts/validate_control_plane.py" \
-    --control-root "$CONTROL_ROOT"
+  # Pre-run validation: check config AND state
+  python3 "$CONFIG_ROOT/scripts/validate_control_plane.py" \
+    --config-root "$CONFIG_ROOT" \
+    --state-root "$STATE_ROOT"
 
   controller_status="$(
-    python3 - "$CONTROL_ROOT/STATE.json" <<'PY'
+    python3 - "$STATE_ROOT/STATE.json" <<'PY'
 import json
 import sys
 
@@ -56,7 +66,7 @@ PY
       echo "controller_status=$controller_status; no agent invocation"
       exit 0
       ;;
-    READY|RUNNING)
+    READY|RUNNING|IN_PROGRESS)
       ;;
     *)
       echo "Unsupported controller status: $controller_status" >&2
@@ -64,7 +74,7 @@ PY
       ;;
   esac
 
-  if [[ ! -f "$CONTROL_ROOT/MASTER_AGENT_PROMPT.xml" ]]; then
+  if [[ ! -f "$CONFIG_ROOT/MASTER_AGENT_PROMPT.xml" ]]; then
     echo "Missing master controller prompt." >&2
     exit 21
   fi
@@ -73,8 +83,10 @@ PY
     "$RUN_TIMEOUT_SECONDS" \
     bash -lc "$AGENT_COMMAND"
 
-  python3 "$CONTROL_ROOT/scripts/validate_control_plane.py" \
-    --control-root "$CONTROL_ROOT"
+  # Post-run validation: check config AND state again
+  python3 "$CONFIG_ROOT/scripts/validate_control_plane.py" \
+    --config-root "$CONFIG_ROOT" \
+    --state-root "$STATE_ROOT"
 
   echo "run_finished_at=$(date -u +%Y%m%dT%H%M%SZ)"
 } >>"$log_file" 2>&1

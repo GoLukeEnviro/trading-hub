@@ -19,11 +19,11 @@ ANY_USAGE_PATTERNS: list[str] = [
 
 
 def _find_py_files() -> list[Path]:
-    """Find all .py files in the self_improvement_v2 directory, excluding .venv."""
+    """Find all .py files in the self_improvement_v2 directory, excluding .venv*."""
     root = PROJECT_ROOT
     return sorted(
         p for p in root.rglob("*.py")
-        if ".venv" not in p.parts
+        if not any(part.startswith(".venv") for part in p.parts)
     )
 
 
