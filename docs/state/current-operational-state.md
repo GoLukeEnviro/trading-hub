@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against merged main at commit
-> `fdac27c` (PR #160 merge, controller contract layer finalized).
+> commit `0557b70` (PR #169 merge, issue #60 cache maintenance finalized).
 >
 > **Last updated:** 2026-06-11
-> **Branch:** `main` (HEAD = fdac27c, PR #160)
+> **Branch:** `main` (HEAD = 0557b70, PR #169)
 
 ---
 
@@ -29,7 +29,7 @@
 
 ---
 
-## 2. SI v2 Controller Status (PR #160 Post-Merge)
+## 2. SI v2 Controller Status (PR #160+ Post-PR #166)
 
 The continuous controller (introduced during the PR #158–#160 cycle) is:
 
@@ -43,6 +43,7 @@ The continuous controller (introduced during the PR #158–#160 cycle) is:
 | **Pause reason** | `AWAITING_NEXT_APPROVED_EPIC` |
 | **Active epic** | None |
 | **Last controller merge** | PR #160 (`fdac27c`) |
+| **Last merge (overall)** | PR #169 (`0557b70`) — #60 cache maintenance |
 | **External state dir** | `/opt/data/si-v2-controller/state/` |
 | **Active worktree** | None |
 | **Active PR** | None |
@@ -76,7 +77,7 @@ The continuous controller (introduced during the PR #158–#160 cycle) is:
 | 0 | Stabilization & Foundation | ✅ Complete (all 12 issues closed) |
 | 1 | Shadowlock & Foundation | ✅ Complete (#12, #45, #47 merged) |
 | — | Controller Layer (PR #158–#160) | ✅ Complete (merged) |
-| 1 (Real-Data Intelligence) | Issues #55–#61 | 🟡 In progress: #55 merged (PR #161), #56 in development |
+| 1 (Real-Data Intelligence) | Issues #55–#61 | ✅ Complete: #55–#59 merged (PRs #161–#166). #60, #61 OPEN |
 | 2 | Runtime Blockers (#43, #44, #40) | ⬜ Not started |
 | 3 | Rainbow Signal Integration | ⬜ Not started |
 
@@ -85,14 +86,17 @@ The continuous controller (introduced during the PR #158–#160 cycle) is:
 All 12 Phase 0 issues (#22, #23, #32, #30, #31, #20, #21, #25, #26, #27, #38,
 #39, #12, #45, #47) have been completed via PRs #49–#54, #68–#75.
 
-### Open Phase 2 Runtime Blockers
+Additionally, Phase 0 child issues [#43](https://github.com/GoLukeEnviro/trading-hub/issues/43)
+(FleetRiskManager fix, PR [#77](https://github.com/GoLukeEnviro/trading-hub/pull/77)) and
+[#40](https://github.com/GoLukeEnviro/trading-hub/issues/40) (dry-run signal revalidation,
+PR [#142](https://github.com/GoLukeEnviro/trading-hub/pull/142)) are now CLOSED.
+
+### Open Phase 0 Remaining Items
 
 | Issue | Title | Priority | Status |
 |-------|-------|----------|--------|
-| [#43](https://github.com/GoLukeEnviro/trading-hub/issues/43) | Fix FleetRiskManager dry-run entry blocker | 🔴 Critical | OPEN |
-| [#44](https://github.com/GoLukeEnviro/trading-hub/issues/44) | Runtime / Docker Compose ownership | 🟠 High | OPEN |
-| [#46](https://github.com/GoLukeEnviro/trading-hub/issues/46) | Branch/PR/worktree hygiene | 🟡 Medium | OPEN |
-| [#40](https://github.com/GoLukeEnviro/trading-hub/issues/40) | Re-run dry-run signal validation | 🟡 Medium | Blocked by #43 |
+| [#44](https://github.com/GoLukeEnviro/trading-hub/issues/44) | Runtime / Docker Compose ownership | 🟠 High | 🔴 BLOCKED — requires Docker/runtime access |
+| [#46](https://github.com/GoLukeEnviro/trading-hub/issues/46) | Branch/PR/worktree hygiene | 🟡 Medium | 🟡 OPEN — repo-only work |
 
 ---
 
@@ -144,7 +148,7 @@ All 12 Phase 0 issues (#22, #23, #32, #30, #31, #20, #21, #25, #26, #27, #38,
 
 | Document | Location | Status |
 |----------|----------|--------|
-| Implementation Roadmap | `docs/roadmap/implementation-roadmap.md` | ✅ Current (this PR updates it) |
+| Implementation Roadmap | `docs/roadmap/implementation-roadmap.md` | ✅ Current (updated by this PR) |
 | SI v2 Documentation Index | `self_improvement_v2/docs/README.md` | 🔶 Historical (commit refs pre-date controller merge) |
 | SI v2 Architecture Index | `self_improvement_v2/docs/OFFLINE_SYSTEM_ARCHITECTURE_INDEX.md` | 🔶 Historical (uses old ai4trade-bot issue refs) |
 | SI v2 Progress Dashboard | `self_improvement_v2/reports/progress/si_v2_progress_dashboard.md` | 🔶 Historical (deterministic offline snapshot) |

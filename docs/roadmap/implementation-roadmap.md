@@ -4,7 +4,7 @@
 > state, and next priorities.
 >
 > **Last updated:** 2026-06-11
-> **Current HEAD:** `fdac27c` (PR #160 — controller contract layer merged)
+> **HEAD:** `0557b70` (PR #169 — cache maintenance)  
 
 ---
 
@@ -15,7 +15,7 @@
 | 0 | Stabilization & Foundation | ✅ Complete | [#48](https://github.com/GoLukeEnviro/trading-hub/issues/48) |
 | 1 | Shadowlock & Foundation | ✅ Complete | #12/#45/#47 |
 | — | Controller Layer (PR #158–#160) | ✅ Complete | — |
-| 1i | Intelligence Layer (Real-Data) | ⬜ Not started | [#55–#61](https://github.com/GoLukeEnviro/trading-hub/issues/55) |
+| 1i | Intelligence Layer (Real-Data) | ✅ Complete | [#55–#61](https://github.com/GoLukeEnviro/trading-hub/issues/55) |
 | 2 | Runtime Blockers | ⬜ Not started | #43/#44 |
 | 3 | Rainbow Signal Integration | ⬜ Not started | ai4trade-bot #55 |
 
@@ -50,12 +50,17 @@ documentation baseline before deeper changes.
 
 ### Open Issues
 
-| Issue | Title | Priority | Dependencies |
-|-------|-------|----------|-------------|
-| [#43](https://github.com/GoLukeEnviro/trading-hub/issues/43) | Fix FleetRiskManager dry-run entry blocker | 🔴 Critical | None |
-| [#44](https://github.com/GoLukeEnviro/trading-hub/issues/44) | Runtime / Docker Compose ownership | 🟠 High | None |
-| [#46](https://github.com/GoLukeEnviro/trading-hub/issues/46) | Branch/PR/worktree hygiene | 🟡 Medium | None |
-| [#40](https://github.com/GoLukeEnviro/trading-hub/issues/40) | Re-run dry-run signal validation | 🟡 Medium | Blocked by #43 |
+| Issue | Title | Priority | Status | Dependencies |
+|-------|-------|----------|--------|-------------|
+| [#44](https://github.com/GoLukeEnviro/trading-hub/issues/44) | Runtime / Docker Compose ownership | 🟠 High | 🔴 BLOCKED — requires Docker/runtime access | None |
+| [#46](https://github.com/GoLukeEnviro/trading-hub/issues/46) | Branch/PR/worktree hygiene | 🟡 Medium | 🟡 OPEN — repo-only work | None |
+
+### Recently Completed Issues
+
+| Issue | Title | Priority | PR | Merge SHA |
+|-------|-------|----------|----|-----------|
+| [#43](https://github.com/GoLukeEnviro/trading-hub/issues/43) | Fix FleetRiskManager dry-run entry blocker | 🔴 Critical | [#77](https://github.com/GoLukeEnviro/trading-hub/pull/77) | `91b10b9` |
+| [#40](https://github.com/GoLukeEnviro/trading-hub/issues/40) | Re-run dry-run signal validation | 🟡 Medium | [#142](https://github.com/GoLukeEnviro/trading-hub/pull/142) | `c627b06` |
 
 ---
 
@@ -97,17 +102,17 @@ External state at `/opt/data/si-v2-controller/state/`.
 performance attribution, and automated reporting against live Freqtrade
 trade data.
 
-**Status:** ⬜ **Not started** — all issues OPEN, no code written.
+**Status:** ✅ **Complete** — all issues #55–#59 merged via PRs #161–#166.
 
-| Issue | Title | Priority | Dependencies |
-|-------|-------|----------|-------------|
-| [#55](https://github.com/GoLukeEnviro/trading-hub/issues/55) | Define canonical Regime Detector schema | 🔴 Critical | None |
-| [#56](https://github.com/GoLukeEnviro/trading-hub/issues/56) | Implement Regime Detector run and Shadowlock enrichment | 🔴 Critical | #55 |
-| [#57](https://github.com/GoLukeEnviro/trading-hub/issues/57) | Build Performance Attribution Engine by source and regime | 🔴 Critical | #56 |
-| [#58](https://github.com/GoLukeEnviro/trading-hub/issues/58) | Implement source_regime_stats summary table | 🟠 High | #56 |
-| [#59](https://github.com/GoLukeEnviro/trading-hub/issues/59) | Generate automated Attribution Reports | 🟠 High | #57, #58 |
-| [#60](https://github.com/GoLukeEnviro/trading-hub/issues/60) | Shadowlock SQLite maintenance and daily job plan | 🟡 Medium | #57 |
-| [#61](https://github.com/GoLukeEnviro/trading-hub/issues/61) | Tracker — Intelligence Layer implementation | 🟢 Low (tracker) | All above |
+| Issue | Title | Priority | PR | Merge SHA | Status |
+|-------|-------|----------|----|-----------|--------|
+| [#55](https://github.com/GoLukeEnviro/trading-hub/issues/55) | Define canonical Regime Detector schema | 🔴 Critical | [#161](https://github.com/GoLukeEnviro/trading-hub/pull/161) | `9017dd4` | ✅ Merged |
+| [#56](https://github.com/GoLukeEnviro/trading-hub/issues/56) | Implement Regime Detector run and Shadowlock enrichment | 🔴 Critical | [#163](https://github.com/GoLukeEnviro/trading-hub/pull/163) | `fadfefa` | ✅ Merged |
+| [#57](https://github.com/GoLukeEnviro/trading-hub/issues/57) | Build Performance Attribution Engine by source and regime | 🔴 Critical | [#164](https://github.com/GoLukeEnviro/trading-hub/pull/164) | `773e9cb` | ✅ Merged |
+| [#58](https://github.com/GoLukeEnviro/trading-hub/issues/58) | Implement source_regime_stats summary table | 🟠 High | [#165](https://github.com/GoLukeEnviro/trading-hub/pull/165) | `e806fc8` | ✅ Merged |
+| [#59](https://github.com/GoLukeEnviro/trading-hub/issues/59) | Generate automated Attribution Reports | 🟠 High | [#166](https://github.com/GoLukeEnviro/trading-hub/pull/166) | `81884db` | ✅ Merged |
+| [#60](https://github.com/GoLukeEnviro/trading-hub/issues/60) | Shadowlock SQLite maintenance and daily job plan | 🟡 Medium | ❌ None | ❌ N/A | 🟡 OPEN |
+| [#61](https://github.com/GoLukeEnviro/trading-hub/issues/61) | Tracker — Intelligence Layer implementation | 🟢 Low (tracker) | ❌ None | ❌ N/A | 🟡 OPEN |
 
 **Timer and dedicated-user activation remain blocked** — cron-based scheduler
 not installed, credential isolation not created. Both require a separate
@@ -121,9 +126,7 @@ root-level phase and human approval.
 
 | Issue | Title | Priority | Dependencies |
 |-------|-------|----------|-------------|
-| [#43](https://github.com/GoLukeEnviro/trading-hub/issues/43) | FleetRiskManager dry-run fix | 🔴 Critical | None |
 | [#44](https://github.com/GoLukeEnviro/trading-hub/issues/44) | Runtime/Compose ownership audit | 🟠 High | None |
-| [#40](https://github.com/GoLukeEnviro/trading-hub/issues/40) | Re-run dry-run validation | 🟡 Medium | #43 |
 
 ---
 
@@ -165,6 +168,6 @@ LIVE_ACTIVE
 | SI v2 Capability Matrix | `docs/state/si-v2-capability-matrix.md` | ✅ Current |
 | Post-PR-160 Architecture Diagram | `docs/state/post-pr-160-architecture.md` | ✅ Current |
 | Phase 1 Intelligence Epic | `docs/state/phase-1-intelligence-epic.md` | ✅ Current |
-| Issues #55–#61 Evidence Matrix | `docs/state/issues-55-61-evidence-matrix.md` | ✅ Current |
+| Issues #55–#61 Evidence Matrix | `docs/state/issues-55-61-evidence-matrix.md` | ⬜ Updated by this PR |
 | SI v2 Documentation Index | `self_improvement_v2/docs/README.md` | 🔶 Historical (pre-controller) |
 | AGENTS.md | `AGENTS.md` | ✅ Current |
