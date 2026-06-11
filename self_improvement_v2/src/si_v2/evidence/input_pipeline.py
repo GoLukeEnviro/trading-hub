@@ -5,9 +5,9 @@ and produces typed evidence records with quality gating for downstream
 proposal/weight engines.
 
 Safety guarantees:
-- Full typed contracts with no Any types
+- Full typed contracts with zero Any types
 - SQLite URI mode=ro (never creates missing databases)
-- 10 quality gates (schema, integrity, age, sparsity, conflicts, etc.)
+- 10+ quality gates (schema, integrity, age, sparsity, numerics, conflicts, etc.)
 - Deterministic output under explicit as_of timestamp
 - Source DB remains byte-for-byte unchanged
 - Canonical schema utilities from source_regime_stats.db
@@ -19,10 +19,9 @@ import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
 from si_v2.source_regime_stats.db import (
     SCHEMA_VERSION as CANONICAL_SCHEMA_VERSION,
@@ -53,6 +52,9 @@ class RejectionReason(Enum):
     INVALID_CONFIDENCE = "invalid_confidence"
     UNKNOWN_REGIME = "unknown_regime"
     UNKNOWN_CONFIDENCE_BUCKET = "unknown_confidence_bucket"
+    INVALID_COUNTS = "invalid_counts"
+    INVALID_TIMESTAMP = "invalid_timestamp"
+    MALFORMED_REQUEST = "malformed_request"
 
 
 class QualityVerdict(Enum):
@@ -64,7 +66,7 @@ class QualityVerdict(Enum):
 
 
 # ---------------------------------------------------------------------------
-# Typed contracts
+# Typed contracts — zero Any usage
 # ---------------------------------------------------------------------------
 
 KNOWN_REGIMES: frozenset[str] = frozenset({
@@ -74,6 +76,10 @@ KNOWN_REGIMES: frozenset[str] = frozenset({
 KNOWN_CONFIDENCE_BUCKETS: frozenset[str] = frozenset({
     "high", "medium", "low",
 })
+
+# Canonical confidence range [0.0, 1.0]
+CONFIDENCE_MIN = 0.0
+CONFIDENCE_MAX = 1.0
 
 
 @dataclass(frozen=True)
@@ -103,6 +109,90 @@ class EvidencePipelineRequest:
     accepted_schema_versions: frozenset[str] = field(
         default_factory=lambda: frozenset({CANONICAL_SCHEMA_VERSION})
     )
+
+    def __post_init__(self: EvidencePipelineRequest) -> None:
+        """Validate request invariants at construction time."""
+        errors: list[str] = []
+
+        # as_of must be timezone-aware UTC
+        if self.as_of.tzinfo is None:
+            errors.append("as_of must be timezone-aware (got naive datetime)")
+        elif self.as_of.tzinfo != UTC:
+            errors.append(f"as_of must be in UTC, got {self.as_of.tzinfo}")
+
+        # period_start/end must be timezone-aware UTC when present
+        for label, dt in [("period_start", self.period_start), ("period_end", self.period_end)]:
+            if dt is not None:
+                if dt.tzinfo is None:
+                    errors.append(f"{label} must be timezone-aware (got naive datetime)")
+                elif dt.tzinfo != UTC:
+                    errors.append(f"{label} must be in UTC, got {dt.tzinfo}")
+
+        # period_start must not exceed period_end
+        if self.period_start is not None and self.period_end is not None and self.period_start > self.period_end:
+            errors.append(
+                f"period_start ({self.period_start.isoformat()}) exceeds "
+                f"period_end ({self.period_end.isoformat()})"
+            )
+
+        # period_end must not exceed as_of
+        if self.period_end is not None and self.period_end > self.as_of:
+            errors.append(
+                f"period_end ({self.period_end.isoformat()}) exceeds "
+                f"as_of ({self.as_of.isoformat()})"
+            )
+
+        # minimum_unique_trade_count must be int > 0 and reject bool
+        if isinstance(self.minimum_unique_trade_count, bool):
+            errors.append("minimum_unique_trade_count must be an integer, not bool")
+        elif not isinstance(self.minimum_unique_trade_count, int):
+            errors.append(
+                f"minimum_unique_trade_count must be an integer, "
+                f"got {type(self.minimum_unique_trade_count).__name__}"
+            )
+        elif self.minimum_unique_trade_count < 1:
+            errors.append(
+                f"minimum_unique_trade_count must be >= 1, "
+                f"got {self.minimum_unique_trade_count}"
+            )
+
+        # maximum_evidence_age_days must be finite non-negative when set
+        if self.maximum_evidence_age_days is not None:
+            if isinstance(self.maximum_evidence_age_days, bool):
+                errors.append("maximum_evidence_age_days must be a float, not bool")
+            elif not isinstance(self.maximum_evidence_age_days, (int, float)):
+                errors.append(
+                    f"maximum_evidence_age_days must be a number, "
+                    f"got {type(self.maximum_evidence_age_days).__name__}"
+                )
+            else:
+                fval = float(self.maximum_evidence_age_days)
+                if fval != fval or fval == float("inf") or fval == float("-inf"):
+                    errors.append(
+                        f"maximum_evidence_age_days must be finite, got {fval}"
+                    )
+                if fval < 0:
+                    errors.append(
+                        f"maximum_evidence_age_days must be non-negative, got {fval}"
+                    )
+
+        # source_filter must be non-empty when present
+        if self.source_filter is not None and not self.source_filter.strip():
+            errors.append("source_filter must be a non-empty string when provided")
+
+        # regime_filter must be non-empty when present
+        if self.regime_filter is not None and not self.regime_filter.strip():
+            errors.append("regime_filter must be a non-empty string when provided")
+
+        # accepted_schema_versions must be non-empty
+        if not self.accepted_schema_versions:
+            errors.append("accepted_schema_versions must be a non-empty set")
+
+        if errors:
+            raise ValueError(
+                "EvidencePipelineRequest validation failed:\n"
+                + "\n".join(f"  - {e}" for e in errors)
+            )
 
 
 @dataclass(frozen=True)
@@ -137,6 +227,40 @@ class ProposalEvidenceRecord:
     cache_schema_version: str | None
     fact_schema_version: str | None
     source_fingerprint: str | None
+
+    def canonical_serialize(self) -> str:
+        """Deterministic JSON serialization of all semantic fields."""
+        return json.dumps(
+            {
+                "evidence_id": self.evidence_id,
+                "source_id": self.source_id,
+                "strategy_or_model_id": self.strategy_or_model_id,
+                "pair": self.pair,
+                "timeframe": self.timeframe,
+                "regime": self.regime,
+                "confidence_bucket": self.confidence_bucket,
+                "unique_trade_count": self.unique_trade_count,
+                "source_contribution_count": self.source_contribution_count,
+                "win_count": self.win_count,
+                "loss_count": self.loss_count,
+                "breakeven_count": self.breakeven_count,
+                "win_rate": self.win_rate,
+                "expectancy": self.expectancy,
+                "average_raw_return": self.average_raw_return,
+                "average_weighted_return": self.average_weighted_return,
+                "cumulative_weighted_return": self.cumulative_weighted_return,
+                "drawdown_proxy": self.drawdown_proxy,
+                "average_source_confidence": self.average_source_confidence,
+                "average_regime_confidence": self.average_regime_confidence,
+                "evidence_max_closed_at": self.evidence_max_closed_at,
+                "input_fingerprint": self.input_fingerprint,
+                "cache_schema_version": self.cache_schema_version,
+                "fact_schema_version": self.fact_schema_version,
+                "source_fingerprint": self.source_fingerprint,
+            },
+            sort_keys=True,
+            default=str,
+        )
 
 
 @dataclass(frozen=True)
@@ -189,89 +313,224 @@ def _make_evidence_id(
 
 
 # ---------------------------------------------------------------------------
+# Safe typed parsing helpers
+# ---------------------------------------------------------------------------
+
+
+def _reject_non_finite(val: object, field_name: str) -> str | None:
+    """Returns an error message if val is non-finite, bool, or non-numeric; None if OK."""
+    if isinstance(val, bool):
+        return f"{field_name} is bool ({val!r}), not a valid float"
+    if not isinstance(val, (int, float)):
+        return f"{field_name} has unexpected type {type(val).__name__} ({val!r})"
+    fval = float(val)
+    if fval != fval:  # NaN
+        return f"{field_name} is NaN"
+    if fval == float("inf"):
+        return f"{field_name} is +infinity"
+    if fval == float("-inf"):
+        return f"{field_name} is -infinity"
+    return None
+
+
+def _parse_required_float(val: object) -> float:
+    """Parse a required float field. Raises ValueError on failure."""
+    err = _reject_non_finite(val, "value")
+    if err is not None:
+        raise ValueError(err)
+    # _reject_non_finite ensures val is int | float at this point
+    assert isinstance(val, (int, float)), f"expected int/float, got {type(val).__name__}"
+    return float(val)
+
+
+def _parse_optional_float(val: object) -> float | None:
+    """Parse an optional float field. Returns None on failure."""
+    if val is None:
+        return None
+    err = _reject_non_finite(val, "value")
+    if err is not None:
+        return None
+    # _reject_non_finite ensures val is int | float at this point
+    assert isinstance(val, (int, float)), f"expected int/float, got {type(val).__name__}"
+    return float(val)
+
+
+def _parse_required_int(val: object) -> int:
+    """Parse a required integer field. Raises ValueError on failure.
+
+    Rejects bool values explicitly.
+    """
+    if isinstance(val, bool):
+        raise ValueError(f"value is bool ({val!r}), not a valid integer")
+    if not isinstance(val, int):
+        raise ValueError(f"value has unexpected type {type(val).__name__} ({val!r})")
+    if val < 0:
+        raise ValueError(f"value is negative ({val})")
+    return val
+
+
+def _parse_required_non_empty_string(val: object) -> str:
+    """Parse a required non-empty string. Raises ValueError on failure."""
+    if val is None:
+        raise ValueError("value is None")
+    if isinstance(val, str):
+        stripped = val.strip()
+        if not stripped:
+            raise ValueError("value is empty or whitespace-only")
+        return stripped
+    raise ValueError(f"value is not a string ({type(val).__name__}): {val!r}")
+
+
+def _parse_optional_non_empty_string(val: object) -> str | None:
+    """Parse an optional non-empty string. Returns None if None or empty."""
+    if val is None:
+        return None
+    if isinstance(val, str):
+        stripped = val.strip()
+        return stripped if stripped else None
+    return None
+
+
+def _parse_utc_datetime_string(val: object) -> str | None:
+    """Parse and validate a UTC datetime string. Returns normalized ISO string or None.
+
+    Returns None when val is None.
+    Raises ValueError for malformed, naive, or non-UTC strings.
+    """
+    if val is None:
+        return None
+    if not isinstance(val, str) or not val.strip():
+        raise ValueError(f"must be a non-empty string, got {type(val).__name__}")
+    try:
+        dt = datetime.fromisoformat(val.strip())
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"could not be parsed: {exc}") from exc
+    if dt.tzinfo is None:
+        raise ValueError(f"naive datetime (no timezone): {val}")
+    if dt.tzinfo != UTC:
+        dt_utc = dt.astimezone(UTC)
+        return dt_utc.isoformat()
+    return val.strip()
+
+
+def _parse_str(val: object) -> str:
+    """Convert a DB value to str. Returns '' for None."""
+    if val is None:
+        return ""
+    return str(val)
+
+
+# ---------------------------------------------------------------------------
 # Quality gates
 # ---------------------------------------------------------------------------
 
 
 def _check_quality(
-    row: dict[str, Any],
+    row: sqlite3.Row,
     request: EvidencePipelineRequest,
-    seen_ids: dict[str, dict[str, Any]],
+    seen_records: dict[str, str],  # evidence_id -> canonical_serialize
 ) -> EvidenceQualityVerdict:
     """Run all quality gates on a single row candidate.
 
     Returns ACCEPTED, REJECTED, or DEDUPLICATED with typed reasons.
+    No Any types used — row is accessed via typed parsing functions.
     """
+    # Extract and validate dimension fields (fail-fast on malformed rows)
+    try:
+        source_id = _parse_required_non_empty_string(row["source_id"])
+    except ValueError as exc:
+        return _reject(None, RejectionReason.MALFORMED_REQUEST, f"source_id: {exc}")
+
+    strategy_or_model_id = (
+        str(row["strategy_or_model_id"])
+        if row["strategy_or_model_id"] is not None
+        else None
+    )
+
+    try:
+        pair = _parse_required_non_empty_string(row["pair"])
+        timeframe = _parse_required_non_empty_string(row["timeframe"])
+        regime = _parse_required_non_empty_string(row["regime"])
+        confidence_bucket = _parse_required_non_empty_string(row["confidence_bucket"])
+    except ValueError as exc:
+        return _reject(None, RejectionReason.MALFORMED_REQUEST, str(exc))
+
     evidence_id = _make_evidence_id(
-        str(row.get("source_id", "")),
-        str(row.get("strategy_or_model_id")) if row.get("strategy_or_model_id") else None,
-        str(row.get("pair", "")),
-        str(row.get("timeframe", "")),
-        str(row.get("regime", "")),
-        str(row.get("confidence_bucket", "")),
+        source_id,
+        strategy_or_model_id,
+        pair,
+        timeframe,
+        regime,
+        confidence_bucket,
     )
 
     # --- Gate: Known regime ---
-    regime = str(row.get("regime", ""))
     if regime not in KNOWN_REGIMES:
-        return EvidenceQualityVerdict(
-            verdict=QualityVerdict.REJECTED,
-            record=None,
-            rejection=EvidenceRejection(
-                evidence_id=evidence_id,
-                reason=RejectionReason.UNKNOWN_REGIME,
-                detail=f"Unknown regime: {regime!r}",
-            ),
+        return _reject(
+            evidence_id,
+            RejectionReason.UNKNOWN_REGIME,
+            f"Unknown regime: {regime!r}",
         )
 
     # --- Gate: Known confidence bucket ---
-    bucket = str(row.get("confidence_bucket", ""))
-    if bucket not in KNOWN_CONFIDENCE_BUCKETS:
-        return EvidenceQualityVerdict(
-            verdict=QualityVerdict.REJECTED,
-            record=None,
-            rejection=EvidenceRejection(
-                evidence_id=evidence_id,
-                reason=RejectionReason.UNKNOWN_CONFIDENCE_BUCKET,
-                detail=f"Unknown confidence bucket: {bucket!r}",
-            ),
+    if confidence_bucket not in KNOWN_CONFIDENCE_BUCKETS:
+        return _reject(
+            evidence_id,
+            RejectionReason.UNKNOWN_CONFIDENCE_BUCKET,
+            f"Unknown confidence bucket: {confidence_bucket!r}",
         )
 
     # --- Gate: Minimum unique trade count ---
-    trade_count = int(row.get("unique_trade_count", 0))
+    try:
+        trade_count = _parse_required_int(row["unique_trade_count"])
+    except ValueError as exc:
+        return _reject(evidence_id, RejectionReason.SPARSE_DATA, str(exc))
+
     if trade_count < request.minimum_unique_trade_count:
-        return EvidenceQualityVerdict(
-            verdict=QualityVerdict.REJECTED,
-            record=None,
-            rejection=EvidenceRejection(
-                evidence_id=evidence_id,
-                reason=RejectionReason.SPARSE_DATA,
-                detail=f"Trade count {trade_count} < minimum {request.minimum_unique_trade_count}",
-            ),
+        return _reject(
+            evidence_id,
+            RejectionReason.SPARSE_DATA,
+            f"Trade count {trade_count} < minimum {request.minimum_unique_trade_count}",
         )
 
     # --- Gate: Maximum evidence age ---
     if request.maximum_evidence_age_days is not None:
-        closed_at_str = row.get("evidence_max_closed_at")
-        if closed_at_str:
-            try:
-                closed_at = datetime.fromisoformat(str(closed_at_str))
-                age_days = (request.as_of - closed_at).total_seconds() / 86400.0
-                if age_days > request.maximum_evidence_age_days:
-                    return EvidenceQualityVerdict(
-                        verdict=QualityVerdict.REJECTED,
-                        record=None,
-                        rejection=EvidenceRejection(
-                            evidence_id=evidence_id,
-                            reason=RejectionReason.STALE_EVIDENCE,
-                            detail=f"Evidence age {age_days:.1f}d > max {request.maximum_evidence_age_days}d",
-                        ),
-                    )
-            except (ValueError, TypeError):
-                pass
+        closed_at_raw = row["evidence_max_closed_at"]
+        if closed_at_raw is None:
+            return _reject(
+                evidence_id,
+                RejectionReason.STALE_EVIDENCE,
+                "Missing evidence_max_closed_at — cannot validate age",
+            )
+        if isinstance(closed_at_raw, str) and not closed_at_raw.strip():
+            return _reject(
+                evidence_id,
+                RejectionReason.STALE_EVIDENCE,
+                "Empty evidence_max_closed_at — cannot validate age",
+            )
+        try:
+            closed_at_str = _parse_utc_datetime_string(closed_at_raw)
+        except ValueError as exc:
+            return _reject(evidence_id, RejectionReason.STALE_EVIDENCE, str(exc))
+
+        if closed_at_str is not None:
+            closed_dt = datetime.fromisoformat(closed_at_str)
+            age_days = (request.as_of - closed_dt).total_seconds() / 86400.0
+            if age_days < 0:
+                return _reject(
+                    evidence_id,
+                    RejectionReason.STALE_EVIDENCE,
+                    f"Evidence timestamp {closed_at_str} is later than as_of",
+                )
+            if age_days > request.maximum_evidence_age_days:
+                return _reject(
+                    evidence_id,
+                    RejectionReason.STALE_EVIDENCE,
+                    f"Evidence age {age_days:.1f}d > max {request.maximum_evidence_age_days}d",
+                )
 
     # --- Gate: Finite numeric metrics ---
-    numeric_fields = [
+    numeric_fields: list[tuple[str, str]] = [
         ("win_rate", "win_rate"),
         ("expectancy", "expectancy"),
         ("average_raw_return", "average_raw_return"),
@@ -279,39 +538,88 @@ def _check_quality(
         ("cumulative_weighted_return", "cumulative_weighted_return"),
         ("drawdown_proxy", "drawdown_proxy"),
     ]
+    parsed_numerics: dict[str, float] = {}
     for display_name, field_name in numeric_fields:
-        val = row.get(field_name)
+        val = row[field_name]
         if val is not None:
             try:
-                fval = float(val)
-                if fval != fval:  # NaN check
-                    return EvidenceQualityVerdict(
-                        verdict=QualityVerdict.REJECTED,
-                        record=None,
-                        rejection=EvidenceRejection(
-                            evidence_id=evidence_id,
-                            reason=RejectionReason.INVALID_NUMERICS,
-                            detail=f"{display_name} is NaN",
-                        ),
-                    )
-                if fval == float("inf") or fval == float("-inf"):
-                    return EvidenceQualityVerdict(
-                        verdict=QualityVerdict.REJECTED,
-                        record=None,
-                        rejection=EvidenceRejection(
-                            evidence_id=evidence_id,
-                            reason=RejectionReason.INVALID_NUMERICS,
-                            detail=f"{display_name} is infinite",
-                        ),
-                    )
-            except (ValueError, TypeError):
-                pass
+                fval = _parse_required_float(val)
+                parsed_numerics[field_name] = fval
+            except ValueError as exc:
+                return _reject(evidence_id, RejectionReason.INVALID_NUMERICS, f"{display_name}: {exc}")
+
+    # --- Gate: Win rate range ---
+    wr_val = row["win_rate"]
+    if wr_val is not None:
+        try:
+            win_rate = _parse_required_float(wr_val)
+        except ValueError as exc:
+            return _reject(evidence_id, RejectionReason.INVALID_NUMERICS, f"win_rate: {exc}")
+        if win_rate < 0.0 or win_rate > 1.0:
+            return _reject(
+                evidence_id,
+                RejectionReason.INVALID_NUMERICS,
+                f"win_rate {win_rate} outside expected [0.0, 1.0] range",
+            )
+    else:
+        win_rate = 0.0
+
+    # --- Gate: Confidence value ranges ---
+    for conf_field in ("average_source_confidence", "average_regime_confidence"):
+        conf_val = row[conf_field]
+        if conf_val is not None:
+            try:
+                fconf = _parse_required_float(conf_val)
+            except ValueError as exc:
+                return _reject(evidence_id, RejectionReason.INVALID_CONFIDENCE, f"{conf_field}: {exc}")
+            if fconf < CONFIDENCE_MIN or fconf > CONFIDENCE_MAX:
+                return _reject(
+                    evidence_id,
+                    RejectionReason.INVALID_CONFIDENCE,
+                    f"{conf_field} value {fconf} outside [{CONFIDENCE_MIN}, {CONFIDENCE_MAX}]",
+                )
+
+    # --- Gate: Count invariants ---
+    try:
+        win_count = _parse_required_int(row["win_count"])
+        loss_count = _parse_required_int(row["loss_count"])
+        breakeven_count = _parse_required_int(row["breakeven_count"])
+        source_contrib_count = _parse_required_int(row["source_contribution_count"])
+    except ValueError as exc:
+        return _reject(evidence_id, RejectionReason.INVALID_COUNTS, str(exc))
+
+    total_outcome = win_count + loss_count + breakeven_count
+    if total_outcome != trade_count:
+        return _reject(
+            evidence_id,
+            RejectionReason.INVALID_COUNTS,
+            f"win_count ({win_count}) + loss_count ({loss_count}) + breakeven_count "
+            f"({breakeven_count}) = {total_outcome} != unique_trade_count ({trade_count})",
+        )
+    if source_contrib_count < 0:
+        return _reject(
+            evidence_id,
+            RejectionReason.INVALID_COUNTS,
+            f"source_contribution_count is negative ({source_contrib_count})",
+        )
 
     # --- Gate: Duplicate detection ---
-    if evidence_id in seen_ids:
-        existing = seen_ids[evidence_id]
-        # Compare content — if identical, deduplicate silently
-        if _rows_equal(row, existing):
+    record = _build_record(
+        row, evidence_id, source_id, strategy_or_model_id,
+        pair, timeframe, regime, confidence_bucket,
+        trade_count, win_count, loss_count, breakeven_count,
+        source_contrib_count, win_rate, parsed_numerics,
+    )
+    if record is None:
+        return _reject(
+            evidence_id, RejectionReason.MALFORMED_REQUEST,
+            "Failed to build evidence record from row data",
+        )
+
+    if evidence_id in seen_records:
+        candidate_serialized = record.canonical_serialize()
+        existing_serialized = seen_records[evidence_id]
+        if candidate_serialized == existing_serialized:
             return EvidenceQualityVerdict(
                 verdict=QualityVerdict.DEDUPLICATED,
                 record=None,
@@ -321,7 +629,6 @@ def _check_quality(
                     detail="Duplicate with identical content — deduplicated",
                 ),
             )
-        # If different, hard conflict
         return EvidenceQualityVerdict(
             verdict=QualityVerdict.REJECTED,
             record=None,
@@ -332,36 +639,7 @@ def _check_quality(
             ),
         )
 
-    seen_ids[evidence_id] = row
-
-    # --- Build accepted record ---
-    record = ProposalEvidenceRecord(
-        evidence_id=evidence_id,
-        source_id=str(row.get("source_id", "")),
-        strategy_or_model_id=str(row["strategy_or_model_id"]) if row.get("strategy_or_model_id") else None,
-        pair=str(row.get("pair", "")),
-        timeframe=str(row.get("timeframe", "")),
-        regime=regime,
-        confidence_bucket=bucket,
-        unique_trade_count=trade_count,
-        source_contribution_count=int(row.get("source_contribution_count", 0)),
-        win_count=int(row.get("win_count", 0)),
-        loss_count=int(row.get("loss_count", 0)),
-        breakeven_count=int(row.get("breakeven_count", 0)),
-        win_rate=_safe_float(row.get("win_rate", 0.0)),
-        expectancy=_safe_float(row.get("expectancy", 0.0)),
-        average_raw_return=_safe_float(row.get("average_raw_return", 0.0)),
-        average_weighted_return=_safe_float(row.get("average_weighted_return", 0.0)),
-        cumulative_weighted_return=_safe_float(row.get("cumulative_weighted_return", 0.0)),
-        drawdown_proxy=_safe_float(row.get("drawdown_proxy", 0.0)),
-        average_source_confidence=_safe_float_opt(row.get("average_source_confidence")),
-        average_regime_confidence=_safe_float_opt(row.get("average_regime_confidence")),
-        evidence_max_closed_at=str(row["evidence_max_closed_at"]) if row.get("evidence_max_closed_at") else None,
-        input_fingerprint=str(row.get("input_fingerprint", "")),
-        cache_schema_version=str(row.get("cache_schema_version")) if row.get("cache_schema_version") else None,
-        fact_schema_version=str(row.get("fact_schema_version")) if row.get("fact_schema_version") else None,
-        source_fingerprint=str(row.get("source_fingerprint")) if row.get("source_fingerprint") else None,
-    )
+    seen_records[evidence_id] = record.canonical_serialize()
 
     return EvidenceQualityVerdict(
         verdict=QualityVerdict.ACCEPTED,
@@ -370,29 +648,79 @@ def _check_quality(
     )
 
 
-def _rows_equal(a: dict[str, Any], b: dict[str, Any]) -> bool:
-    """Compare two row dicts for content equality."""
-    # Compare all keys present in either dict
-    all_keys = set(a.keys()) | set(b.keys())
-    return all(a.get(key) == b.get(key) for key in all_keys)
+def _reject(
+    evidence_id: str | None,
+    reason: RejectionReason,
+    detail: str,
+) -> EvidenceQualityVerdict:
+    """Helper to create a REJECTED verdict."""
+    return EvidenceQualityVerdict(
+        verdict=QualityVerdict.REJECTED,
+        record=None,
+        rejection=EvidenceRejection(
+            evidence_id=evidence_id,
+            reason=reason,
+            detail=detail,
+        ),
+    )
 
 
-def _safe_float(val: object) -> float:
-    """Convert a value to float, defaulting to 0.0 on failure."""
-    try:
-        return float(val)  # type: ignore[arg-type]
-    except (ValueError, TypeError):
-        return 0.0
-
-
-def _safe_float_opt(val: object) -> float | None:
-    """Convert a value to float or None."""
-    if val is None:
+def _build_record(
+    row: sqlite3.Row,
+    evidence_id: str,
+    source_id: str,
+    strategy_or_model_id: str | None,
+    pair: str,
+    timeframe: str,
+    regime: str,
+    confidence_bucket: str,
+    trade_count: int,
+    win_count: int,
+    loss_count: int,
+    breakeven_count: int,
+    source_contrib_count: int,
+    win_rate: float,
+    parsed_numerics: dict[str, float],
+) -> ProposalEvidenceRecord | None:
+    """Build a ProposalEvidenceRecord from row data. Returns None on parse failure."""
+    expectancy = parsed_numerics.get("expectancy")
+    avg_raw = parsed_numerics.get("average_raw_return")
+    avg_weighted = parsed_numerics.get("average_weighted_return")
+    cum_weighted = parsed_numerics.get("cumulative_weighted_return")
+    drawdown = parsed_numerics.get("drawdown_proxy")
+    if any(v is None for v in [expectancy, avg_raw, avg_weighted, cum_weighted, drawdown]):
         return None
-    try:
-        return float(val)  # type: ignore[arg-type]
-    except (ValueError, TypeError):
-        return None
+
+    avg_source_conf = _parse_optional_float(row["average_source_confidence"])
+    avg_regime_conf = _parse_optional_float(row["average_regime_confidence"])
+
+    return ProposalEvidenceRecord(
+        evidence_id=evidence_id,
+        source_id=source_id,
+        strategy_or_model_id=strategy_or_model_id,
+        pair=pair,
+        timeframe=timeframe,
+        regime=regime,
+        confidence_bucket=confidence_bucket,
+        unique_trade_count=trade_count,
+        source_contribution_count=source_contrib_count,
+        win_count=win_count,
+        loss_count=loss_count,
+        breakeven_count=breakeven_count,
+        win_rate=win_rate,
+        expectancy=expectancy,
+        average_raw_return=avg_raw,
+        average_weighted_return=avg_weighted,
+        cumulative_weighted_return=cum_weighted,
+        drawdown_proxy=drawdown,
+        average_source_confidence=avg_source_conf,
+        average_regime_confidence=avg_regime_conf,
+        evidence_max_closed_at=_parse_optional_non_empty_string(row["evidence_max_closed_at"]),
+        input_fingerprint=_parse_str(row["input_fingerprint"]),
+        cache_schema_version=_parse_optional_non_empty_string(row["cache_schema_version"]),
+        fact_schema_version=_parse_optional_non_empty_string(row["fact_schema_version"]),
+        source_fingerprint=_parse_optional_non_empty_string(row["source_fingerprint"]),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +819,7 @@ def _validate_cache(
     # Schema version and metadata
     try:
         row = conn.execute(
-            "SELECT cache_schema_version, source_fingerprint "
+            "SELECT cache_schema_version, fact_schema_version, source_fingerprint "
             "FROM cache_metadata WHERE id = 1 LIMIT 1"
         ).fetchone()
         if row is None:
@@ -503,7 +831,7 @@ def _validate_cache(
                     f"Unsupported cache schema version: {ver!r}. "
                     f"Accepted: {sorted(request.accepted_schema_versions)}"
                 )
-            fp = str(row[1]) if row[1] else ""
+            fp = str(row[2]) if row[2] else ""
             if not fp:
                 errors.append("Cache metadata missing source_fingerprint")
     except sqlite3.DatabaseError as exc:
@@ -517,7 +845,9 @@ def _validate_cache(
 # ---------------------------------------------------------------------------
 
 
-def run_evidence_pipeline(request: EvidencePipelineRequest) -> EvidencePipelineResult:
+def run_evidence_pipeline(
+    request: EvidencePipelineRequest,
+) -> EvidencePipelineResult:
     """Run the evidence input pipeline.
 
     This is the primary entry point. It:
@@ -540,7 +870,7 @@ def run_evidence_pipeline(request: EvidencePipelineRequest) -> EvidencePipelineR
     accepted: list[ProposalEvidenceRecord] = []
     rejected: list[EvidenceRejection] = []
     deduplicated_count = 0
-    seen_ids: dict[str, dict[str, Any]] = {}
+    seen_records: dict[str, str] = {}  # evidence_id -> canonical_serialize
 
     db_path = request.cache_db_path.resolve()
 
@@ -562,9 +892,6 @@ def run_evidence_pipeline(request: EvidencePipelineRequest) -> EvidencePipelineR
         validation_errors = _validate_cache(conn, request)
         if validation_errors:
             errors.extend(validation_errors)
-            # Don't return early — continue to collect evidence even if
-            # validation has warnings. Hard failures (integrity, FK) are
-            # treated as errors that prevent acceptance.
             has_hard_failure = any(
                 "integrity" in e.lower() or "foreign key" in e.lower()
                 for e in validation_errors
@@ -579,7 +906,7 @@ def run_evidence_pipeline(request: EvidencePipelineRequest) -> EvidencePipelineR
         cursor = conn.execute(query, params)
 
         for row in cursor:
-            verdict = _check_quality(dict(row), request, seen_ids)
+            verdict = _check_quality(row, request, seen_records)
             if verdict.verdict == QualityVerdict.ACCEPTED and verdict.record is not None:
                 accepted.append(verdict.record)
             elif verdict.verdict == QualityVerdict.REJECTED and verdict.rejection is not None:
@@ -603,14 +930,31 @@ def _make_result(
     errors: list[str],
 ) -> EvidencePipelineResult:
     """Build the final EvidencePipelineResult with a deterministic fingerprint."""
-    # Build a deterministic pipeline fingerprint from the result
+    # Build a deterministic pipeline fingerprint from full result content
+    accepted_serialized = [r.canonical_serialize() for r in accepted]
+    rejected_serialized = [
+        {
+            "evidence_id": r.evidence_id,
+            "reason": r.reason.value,
+            "detail": r.detail,
+        }
+        for r in rejected
+    ]
+
     fp_input = json.dumps(
         {
-            "accepted_count": len(accepted),
-            "rejected_count": len(rejected),
+            "accepted": accepted_serialized,
+            "rejected": rejected_serialized,
             "deduplicated_count": deduplicated_count,
             "error_count": len(errors),
+            "errors": sorted(errors),
             "as_of": request.as_of.isoformat(),
+            "period_start": request.period_start.isoformat() if request.period_start else None,
+            "period_end": request.period_end.isoformat() if request.period_end else None,
+            "source_filter": request.source_filter,
+            "regime_filter": request.regime_filter,
+            "minimum_unique_trade_count": request.minimum_unique_trade_count,
+            "maximum_evidence_age_days": request.maximum_evidence_age_days,
         },
         sort_keys=True,
     )
