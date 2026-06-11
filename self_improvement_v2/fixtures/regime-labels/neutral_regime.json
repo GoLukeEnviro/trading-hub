@@ -1,0 +1,12 @@
+{
+  "timestamp_utc": "2026-06-10T12:00:00Z",
+  "symbol_or_pair": "SOL/USDT:USDT",
+  "timeframe": "4h",
+  "regime_label": "NEUTRAL",
+  "confidence": 0.55,
+  "source": "rainbow:ta",
+  "metadata": {
+    "indicators": {"rsi_14": 50.0, "macd": "flat", "trend": "ranging"},
+    "notes": "No strong directional conviction — market is ranging"
+  }
+}

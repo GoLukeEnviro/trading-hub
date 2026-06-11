@@ -5,6 +5,12 @@ Verifies:
 - required fields present
 - expected regimes exist
 - no secrets
+- both old (lowercase) and new (uppercase #55 canonical) fixtures are valid
+
+NOTE: The old fixture vocabulary (bullish, bearish, sideways, volatile, unknown)
+is DEPRECATED. New code should use the canonical #55 uppercase labels
+(BULLISH, BEARISH, NEUTRAL, UNKNOWN). See:
+  docs/specs/si-v2-regime-detector-schema.md (Issue #55)
 """
 
 from __future__ import annotations
@@ -19,13 +25,32 @@ _FIXTURE_DIR = (
     / "regime-labels"
 )
 
-_EXPECTED_FIXTURES: list[str] = [
+# All expected fixture files (legacy + canonical)
+_ALL_EXPECTED: list[str] = [
+    # Canonical #55 format (uppercase)
     "bullish_regime.json",
     "bearish_regime.json",
+    "neutral_regime.json",
+    "unknown_regime.json",
+    # Legacy lowercase (backward compat)
+    "legacy_bullish_regime.json",
+    "legacy_bearish_regime.json",
+    "legacy_unknown_regime.json",
+    # Original v1 fixtures (backward compat)
     "sideways_regime.json",
     "volatile_regime.json",
-    "unknown_regime.json",
 ]
+
+_OLD_LABELS: set[str] = {
+    "bullish", "bearish", "sideways",
+    "volatile", "unknown",
+}
+
+_CANONICAL_LABELS: set[str] = {
+    "BULLISH", "BEARISH", "NEUTRAL", "UNKNOWN",
+}
+
+_VALID_LABELS: set[str] = _OLD_LABELS | _CANONICAL_LABELS
 
 
 class TestFixtureParsing:
@@ -33,7 +58,7 @@ class TestFixtureParsing:
         assert _FIXTURE_DIR.exists()
 
     def test_all_expected_fixtures_exist(self) -> None:
-        for name in _EXPECTED_FIXTURES:
+        for name in _ALL_EXPECTED:
             assert (_FIXTURE_DIR / name).exists(), (
                 f"Missing fixture: {name}"
             )
@@ -46,7 +71,7 @@ class TestFixtureParsing:
 
     def test_no_extra_json_files(self) -> None:
         actual = {f.name for f in _FIXTURE_DIR.glob("*.json")}
-        expected = set(_EXPECTED_FIXTURES)
+        expected = set(_ALL_EXPECTED)
         assert actual == expected, (
             f"Unexpected files: {actual - expected}"
         )
@@ -74,31 +99,40 @@ class TestRequiredFields:
                     f"{f.name} missing required field: {field}"
                 )
 
-    def test_all_fixtures_have_regime_label(self) -> None:
+    def test_all_fixtures_have_valid_regime_label(self) -> None:
         for f in _FIXTURE_DIR.glob("*.json"):
             with open(f) as fp:
                 data = dict(json.load(fp))
             label = data.get("regime_label", "")
-            assert label in (
-                "bullish", "bearish", "sideways",
-                "volatile", "unknown"
-            ), f"{f.name} has unexpected label: {label}"
+            assert label in _VALID_LABELS, (
+                f"{f.name} has unexpected label: {label!r}"
+            )
 
 
 class TestRegimeDistribution:
-    def test_all_five_regimes_present(self) -> None:
+    def test_old_labels_present(self) -> None:
+        """Old lowercase fixtures still exist for backward compat."""
         labels = set()
         for f in _FIXTURE_DIR.glob("*.json"):
             with open(f) as fp:
                 data = dict(json.load(fp))
             labels.add(data.get("regime_label", ""))
-        expected = {
-            "bullish", "bearish", "sideways",
-            "volatile", "unknown"
-        }
-        assert labels == expected, (
-            f"Missing regimes: {expected - labels}"
-        )
+        for old_label in _OLD_LABELS:
+            assert old_label in labels, (
+                f"Old label {old_label!r} missing from fixtures"
+            )
+
+    def test_canonical_labels_present(self) -> None:
+        """New uppercase #55 canonical labels are present."""
+        labels = set()
+        for f in _FIXTURE_DIR.glob("*.json"):
+            with open(f) as fp:
+                data = dict(json.load(fp))
+            labels.add(data.get("regime_label", ""))
+        for canonical in _CANONICAL_LABELS:
+            assert canonical in labels, (
+                f"Canonical label {canonical!r} missing from fixtures"
+            )
 
 
 class TestNoCredentials:
