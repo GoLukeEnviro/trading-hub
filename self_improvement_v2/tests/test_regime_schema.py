@@ -102,7 +102,7 @@ class TestRequiredSections:
             if section not in content:
                 missing.append(section)
         assert len(missing) == 0, (
-            f"Missing required sections:\n" + "\n".join(missing)
+            "Missing required sections:\n" + "\n".join(missing)
         )
 
 
@@ -119,7 +119,7 @@ class TestRequiredLabels:
             if f"`{label}`" not in content:
                 missing.append(label)
         assert len(missing) == 0, (
-            f"Missing canonical regime labels:\n" + "\n".join(missing)
+            "Missing canonical regime labels:\n" + "\n".join(missing)
         )
 
 
@@ -135,7 +135,7 @@ class TestRequiredSchemaFields:
             if f"`{field}`" not in content:
                 missing.append(field)
         assert len(missing) == 0, (
-            f"Missing schema fields:\n" + "\n".join(missing)
+            "Missing schema fields:\n" + "\n".join(missing)
         )
 
 
@@ -159,7 +159,7 @@ class TestBackwardCompatibility:
             if f"`{label}`" not in content:
                 missing.append(label)
         assert len(missing) == 0, (
-            f"Missing v1 label mapping entries:\n" + "\n".join(missing)
+            "Missing v1 label mapping entries:\n" + "\n".join(missing)
         )
 
 
