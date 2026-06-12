@@ -17,9 +17,7 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
-import pytest
+from datetime import UTC, datetime, timedelta, timezone
 
 # ---------------------------------------------------------------------------
 # Canonical candle schema
@@ -104,9 +102,8 @@ def validate_candle(candle: dict) -> list[str]:
     # Price fields: non-negative
     for field in ("open", "high", "low", "close"):
         val = candle.get(field)
-        if isinstance(val, (int, float)):
-            if float(val) < 0:
-                errors.append(f"{field} is negative ({float(val)})")
+        if isinstance(val, (int, float)) and float(val) < 0:
+            errors.append(f"{field} is negative ({float(val)})")
 
     # Consistency: high >= max(open, close)
     try:
@@ -165,9 +162,8 @@ def validate_candle_sequence(candles: list[dict]) -> list[str]:
             pair_ts_set.add(ts_iso)
 
             # Ordering check (within same pair)
-            if prev_pair is not None and prev_pair == pair and prev_ts is not None:
-                if ts < prev_ts:
-                    errors.append(
+            if prev_pair is not None and prev_pair == pair and prev_ts is not None and ts < prev_ts:
+                errors.append(
                         f"Candle {i} ({pair} @ {ts_iso}): "
                         f"timestamp before previous ({prev_ts.isoformat()})"
                     )
@@ -269,8 +265,6 @@ class TestCandleSchema:
 
     def test_non_utc_timestamp_rejected(self) -> None:
         """Non-UTC timestamp must be rejected."""
-        from datetime import timezone, timedelta
-
         candle = _make_valid_candle(
             timestamp=datetime(2026, 6, 1, 0, 0, tzinfo=timezone(timedelta(hours=2)))
         )
