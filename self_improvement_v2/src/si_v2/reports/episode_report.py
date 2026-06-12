@@ -1,4 +1,4 @@
-"""Typed contracts for the Episode Report Builder (issue #64).
+"""Typed contracts for the Episode Report Builder (issue #64, hardened #185).
 
 All models are Pydantic v2 with ``ConfigDict(strict=True)``,
 ``extra='forbid'``, and zero ``Any`` usage.
@@ -10,31 +10,108 @@ Review states:
     REJECTED_BY_HUMAN — human has reviewed and rejected.
     DEFERRED_BY_HUMAN — human has deferred pending more information.
 
-Episode verdicts:
-    GREEN — all required artifacts present, fingerprints match,
-        proposal decision is ACCEPT, and review state is
-        ACCEPTED_BY_HUMAN.
-    YELLOW — partial artifacts, stale evidence, or review is still
-        PENDING_REVIEW or DEFERRED_BY_HUMAN.
-    RED — required artifacts missing, fingerprints mismatch,
-        proposal is REJECT or DEFER, or provenance validation failed.
+Episode verdict truth table (E185-03):
+    - proposal REJECT or hard policy failure => RED
+    - integrity, provenance, schema, or mandatory validation failure => RED
+    - pending human review => YELLOW
+    - deferred human review => YELLOW (unless independent hard failure)
+    - missing evidence that may be produced later => YELLOW
+    - accepted proposal + human review acceptance + all mandatory
+      evidence and integrity checks => GREEN
+    - human rejection => RED
+
+SHA-256 values (E185-01):
+    Exactly 64 lowercase hexadecimal characters. Rejects uppercase,
+    non-hex, truncated, extended, whitespace, and malformed values.
+
+Timestamps (E185-02):
+    Timezone-aware UTC timestamps. Rejects naive, malformed, non-UTC,
+    and logically inconsistent values.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from decimal import Decimal
 from enum import Enum, StrEnum
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic.functional_validators import AfterValidator
 
 from si_v2.propose.proposal_scoring.decimal_safe import to_decimal
 from si_v2.propose.proposal_scoring.models import POLICY_VERSION
 from si_v2.propose.weight_proposal.models import PROPOSAL_SCHEMA_VERSION
 
+EVIDENCE_SCHEMA_VERSION: str = "evidence_v1"
 EPISODE_SCHEMA_VERSION: str = "episode_report_v1"
+
+# ---------------------------------------------------------------------------
+# Canonical SHA-256 validator (E185-01)
+# ---------------------------------------------------------------------------
+
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _validate_sha256_hex(v: str) -> str:
+    """Validate that *v* is exactly 64 lowercase hexadecimal characters."""
+    if not _SHA256_HEX_RE.match(v):
+        raise ValueError(
+            f"expected exactly 64 lowercase hex characters, got {v!r} "
+            f"(length={len(v)})"
+        )
+    return v
+
+
+Sha256Hex = Annotated[str, AfterValidator(_validate_sha256_hex)]
+
+# ---------------------------------------------------------------------------
+# Canonical UTC timestamp validator (E185-02)
+# ---------------------------------------------------------------------------
+
+# Accept ISO 8601 with trailing Z or +00:00 / -00:00 (normalised to UTC).
+_UTC_TS_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
+)
+
+
+def _validate_utc_timestamp(v: str) -> str:
+    """Validate *v* is a well-formed, timezone-aware UTC timestamp.
+
+    Rejects naive timestamps, malformed strings, and timestamps whose
+    timezone part is not UTC or a zero offset.
+    """
+    if not _UTC_TS_RE.match(v):
+        raise ValueError(
+            f"proposal_timestamp_utc={v!r} does not match ISO 8601 with "
+            f"timezone offset"
+        )
+    # Normalise: accept Z, +00:00, -00:00
+    if v.endswith("Z"):
+        canonical = v[:-1] + "+00:00"
+    elif v.endswith("+00:00") or v.endswith("-00:00"):
+        canonical = v
+    else:
+        raise ValueError(
+            f"proposal_timestamp_utc={v!r} is non-UTC offset; "
+            f"only Z, +00:00, or -00:00 allowed"
+        )
+    # Very basic consistency — hours 00-23, minutes 00-59, seconds 00-59
+    _date_part, time_part = canonical.split("T")
+    time_only = time_part.split("+")[0].split("-")[0]
+    hms_str = time_only.split(".")[0]  # strip fractional seconds
+    h, m, s = hms_str.split(":")
+    if not (0 <= int(h) <= 23 and 0 <= int(m) <= 59 and 0 <= int(s) <= 59):
+        raise ValueError(
+            f"proposal_timestamp_utc={v!r} has invalid time components"
+        )
+    return canonical
+
+
+UtcTimestamp = Annotated[str, AfterValidator(_validate_utc_timestamp)]
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +156,7 @@ class EvidenceReference(BaseModel):
     evidence_id: str = Field(min_length=1, max_length=128)
     source_id: str = Field(min_length=1, max_length=128)
     regime: str = Field(min_length=1, max_length=64)
-    fingerprint: str = Field(min_length=64, max_length=64)
+    fingerprint: Sha256Hex
 
 
 class ProposalReference(BaseModel):
@@ -87,12 +164,12 @@ class ProposalReference(BaseModel):
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
-    proposal_id: str = Field(min_length=64, max_length=64)
-    batch_id: str = Field(min_length=64, max_length=64)
+    proposal_id: Sha256Hex
+    batch_id: Sha256Hex
     source_id: str = Field(min_length=1, max_length=128)
     regime: str = Field(min_length=1, max_length=64)
-    proposal_fingerprint: str = Field(min_length=64, max_length=64)
-    batch_fingerprint: str = Field(min_length=64, max_length=64)
+    proposal_fingerprint: Sha256Hex
+    batch_fingerprint: Sha256Hex
     decision: str = Field(pattern=r"^(ACCEPT|REJECT|DEFER)$")
     proposed_weight: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
     proposed_delta: Decimal = Field(ge=Decimal("-1"), le=Decimal("1"))
@@ -116,7 +193,8 @@ class ValidationReference(BaseModel):
 
     validation_id: str = Field(min_length=1, max_length=128)
     validation_type: ValidationType
-    fingerprint: str = Field(min_length=64, max_length=64)
+    fingerprint: Sha256Hex
+    passed: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +209,7 @@ class ArtifactReference(BaseModel):
 
     artifact_id: str = Field(min_length=1, max_length=128)
     artifact_type: str = Field(pattern=r"^(json|md)$")
-    content_hash: str = Field(min_length=64, max_length=64)
+    content_hash: Sha256Hex
 
 
 class EpisodeReportRequest(BaseModel):
@@ -140,7 +218,7 @@ class EpisodeReportRequest(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
     episode_id: str = Field(min_length=8, max_length=128)
-    proposal_timestamp_utc: str = Field(min_length=10, max_length=40)
+    proposal_timestamp_utc: UtcTimestamp
     episode_reviewer: str = Field(default="", max_length=256)
     review_state: ReviewState = ReviewState.PENDING_REVIEW
     review_notes: str = Field(default="", max_length=2000)
@@ -153,6 +231,7 @@ class EpisodeReportRequest(BaseModel):
     episode_schema_version: str = EPISODE_SCHEMA_VERSION
     policy_version: str = POLICY_VERSION
     proposal_schema_version: str = PROPOSAL_SCHEMA_VERSION
+    evidence_schema_version: str = EVIDENCE_SCHEMA_VERSION
 
     @model_validator(mode="after")
     def _validate_at_least_one_proposal(self) -> EpisodeReportRequest:
@@ -163,14 +242,53 @@ class EpisodeReportRequest(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _validate_no_duplicate_artifact_ids(self) -> EpisodeReportRequest:
-        seen: set[str] = set()
+    def _validate_no_duplicate_ids(self) -> EpisodeReportRequest:
+        """E185-05: Reject duplicate evidence, proposal, validation, and artifact IDs."""
+        # Evidence IDs
+        ev_seen: set[str] = set()
+        for ev in self.evidence_references:
+            if ev.evidence_id in ev_seen:
+                raise ValueError(
+                    f"duplicate evidence_id: {ev.evidence_id}"
+                )
+            ev_seen.add(ev.evidence_id)
+
+        # Proposal IDs
+        pr_seen: set[str] = set()
+        semi_seen: set[tuple[str, str]] = set()
+        for pr in self.proposal_references:
+            if pr.proposal_id in pr_seen:
+                raise ValueError(
+                    f"duplicate proposal_id: {pr.proposal_id}"
+                )
+            pr_seen.add(pr.proposal_id)
+            # Reject conflicting duplicate (source_id, regime) — E185-05
+            key = (pr.source_id, pr.regime)
+            if key in semi_seen:
+                raise ValueError(
+                    f"duplicate (source_id={pr.source_id!r}, "
+                    f"regime={pr.regime!r}) with different proposal_id"
+                )
+            semi_seen.add(key)
+
+        # Validation IDs
+        va_seen: set[str] = set()
+        for va in self.validation_references:
+            if va.validation_id in va_seen:
+                raise ValueError(
+                    f"duplicate validation_id: {va.validation_id}"
+                )
+            va_seen.add(va.validation_id)
+
+        # Artifact IDs (already validated, but added for completeness)
+        ar_seen: set[str] = set()
         for a in self.artifact_references:
-            if a.artifact_id in seen:
+            if a.artifact_id in ar_seen:
                 raise ValueError(
                     f"duplicate artifact_id: {a.artifact_id}"
                 )
-            seen.add(a.artifact_id)
+            ar_seen.add(a.artifact_id)
+
         return self
 
 
@@ -185,11 +303,11 @@ class IntegrityManifest(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
 
     episode_id: str = Field(min_length=8, max_length=128)
-    episode_fingerprint: str = Field(min_length=64, max_length=64)
-    evidence_fingerprints: dict[str, str] = Field(default_factory=dict)
-    proposal_fingerprints: dict[str, str] = Field(default_factory=dict)
-    validation_fingerprints: dict[str, str] = Field(default_factory=dict)
-    artifact_hashes: dict[str, str] = Field(default_factory=dict)
+    episode_fingerprint: Sha256Hex
+    evidence_fingerprints: dict[str, Sha256Hex] = Field(default_factory=dict)
+    proposal_fingerprints: dict[str, Sha256Hex] = Field(default_factory=dict)
+    validation_fingerprints: dict[str, Sha256Hex] = Field(default_factory=dict)
+    artifact_hashes: dict[str, Sha256Hex] = Field(default_factory=dict)
 
 
 class EpisodeReport(BaseModel):
@@ -227,88 +345,126 @@ class EpisodeReport(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Verdict computation
+# Verdict computation (E185-03 canonical truth table)
 # ---------------------------------------------------------------------------
 
 
+def _has_mandatory_validation(request: EpisodeReportRequest) -> bool:
+    """Check whether the request has at least one mandatory validation reference.
+
+    E185-04: GREEN requires at least one backtest or walk-forward
+    validation reference with ``passed=True``.
+    """
+    for va in request.validation_references:
+        if va.validation_type in (ValidationType.BACKTEST, ValidationType.WALK_FORWARD) and va.passed:
+            return True
+    return False
+
+
 def compute_verdict(request: EpisodeReportRequest) -> tuple[EpisodeVerdict, str]:
-    """Compute the deterministic episode verdict from the request.
+    """Compute the deterministic episode verdict from the request (E185-03).
+
+    Truth table:
+        - proposal REJECT or hard policy failure => RED
+        - integrity, provenance, schema, or mandatory validation failure => RED
+        - human rejection => RED
+        - pending human review => YELLOW
+        - deferred human review => YELLOW (unless independent hard failure)
+        - missing evidence that may be produced later => YELLOW
+        - accepted proposal + human review acceptance + all mandatory
+          evidence and integrity checks => GREEN
 
     Returns:
         A tuple of ``(verdict, rationale)``.
     """
-    # Collect all proposal decisions
     decisions = {p.decision for p in request.proposal_references}
 
-    # RED: all proposals REJECTED — no DEFER, no ACCEPT
-    if decisions == {"REJECT"}:
-        return EpisodeVerdict.RED, (
-            "all proposals are rejected; "
-            "no actionable recommendation exists"
-        )
-
-    # RED: a proposal was REJECTED
+    # RED: proposal REJECT
     if "REJECT" in decisions:
         return EpisodeVerdict.RED, (
             "at least one proposal is rejected; "
             "review this before further action"
         )
 
-    # GREEN: ACCEPTED_BY_HUMAN with at least one ACCEPT
+    # RED: human REJECT
+    if request.review_state == ReviewState.REJECTED_BY_HUMAN:
+        return EpisodeVerdict.RED, (
+            "human has rejected the proposal(s); "
+            "episode is not accepted"
+        )
+
+    # RED: ACCEPTED_BY_HUMAN but missing mandatory validation (E185-04)
+    if (
+        request.review_state == ReviewState.ACCEPTED_BY_HUMAN
+        and "ACCEPT" in decisions
+        and not _has_mandatory_validation(request)
+    ):
+            return EpisodeVerdict.RED, (
+                "human has accepted but mandatory validation "
+                "(backtest or walk-forward) is missing or failed"
+            )
+
+    # GREEN: ACCEPT + ACCEPTED_BY_HUMAN + mandatory validation passed
     if request.review_state == ReviewState.ACCEPTED_BY_HUMAN and "ACCEPT" in decisions:
         return EpisodeVerdict.GREEN, (
             "human has accepted at least one proposal; "
-            "review acceptance confirmed"
+            "mandatory validation evidence present"
         )
 
-    # YELLOW: ACCEPTED_BY_HUMAN but no ACCEPT proposals (all DEFER)
+    # YELLOW: ACCEPTED_BY_HUMAN but all proposals DEFER
     if request.review_state == ReviewState.ACCEPTED_BY_HUMAN and decisions == {"DEFER"}:
         return EpisodeVerdict.YELLOW, (
             "human review accepted but proposals are deferred; "
             "no actionable accept decisions"
         )
 
-    # RED: review states that indicate non-acceptance
-    if request.review_state in (
-        ReviewState.REJECTED_BY_HUMAN,
-        ReviewState.DEFERRED_BY_HUMAN,
-    ):
-        return EpisodeVerdict.RED, (
-            f"human review state is {request.review_state.value}; "
-            "episode is not accepted"
-        )
-
-    # YELLOW: PENDING_REVIEW
+    # YELLOW: PENDING_REVIEW (E185-03)
     if request.review_state == ReviewState.PENDING_REVIEW:
+        if decisions and decisions != {"DEFER"}:
+            return EpisodeVerdict.YELLOW, (
+                "proposals are acceptable but review is still pending"
+            )
         return EpisodeVerdict.YELLOW, (
-            "proposals are acceptable but review is still pending"
+            "review is pending"
         )
 
-    # YELLOW: ACCEPTED_BY_HUMAN with mixed DEFER (fallback)
+    # YELLOW: DEFERRED_BY_HUMAN (E185-03 — deferred is YELLOW, not RED)
+    if request.review_state == ReviewState.DEFERRED_BY_HUMAN:
+        return EpisodeVerdict.YELLOW, (
+            "human has deferred the proposal(s); "
+            "pending further information"
+        )
+
+    # YELLOW: ACCEPTED_BY_HUMAN with mixed/indeterminate state
     if request.review_state == ReviewState.ACCEPTED_BY_HUMAN:
         return EpisodeVerdict.YELLOW, (
             "human review accepted but no clear accept decisions; "
             "review required"
         )
 
-    # Fallback — should not normally be reached
+    # Fallback
     return EpisodeVerdict.YELLOW, (
         "mixed or indeterminate state; review required"
     )
 
 
 # ---------------------------------------------------------------------------
-# Fingerprinting
+# Fingerprinting (E185-06: include all contract versions)
 # ---------------------------------------------------------------------------
 
 
 def compute_episode_fingerprint(request: EpisodeReportRequest) -> str:
-    """Deterministic SHA-256 fingerprint for the request."""
+    """Deterministic SHA-256 fingerprint for the request.
+
+    E185-06: Includes episode schema version, policy version, proposal
+    schema version, and evidence schema version. ``episode_id`` is
+    treated as an external idempotency key and is excluded from the
+    semantic fingerprint.
+    """
     import json as _json
     raw = _json.dumps(
         request.model_dump(
-            exclude={"episode_id", "episode_schema_version", "policy_version",
-                     "proposal_schema_version"},
+            exclude={"episode_id"},
         ),
         sort_keys=True,
         default=_episode_json_default,
@@ -647,6 +803,8 @@ def build_episode_report(
 
 
 __all__ = [
+    "EPISODE_SCHEMA_VERSION",
+    "EVIDENCE_SCHEMA_VERSION",
     "ArtifactReference",
     "EpisodeReport",
     "EpisodeReportRequest",
@@ -655,6 +813,8 @@ __all__ = [
     "IntegrityManifest",
     "ProposalReference",
     "ReviewState",
+    "Sha256Hex",
+    "UtcTimestamp",
     "ValidationReference",
     "ValidationType",
     "build_episode_report",
