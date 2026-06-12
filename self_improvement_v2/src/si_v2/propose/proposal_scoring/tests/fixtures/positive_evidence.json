@@ -1,0 +1,32 @@
+{
+  "evidence_id": "evi-positive-001",
+  "source_id": "rainbow:ta",
+  "regime": "bullish",
+  "evidence_schema_version": 1,
+  "unique_trade_count": 80,
+  "expectancy": "0.012",
+  "drawdown_proxy": "0.12",
+  "average_source_confidence": "0.82",
+  "average_regime_confidence": "0.75",
+  "evidence_age_days": "3",
+  "data_quality_verdict": "accepted",
+  "is_actionable": true,
+  "direction_hint": "increase",
+  "has_conflict": false,
+  "human_approval_available": true,
+  "backtest_metrics": {
+    "passed": true,
+    "total_trades": 120,
+    "profit_total_pct": "12.5",
+    "max_drawdown_pct": "0.08",
+    "win_rate_pct": "62.0",
+    "profit_factor": "1.85",
+    "sharpe": "1.4"
+  },
+  "walk_forward_metrics": {
+    "passed": true,
+    "stability_score": "0.78",
+    "out_of_sample_profit_total_pct": "0.06",
+    "reason": "stable"
+  }
+}

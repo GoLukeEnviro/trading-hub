@@ -1,0 +1,35 @@
+{
+  "policy_version": "scoring_policy_v1",
+  "minimum_sample_count": 30,
+  "maximum_evidence_age_days": "30",
+  "minimum_expectancy": "0.0",
+  "maximum_drawdown_proxy": "0.25",
+  "minimum_confidence": "0.30",
+  "minimum_backtest_thresholds": {
+    "minimum_profit_total_pct": "0.0",
+    "minimum_profit_factor": "1.0",
+    "maximum_drawdown_pct": "0.20",
+    "minimum_win_rate_pct": "0.0",
+    "minimum_total_trades": 10
+  },
+  "minimum_walk_forward_stability": {
+    "minimum_stability_score": "0.50",
+    "minimum_out_of_sample_profit_total_pct": "0.0"
+  },
+  "component_weights": {
+    "sample": "0.10",
+    "expectancy": "0.20",
+    "drawdown": "0.20",
+    "confidence": "0.10",
+    "recency": "0.05",
+    "backtest": "0.15",
+    "walk_forward": "0.15",
+    "quality": "0.05"
+  },
+  "accept_threshold": "0.65",
+  "defer_threshold": "0.40",
+  "maximum_proposal_delta": "0.10",
+  "require_backtest_for_promotion": true,
+  "require_walk_forward_for_promotion": true,
+  "accepted_evidence_schema_versions": [1]
+}

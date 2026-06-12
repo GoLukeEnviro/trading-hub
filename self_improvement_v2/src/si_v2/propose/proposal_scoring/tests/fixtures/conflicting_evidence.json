@@ -1,0 +1,32 @@
+{
+  "evidence_id": "evi-conflict-001",
+  "source_id": "rainbow:ta",
+  "regime": "bullish",
+  "evidence_schema_version": 1,
+  "unique_trade_count": 100,
+  "expectancy": "0.015",
+  "drawdown_proxy": "0.10",
+  "average_source_confidence": "0.85",
+  "average_regime_confidence": "0.80",
+  "evidence_age_days": "4",
+  "data_quality_verdict": "accepted",
+  "is_actionable": true,
+  "direction_hint": "increase",
+  "has_conflict": true,
+  "human_approval_available": true,
+  "backtest_metrics": {
+    "passed": true,
+    "total_trades": 150,
+    "profit_total_pct": "10.0",
+    "max_drawdown_pct": "0.10",
+    "win_rate_pct": "60.0",
+    "profit_factor": "1.6",
+    "sharpe": "1.2"
+  },
+  "walk_forward_metrics": {
+    "passed": true,
+    "stability_score": "0.75",
+    "out_of_sample_profit_total_pct": "0.05",
+    "reason": "stable"
+  }
+}
