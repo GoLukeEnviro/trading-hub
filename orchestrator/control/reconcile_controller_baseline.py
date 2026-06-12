@@ -166,10 +166,14 @@ def main() -> None:
 
 
 def _validate_sha(commit: str) -> None:
-    """Validate that *commit* is exactly 64 lowercase hex characters."""
+    """Validate that *commit* is exactly 40 or 64 lowercase hex characters."""
+    _SHA1_RE = __import__("re").compile(r"^[0-9a-f]{40}$")
     _SHA256_RE = __import__("re").compile(r"^[0-9a-f]{64}$")
-    if not _SHA256_RE.match(commit):
-        raise ValueError(f"Invalid commit SHA: {commit!r}")
+    if not (_SHA1_RE.match(commit) or _SHA256_RE.match(commit)):
+        raise ValueError(
+            f"Invalid commit SHA: {commit!r} "
+            f"(expected 40-char SHA-1 or 64-char SHA-256 hex)"
+        )
 
 
 def _commit_exists(commit: str, repo_root: Path) -> None:
