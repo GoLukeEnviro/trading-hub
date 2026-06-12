@@ -1,0 +1,32 @@
+{
+  "evidence_id": "evi-highdd-001",
+  "source_id": "rainbow:llm",
+  "regime": "bullish",
+  "evidence_schema_version": 1,
+  "unique_trade_count": 100,
+  "expectancy": "0.025",
+  "drawdown_proxy": "0.40",
+  "average_source_confidence": "0.80",
+  "average_regime_confidence": "0.70",
+  "evidence_age_days": "2",
+  "data_quality_verdict": "accepted",
+  "is_actionable": true,
+  "direction_hint": "increase",
+  "has_conflict": false,
+  "human_approval_available": true,
+  "backtest_metrics": {
+    "passed": false,
+    "total_trades": 100,
+    "profit_total_pct": "20.0",
+    "max_drawdown_pct": "0.40",
+    "win_rate_pct": "55.0",
+    "profit_factor": "1.5",
+    "sharpe": "0.9"
+  },
+  "walk_forward_metrics": {
+    "passed": false,
+    "stability_score": "0.30",
+    "out_of_sample_profit_total_pct": "-0.05",
+    "reason": "unstable"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "evidence_id": "evi-sparse-001",
+  "source_id": "rainbow:llm",
+  "regime": "bearish",
+  "evidence_schema_version": 1,
+  "unique_trade_count": 8,
+  "expectancy": "0.005",
+  "drawdown_proxy": "0.05",
+  "average_source_confidence": "0.45",
+  "average_regime_confidence": "0.40",
+  "evidence_age_days": "2",
+  "data_quality_verdict": "accepted",
+  "is_actionable": true,
+  "direction_hint": "increase",
+  "has_conflict": false,
+  "human_approval_available": true,
+  "backtest_metrics": {
+    "passed": true,
+    "total_trades": 12,
+    "profit_total_pct": "1.2",
+    "max_drawdown_pct": "0.05",
+    "win_rate_pct": "55.0",
+    "profit_factor": "1.15",
+    "sharpe": "0.6"
+  },
+  "walk_forward_metrics": {
+    "passed": true,
+    "stability_score": "0.55",
+    "out_of_sample_profit_total_pct": "0.005",
+    "reason": "stable"
+  }
+}

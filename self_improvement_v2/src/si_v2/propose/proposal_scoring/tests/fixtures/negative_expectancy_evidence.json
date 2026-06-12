@@ -1,0 +1,32 @@
+{
+  "evidence_id": "evi-negexp-001",
+  "source_id": "rainbow:ta",
+  "regime": "bullish",
+  "evidence_schema_version": 1,
+  "unique_trade_count": 80,
+  "expectancy": "-0.008",
+  "drawdown_proxy": "0.10",
+  "average_source_confidence": "0.80",
+  "average_regime_confidence": "0.70",
+  "evidence_age_days": "2",
+  "data_quality_verdict": "accepted",
+  "is_actionable": true,
+  "direction_hint": "increase",
+  "has_conflict": false,
+  "human_approval_available": true,
+  "backtest_metrics": {
+    "passed": false,
+    "total_trades": 80,
+    "profit_total_pct": "-5.0",
+    "max_drawdown_pct": "0.10",
+    "win_rate_pct": "45.0",
+    "profit_factor": "0.85",
+    "sharpe": "-0.4"
+  },
+  "walk_forward_metrics": {
+    "passed": false,
+    "stability_score": "0.40",
+    "out_of_sample_profit_total_pct": "-0.02",
+    "reason": "unstable"
+  }
+}

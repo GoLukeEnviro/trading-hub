@@ -1,0 +1,18 @@
+{
+  "policy_version": "scoring_policy_v1",
+  "minimum_sample_count": 30,
+  "maximum_evidence_age_days": "30",
+  "minimum_expectancy": "0.0",
+  "maximum_drawdown_proxy": "0.25",
+  "minimum_confidence": "0.30",
+  "component_weights": {
+    "sample": "0.50",
+    "expectancy": "0.50",
+    "drawdown": "0.10",
+    "confidence": "0.10",
+    "recency": "0.00",
+    "backtest": "0.00",
+    "walk_forward": "0.00",
+    "quality": "0.00"
+  }
+}
