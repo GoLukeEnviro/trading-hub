@@ -140,7 +140,7 @@ def _to_score_input(
         source_id=str(ev.source_id),
         regime=str(ev.regime),
         evidence_schema_version=int(
-            getattr(ev, "cache_schema_version", 1) or 1
+            float(str(getattr(ev, "cache_schema_version", 1) or 1))
         ),
         unique_trade_count=int(getattr(ev, "unique_trade_count", 0)),
         expectancy=_req_decimal("expectancy"),

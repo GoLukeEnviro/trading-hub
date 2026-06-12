@@ -227,6 +227,7 @@ class ProposalEvidenceRecord:
     cache_schema_version: str | None
     fact_schema_version: str | None
     source_fingerprint: str | None
+    evidence_age_days: float = 0.0
 
     def canonical_serialize(self) -> str:
         """Deterministic JSON serialization of all semantic fields."""
