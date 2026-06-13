@@ -37,22 +37,6 @@ _REPORT_PATH = (
     _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "first-rest-shadowproposal-proof.md"
 )
 
-# ---------------------------------------------------------------------------
-# SI v2 module imports
-# ---------------------------------------------------------------------------
-# We import only what the safety contract requires: the adapter, the state
-# schemas, and the ShadowLogger. The ApprovalGateManager from
-# si_v2.approve.approval_gate requires BacktestResult + WalkForwardResult,
-# which we do not have for a simple ping. We produce a documented
-# pending-human artifact directly.
-sys.path.insert(0, str(_REPO_ROOT / "self_improvement_v2" / "src"))
-
-from si_v2.adapters.freqtrade_rest_readonly import (  # noqa: E402
-    SIV2FreqtradeTelemetryConnector,
-)
-from si_v2.deploy.shadow_logger import ShadowLogger  # noqa: E402
-from si_v2.state.schemas import MutationCandidate  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # RiskGuard-style local check (proof-only)
@@ -176,6 +160,16 @@ def main() -> int:
     Returns:
         0 on success, 1 on failure.
     """
+    # Ensure SI v2 module path is available before lazy imports
+    sys.path.insert(0, str(_REPO_ROOT / "self_improvement_v2" / "src"))
+
+    # Lazy imports (required after sys.path is set)
+    from si_v2.adapters.freqtrade_rest_readonly import (  # noqa: E402
+        SIV2FreqtradeTelemetryConnector,
+    )
+    from si_v2.deploy.shadow_logger import ShadowLogger  # noqa: E402
+    from si_v2.state.schemas import MutationCandidate  # noqa: E402
+
     print("=" * 72)
     print("SI v2 Phase 2 — First Read-Only REST ShadowProposal Proof")
     print("=" * 72)
