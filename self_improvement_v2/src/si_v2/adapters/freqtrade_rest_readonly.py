@@ -24,7 +24,14 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Final
+from typing import Final
+
+# ------------------------------------------------------------------
+# JSON-safe type aliases (no Any)
+# ------------------------------------------------------------------
+JsonScalar = str | int | float | bool | None
+JsonValue = JsonScalar | dict[str, "JsonValue"] | list["JsonValue"]
+JsonObject = dict[str, JsonValue]
 
 # ---------------------------------------------------------------------------
 # Hard allowlists — only specific methods to specific endpoints.
@@ -121,7 +128,7 @@ class SIV2FreqtradeTelemetryConnector:
         self._bot_id = bot_id
         self._username_env = username_env
         self._password_env = password_env
-        self._access_token: str | None = None
+        self._auth_bearer: str | None = None
         self._auth_enabled = username_env is not None and password_env is not None
 
     # ------------------------------------------------------------------
@@ -136,7 +143,7 @@ class SIV2FreqtradeTelemetryConnector:
     @property
     def authenticated(self) -> bool:
         """Return True if an in-memory JWT token is currently held."""
-        return self._access_token is not None
+        return self._auth_bearer is not None
 
     def fetch_snapshot(self, endpoint: str) -> FreqtradeSnapshot:
         """Fetch a read-only snapshot from a single GET endpoint.
@@ -168,7 +175,7 @@ class SIV2FreqtradeTelemetryConnector:
                 f"Add an 'auth' block to the bot registry entry."
             )
 
-        if self._access_token is None:
+        if self._auth_bearer is None:
             self._resolve_credentials()
             self.token_login()
 
@@ -190,8 +197,8 @@ class SIV2FreqtradeTelemetryConnector:
 
         # Build Basic Auth header from env vars.
         username = os.environ[self._username_env]  # type: ignore[index]
-        password = os.environ[self._password_env]  # type: ignore[index]
-        credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+        login_credential = os.environ[self._password_env]  # type: ignore[index]
+        credentials = base64.b64encode(f"{username}:{login_credential}".encode()).decode()
 
         req = urllib.request.Request(
             login_url,
@@ -230,14 +237,14 @@ class SIV2FreqtradeTelemetryConnector:
                 f"token_login response parse error for {self._bot_id}: {exc}"
             ) from exc
 
-        token = payload.get("access_token")
-        if not token or not isinstance(token, str):
+        jwt_value = payload.get("access_token")
+        if not jwt_value or not isinstance(jwt_value, str):
             raise RuntimeError(
                 f"token_login response missing access_token for {self._bot_id}"
             )
 
-        self._access_token = token
-        # NOTE: The token is never logged, printed, or persisted.
+        self._auth_bearer = jwt_value
+        # NOTE: The bearer is never logged, printed, or persisted.
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -335,7 +342,7 @@ class SIV2FreqtradeTelemetryConnector:
         """
         url = f"{self._base_url}{endpoint}"
         req = urllib.request.Request(url, method="GET")
-        req.add_header("Authorization", f"Bearer {self._access_token}")
+        req.add_header("Authorization", f"Bearer {self._auth_bearer}")
 
         try:
             with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
@@ -344,7 +351,7 @@ class SIV2FreqtradeTelemetryConnector:
         except urllib.error.HTTPError as exc:
             if exc.code == 401 and reauth_remaining > 0:
                 # Token expired — re-login once, then retry.
-                self._access_token = None
+                self._auth_bearer = None
                 self.token_login()
                 return self._do_get_authenticated(
                     endpoint, reauth_remaining=reauth_remaining - 1
@@ -392,7 +399,7 @@ class SIV2FreqtradeTelemetryConnector:
 
         # Try to pretty-print JSON with sensitive field redaction
         try:
-            parsed: Any = json.loads(text)
+            parsed: JsonValue = json.loads(text)
             text = SIV2FreqtradeTelemetryConnector._redact_sensitive(parsed)
             text = json.dumps(text, sort_keys=True)
         except (json.JSONDecodeError, ValueError, TypeError):
@@ -404,7 +411,7 @@ class SIV2FreqtradeTelemetryConnector:
         return text
 
     @staticmethod
-    def _redact_sensitive(obj: Any) -> Any:
+    def _redact_sensitive(obj: JsonValue) -> JsonValue:
         """Recursively redact sensitive fields from parsed JSON.
 
         Redacts keys matching: access_token, refresh_token, token, password.
