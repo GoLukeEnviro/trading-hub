@@ -89,6 +89,13 @@ NO_PROPOSAL_REASON_INVALID_EVIDENCE: Final[str] = "invalid_evidence"
 PROPOSAL_HYPOTHESIS_REACHABILITY: Final[str] = "telemetry_reachability_baseline_established"
 PROPOSAL_HYPOTHESIS_STATUS_OBSERVABLE: Final[str] = "telemetry_status_endpoint_observable_v1"
 
+# Signal-aware hypothesis classes
+PROPOSAL_HYPOTHESIS_INSUFFICIENT_EVIDENCE: Final[str] = "no_action_insufficient_evidence_v1"
+PROPOSAL_HYPOTHESIS_UNDERPERFORMING_PAIR: Final[str] = "observe_underperforming_pair_cluster_v1"
+PROPOSAL_HYPOTHESIS_PROFIT_DISPERSION: Final[str] = "review_fleet_profitability_dispersion_v1"
+PROPOSAL_HYPOTHESIS_TRADE_DURATION: Final[str] = "review_trade_duration_outlier_v1"
+PROPOSAL_HYPOTHESIS_SIGNAL_QUALITY: Final[str] = "review_entry_signal_quality_v1"
+
 # ------------------------------------------------------------------
 # Data classes
 # ------------------------------------------------------------------
@@ -120,6 +127,9 @@ class BotEvidence:
     missing_env_vars: tuple[str, ...]
     auth_error_summary: str
     fetched_at_utc: str
+    # Optional rich signal summary for signal-aware decisions
+    signal_depth: float = 0.0
+    proposal_evidence_json: JsonObject | None = None
 
 
 @dataclass(frozen=True)
@@ -198,7 +208,7 @@ def _candidate_sha(bot_id: str, evidence: BotEvidence, hypothesis: str) -> str:
 
 def _evidence_summary(evidence: BotEvidence) -> JsonObject:
     """Redacted, bounded evidence summary safe to embed in a proposal."""
-    return {
+    result: JsonObject = {
         "bot_id": evidence.bot_id,
         "base_url": evidence.base_url,
         "auth_type": evidence.auth_type,
@@ -221,7 +231,11 @@ def _evidence_summary(evidence: BotEvidence) -> JsonObject:
         "missing_env_vars": list(evidence.missing_env_vars),
         "auth_error_summary": evidence.auth_error_summary[:200] if evidence.auth_error_summary else "",
         "fetched_at_utc": evidence.fetched_at_utc,
+        "signal_depth": evidence.signal_depth,
     }
+    if evidence.proposal_evidence_json is not None:
+        result["proposal_evidence"] = evidence.proposal_evidence_json
+    return result
 
 
 # ------------------------------------------------------------------
@@ -268,6 +282,66 @@ def _decide_one(evidence: BotEvidence) -> ShadowProposalDecision:
 
     # Rule B: fully authenticated
     if outcome == "AUTHENTICATED":
+        # Check for richer signal evidence
+        pe = evidence.proposal_evidence_json
+        if evidence.signal_depth >= 0.5 and pe is not None:
+            # We have rich signals — decide based on anomalies
+            anomalies_raw: object = pe.get("anomaly_flags", [])
+            anomalies: list[str] = [str(a) for a in (anomalies_raw if isinstance(anomalies_raw, list) else [])]
+            profit_pct: float = 0.0
+            profit_raw: object = pe.get("profit_all_percent", 0.0)
+            if isinstance(profit_raw, (int, float)):
+                profit_pct = float(profit_raw)
+            open_trades = evidence.status_open_trades
+
+            # Fleet profitability dispersion anomaly
+            if "negative_closed_profit" in anomalies or profit_pct < -5.0:
+                hypothesis = PROPOSAL_HYPOTHESIS_UNDERPERFORMING_PAIR
+            elif open_trades > 0 and profit_pct > 5.0:
+                hypothesis = PROPOSAL_HYPOTHESIS_PROFIT_DISPERSION
+            elif open_trades == 0:
+                # Idle — insufficient evidence for actionable proposal
+                hypothesis = PROPOSAL_HYPOTHESIS_INSUFFICIENT_EVIDENCE
+                sha = _candidate_sha(evidence.bot_id, evidence, hypothesis)
+                return ShadowProposalDecision(
+                    decision_type=DECISION_NO_PROPOSAL,
+                    bot_id=evidence.bot_id,
+                    candidate_sha256=sha,
+                    base_mode="proposal_only",
+                    mutation_policy="safe_parameter_overlay_only",
+                    requires_human_approval=True,
+                    hypothesis=hypothesis,
+                    parameters={},
+                    metadata_only_candidates={"signal_depth_observed": 1},
+                    evidence_summary=_evidence_summary(evidence),
+                    no_proposal_reason="insufficient_signal_depth",
+                    fetched_at_utc=evidence.fetched_at_utc,
+                )
+            else:
+                # No anomaly — safe baseline
+                hypothesis = PROPOSAL_HYPOTHESIS_STATUS_OBSERVABLE
+
+            sha = _candidate_sha(evidence.bot_id, evidence, hypothesis)
+            return ShadowProposalDecision(
+                decision_type=DECISION_SHADOW_PROPOSAL,
+                bot_id=evidence.bot_id,
+                candidate_sha256=sha,
+                base_mode="proposal_only",
+                mutation_policy="safe_parameter_overlay_only",
+                requires_human_approval=True,
+                hypothesis=hypothesis,
+                parameters={},
+                metadata_only_candidates={
+                    "signal_depth": int(evidence.signal_depth * 100),
+                    "anomaly_count": len(anomalies),
+                    "open_trades_observed": int(open_trades),
+                },
+                evidence_summary=_evidence_summary(evidence),
+                no_proposal_reason=None,
+                fetched_at_utc=evidence.fetched_at_utc,
+            )
+
+        # Fallback: reachability/status only (existing behavior)
         hypothesis = PROPOSAL_HYPOTHESIS_STATUS_OBSERVABLE
         sha = _candidate_sha(evidence.bot_id, evidence, hypothesis)
         return ShadowProposalDecision(
