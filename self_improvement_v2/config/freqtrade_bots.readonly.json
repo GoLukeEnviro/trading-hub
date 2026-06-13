@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "bots": [
+    {
+      "bot_id": "freqtrade-freqforge",
+      "base_url": "http://trading-freqtrade-freqforge-1:8080",
+      "dry_run_expected": true,
+      "enabled": true
+    },
+    {
+      "bot_id": "freqtrade-regime-hybrid",
+      "base_url": "http://trading-freqtrade-regime-hybrid-1:8080",
+      "dry_run_expected": true,
+      "enabled": true
+    },
+    {
+      "bot_id": "freqtrade-freqforge-canary",
+      "base_url": "http://trading-freqtrade-freqforge-canary-1:8080",
+      "dry_run_expected": true,
+      "enabled": true
+    },
+    {
+      "bot_id": "freqai-rebel",
+      "base_url": "http://trading-freqai-rebel-1:8080",
+      "dry_run_expected": true,
+      "enabled": true
+    }
+  ]
+}
