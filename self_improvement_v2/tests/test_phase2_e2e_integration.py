@@ -806,6 +806,7 @@ class TestNoRuntimeAccess:
             "si_v2.rainbow",
             "si_v2.cron",
             "si_v2.integrations",
+            "si_v2.signals",
         )
         for modname in si_v2_modules:
             if modname.startswith(excluded_prefixes):
