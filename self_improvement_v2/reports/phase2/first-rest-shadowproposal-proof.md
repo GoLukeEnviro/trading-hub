@@ -1,6 +1,6 @@
 # SI v2 Phase 2 — First Read-Only REST ShadowProposal Proof
 
-**Date:** 2026-06-13T09:26:29Z
+**Date:** 2026-06-13T09:33:51Z
 **Proof script:** `self_improvement_v2/src/si_v2/proofs/first_rest_shadowproposal_proof.py`
 **Branch:** `feat/si-v2-first-rest-shadowproposal-proof`
 
@@ -101,7 +101,7 @@ All values are unchanged by this proof.
 | Status code | `200` |
 | OK | `True` |
 | Response summary | `{"status": "pong"}` |
-| Fetched at | `2026-06-13T09:26:29.790065+00:00` |
+| Fetched at | `2026-06-13T09:33:51.324345+00:00` |
 
 ---
 
@@ -110,7 +110,7 @@ All values are unchanged by this proof.
 | Field | Value |
 |-------|-------|
 | Type | `MutationCandidate` (metadata-only) |
-| candidate_sha256 | `2c85ec3f001e400b` |
+| candidate_sha256 | `f436f52e7b297611` |
 | bot_id | `freqtrade-freqforge` |
 | base_mode | `proposal_only` |
 | requires_human_approval | `True` |
@@ -131,7 +131,7 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | Field | Value |
 |-------|-------|
 | Result | `PASS_SHADOW_ONLY` |
-| Reason | `candidate 2c85ec3f001e400b for freqtrade-freqforge is proposal_only, requires human approval, and contains no forbidden parameters. Runtime application is blocked.` |
+| Reason | `candidate f436f52e7b297611 for freqtrade-freqforge is proposal_only, requires human approval, and contains no forbidden parameters. Runtime application is blocked.` |
 | Details | proposal_only=True; runtime_blocked=True |
 
 ### ShadowLogger (In-Memory)
@@ -148,7 +148,7 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | Field | Value |
 |-------|-------|
 | Artifact type | `shadow_proposal_pending_human` |
-| Proposal ID | `2c85ec3f001e400b` |
+| Proposal ID | `f436f52e7b297611` |
 | Approval status | `PENDING_HUMAN` |
 | Reason | `Existing ApprovalGateManager requires BacktestResult and WalkForwardResult objects that are not produced by a ping-only proof. This artifact documents the pending-human state. Full approval gate integration requires a backtest or walk-forward result in a subsequent proof iteration.` |
 
@@ -183,7 +183,7 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 
 | Field | Present | Value |
 |-------|---------|-------|
-| `proposal_id` / `candidate_sha256` | ✅ | `2c85ec3f001e400b` |
+| `proposal_id` / `candidate_sha256` | ✅ | `f436f52e7b297611` |
 | `bot_id` = freqtrade-freqforge | ✅ | `freqtrade-freqforge` |
 | `source` = real_freqtrade_rest_get_ping | ✅ | `real_freqtrade_rest_get_ping` |
 | `hypothesis` | ✅ | See Executive Summary |
@@ -238,24 +238,13 @@ The initial proof correctly proved the one-shot path but **failed to reach the F
 
 ### Why `127.0.0.1` Fails
 
-The proof script runs **inside the `hermes-green` container**. Inside that container,
-`127.0.0.1` points to `hermes-green` itself, **not** the Docker host. The host-mapped
-ports (`8086`, `8085`, `8081`, `8087`) are only reachable from the Docker host's
-loopback interface — not from other containers.
+Inside the `hermes-green` container, `127.0.0.1` points to `hermes-green` itself, not the Docker host. Host-mapped ports (8086, 8085, 8081, 8087) are only reachable from the Docker host's loopback interface.
 
 ### Correct Target
 
-All four Freqtrade bot containers are attached to the **`hermes-net`** Docker
-bridge network (confirmed from `docker-compose.yml`). Their internal Freqtrade
-API port is `8080` (container port, verified from `127.0.0.1:8086:8080` mapping).
-
-The existing `hermes-watchdog` service already confirms this pattern — it uses
-Docker DNS names with internal port `8080`:
-`http://trading-freqtrade-freqforge-1:8080/api/v1/ping`
+All four Freqtrade bot containers are attached to **`hermes-net`** (confirmed from `docker-compose.yml`). Their internal API port is `8080`. The existing `hermes-watchdog` already uses Docker DNS: `http://trading-freqtrade-freqforge-1:8080/api/v1/ping`.
 
 ### Remediation (Registry-Only)
-
-The fix is **minimal and repository-only**:
 
 | Bot ID | Old URL (Host Loopback) | New URL (Docker DNS) |
 |--------|------------------------|----------------------|
@@ -268,8 +257,8 @@ The fix is **minimal and repository-only**:
 
 | Metric | Before (old URL) | After (fixed URL) |
 |--------|-----------------|-------------------|
-| HTTP status | `0` (connection refused) | **`200`** ✅ |
-| Response | `connection_error` | **`{"status": "pong"}`** ✅ |
+| HTTP status | `0` (refused) | **`200`** ✅ |
+| Response | `connection_error` | **`{"status":"pong"}`** ✅ |
 | RiskGuard | `PASS_SHADOW_ONLY` | `PASS_SHADOW_ONLY` ✅ |
 | ShadowLogger | `LOGGED` | `LOGGED` ✅ |
 
@@ -283,4 +272,4 @@ The fix is **minimal and repository-only**:
 | `depends_on` change | ❌ Not required |
 | Container restart/rebuild | ❌ Not required |
 | Runtime mutation | ❌ Not performed |
-| Controller status | ✅ Remains PAUSED / L3_REPOSITORY_ONLY |`
+| Controller status | ✅ Remains PAUSED / L3_REPOSITORY_ONLY |
