@@ -66,7 +66,14 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
-from typing import Any, Final
+from typing import Final
+
+# ------------------------------------------------------------------
+# JSON-safe type aliases (no Any)
+# ------------------------------------------------------------------
+JsonScalar = str | int | float | bool | None
+JsonValue = JsonScalar | dict[str, "JsonValue"] | list["JsonValue"]
+JsonObject = dict[str, JsonValue]
 
 # ------------------------------------------------------------------
 # Decision constants
@@ -134,7 +141,7 @@ class ShadowProposalDecision:
     hypothesis: str
     parameters: dict[str, float | int]
     metadata_only_candidates: dict[str, int]
-    evidence_summary: dict[str, Any]
+    evidence_summary: JsonObject
     no_proposal_reason: str | None
     fetched_at_utc: str
 
@@ -189,7 +196,7 @@ def _candidate_sha(bot_id: str, evidence: BotEvidence, hypothesis: str) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
-def _evidence_summary(evidence: BotEvidence) -> dict[str, Any]:
+def _evidence_summary(evidence: BotEvidence) -> JsonObject:
     """Redacted, bounded evidence summary safe to embed in a proposal."""
     return {
         "bot_id": evidence.bot_id,
@@ -438,7 +445,7 @@ def analyze_fleet(evidence_list: list[BotEvidence], cycle_id: str) -> FleetDecis
     )
 
 
-def fleet_decision_to_dict(decision: FleetDecision) -> dict[str, Any]:
+def fleet_decision_to_dict(decision: FleetDecision) -> JsonObject:
     """Serialize a FleetDecision to a JSON-safe dict.
 
     The output is suitable for writing to the evidence bundle JSON
