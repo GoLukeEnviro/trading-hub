@@ -1,39 +1,63 @@
-# SI v2 Phase 2 — First Read-Only REST ShadowProposal Proof
+# SI v2 Phase 2 — Read-Only REST ShadowProposal Proof with JWT Auth
 
-**Date:** 2026-06-13T09:15:48Z
+**Date:** 2026-06-13T10:04:06Z
 **Proof script:** `self_improvement_v2/src/si_v2/proofs/first_rest_shadowproposal_proof.py`
-**Branch:** `feat/si-v2-first-rest-shadowproposal-proof`
+**Branch:** `feat/si-v2-readonly-freqtrade-jwt-auth`
 
 ---
 
 ## Executive Summary
 
 This proof demonstrates that the SI v2 controller can read real dry-run bot
-telemetry from exactly one Freqtrade bot via REST GET only and produce exactly
-one ShadowProposal artifact that passes through the existing safety chain:
-RiskGuard-style validation, ShadowLogger logging, and a documented
-pending-human approval state.
+telemetry from exactly one Freqtrade bot via REST GET with JWT authentication
+and produce exactly one ShadowProposal artifact that passes through the
+existing safety chain: RiskGuard-style validation, ShadowLogger logging, and
+a documented pending-human approval state.
 
-**Result: GREEN** — All safety gates exercised. No runtime mutation. No config
-mutation. Controller remains PAUSED / L3_REPOSITORY_ONLY.
+**Root cause (this PR):** `/api/v1/ping` is unauthenticated but `/api/v1/status`
+requires JWT authentication. The previous proof (PR #205) could only reach
+`/api/v1/ping`. This PR adds minimal JWT auth so `/api/v1/status` can be
+fetched.
+
+**Implementation:** HTTP Basic Auth to `POST /api/v1/token/login`, in-memory
+JWT Bearer token for authenticated `GET /api/v1/status`.
+
+**Secret handling:** Environment variable references only in the registry.
+No committed credentials. No persisted tokens. No printed secrets.
+
+**Safety:** One bot, one-shot proof, shadow-only proposal. Controller remains
+PAUSED / L3_REPOSITORY_ONLY.
+
+---
+
+## Prior Proof Chain
+
+| PR | What | Status |
+|----|------|--------|
+| #205 | First REST ShadowProposal proof (ping only) | OPEN |
+| #206 | Fix registry to use Docker DNS URLs | MERGED |
+| #207 (this) | Add minimal JWT auth for /api/v1/status | PENDING |
 
 ---
 
 ## Scope and Non-Goals
 
 ### In Scope
-- Load bot registry from `self_improvement_v2/config/freqtrade_bots.readonly.json`
+- Load bot registry with env-reference auth metadata
 - Select exactly one bot: `freqtrade-freqforge`
-- Call exactly one REST GET endpoint: `/api/v1/ping`
+- Call unauthenticated REST GET `/api/v1/ping` for reachability
+- Authenticate via HTTP Basic Auth to `POST /api/v1/token/login`
+- Fetch authenticated REST GET `/api/v1/status`
 - Build a metadata-only `MutationCandidate` (no executable config change)
 - RiskGuard-style local check that blocks runtime
 - ShadowLogger entry (in-memory mode)
-- Pending-human approval artifact (documented, not submitted to ApprovalGateManager)
-- Proof report written to `self_improvement_v2/reports/phase2/first-rest-shadowproposal-proof.md`
+- Pending-human approval artifact
+- Proof report with JWT auth section
 
 ### Non-Goals (explicitly excluded)
 - No live trading enablement
-- No Freqtrade POST/PUT/PATCH/DELETE
+- No Freqtrade PUT/PATCH/DELETE
+- No `/api/v1/balance` or `/api/v1/show_config` (future iteration)
 - No WebSocket usage
 - No Docker commands or container inspection
 - No Freqtrade CLI calls
@@ -45,63 +69,55 @@ mutation. Controller remains PAUSED / L3_REPOSITORY_ONLY.
 
 ---
 
-## Repository State Observed
+## Registry Auth Metadata Shape
 
-| Property | Value |
-|----------|-------|
-| HEAD commit | `ede70bc01ed965aa7ed16c55e544b7503b1e82e2` |
-| Default branch | `main` |
-| Base branch commit | `ede70bc` |
-| Working branch | `feat/si-v2-first-rest-shadowproposal-proof` |
+```json
+"auth": {
+  "type": "env_basic_jwt",
+  "username_env": "SI_V2_FREQTRADE_FREQFORGE_USERNAME",
+  "password_env": "SI_V2_FREQTRADE_FREQFORGE_PASSWORD"
+}
+```
 
-### State Drift Observed
-
-| Source | Declared Commit | Actual HEAD |
-|--------|----------------|-------------|
-| `orchestrator/control/STATE.json` canonical_main_commit | `796760a5c` | `ede70bc` |
-| `docs/state/current-operational-state.md` | `0557b70` | `ede70bc` |
-
-Both `STATE.json` and `current-operational-state.md` declare stale commit refs.
-This is documented here as observed drift. No new issue was created; no
-reconciliation task was started.
-
-### Controller Status (from STATE.json)
-
-| Property | Value |
-|----------|-------|
-| controller_status | PAUSED |
-| operation_level | L3_REPOSITORY_ONLY |
-| runtime_policy | FORBIDDEN |
-| merge_policy | HUMAN_ONLY |
-| pause_reason | AWAITING_NEXT_EPIC |
-
-All values are unchanged by this proof.
+All four bots follow the same pattern with bot-specific env var names.
+No real credentials are stored in the repository.
 
 ---
 
-## Selected Bot
+## REST GET Snapshots
 
-| Field | Value |
-|-------|-------|
-| bot_id | `freqtrade-freqforge` |
-| base_url | `http://127.0.0.1:8086` |
-| dry_run_expected | `true` |
-| enabled | `true` |
-| Strategy | `FreqForge_Override` |
-| Container port | `8086 → 8080` (from docker-compose.yml) |
-
----
-
-## REST GET Snapshot
+### /api/v1/ping (unauthenticated, reachability)
 
 | Field | Value |
 |-------|-------|
 | Endpoint | `/api/v1/ping` |
 | Method | `GET` |
+| Auth required | No |
+| Status code | `200` |
+| OK | `True` |
+| Response summary | `{"status": "pong"}` |
+| Fetched at | `2026-06-13T10:04:06.842860+00:00` |
+
+### /api/v1/status (authenticated, bot status)
+
+| Field | Value |
+|-------|-------|
+| Endpoint | `/api/v1/status` |
+| Method | `GET` |
+| Auth required | Yes (Bearer JWT) |
 | Status code | `0` |
 | OK | `False` |
-| Response summary | `connection_error: <urlopen error [Errno 111] Connection refused>` |
-| Fetched at | `2026-06-13T09:15:48.429446+00:00` |
+| Response summary | `YELLOW: missing env vars (SI_V2_FREQTRADE_FREQFORGE_USERNAME, SI_V2_FREQTRADE_FREQFORGE_PASSWORD)` |
+| Fetched at | `2026-06-13T10:04:06.842947+00:00` |
+
+### Auth (token_login)
+
+| Field | Value |
+|-------|-------|
+| Method | `POST /api/v1/token/login` |
+| Auth type | HTTP Basic Auth (from env vars) |
+| Result | `YELLOW_MISSING_ENV_VARS` |
+| Missing env vars | `SI_V2_FREQTRADE_FREQFORGE_USERNAME, SI_V2_FREQTRADE_FREQFORGE_PASSWORD` |
 
 ---
 
@@ -110,17 +126,13 @@ All values are unchanged by this proof.
 | Field | Value |
 |-------|-------|
 | Type | `MutationCandidate` (metadata-only) |
-| candidate_sha256 | `709c9dc6044c5e59` |
+| candidate_sha256 | `d7b9876860104535` |
 | bot_id | `freqtrade-freqforge` |
 | base_mode | `proposal_only` |
 | requires_human_approval | `True` |
 | Parameters | `{'dry_run': 1}` |
-| Metadata-only candidates | `{'proof_phase2_ping': 1}` |
-| Source | `real_freqtrade_rest_get_ping` |
-
-The candidate uses `parameters={'dry_run': 1}` as a metadata flag confirming
-dry-run mode. This is **not** an executable config change — it is proof
-metadata embedded to satisfy the `MutationCandidate` schema requirements.
+| Metadata-only candidates | `{'proof_phase2_ping': 1, 'proof_phase2_status_auth': 1}` |
+| Source | `real_freqtrade_rest_get_ping_and_status` |
 
 ---
 
@@ -131,7 +143,7 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | Field | Value |
 |-------|-------|
 | Result | `PASS_SHADOW_ONLY` |
-| Reason | `candidate 709c9dc6044c5e59 for freqtrade-freqforge is proposal_only, requires human approval, and contains no forbidden parameters. Runtime application is blocked.` |
+| Reason | `candidate d7b9876860104535 for freqtrade-freqforge is proposal_only, requires human approval, and contains no forbidden parameters. Runtime application is blocked.` |
 | Details | proposal_only=True; runtime_blocked=True |
 
 ### ShadowLogger (In-Memory)
@@ -148,9 +160,8 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | Field | Value |
 |-------|-------|
 | Artifact type | `shadow_proposal_pending_human` |
-| Proposal ID | `709c9dc6044c5e59` |
+| Proposal ID | `d7b9876860104535` |
 | Approval status | `PENDING_HUMAN` |
-| Reason | `Existing ApprovalGateManager requires BacktestResult and WalkForwardResult objects that are not produced by a ping-only proof. This artifact documents the pending-human state. Full approval gate integration requires a backtest or walk-forward result in a subsequent proof iteration.` |
 
 ---
 
@@ -159,13 +170,14 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | Property | Value | Verified |
 |----------|-------|----------|
 | Bots contacted | 1 (freqtrade-freqforge) | ✅ |
-| REST GET only | Yes | ✅ |
+| REST GET only (data) | Yes | ✅ |
+| REST POST (auth only) | 1 (token_login) | ✅ |
+| REST PUT/PATCH/DELETE | 0 | ✅ |
 | WebSocket used | No | ✅ |
 | Docker commands | 0 | ✅ |
 | Freqtrade CLI calls | 0 | ✅ |
 | Runtime mutations | 0 | ✅ |
 | Config mutations | 0 | ✅ |
-| Freqtrade POST/PUT/PATCH/DELETE | 0 | ✅ |
 | Controller PAUSED | Yes | ✅ |
 | Controller L3_REPOSITORY_ONLY | Yes | ✅ |
 | ShadowProposals generated | 1 | ✅ |
@@ -173,57 +185,27 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | RiskGuard exercised | Yes (PASS_SHADOW_ONLY) | ✅ |
 | ShadowLogger exercised | Yes (LOGGED) | ✅ |
 | ApprovalGate path exercised | Yes (PENDING_HUMAN) | ✅ |
-| Secrets exposed | No | ✅ |
+| Secrets in repo | No | ✅ |
+| Secrets printed | No | ✅ |
+| Tokens persisted | No | ✅ |
 
 ---
 
-## Acceptance Criteria
+## Explicit Non-Goals (Not Changed in This PR)
 
-### Must-Include Fields
-
-| Field | Present | Value |
-|-------|---------|-------|
-| `proposal_id` / `candidate_sha256` | ✅ | `709c9dc6044c5e59` |
-| `bot_id` = freqtrade-freqforge | ✅ | `freqtrade-freqforge` |
-| `source` = real_freqtrade_rest_get_ping | ✅ | `real_freqtrade_rest_get_ping` |
-| `hypothesis` | ✅ | See Executive Summary |
-| `evidence_summary` from ping | ✅ | `connection_error: <urlopen error [Errno 111] Connection refused>` |
-| `risk_guard_result` = PASS_SHADOW_ONLY | ✅ | `PASS_SHADOW_ONLY` |
-| `shadow_logger_result` = LOGGED | ✅ | `LOGGED` |
-| `approval_status` = PENDING_HUMAN | ✅ | `PENDING_HUMAN` |
-| `runtime_mutations` = 0 | ✅ | 0 |
-| `config_mutations` = 0 | ✅ | 0 |
-| `freqtrade_post_requests` = 0 | ✅ | 0 |
-
-### Must-Not-Include Fields
-
-| Field | Present | Status |
-|-------|---------|--------|
-| `dry_run=false` | No | ✅ |
-| Live trading approval | No | ✅ |
-| Strategy edit | No | ✅ |
-| Config edit | No | ✅ |
-| Order command | No | ✅ |
-| Restart command | No | ✅ |
-| Docker command | No | ✅ |
+- No docker-compose.yml change
+- No network change
+- No port change
+- No depends_on change
+- No service change
+- No healthcheck change
+- No runtime mutation
+- No controller activation
+- No full telemetry system
 
 ---
 
 ## Final Verdict
 
-**GREEN** ✅ — All safety gates exercised. No mutations. Read-only proof.
+Proof result: see console output
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  SI v2 Phase 2 — First REST ShadowProposal Proof                    │
-│                                                                     │
-│  Status:  ✅ COMPLETE                                               │
-│  Bot:     freqtrade-freqforge (1/1)                                 │
-│  Method:  GET /api/v1/ping                                          │
-│  Safety:  RiskGuard=PASS_SHADOW_ONLY                                │
-│           ShadowLogger=LOGGED                                       │
-│           Approval=PENDING_HUMAN                                    │
-│  Mutations: 0                                                       │
-│  Verdict:  GREEN — proof passes all acceptance criteria             │
-└─────────────────────────────────────────────────────────────────────┘
-```

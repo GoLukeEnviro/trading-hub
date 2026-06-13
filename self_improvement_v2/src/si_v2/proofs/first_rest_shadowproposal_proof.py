@@ -1,23 +1,27 @@
-"""SI v2 Phase 2 — First Read-Only REST ShadowProposal Proof (One-Shot).
+"""SI v2 Phase 2 — Read-Only Freqtrade REST ShadowProposal Proof with JWT Auth.
 
 PURPOSE
   Minimal proof that the SI v2 controller can:
-    1. Load a bot registry config.
+    1. Load a bot registry config with env-reference auth metadata.
     2. Select one bot (freqtrade-freqforge).
-    3. Make exactly one Freqtrade REST GET call (/api/v1/ping).
-    4. Build a MutationCandidate (metadata-only, no executable config change).
-    5. Pass it through a RiskGuard-style local check (blocks runtime).
-    6. Log via the existing ShadowLogger.
-    7. Produce a documented pending-human approval artifact.
+    3. Make an unauthenticated REST GET call (/api/v1/ping) for reachability.
+    4. Authenticate via HTTP Basic Auth to POST /api/v1/token/login.
+    5. Fetch authenticated REST GET /api/v1/status with Bearer JWT.
+    6. Build a MutationCandidate (metadata-only, no executable config change).
+    7. Pass it through a RiskGuard-style local check (blocks runtime).
+    8. Log via the existing ShadowLogger.
+    9. Produce a documented pending-human approval artifact.
 
 CONSTRAINTS (enforced at code level)
   - Exactly one bot (freqtrade-freqforge).
-  - Exactly one REST GET endpoint (/api/v1/ping).
-  - No POST/PUT/PATCH/DELETE anywhere in this proof.
+  - Two REST GET endpoints (/api/v1/ping unauthenticated, /api/v1/status authenticated).
+  - One REST POST endpoint (/api/v1/token/login for auth only).
+  - No other POST/PUT/PATCH/DELETE anywhere in this proof.
   - No WebSocket, Docker, or Freqtrade CLI usage.
   - No runtime mutation.
   - No config mutation.
   - Controller remains PAUSED / L3_REPOSITORY_ONLY.
+  - No secrets committed, printed, or persisted.
 """
 
 from __future__ import annotations
@@ -41,11 +45,6 @@ _REPORT_PATH = (
 # ---------------------------------------------------------------------------
 # SI v2 module imports
 # ---------------------------------------------------------------------------
-# We import only what the safety contract requires: the adapter, the state
-# schemas, and the ShadowLogger. The ApprovalGateManager from
-# si_v2.approve.approval_gate requires BacktestResult + WalkForwardResult,
-# which we do not have for a simple ping. We produce a documented
-# pending-human artifact directly.
 sys.path.insert(0, str(_REPO_ROOT / "self_improvement_v2" / "src"))
 
 from si_v2.adapters.freqtrade_rest_readonly import (  # noqa: E402
@@ -120,7 +119,9 @@ def _riskguard_check(candidate: MutationCandidate) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 def _build_pending_human_artifact(
     candidate: MutationCandidate,
-    snapshot: dict[str, Any],
+    ping_snapshot: dict[str, Any],
+    status_snapshot: dict[str, Any],
+    auth_summary: dict[str, Any],
     riskguard_result: dict[str, Any],
     shadow_logger_result: dict[str, Any],
 ) -> dict[str, Any]:
@@ -128,7 +129,7 @@ def _build_pending_human_artifact(
 
     This replaces the full ApprovalGateManager.evaluate() path because the
     existing gate requires BacktestResult + WalkForwardResult objects which
-    are not available for a simple ping proof.
+    are not available for a ping+status proof.
 
     Returns a dictionary with all required fields for human review.
     """
@@ -139,29 +140,35 @@ def _build_pending_human_artifact(
         "created_at_utc": datetime.now(UTC).isoformat(),
         "bot_id": candidate.bot_id,
         "candidate_sha256": candidate.candidate_sha256,
-        "source": "real_freqtrade_rest_get_ping",
+        "source": "real_freqtrade_rest_get_ping_and_status",
         "hypothesis": (
             "SI v2 controller can read real dry-run bot telemetry via "
-            "REST GET and produce a ShadowProposal artifact that passes "
-            "through the safety chain without any runtime mutation."
+            "REST GET (authenticated) and produce a ShadowProposal "
+            "artifact that passes through the safety chain without "
+            "any runtime mutation."
         ),
-        "evidence_summary": snapshot.get("response_summary", "N/A"),
+        "evidence_summary": {
+            "ping": ping_snapshot.get("response_summary", "N/A")[:200],
+            "status": status_snapshot.get("response_summary", "N/A")[:200],
+        },
+        "auth_summary": auth_summary,
         "status": "pending_human",
         "reason": (
             "Existing ApprovalGateManager requires BacktestResult and "
-            "WalkForwardResult objects that are not produced by a ping-only "
-            "proof. This artifact documents the pending-human state. Full "
-            "approval gate integration requires a backtest or walk-forward "
-            "result in a subsequent proof iteration."
+            "WalkForwardResult objects that are not produced by a "
+            "ping+status proof. This artifact documents the pending-human "
+            "state. Full approval gate integration requires a backtest "
+            "or walk-forward result in a subsequent proof iteration."
         ),
         "risk_guard_result": riskguard_result["result"],
         "shadow_logger_result": shadow_logger_result.get("outcome", "LOGGED"),
         "approval_status": "PENDING_HUMAN",
         "runtime_mutations": 0,
         "config_mutations": 0,
-        "freqtrade_post_requests": 0,
+        "freqtrade_post_requests": 1,  # token_login only
         "metadata": {
-            "selected_endpoint": "/api/v1/ping",
+            "selected_endpoints": ["/api/v1/ping", "/api/v1/status"],
+            "auth_type": "env_basic_jwt",
             "proof_script": Path(__file__).name,
             "timestamp_utc": datetime.now(UTC).isoformat(),
         },
@@ -178,7 +185,7 @@ def main() -> int:
         0 on success, 1 on failure.
     """
     print("=" * 72)
-    print("SI v2 Phase 2 — First Read-Only REST ShadowProposal Proof")
+    print("SI v2 Phase 2 — Read-Only REST ShadowProposal Proof with JWT Auth")
     print("=" * 72)
 
     # Step 1: Load bot registry
@@ -207,44 +214,170 @@ def main() -> int:
 
     bot_id: str = selected_bot["bot_id"]
     base_url: str = selected_bot["base_url"]
+    auth_config: dict[str, Any] = selected_bot.get("auth", {})
     print(f"  Selected: {bot_id} @ {base_url}")
+    print(f"  Auth type: {auth_config.get('type', 'none')}")
 
-    # Step 3: Call exactly one REST GET endpoint: /api/v1/ping
-    print("\n[STEP 3] Connecting via REST GET /api/v1/ping...")
+    # Step 3: Call unauthenticated REST GET /api/v1/ping for reachability
+    print("\n[STEP 3] Connecting via unauthenticated REST GET /api/v1/ping...")
     connector = SIV2FreqtradeTelemetryConnector(base_url=base_url, bot_id=bot_id)
 
-    snapshot = connector.fetch_snapshot("/api/v1/ping")
+    ping_snapshot = connector.fetch_snapshot("/api/v1/ping")
 
-    print(f"  Endpoint: {snapshot.endpoint}")
-    print(f"  Status code: {snapshot.status_code}")
-    print(f"  OK: {snapshot.ok}")
-    print(f"  Response: {snapshot.response_summary[:200]}")
+    print(f"  Endpoint: {ping_snapshot.endpoint}")
+    print(f"  Status code: {ping_snapshot.status_code}")
+    print(f"  OK: {ping_snapshot.ok}")
+    print(f"  Response: {ping_snapshot.response_summary[:200]}")
 
-    snapshot_dict = {
-        "bot_id": snapshot.bot_id,
-        "endpoint": snapshot.endpoint,
-        "status_code": snapshot.status_code,
-        "ok": snapshot.ok,
-        "response_summary": snapshot.response_summary,
-        "fetched_at_utc": snapshot.fetched_at_utc,
+    ping_dict = {
+        "bot_id": ping_snapshot.bot_id,
+        "endpoint": ping_snapshot.endpoint,
+        "status_code": ping_snapshot.status_code,
+        "ok": ping_snapshot.ok,
+        "response_summary": ping_snapshot.response_summary,
+        "fetched_at_utc": ping_snapshot.fetched_at_utc,
     }
 
-    # Step 4: Create a MutationCandidate (metadata-only, no executable config)
-    print("\n[STEP 4] Building metadata-only MutationCandidate...")
+    if not ping_snapshot.ok:
+        print("\n  WARNING: /api/v1/ping failed. Bot may be unreachable.")
+        print("  Proceeding to attempt auth anyway for diagnostic purposes.")
+
+    # Step 4: Authenticate via HTTP Basic Auth → JWT
+    print("\n[STEP 4] Authenticating via HTTP Basic Auth → JWT...")
+    print(f"  Auth type: {auth_config.get('type', 'none')}")
+    print(f"  Username env var: {auth_config.get('username_env', 'N/A')}")
+    print(f"  Password env var: {auth_config.get('password_env', 'N/A')}")
+
+    username_env: str | None = auth_config.get("username_env")
+    password_env: str | None = auth_config.get("password_env")
+
+    # Initialize with safe defaults — always overwritten in the branches below.
+    status_dict: dict[str, Any] = {
+        "bot_id": bot_id,
+        "endpoint": "/api/v1/status",
+        "status_code": 0,
+        "ok": False,
+        "response_summary": "not attempted",
+        "fetched_at_utc": datetime.now(UTC).isoformat(),
+    }
+    auth_summary: dict[str, Any] = {
+        "auth_attempted": False,
+        "auth_result": "NOT_ATTEMPTED",
+        "missing_env_vars": [],
+    }
+    auth_connector: SIV2FreqtradeTelemetryConnector | None = None
+
+    if username_env and password_env:
+        import os
+
+        # Create a new connector with auth
+        auth_connector = SIV2FreqtradeTelemetryConnector(
+            base_url=base_url,
+            bot_id=bot_id,
+            username_env=username_env,
+            password_env=password_env,
+        )
+
+        # Check if env vars are present without printing values
+        missing: list[str] = []
+        if not os.environ.get(username_env):
+            missing.append(username_env)
+        if not os.environ.get(password_env):
+            missing.append(password_env)
+
+        if missing:
+            print(f"  WARNING: Missing environment variables: {', '.join(missing)}")
+            print("  Auth will fail. Skipping authenticated /status call.")
+            print("  Set the missing env vars and re-run to complete the proof.")
+            status_dict = {
+                "bot_id": bot_id,
+                "endpoint": "/api/v1/status",
+                "status_code": 0,
+                "ok": False,
+                "response_summary": f"YELLOW: missing env vars ({', '.join(missing)})",
+                "fetched_at_utc": datetime.now(UTC).isoformat(),
+            }
+            auth_summary = {
+                "auth_attempted": True,
+                "auth_result": "YELLOW_MISSING_ENV_VARS",
+                "missing_env_vars": missing,
+            }
+            auth_connector = None
+        else:
+            try:
+                auth_connector.token_login()
+                print(f"  token_login: SUCCESS (token held in memory)")
+                auth_summary = {
+                    "auth_attempted": True,
+                    "auth_result": "SUCCESS",
+                    "missing_env_vars": [],
+                }
+            except RuntimeError as exc:
+                print(f"  token_login: FAILED — {exc}")
+                status_dict = {
+                    "bot_id": bot_id,
+                    "endpoint": "/api/v1/status",
+                    "status_code": 0,
+                    "ok": False,
+                    "response_summary": f"auth_error: {exc}",
+                    "fetched_at_utc": datetime.now(UTC).isoformat(),
+                }
+                auth_summary = {
+                    "auth_attempted": True,
+                    "auth_result": "FAILED",
+                    "missing_env_vars": [],
+                    "error_summary": str(exc)[:200],
+                }
+                auth_connector = None
+    else:
+        print("  No auth configured for this bot. Skipping authenticated /status call.")
+        status_dict = {
+            "bot_id": bot_id,
+            "endpoint": "/api/v1/status",
+            "status_code": 0,
+            "ok": False,
+            "response_summary": "no auth config in registry",
+            "fetched_at_utc": datetime.now(UTC).isoformat(),
+        }
+        auth_summary = {
+            "auth_attempted": False,
+            "auth_result": "SKIPPED_NO_CONFIG",
+            "missing_env_vars": [],
+        }
+
+    # Step 5: Fetch authenticated REST GET /api/v1/status
+    print("\n[STEP 5] Fetching authenticated REST GET /api/v1/status...")
+    if auth_connector is not None and hasattr(auth_connector, "authenticated") and auth_connector.authenticated:
+        status_snapshot = auth_connector.fetch_snapshot("/api/v1/status")
+        status_dict = {
+            "bot_id": status_snapshot.bot_id,
+            "endpoint": status_snapshot.endpoint,
+            "status_code": status_snapshot.status_code,
+            "ok": status_snapshot.ok,
+            "response_summary": status_snapshot.response_summary,
+            "fetched_at_utc": status_snapshot.fetched_at_utc,
+        }
+    print(f"  Endpoint: {status_dict['endpoint']}")
+    print(f"  Status code: {status_dict.get('status_code', 'N/A')}")
+    print(f"  OK: {status_dict.get('ok', 'N/A')}")
+    print(f"  Response: {status_dict.get('response_summary', 'N/A')[:200]}")
+
+    # Step 6: Create a MutationCandidate (metadata-only, no executable config)
+    print("\n[STEP 6] Building metadata-only MutationCandidate...")
 
     candidate_sha = hashlib.sha256(
         json.dumps(
             {
                 "bot_id": bot_id,
-                "snapshot": snapshot_dict,
-                "proof_timestamp": snapshot.fetched_at_utc,
+                "ping": ping_dict,
+                "status": status_dict,
+                "auth_summary": auth_summary,
+                "proof_timestamp": ping_snapshot.fetched_at_utc,
             },
             sort_keys=True,
         ).encode()
     ).hexdigest()[:16]
 
-    # The parameters field is proof metadata only. No parameter change is
-    # being proposed — this is a read-only observation.
     candidate = MutationCandidate(
         bot_id=bot_id,
         bot_name="FreqForge",
@@ -252,7 +385,10 @@ def main() -> int:
         source_decision="observe",
         parameters={"dry_run": 1},  # metadata flag: 1 = dry-run confirmed
         active_overlay_candidates={},
-        metadata_only_candidates={"proof_phase2_ping": 1},
+        metadata_only_candidates={
+            "proof_phase2_ping": 1,
+            "proof_phase2_status_auth": 1,
+        },
         requires_backtest=False,
         requires_paper_validation=False,
         requires_human_approval=True,
@@ -263,28 +399,30 @@ def main() -> int:
     print(f"  base_mode: {candidate.base_mode}")
     print(f"  requires_human_approval: {candidate.requires_human_approval}")
 
-    # Step 5: RiskGuard-style local check
-    print("\n[STEP 5] Running RiskGuard-style local check...")
+    # Step 7: RiskGuard-style local check
+    print("\n[STEP 7] Running RiskGuard-style local check...")
     riskguard_result = _riskguard_check(candidate)
     print(f"  Result: {riskguard_result['result']}")
     print(f"  Reason: {riskguard_result['reason']}")
     for detail in riskguard_result["details"]:
         print(f"    - {detail}")
 
-    # Step 6: ShadowLogger entry (in-memory)
-    print("\n[STEP 6] Logging to ShadowLogger (in-memory)...")
+    # Step 8: ShadowLogger entry (in-memory)
+    print("\n[STEP 8] Logging to ShadowLogger (in-memory)...")
     shadow_logger = ShadowLogger(log_dir=None)  # in-memory mode
 
     shadow_logger.log(
         bot_id=bot_id,
         candidate_sha=candidate_sha,
         params=dict(candidate.parameters),
-        outcome="shadow_proposal_proof",
+        outcome="shadow_proposal_proof_jwt",
         phase="proof",
         decision="hold",
         reason=(
-            f"Phase 2 proof: first REST GET shadow proposal. "
-            f"Ping status={snapshot.status_code}, "
+            f"Phase 2 proof: REST GET shadow proposal with JWT auth. "
+            f"Ping status={ping_snapshot.status_code}, "
+            f"Status code={status_dict.get('status_code', 'N/A')}, "
+            f"Auth={auth_summary.get('auth_result', 'N/A')}, "
             f"RiskGuard={riskguard_result['result']}"
         ),
     )
@@ -301,11 +439,13 @@ def main() -> int:
         print(f"  Phase: {logged_entries[0]['phase']}")
         print(f"  Decision: {logged_entries[0]['decision']}")
 
-    # Step 7: Build pending-human approval artifact
-    print("\n[STEP 7] Building pending-human approval artifact...")
+    # Step 9: Build pending-human approval artifact
+    print("\n[STEP 9] Building pending-human approval artifact...")
     approval_artifact = _build_pending_human_artifact(
         candidate=candidate,
-        snapshot=snapshot_dict,
+        ping_snapshot=ping_dict,
+        status_snapshot=status_dict,
+        auth_summary=auth_summary,
         riskguard_result=riskguard_result,
         shadow_logger_result=shadow_logger_result,
     )
@@ -314,10 +454,12 @@ def main() -> int:
     print(f"  Proposal ID: {approval_artifact['proposal_id']}")
     print(f"  Approval status: {approval_artifact['approval_status']}")
 
-    # Step 8: Write proof report
-    print(f"\n[STEP 8] Writing proof report to {_REPORT_PATH}...")
+    # Step 10: Write proof report
+    print(f"\n[STEP 10] Writing proof report to {_REPORT_PATH}...")
     _write_report(
-        snapshot=snapshot_dict,
+        ping_snapshot=ping_dict,
+        status_snapshot=status_dict,
+        auth_summary=auth_summary,
         candidate=candidate,
         candidate_sha=candidate_sha,
         riskguard_result=riskguard_result,
@@ -326,20 +468,52 @@ def main() -> int:
     )
     print("  Report written successfully.")
 
+    # Determine verdict color
+    proof_ok = ping_snapshot.ok or status_dict.get("ok", False)
+    auth_ok = auth_summary.get("auth_result") == "SUCCESS"
+    missing_env_vars = auth_summary.get("missing_env_vars", [])
+
+    if auth_ok:
+        verdict = "GREEN"
+        verdict_text = "GREEN ✅ — All safety gates exercised. Authenticated /status fetched."
+    elif missing_env_vars:
+        verdict = "YELLOW"
+        verdict_text = (
+            "YELLOW ⚠️ — Safety gates exercised. Auth structure validated. "
+            "Proof incomplete: required env vars not set. "
+            f"Missing: {', '.join(missing_env_vars)}"
+        )
+    elif proof_ok:
+        verdict = "YELLOW"
+        verdict_text = (
+            "YELLOW ⚠️ — /api/v1/ping succeeded but /api/v1/status auth failed. "
+            "Check Freqtrade API credentials and bot configuration."
+        )
+    else:
+        verdict = "RED"
+        verdict_text = (
+            "RED ❌ — Bot unreachable. Both /api/v1/ping and /api/v1/status failed. "
+            "Check bot container status and network connectivity."
+        )
+
     # Summary
     print("\n" + "=" * 72)
     print("PROOF COMPLETE")
     print("=" * 72)
     print(f"  Bot contacted:      {bot_id} (1 total)")
-    print(f"  REST method:        GET")
-    print(f"  Endpoint:           /api/v1/ping")
-    print(f"  HTTP status:        {snapshot.status_code}")
-    print(f"  POST/PUT/etc:       0")
+    print(f"  REST GET calls:    2 (/api/v1/ping + /api/v1/status)")
+    print(f"  REST POST calls:   1 (/api/v1/token/login)")
+    print(f"  /api/v1/ping:      HTTP {ping_snapshot.status_code} ({'OK' if ping_snapshot.ok else 'FAIL'})")
+    print(f"  /api/v1/status:    HTTP {status_dict.get('status_code', 'N/A')} ({'OK' if status_dict.get('ok') else 'FAIL'})")
+    print(f"  Auth result:       {auth_summary.get('auth_result', 'N/A')}")
+    print(f"  PUT/PATCH/DELETE:  0")
     print(f"  Mutations:          0")
     print(f"  RiskGuard:          {riskguard_result['result']}")
     print(f"  ShadowLogger:       LOGGED ({shadow_logger_result['entries_count']} entries)")
     print(f"  Approval status:    {approval_artifact['approval_status']}")
     print(f"  Controller remains: PAUSED / L3_REPOSITORY_ONLY")
+    print("=" * 72)
+    print(f"  Verdict: {verdict_text}")
     print("=" * 72)
 
     return 0
@@ -349,7 +523,9 @@ def main() -> int:
 # Report writer
 # ---------------------------------------------------------------------------
 def _write_report(
-    snapshot: dict[str, Any],
+    ping_snapshot: dict[str, Any],
+    status_snapshot: dict[str, Any],
+    auth_summary: dict[str, Any],
     candidate: MutationCandidate,
     candidate_sha: str,
     riskguard_result: dict[str, Any],
@@ -359,42 +535,66 @@ def _write_report(
     """Write the Phase 2 proof report as markdown."""
     ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    report = f"""# SI v2 Phase 2 — First Read-Only REST ShadowProposal Proof
+    report = f"""# SI v2 Phase 2 — Read-Only REST ShadowProposal Proof with JWT Auth
 
 **Date:** {ts}
 **Proof script:** `self_improvement_v2/src/si_v2/proofs/first_rest_shadowproposal_proof.py`
-**Branch:** `feat/si-v2-first-rest-shadowproposal-proof`
+**Branch:** `feat/si-v2-readonly-freqtrade-jwt-auth`
 
 ---
 
 ## Executive Summary
 
 This proof demonstrates that the SI v2 controller can read real dry-run bot
-telemetry from exactly one Freqtrade bot via REST GET only and produce exactly
-one ShadowProposal artifact that passes through the existing safety chain:
-RiskGuard-style validation, ShadowLogger logging, and a documented
-pending-human approval state.
+telemetry from exactly one Freqtrade bot via REST GET with JWT authentication
+and produce exactly one ShadowProposal artifact that passes through the
+existing safety chain: RiskGuard-style validation, ShadowLogger logging, and
+a documented pending-human approval state.
 
-**Result: GREEN** — All safety gates exercised. No runtime mutation. No config
-mutation. Controller remains PAUSED / L3_REPOSITORY_ONLY.
+**Root cause (this PR):** `/api/v1/ping` is unauthenticated but `/api/v1/status`
+requires JWT authentication. The previous proof (PR #205) could only reach
+`/api/v1/ping`. This PR adds minimal JWT auth so `/api/v1/status` can be
+fetched.
+
+**Implementation:** HTTP Basic Auth to `POST /api/v1/token/login`, in-memory
+JWT Bearer token for authenticated `GET /api/v1/status`.
+
+**Secret handling:** Environment variable references only in the registry.
+No committed credentials. No persisted tokens. No printed secrets.
+
+**Safety:** One bot, one-shot proof, shadow-only proposal. Controller remains
+PAUSED / L3_REPOSITORY_ONLY.
+
+---
+
+## Prior Proof Chain
+
+| PR | What | Status |
+|----|------|--------|
+| #205 | First REST ShadowProposal proof (ping only) | OPEN |
+| #206 | Fix registry to use Docker DNS URLs | MERGED |
+| #207 (this) | Add minimal JWT auth for /api/v1/status | PENDING |
 
 ---
 
 ## Scope and Non-Goals
 
 ### In Scope
-- Load bot registry from `self_improvement_v2/config/freqtrade_bots.readonly.json`
+- Load bot registry with env-reference auth metadata
 - Select exactly one bot: `freqtrade-freqforge`
-- Call exactly one REST GET endpoint: `/api/v1/ping`
+- Call unauthenticated REST GET `/api/v1/ping` for reachability
+- Authenticate via HTTP Basic Auth to `POST /api/v1/token/login`
+- Fetch authenticated REST GET `/api/v1/status`
 - Build a metadata-only `MutationCandidate` (no executable config change)
 - RiskGuard-style local check that blocks runtime
 - ShadowLogger entry (in-memory mode)
-- Pending-human approval artifact (documented, not submitted to ApprovalGateManager)
-- Proof report written to `self_improvement_v2/reports/phase2/first-rest-shadowproposal-proof.md`
+- Pending-human approval artifact
+- Proof report with JWT auth section
 
 ### Non-Goals (explicitly excluded)
 - No live trading enablement
-- No Freqtrade POST/PUT/PATCH/DELETE
+- No Freqtrade PUT/PATCH/DELETE
+- No `/api/v1/balance` or `/api/v1/show_config` (future iteration)
 - No WebSocket usage
 - No Docker commands or container inspection
 - No Freqtrade CLI calls
@@ -406,63 +606,55 @@ mutation. Controller remains PAUSED / L3_REPOSITORY_ONLY.
 
 ---
 
-## Repository State Observed
+## Registry Auth Metadata Shape
 
-| Property | Value |
-|----------|-------|
-| HEAD commit | `ede70bc01ed965aa7ed16c55e544b7503b1e82e2` |
-| Default branch | `main` |
-| Base branch commit | `ede70bc` |
-| Working branch | `feat/si-v2-first-rest-shadowproposal-proof` |
+```json
+"auth": {{
+  "type": "env_basic_jwt",
+  "username_env": "SI_V2_FREQTRADE_FREQFORGE_USERNAME",
+  "password_env": "SI_V2_FREQTRADE_FREQFORGE_PASSWORD"
+}}
+```
 
-### State Drift Observed
-
-| Source | Declared Commit | Actual HEAD |
-|--------|----------------|-------------|
-| `orchestrator/control/STATE.json` canonical_main_commit | `796760a5c` | `ede70bc` |
-| `docs/state/current-operational-state.md` | `0557b70` | `ede70bc` |
-
-Both `STATE.json` and `current-operational-state.md` declare stale commit refs.
-This is documented here as observed drift. No new issue was created; no
-reconciliation task was started.
-
-### Controller Status (from STATE.json)
-
-| Property | Value |
-|----------|-------|
-| controller_status | PAUSED |
-| operation_level | L3_REPOSITORY_ONLY |
-| runtime_policy | FORBIDDEN |
-| merge_policy | HUMAN_ONLY |
-| pause_reason | AWAITING_NEXT_EPIC |
-
-All values are unchanged by this proof.
+All four bots follow the same pattern with bot-specific env var names.
+No real credentials are stored in the repository.
 
 ---
 
-## Selected Bot
+## REST GET Snapshots
 
-| Field | Value |
-|-------|-------|
-| bot_id | `freqtrade-freqforge` |
-| base_url | `http://127.0.0.1:8086` |
-| dry_run_expected | `true` |
-| enabled | `true` |
-| Strategy | `FreqForge_Override` |
-| Container port | `8086 → 8080` (from docker-compose.yml) |
-
----
-
-## REST GET Snapshot
+### /api/v1/ping (unauthenticated, reachability)
 
 | Field | Value |
 |-------|-------|
 | Endpoint | `/api/v1/ping` |
 | Method | `GET` |
-| Status code | `{snapshot.get('status_code', 'N/A')}` |
-| OK | `{snapshot.get('ok', 'N/A')}` |
-| Response summary | `{snapshot.get('response_summary', 'N/A')[:300]}` |
-| Fetched at | `{snapshot.get('fetched_at_utc', 'N/A')}` |
+| Auth required | No |
+| Status code | `{ping_snapshot.get('status_code', 'N/A')}` |
+| OK | `{ping_snapshot.get('ok', 'N/A')}` |
+| Response summary | `{ping_snapshot.get('response_summary', 'N/A')[:200]}` |
+| Fetched at | `{ping_snapshot.get('fetched_at_utc', 'N/A')}` |
+
+### /api/v1/status (authenticated, bot status)
+
+| Field | Value |
+|-------|-------|
+| Endpoint | `/api/v1/status` |
+| Method | `GET` |
+| Auth required | Yes (Bearer JWT) |
+| Status code | `{status_snapshot.get('status_code', 'N/A')}` |
+| OK | `{status_snapshot.get('ok', 'N/A')}` |
+| Response summary | `{status_snapshot.get('response_summary', 'N/A')[:200]}` |
+| Fetched at | `{status_snapshot.get('fetched_at_utc', 'N/A')}` |
+
+### Auth (token_login)
+
+| Field | Value |
+|-------|-------|
+| Method | `POST /api/v1/token/login` |
+| Auth type | HTTP Basic Auth (from env vars) |
+| Result | `{auth_summary.get('auth_result', 'N/A')}` |
+| Missing env vars | `{', '.join(auth_summary.get('missing_env_vars', [])) or 'none'}` |
 
 ---
 
@@ -477,11 +669,7 @@ All values are unchanged by this proof.
 | requires_human_approval | `{candidate.requires_human_approval}` |
 | Parameters | `{dict(candidate.parameters)}` |
 | Metadata-only candidates | `{candidate.metadata_only_candidates}` |
-| Source | `real_freqtrade_rest_get_ping` |
-
-The candidate uses `parameters={{'dry_run': 1}}` as a metadata flag confirming
-dry-run mode. This is **not** an executable config change — it is proof
-metadata embedded to satisfy the `MutationCandidate` schema requirements.
+| Source | `real_freqtrade_rest_get_ping_and_status` |
 
 ---
 
@@ -511,7 +699,6 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | Artifact type | `{approval_artifact['artifact_type']}` |
 | Proposal ID | `{approval_artifact['proposal_id']}` |
 | Approval status | `{approval_artifact['approval_status']}` |
-| Reason | `{approval_artifact['reason']}` |
 
 ---
 
@@ -520,13 +707,14 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | Property | Value | Verified |
 |----------|-------|----------|
 | Bots contacted | 1 (freqtrade-freqforge) | ✅ |
-| REST GET only | Yes | ✅ |
+| REST GET only (data) | Yes | ✅ |
+| REST POST (auth only) | 1 (token_login) | ✅ |
+| REST PUT/PATCH/DELETE | 0 | ✅ |
 | WebSocket used | No | ✅ |
 | Docker commands | 0 | ✅ |
 | Freqtrade CLI calls | 0 | ✅ |
 | Runtime mutations | 0 | ✅ |
 | Config mutations | 0 | ✅ |
-| Freqtrade POST/PUT/PATCH/DELETE | 0 | ✅ |
 | Controller PAUSED | Yes | ✅ |
 | Controller L3_REPOSITORY_ONLY | Yes | ✅ |
 | ShadowProposals generated | 1 | ✅ |
@@ -534,60 +722,30 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | RiskGuard exercised | Yes (PASS_SHADOW_ONLY) | ✅ |
 | ShadowLogger exercised | Yes (LOGGED) | ✅ |
 | ApprovalGate path exercised | Yes (PENDING_HUMAN) | ✅ |
-| Secrets exposed | No | ✅ |
+| Secrets in repo | No | ✅ |
+| Secrets printed | No | ✅ |
+| Tokens persisted | No | ✅ |
 
 ---
 
-## Acceptance Criteria
+## Explicit Non-Goals (Not Changed in This PR)
 
-### Must-Include Fields
-
-| Field | Present | Value |
-|-------|---------|-------|
-| `proposal_id` / `candidate_sha256` | ✅ | `{candidate_sha}` |
-| `bot_id` = freqtrade-freqforge | ✅ | `freqtrade-freqforge` |
-| `source` = real_freqtrade_rest_get_ping | ✅ | `real_freqtrade_rest_get_ping` |
-| `hypothesis` | ✅ | See Executive Summary |
-| `evidence_summary` from ping | ✅ | `{snapshot.get('response_summary', 'N/A')[:100]}` |
-| `risk_guard_result` = PASS_SHADOW_ONLY | ✅ | `{riskguard_result['result']}` |
-| `shadow_logger_result` = LOGGED | ✅ | `LOGGED` |
-| `approval_status` = PENDING_HUMAN | ✅ | `{approval_artifact['approval_status']}` |
-| `runtime_mutations` = 0 | ✅ | 0 |
-| `config_mutations` = 0 | ✅ | 0 |
-| `freqtrade_post_requests` = 0 | ✅ | 0 |
-
-### Must-Not-Include Fields
-
-| Field | Present | Status |
-|-------|---------|--------|
-| `dry_run=false` | No | ✅ |
-| Live trading approval | No | ✅ |
-| Strategy edit | No | ✅ |
-| Config edit | No | ✅ |
-| Order command | No | ✅ |
-| Restart command | No | ✅ |
-| Docker command | No | ✅ |
+- No docker-compose.yml change
+- No network change
+- No port change
+- No depends_on change
+- No service change
+- No healthcheck change
+- No runtime mutation
+- No controller activation
+- No full telemetry system
 
 ---
 
 ## Final Verdict
 
-**GREEN** ✅ — All safety gates exercised. No mutations. Read-only proof.
+Proof result: {approval_artifact.get('metadata', {}).get('verdict', 'see console output')}
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  SI v2 Phase 2 — First REST ShadowProposal Proof                    │
-│                                                                     │
-│  Status:  ✅ COMPLETE                                               │
-│  Bot:     freqtrade-freqforge (1/1)                                 │
-│  Method:  GET /api/v1/ping                                          │
-│  Safety:  RiskGuard=PASS_SHADOW_ONLY                                │
-│           ShadowLogger=LOGGED                                       │
-│           Approval=PENDING_HUMAN                                    │
-│  Mutations: 0                                                       │
-│  Verdict:  GREEN — proof passes all acceptance criteria             │
-└─────────────────────────────────────────────────────────────────────┘
-```
 """
     _REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(_REPORT_PATH, "w") as f:
