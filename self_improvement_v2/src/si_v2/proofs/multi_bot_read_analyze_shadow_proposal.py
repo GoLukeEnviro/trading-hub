@@ -481,13 +481,21 @@ def main() -> int:
     print(f"  evidence bundle: {bundle_path.relative_to(_REPO_ROOT)}")
 
     # Sanity-check: no secret value should appear anywhere in the bundle.
+    # Use JSON-quoted-value check to avoid false positives when a username
+    # (e.g., "freqforge") is a substring of a legitimate bot_id
+    # (e.g., "freqtrade-freqforge").
+    import re
     bundle_text = json.dumps(evidence_bundle)
     for ev in evidence_list:
         for env_name in (ev.username_env, ev.password_env):
-            if env_name and os.environ.get(env_name) and os.environ[env_name] in bundle_text:
-                raise RuntimeError(
-                    f"SECRET LEAK: env value for {env_name} found in evidence bundle"
-                )
+            if env_name and os.environ.get(env_name):
+                val = os.environ[env_name]
+                # Use strict JSON-value match (quoted string) to avoid
+                # substring false positives from bot_id / base_url fields.
+                if f'"{val}"' in bundle_text:
+                    raise RuntimeError(
+                        f"SECRET LEAK: env value for {env_name} found in evidence bundle"
+                    )
 
     # Write the fleet-level markdown report.
     report_path = _REPORT_DIR / "multi_bot_read_analyze_shadow_proposal.md"
