@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "bots": [
+    {
+      "bot_id": "freqtrade-freqforge",
+      "base_url": "http://127.0.0.1:8086",
+      "dry_run_expected": true,
+      "enabled": true
+    },
+    {
+      "bot_id": "freqtrade-regime-hybrid",
+      "base_url": "http://127.0.0.1:8085",
+      "dry_run_expected": true,
+      "enabled": true
+    },
+    {
+      "bot_id": "freqtrade-freqforge-canary",
+      "base_url": "http://127.0.0.1:8081",
+      "dry_run_expected": true,
+      "enabled": true
+    },
+    {
+      "bot_id": "freqai-rebel",
+      "base_url": "http://127.0.0.1:8087",
+      "dry_run_expected": true,
+      "enabled": true
+    }
+  ]
+}
