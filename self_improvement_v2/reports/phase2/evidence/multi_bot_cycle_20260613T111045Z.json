@@ -1,0 +1,354 @@
+{
+  "artifact_type": "multi_bot_read_analyze_shadow_proposal",
+  "bots": [
+    {
+      "auth_error_summary": "",
+      "auth_type": "env_basic_jwt",
+      "base_url": "http://trading-freqtrade-freqforge-1:8080",
+      "bot_id": "freqtrade-freqforge",
+      "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+      "missing_env_vars": [
+        "SI_V2_FREQTRADE_FREQFORGE_USERNAME",
+        "SI_V2_FREQTRADE_FREQFORGE_PASSWORD"
+      ],
+      "password_env": "SI_V2_FREQTRADE_FREQFORGE_PASSWORD",
+      "ping": {
+        "endpoint": "/api/v1/ping",
+        "ok": true,
+        "response_summary": "{\"status\": \"pong\"}",
+        "status_code": 200
+      },
+      "status": {
+        "auth_outcome": "YELLOW_MISSING_ENV_VARS",
+        "endpoint": "/api/v1/status",
+        "ok": false,
+        "open_trades": 0,
+        "response_summary": "YELLOW: missing env vars (SI_V2_FREQTRADE_FREQFORGE_USERNAME, SI_V2_FREQTRADE_FREQFORGE_PASSWORD)",
+        "status_code": 0
+      },
+      "username_env": "SI_V2_FREQTRADE_FREQFORGE_USERNAME"
+    },
+    {
+      "auth_error_summary": "",
+      "auth_type": "env_basic_jwt",
+      "base_url": "http://trading-freqtrade-regime-hybrid-1:8080",
+      "bot_id": "freqtrade-regime-hybrid",
+      "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+      "missing_env_vars": [
+        "SI_V2_FREQTRADE_REGIME_HYBRID_USERNAME",
+        "SI_V2_FREQTRADE_REGIME_HYBRID_PASSWORD"
+      ],
+      "password_env": "SI_V2_FREQTRADE_REGIME_HYBRID_PASSWORD",
+      "ping": {
+        "endpoint": "/api/v1/ping",
+        "ok": true,
+        "response_summary": "{\"status\": \"pong\"}",
+        "status_code": 200
+      },
+      "status": {
+        "auth_outcome": "YELLOW_MISSING_ENV_VARS",
+        "endpoint": "/api/v1/status",
+        "ok": false,
+        "open_trades": 0,
+        "response_summary": "YELLOW: missing env vars (SI_V2_FREQTRADE_REGIME_HYBRID_USERNAME, SI_V2_FREQTRADE_REGIME_HYBRID_PASSWORD)",
+        "status_code": 0
+      },
+      "username_env": "SI_V2_FREQTRADE_REGIME_HYBRID_USERNAME"
+    },
+    {
+      "auth_error_summary": "",
+      "auth_type": "env_basic_jwt",
+      "base_url": "http://trading-freqtrade-freqforge-canary-1:8080",
+      "bot_id": "freqtrade-freqforge-canary",
+      "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+      "missing_env_vars": [
+        "SI_V2_FREQTRADE_FREQFORGE_CANARY_USERNAME",
+        "SI_V2_FREQTRADE_FREQFORGE_CANARY_PASSWORD"
+      ],
+      "password_env": "SI_V2_FREQTRADE_FREQFORGE_CANARY_PASSWORD",
+      "ping": {
+        "endpoint": "/api/v1/ping",
+        "ok": true,
+        "response_summary": "{\"status\": \"pong\"}",
+        "status_code": 200
+      },
+      "status": {
+        "auth_outcome": "YELLOW_MISSING_ENV_VARS",
+        "endpoint": "/api/v1/status",
+        "ok": false,
+        "open_trades": 0,
+        "response_summary": "YELLOW: missing env vars (SI_V2_FREQTRADE_FREQFORGE_CANARY_USERNAME, SI_V2_FREQTRADE_FREQFORGE_CANARY_PASSWORD)",
+        "status_code": 0
+      },
+      "username_env": "SI_V2_FREQTRADE_FREQFORGE_CANARY_USERNAME"
+    },
+    {
+      "auth_error_summary": "",
+      "auth_type": "env_basic_jwt",
+      "base_url": "http://trading-freqai-rebel-1:8080",
+      "bot_id": "freqai-rebel",
+      "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+      "missing_env_vars": [
+        "SI_V2_FREQTRADE_FREQAI_REBEL_USERNAME",
+        "SI_V2_FREQTRADE_FREQAI_REBEL_PASSWORD"
+      ],
+      "password_env": "SI_V2_FREQTRADE_FREQAI_REBEL_PASSWORD",
+      "ping": {
+        "endpoint": "/api/v1/ping",
+        "ok": true,
+        "response_summary": "{\"status\": \"pong\"}",
+        "status_code": 200
+      },
+      "status": {
+        "auth_outcome": "YELLOW_MISSING_ENV_VARS",
+        "endpoint": "/api/v1/status",
+        "ok": false,
+        "open_trades": 0,
+        "response_summary": "YELLOW: missing env vars (SI_V2_FREQTRADE_FREQAI_REBEL_USERNAME, SI_V2_FREQTRADE_FREQAI_REBEL_PASSWORD)",
+        "status_code": 0
+      },
+      "username_env": "SI_V2_FREQTRADE_FREQAI_REBEL_USERNAME"
+    }
+  ],
+  "branch": "feat/si-v2-readonly-freqtrade-jwt-auth",
+  "commit_sha": "1789f76",
+  "cycle_id": "20260613T111045Z",
+  "fleet_summary": {
+    "config_mutations": 0,
+    "fleet_verdict": "YELLOW",
+    "fleet_verdict_reason": "all 4 bots reachable (/ping=200) but JWT env vars not set; loop logic executed with reachability-only evidence",
+    "live_trading_mutations": 0,
+    "no_proposal_count": 0,
+    "ping_failed_count": 0,
+    "ping_ok_count": 4,
+    "runtime_mutations": 0,
+    "shadow_proposal_count": 4,
+    "status_authenticated_count": 0,
+    "status_failed_count": 0,
+    "status_yellow_missing_env_count": 4,
+    "total_bots": 4
+  },
+  "generated_at_utc": "2026-06-13T11:10:45.687023+00:00",
+  "per_bot_decisions": [
+    {
+      "base_mode": "proposal_only",
+      "bot_id": "freqtrade-freqforge",
+      "candidate_sha256": "2ec09d92bb7ccd2f",
+      "decision_type": "SHADOW_PROPOSAL",
+      "evidence_summary": {
+        "auth_error_summary": "",
+        "auth_type": "env_basic_jwt",
+        "base_url": "http://trading-freqtrade-freqforge-1:8080",
+        "bot_id": "freqtrade-freqforge",
+        "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+        "missing_env_vars": [
+          "SI_V2_FREQTRADE_FREQFORGE_USERNAME",
+          "SI_V2_FREQTRADE_FREQFORGE_PASSWORD"
+        ],
+        "password_env": "SI_V2_FREQTRADE_FREQFORGE_PASSWORD",
+        "ping": {
+          "endpoint": "/api/v1/ping",
+          "ok": true,
+          "response_summary": "{\"status\": \"pong\"}",
+          "status_code": 200
+        },
+        "status": {
+          "auth_outcome": "YELLOW_MISSING_ENV_VARS",
+          "endpoint": "/api/v1/status",
+          "ok": false,
+          "open_trades": 0,
+          "response_summary": "YELLOW: missing env vars (SI_V2_FREQTRADE_FREQFORGE_USERNAME, SI_V2_FREQTRADE_FREQFORGE_PASSWORD)",
+          "status_code": 0
+        },
+        "username_env": "SI_V2_FREQTRADE_FREQFORGE_USERNAME"
+      },
+      "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+      "hypothesis": "telemetry_reachability_baseline_established",
+      "metadata_only_candidates": {
+        "ping_reachable": 1,
+        "status_auth_outcome_observed": 1
+      },
+      "mutation_policy": "safe_parameter_overlay_only",
+      "no_proposal_reason": null,
+      "parameters": {},
+      "requires_human_approval": true
+    },
+    {
+      "base_mode": "proposal_only",
+      "bot_id": "freqtrade-regime-hybrid",
+      "candidate_sha256": "e41638504c52a01d",
+      "decision_type": "SHADOW_PROPOSAL",
+      "evidence_summary": {
+        "auth_error_summary": "",
+        "auth_type": "env_basic_jwt",
+        "base_url": "http://trading-freqtrade-regime-hybrid-1:8080",
+        "bot_id": "freqtrade-regime-hybrid",
+        "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+        "missing_env_vars": [
+          "SI_V2_FREQTRADE_REGIME_HYBRID_USERNAME",
+          "SI_V2_FREQTRADE_REGIME_HYBRID_PASSWORD"
+        ],
+        "password_env": "SI_V2_FREQTRADE_REGIME_HYBRID_PASSWORD",
+        "ping": {
+          "endpoint": "/api/v1/ping",
+          "ok": true,
+          "response_summary": "{\"status\": \"pong\"}",
+          "status_code": 200
+        },
+        "status": {
+          "auth_outcome": "YELLOW_MISSING_ENV_VARS",
+          "endpoint": "/api/v1/status",
+          "ok": false,
+          "open_trades": 0,
+          "response_summary": "YELLOW: missing env vars (SI_V2_FREQTRADE_REGIME_HYBRID_USERNAME, SI_V2_FREQTRADE_REGIME_HYBRID_PASSWORD)",
+          "status_code": 0
+        },
+        "username_env": "SI_V2_FREQTRADE_REGIME_HYBRID_USERNAME"
+      },
+      "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+      "hypothesis": "telemetry_reachability_baseline_established",
+      "metadata_only_candidates": {
+        "ping_reachable": 1,
+        "status_auth_outcome_observed": 1
+      },
+      "mutation_policy": "safe_parameter_overlay_only",
+      "no_proposal_reason": null,
+      "parameters": {},
+      "requires_human_approval": true
+    },
+    {
+      "base_mode": "proposal_only",
+      "bot_id": "freqtrade-freqforge-canary",
+      "candidate_sha256": "bddb24e5aa1b3101",
+      "decision_type": "SHADOW_PROPOSAL",
+      "evidence_summary": {
+        "auth_error_summary": "",
+        "auth_type": "env_basic_jwt",
+        "base_url": "http://trading-freqtrade-freqforge-canary-1:8080",
+        "bot_id": "freqtrade-freqforge-canary",
+        "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+        "missing_env_vars": [
+          "SI_V2_FREQTRADE_FREQFORGE_CANARY_USERNAME",
+          "SI_V2_FREQTRADE_FREQFORGE_CANARY_PASSWORD"
+        ],
+        "password_env": "SI_V2_FREQTRADE_FREQFORGE_CANARY_PASSWORD",
+        "ping": {
+          "endpoint": "/api/v1/ping",
+          "ok": true,
+          "response_summary": "{\"status\": \"pong\"}",
+          "status_code": 200
+        },
+        "status": {
+          "auth_outcome": "YELLOW_MISSING_ENV_VARS",
+          "endpoint": "/api/v1/status",
+          "ok": false,
+          "open_trades": 0,
+          "response_summary": "YELLOW: missing env vars (SI_V2_FREQTRADE_FREQFORGE_CANARY_USERNAME, SI_V2_FREQTRADE_FREQFORGE_CANARY_PASSWORD)",
+          "status_code": 0
+        },
+        "username_env": "SI_V2_FREQTRADE_FREQFORGE_CANARY_USERNAME"
+      },
+      "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+      "hypothesis": "telemetry_reachability_baseline_established",
+      "metadata_only_candidates": {
+        "ping_reachable": 1,
+        "status_auth_outcome_observed": 1
+      },
+      "mutation_policy": "safe_parameter_overlay_only",
+      "no_proposal_reason": null,
+      "parameters": {},
+      "requires_human_approval": true
+    },
+    {
+      "base_mode": "proposal_only",
+      "bot_id": "freqai-rebel",
+      "candidate_sha256": "d4425fc934dedfd6",
+      "decision_type": "SHADOW_PROPOSAL",
+      "evidence_summary": {
+        "auth_error_summary": "",
+        "auth_type": "env_basic_jwt",
+        "base_url": "http://trading-freqai-rebel-1:8080",
+        "bot_id": "freqai-rebel",
+        "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+        "missing_env_vars": [
+          "SI_V2_FREQTRADE_FREQAI_REBEL_USERNAME",
+          "SI_V2_FREQTRADE_FREQAI_REBEL_PASSWORD"
+        ],
+        "password_env": "SI_V2_FREQTRADE_FREQAI_REBEL_PASSWORD",
+        "ping": {
+          "endpoint": "/api/v1/ping",
+          "ok": true,
+          "response_summary": "{\"status\": \"pong\"}",
+          "status_code": 200
+        },
+        "status": {
+          "auth_outcome": "YELLOW_MISSING_ENV_VARS",
+          "endpoint": "/api/v1/status",
+          "ok": false,
+          "open_trades": 0,
+          "response_summary": "YELLOW: missing env vars (SI_V2_FREQTRADE_FREQAI_REBEL_USERNAME, SI_V2_FREQTRADE_FREQAI_REBEL_PASSWORD)",
+          "status_code": 0
+        },
+        "username_env": "SI_V2_FREQTRADE_FREQAI_REBEL_USERNAME"
+      },
+      "fetched_at_utc": "2026-06-13T11:10:45.687023+00:00",
+      "hypothesis": "telemetry_reachability_baseline_established",
+      "metadata_only_candidates": {
+        "ping_reachable": 1,
+        "status_auth_outcome_observed": 1
+      },
+      "mutation_policy": "safe_parameter_overlay_only",
+      "no_proposal_reason": null,
+      "parameters": {},
+      "requires_human_approval": true
+    }
+  ],
+  "registry_path": "self_improvement_v2/config/freqtrade_bots.readonly.json",
+  "safety_results": [
+    {
+      "approval_status": "PENDING_HUMAN",
+      "bot_id": "freqtrade-freqforge",
+      "candidate_sha256": "2ec09d92bb7ccd2f",
+      "decision_type": "SHADOW_PROPOSAL",
+      "hypothesis": "telemetry_reachability_baseline_established",
+      "riskguard": "PASS_SHADOW_ONLY",
+      "riskguard_reason": "candidate 2ec09d92bb7ccd2f for freqtrade-freqforge is proposal_only, requires human approval, has empty parameters, and a safe mutation policy. Runtime application is blocked.",
+      "shadow_logger": "LOGGED",
+      "shadow_logger_entries": 1
+    },
+    {
+      "approval_status": "PENDING_HUMAN",
+      "bot_id": "freqtrade-regime-hybrid",
+      "candidate_sha256": "e41638504c52a01d",
+      "decision_type": "SHADOW_PROPOSAL",
+      "hypothesis": "telemetry_reachability_baseline_established",
+      "riskguard": "PASS_SHADOW_ONLY",
+      "riskguard_reason": "candidate e41638504c52a01d for freqtrade-regime-hybrid is proposal_only, requires human approval, has empty parameters, and a safe mutation policy. Runtime application is blocked.",
+      "shadow_logger": "LOGGED",
+      "shadow_logger_entries": 1
+    },
+    {
+      "approval_status": "PENDING_HUMAN",
+      "bot_id": "freqtrade-freqforge-canary",
+      "candidate_sha256": "bddb24e5aa1b3101",
+      "decision_type": "SHADOW_PROPOSAL",
+      "hypothesis": "telemetry_reachability_baseline_established",
+      "riskguard": "PASS_SHADOW_ONLY",
+      "riskguard_reason": "candidate bddb24e5aa1b3101 for freqtrade-freqforge-canary is proposal_only, requires human approval, has empty parameters, and a safe mutation policy. Runtime application is blocked.",
+      "shadow_logger": "LOGGED",
+      "shadow_logger_entries": 1
+    },
+    {
+      "approval_status": "PENDING_HUMAN",
+      "bot_id": "freqai-rebel",
+      "candidate_sha256": "d4425fc934dedfd6",
+      "decision_type": "SHADOW_PROPOSAL",
+      "hypothesis": "telemetry_reachability_baseline_established",
+      "riskguard": "PASS_SHADOW_ONLY",
+      "riskguard_reason": "candidate d4425fc934dedfd6 for freqai-rebel is proposal_only, requires human approval, has empty parameters, and a safe mutation policy. Runtime application is blocked.",
+      "shadow_logger": "LOGGED",
+      "shadow_logger_entries": 1
+    }
+  ],
+  "schema_version": 1
+}
