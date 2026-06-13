@@ -62,11 +62,22 @@ from si_v2.loop.cycle_state import (  # noqa: E402
 from si_v2.loop.fleet_analyzer import (  # noqa: E402
     DECISION_SHADOW_PROPOSAL,
     BotEvidence,
+    JsonObject,
     analyze_fleet,
 )
 from si_v2.loop.telemetry_normalizer import (  # noqa: E402
     NormalizedTelemetry,
     normalize_raw_evidence,
+)
+from si_v2.signals.freqtrade_signals import (  # noqa: E402
+    collect_bot_signals,
+)
+from si_v2.signals.fusion import (  # noqa: E402
+    build_proposal_evidence,
+    fuse_signals,
+)
+from si_v2.signals.models import (  # noqa: E402
+    BotSignalSnapshot,
 )
 
 # ------------------------------------------------------------------
@@ -139,15 +150,13 @@ def _riskguard_check(decision: dict[str, object]) -> dict[str, object]:
 def _collect_one(
     bot: dict[str, object],
     now_iso: str,
-) -> tuple[NormalizedTelemetry, dict[str, object]]:
-    """Collect /ping and /status evidence for a single bot.
+) -> tuple[NormalizedTelemetry, dict[str, object], SIV2FreqtradeTelemetryConnector | None]:
+    """Collect /ping, /status evidence for a single bot, plus an auth connector
+    for optional signal collection.
 
-    Returns a tuple of (NormalizedTelemetry, debug_dict). The debug dict is
-    used for console output only; the NormalizedTelemetry is the structured
-    input to the normalizer and fleet analyzer.
-
-    No credential value is ever read, printed, or stored. Env-var lookups
-    use the variable name only for missing-env detection.
+    Returns a tuple of (NormalizedTelemetry, debug_dict, auth_connector_or_None).
+    The auth connector can be reused for additional signal endpoints.
+    No credential value is ever read, printed, or stored.
     """
     bot_id: str = bot["bot_id"]  # type: ignore[index]
     base_url: str = bot["base_url"]  # type: ignore[index]
@@ -170,6 +179,7 @@ def _collect_one(
     status_auth_outcome = "NOT_ATTEMPTED"
     missing_env_vars: list[str] = []
     auth_error_summary = ""
+    auth_connector: SIV2FreqtradeTelemetryConnector | None = None
 
     if username_env and password_env:
         # Check env vars by NAME only — never read the value
@@ -185,19 +195,21 @@ def _collect_one(
             )
         else:
             # Build an authenticated connector and attempt login + status
-            auth_connector = SIV2FreqtradeTelemetryConnector(
+            _auth_connector_inner = SIV2FreqtradeTelemetryConnector(
                 base_url=base_url,
                 bot_id=bot_id,
                 username_env=username_env,
                 password_env=password_env,
             )
             try:
-                auth_connector.token_login()
+                _auth_connector_inner.token_login()
                 status_auth_outcome = "AUTHENTICATED"
+                auth_connector = _auth_connector_inner
             except RuntimeError as exc:
                 status_auth_outcome = "FAILED"
                 auth_error_summary = str(exc)[:200]
                 status_response_summary = f"auth_error: {auth_error_summary}"
+                auth_connector = None
             else:
                 try:
                     status_snapshot = auth_connector.fetch_snapshot("/api/v1/status")
@@ -242,7 +254,7 @@ def _collect_one(
         "missing_env_vars": list(missing_env_vars),
     }
 
-    return telemetry, debug
+    return telemetry, debug, auth_connector
 
 
 # ------------------------------------------------------------------
@@ -283,11 +295,17 @@ def _current_branch() -> str:
 # ------------------------------------------------------------------
 
 
-def _telemetry_to_bot_evidence(telemetry: NormalizedTelemetry) -> BotEvidence:
+def _telemetry_to_bot_evidence(
+    telemetry: NormalizedTelemetry,
+    signal_depth: float = 0.0,
+    proposal_evidence_json: JsonObject | None = None,
+) -> BotEvidence:
     """Convert NormalizedTelemetry to a BotEvidence dataclass.
 
     Args:
         telemetry: Normalized telemetry for one bot.
+        signal_depth: Optional signal depth score (0.0-1.0).
+        proposal_evidence_json: Optional structured proposal evidence.
 
     Returns:
         A BotEvidence dataclass suitable for ``analyze_fleet()``.
@@ -315,6 +333,8 @@ def _telemetry_to_bot_evidence(telemetry: NormalizedTelemetry) -> BotEvidence:
             else ""
         ),
         fetched_at_utc=telemetry.fetched_at_utc,
+        signal_depth=signal_depth,
+        proposal_evidence_json=proposal_evidence_json,
     )
 
 
@@ -401,14 +421,17 @@ def run_active_cycle() -> int:
     telemetry_list: list[NormalizedTelemetry] = []
     evidence_list: list[BotEvidence] = []
     debug_by_bot: dict[str, dict[str, object]] = {}
+    auth_connectors_by_bot: dict[str, SIV2FreqtradeTelemetryConnector] = {}
 
     for bot in bots:
         bot_id = bot.get("bot_id", "<missing>")
         print(f"\n  --- {bot_id} @ {bot.get('base_url')} ---")
-        telemetry, debug = _collect_one(bot, now_iso)
+        telemetry, debug, auth_connector = _collect_one(bot, now_iso)
         telemetry_list.append(telemetry)
         evidence_list.append(_telemetry_to_bot_evidence(telemetry))
         debug_by_bot[bot_id] = debug
+        if auth_connector is not None:
+            auth_connectors_by_bot[bot_id] = auth_connector
 
         print(f"  /api/v1/ping:  HTTP {debug['ping']['status_code']} "
               f"({'OK' if debug['ping']['ok'] else 'FAIL'})")
@@ -417,6 +440,55 @@ def run_active_cycle() -> int:
             print(f"  missing env:   {', '.join(debug['missing_env_vars'])}")
         print(f"  /api/v1/status: HTTP {debug['status']['status_code']} "
               f"({'AUTH' if debug['status']['auth_outcome'] == 'AUTHENTICATED' else 'SKIP'})")
+
+    # ------------------------------------------------------------------
+    # Step 2b: Collect rich signal snapshots (optional, non-blocking)
+    # ------------------------------------------------------------------
+    print("\n[STEP 2b] Collecting rich signal summaries...")
+    signal_snapshots: list[BotSignalSnapshot] = []
+    signal_snapshots_by_bot: dict[str, BotSignalSnapshot] = {}
+    for bot in bots:
+        bot_id = bot.get("bot_id", "<missing>")
+        connector = auth_connectors_by_bot.get(bot_id)
+        if connector is not None and connector.authenticated:
+            try:
+                snap = collect_bot_signals(connector, bot_id, cycle_id)
+                signal_snapshots.append(snap)
+                signal_snapshots_by_bot[bot_id] = snap
+                q = snap.signal_quality
+                if q:
+                    print(f"  {bot_id}: signal_depth={snap.signal_depth:.2f} "
+                          f"({q.available_count}/{q.total_endpoints} endpoints)")
+                else:
+                    print(f"  {bot_id}: signal_depth={snap.signal_depth:.2f}")
+            except Exception as exc:
+                print(f"  {bot_id}: signal collection error — {str(exc)[:80]}")
+        else:
+            print(f"  {bot_id}: skip (not authenticated)")
+
+    # Fuse fleet signals
+    fleet_signals = fuse_signals(signal_snapshots, cycle_id)
+    has_rich_signals = fleet_signals.has_rich_signals
+    print(f"  fleet_signal_depth={fleet_signals.fleet_signal_depth:.2f}, "
+          f"rich_signals={has_rich_signals}")
+
+    # Rebuild evidence_list with signal data for signal-aware fleet analysis
+    evidence_list = [
+        _telemetry_to_bot_evidence(
+            t,
+            signal_depth=(
+                signal_snapshots_by_bot[t.bot_id].signal_depth
+                if t.bot_id in signal_snapshots_by_bot
+                else 0.0
+            ),
+            proposal_evidence_json=(
+                build_proposal_evidence(signal_snapshots_by_bot[t.bot_id]).to_json_safe()
+                if t.bot_id in signal_snapshots_by_bot
+                else None
+            ),
+        )
+        for t in telemetry_list
+    ]
 
     # ------------------------------------------------------------------
     # Step 3: Analyze fleet

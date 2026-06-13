@@ -39,6 +39,12 @@ JsonObject = dict[str, JsonValue]
 ALLOWED_GET_ENDPOINTS: Final[frozenset[str]] = frozenset({
     "/api/v1/ping",
     "/api/v1/status",
+    "/api/v1/count",
+    "/api/v1/profit",
+    "/api/v1/performance",
+    "/api/v1/daily",
+    "/api/v1/whitelist",
+    "/api/v1/version",
 })
 
 # /api/v1/ping does not require auth; all others do.
