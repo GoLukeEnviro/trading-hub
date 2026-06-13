@@ -1,29 +1,49 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "bots": [
     {
       "bot_id": "freqtrade-freqforge",
       "base_url": "http://trading-freqtrade-freqforge-1:8080",
       "dry_run_expected": true,
-      "enabled": true
+      "enabled": true,
+      "auth": {
+        "type": "env_basic_jwt",
+        "username_env": "SI_V2_FREQTRADE_FREQFORGE_USERNAME",
+        "password_env": "SI_V2_FREQTRADE_FREQFORGE_PASSWORD"
+      }
     },
     {
       "bot_id": "freqtrade-regime-hybrid",
       "base_url": "http://trading-freqtrade-regime-hybrid-1:8080",
       "dry_run_expected": true,
-      "enabled": true
+      "enabled": true,
+      "auth": {
+        "type": "env_basic_jwt",
+        "username_env": "SI_V2_FREQTRADE_REGIME_HYBRID_USERNAME",
+        "password_env": "SI_V2_FREQTRADE_REGIME_HYBRID_PASSWORD"
+      }
     },
     {
       "bot_id": "freqtrade-freqforge-canary",
       "base_url": "http://trading-freqtrade-freqforge-canary-1:8080",
       "dry_run_expected": true,
-      "enabled": true
+      "enabled": true,
+      "auth": {
+        "type": "env_basic_jwt",
+        "username_env": "SI_V2_FREQTRADE_FREQFORGE_CANARY_USERNAME",
+        "password_env": "SI_V2_FREQTRADE_FREQFORGE_CANARY_PASSWORD"
+      }
     },
     {
       "bot_id": "freqai-rebel",
       "base_url": "http://trading-freqai-rebel-1:8080",
       "dry_run_expected": true,
-      "enabled": true
+      "enabled": true,
+      "auth": {
+        "type": "env_basic_jwt",
+        "username_env": "SI_V2_FREQTRADE_FREQAI_REBEL_USERNAME",
+        "password_env": "SI_V2_FREQTRADE_FREQAI_REBEL_PASSWORD"
+      }
     }
   ]
 }
