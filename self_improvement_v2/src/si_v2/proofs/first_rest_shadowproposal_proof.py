@@ -27,6 +27,10 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from si_v2.state.schemas import MutationCandidate
 
 # ---------------------------------------------------------------------------
 # Repository-relative paths
@@ -164,11 +168,11 @@ def main() -> int:
     sys.path.insert(0, str(_REPO_ROOT / "self_improvement_v2" / "src"))
 
     # Lazy imports (required after sys.path is set)
-    from si_v2.adapters.freqtrade_rest_readonly import (  # noqa: E402
+    from si_v2.adapters.freqtrade_rest_readonly import (
         SIV2FreqtradeTelemetryConnector,
     )
-    from si_v2.deploy.shadow_logger import ShadowLogger  # noqa: E402
-    from si_v2.state.schemas import MutationCandidate  # noqa: E402
+    from si_v2.deploy.shadow_logger import ShadowLogger
+    from si_v2.state.schemas import MutationCandidate
 
     print("=" * 72)
     print("SI v2 Phase 2 — First Read-Only REST ShadowProposal Proof")
