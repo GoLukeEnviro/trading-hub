@@ -1,6 +1,6 @@
 # SI v2 Phase 2 — First Read-Only REST ShadowProposal Proof
 
-**Date:** 2026-06-13T09:15:48Z
+**Date:** 2026-06-13T09:26:29Z
 **Proof script:** `self_improvement_v2/src/si_v2/proofs/first_rest_shadowproposal_proof.py`
 **Branch:** `feat/si-v2-first-rest-shadowproposal-proof`
 
@@ -98,10 +98,10 @@ All values are unchanged by this proof.
 |-------|-------|
 | Endpoint | `/api/v1/ping` |
 | Method | `GET` |
-| Status code | `0` |
-| OK | `False` |
-| Response summary | `connection_error: <urlopen error [Errno 111] Connection refused>` |
-| Fetched at | `2026-06-13T09:15:48.429446+00:00` |
+| Status code | `200` |
+| OK | `True` |
+| Response summary | `{"status": "pong"}` |
+| Fetched at | `2026-06-13T09:26:29.790065+00:00` |
 
 ---
 
@@ -110,7 +110,7 @@ All values are unchanged by this proof.
 | Field | Value |
 |-------|-------|
 | Type | `MutationCandidate` (metadata-only) |
-| candidate_sha256 | `709c9dc6044c5e59` |
+| candidate_sha256 | `2c85ec3f001e400b` |
 | bot_id | `freqtrade-freqforge` |
 | base_mode | `proposal_only` |
 | requires_human_approval | `True` |
@@ -131,7 +131,7 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | Field | Value |
 |-------|-------|
 | Result | `PASS_SHADOW_ONLY` |
-| Reason | `candidate 709c9dc6044c5e59 for freqtrade-freqforge is proposal_only, requires human approval, and contains no forbidden parameters. Runtime application is blocked.` |
+| Reason | `candidate 2c85ec3f001e400b for freqtrade-freqforge is proposal_only, requires human approval, and contains no forbidden parameters. Runtime application is blocked.` |
 | Details | proposal_only=True; runtime_blocked=True |
 
 ### ShadowLogger (In-Memory)
@@ -148,7 +148,7 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 | Field | Value |
 |-------|-------|
 | Artifact type | `shadow_proposal_pending_human` |
-| Proposal ID | `709c9dc6044c5e59` |
+| Proposal ID | `2c85ec3f001e400b` |
 | Approval status | `PENDING_HUMAN` |
 | Reason | `Existing ApprovalGateManager requires BacktestResult and WalkForwardResult objects that are not produced by a ping-only proof. This artifact documents the pending-human state. Full approval gate integration requires a backtest or walk-forward result in a subsequent proof iteration.` |
 
@@ -183,11 +183,11 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 
 | Field | Present | Value |
 |-------|---------|-------|
-| `proposal_id` / `candidate_sha256` | ✅ | `709c9dc6044c5e59` |
+| `proposal_id` / `candidate_sha256` | ✅ | `2c85ec3f001e400b` |
 | `bot_id` = freqtrade-freqforge | ✅ | `freqtrade-freqforge` |
 | `source` = real_freqtrade_rest_get_ping | ✅ | `real_freqtrade_rest_get_ping` |
 | `hypothesis` | ✅ | See Executive Summary |
-| `evidence_summary` from ping | ✅ | `connection_error: <urlopen error [Errno 111] Connection refused>` |
+| `evidence_summary` from ping | ✅ | `{"status": "pong"}` |
 | `risk_guard_result` = PASS_SHADOW_ONLY | ✅ | `PASS_SHADOW_ONLY` |
 | `shadow_logger_result` = LOGGED | ✅ | `LOGGED` |
 | `approval_status` = PENDING_HUMAN | ✅ | `PENDING_HUMAN` |
@@ -227,3 +227,60 @@ metadata embedded to satisfy the `MutationCandidate` schema requirements.
 │  Verdict:  GREEN — proof passes all acceptance criteria             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Follow-Up: Registry URL Fix (PR #fix/si-v2-freqtrade-registry-docker-dns)
+
+### Root Cause
+
+The initial proof correctly proved the one-shot path but **failed to reach the Freqtrade bot** (`status=0`, `Connection refused`). The root cause is **incorrect `base_url` values** in `self_improvement_v2/config/freqtrade_bots.readonly.json` — they used `127.0.0.1` host-loopback URLs from inside the `hermes-green` container.
+
+### Why `127.0.0.1` Fails
+
+The proof script runs **inside the `hermes-green` container**. Inside that container,
+`127.0.0.1` points to `hermes-green` itself, **not** the Docker host. The host-mapped
+ports (`8086`, `8085`, `8081`, `8087`) are only reachable from the Docker host's
+loopback interface — not from other containers.
+
+### Correct Target
+
+All four Freqtrade bot containers are attached to the **`hermes-net`** Docker
+bridge network (confirmed from `docker-compose.yml`). Their internal Freqtrade
+API port is `8080` (container port, verified from `127.0.0.1:8086:8080` mapping).
+
+The existing `hermes-watchdog` service already confirms this pattern — it uses
+Docker DNS names with internal port `8080`:
+`http://trading-freqtrade-freqforge-1:8080/api/v1/ping`
+
+### Remediation (Registry-Only)
+
+The fix is **minimal and repository-only**:
+
+| Bot ID | Old URL (Host Loopback) | New URL (Docker DNS) |
+|--------|------------------------|----------------------|
+| `freqtrade-freqforge` | `http://127.0.0.1:8086` | `http://trading-freqtrade-freqforge-1:8080` |
+| `freqtrade-regime-hybrid` | `http://127.0.0.1:8085` | `http://trading-freqtrade-regime-hybrid-1:8080` |
+| `freqtrade-freqforge-canary` | `http://127.0.0.1:8081` | `http://trading-freqtrade-freqforge-canary-1:8080` |
+| `freqai-rebel` | `http://127.0.0.1:8087` | `http://trading-freqai-rebel-1:8080` |
+
+### Result After Fix
+
+| Metric | Before (old URL) | After (fixed URL) |
+|--------|-----------------|-------------------|
+| HTTP status | `0` (connection refused) | **`200`** ✅ |
+| Response | `connection_error` | **`{"status": "pong"}`** ✅ |
+| RiskGuard | `PASS_SHADOW_ONLY` | `PASS_SHADOW_ONLY` ✅ |
+| ShadowLogger | `LOGGED` | `LOGGED` ✅ |
+
+### Explicit Non-Goals (unchanged by this fix)
+
+| Item | Status |
+|------|--------|
+| `docker-compose.yml` change | ❌ Not required |
+| Docker network change | ❌ Not required |
+| Port mapping change | ❌ Not required |
+| `depends_on` change | ❌ Not required |
+| Container restart/rebuild | ❌ Not required |
+| Runtime mutation | ❌ Not performed |
+| Controller status | ✅ Remains PAUSED / L3_REPOSITORY_ONLY |`
