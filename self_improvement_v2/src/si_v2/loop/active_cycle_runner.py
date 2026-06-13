@@ -69,6 +69,10 @@ from si_v2.loop.telemetry_normalizer import (  # noqa: E402
     NormalizedTelemetry,
     normalize_raw_evidence,
 )
+from si_v2.measurement.ledger import (  # noqa: E402
+    build_ledger,
+    persist_ledger,
+)
 from si_v2.signals.freqtrade_signals import (  # noqa: E402
     collect_bot_signals,
 )
@@ -79,6 +83,16 @@ from si_v2.signals.fusion import (  # noqa: E402
 from si_v2.signals.models import (  # noqa: E402
     BotSignalSnapshot,
 )
+
+# ------------------------------------------------------------------
+# Measurement Ledger post-step constants
+# ------------------------------------------------------------------
+_MEASUREMENT_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "measurement"
+
+LEDGER_STATUS_SUCCESS: str = "SUCCESS"
+LEDGER_STATUS_WARNING: str = "WARNING"
+LEDGER_STATUS_SKIPPED: str = "SKIPPED"
+LEDGER_STATUS_FAILED: str = "FAILED"
 
 # ------------------------------------------------------------------
 # RiskGuard-style local check (same semantics as PR #207, #208)
@@ -370,6 +384,132 @@ def _check_secret_leak(
                     raise RuntimeError(
                         f"SECRET LEAK: env value for {env_name} found in evidence bundle"
                     )
+
+
+# ------------------------------------------------------------------
+# Measurement Ledger passive post-step
+# ------------------------------------------------------------------
+
+
+def _run_ledger_post_step(
+    state_dir: Path,
+    evidence_dir: Path,
+    ledger_dir: Path,
+) -> dict[str, object]:
+    """Passively build and persist the Measurement Ledger.
+
+    This is a read-only, non-blocking post-step. It scans existing cycle
+    state artifacts and writes the measurement ledger outputs. It never
+    raises — failures are captured and returned as status ``WARNING``
+    or ``FAILED`` so the cycle itself can complete.
+
+    Returns a dict with:
+        - status: SUCCESS | WARNING | SKIPPED | FAILED
+        - error: str or empty
+        - cycles_scanned: int
+        - bot_points: int
+        - fleet_points: int
+        - proposal_records: int
+        - attribution_windows: int
+        - mutations_all_zero: bool
+        - secrets_found: bool
+        - ledger_paths: dict of label -> str(path) or empty
+    """
+    result: dict[str, object] = {
+        "status": LEDGER_STATUS_SKIPPED,
+        "error": "",
+        "cycles_scanned": 0,
+        "bot_points": 0,
+        "fleet_points": 0,
+        "proposal_records": 0,
+        "attribution_windows": 0,
+        "mutations_all_zero": True,
+        "secrets_found": False,
+        "ledger_paths": {},
+    }
+
+    if not state_dir.is_dir():
+        result["status"] = LEDGER_STATUS_SKIPPED
+        result["error"] = f"state_dir not found: {state_dir}"
+        return result
+
+    # Build ledger
+    try:
+        ledger = build_ledger(
+            state_dir=state_dir,
+            evidence_dir=evidence_dir,
+            ledger_dir=ledger_dir,
+        )
+    except FileNotFoundError as exc:
+        result["status"] = LEDGER_STATUS_SKIPPED
+        result["error"] = str(exc)[:300]
+        return result
+    except (ValueError, KeyError, TypeError) as exc:
+        result["status"] = LEDGER_STATUS_WARNING
+        result["error"] = f"schema/parse failure: {str(exc)[:300]}"
+        return result
+    except Exception as exc:
+        result["status"] = LEDGER_STATUS_FAILED
+        result["error"] = f"unexpected: {str(exc)[:300]}"
+        return result
+
+    if ledger.cycle_count == 0:
+        result["status"] = LEDGER_STATUS_SKIPPED
+        result["error"] = "no cycle state artifacts found"
+        return result
+
+    # Persist
+    try:
+        paths = persist_ledger(ledger, ledger_dir=ledger_dir)
+    except OSError as exc:
+        result["status"] = LEDGER_STATUS_FAILED
+        result["error"] = f"write failure: {str(exc)[:300]}"
+        return result
+    except Exception as exc:
+        result["status"] = LEDGER_STATUS_FAILED
+        result["error"] = f"persist unexpected: {str(exc)[:300]}"
+        return result
+
+    # Collect results
+    muts_zero = all(p.runtime_mutations == 0 for p in ledger.fleet_points)
+    result["status"] = LEDGER_STATUS_SUCCESS
+    result["cycles_scanned"] = ledger.cycle_count
+    result["bot_points"] = len(ledger.bot_points)
+    result["fleet_points"] = len(ledger.fleet_points)
+    result["proposal_records"] = len(ledger.proposal_records)
+    result["attribution_windows"] = len(ledger.attribution_windows)
+    result["mutations_all_zero"] = muts_zero
+    result["secrets_found"] = False
+    result["ledger_paths"] = {k: str(v) for k, v in paths.items()}
+
+    return result
+
+
+def _adjusted_fleet_verdict(
+    base_verdict: str,
+    ledger_status: str,
+) -> str:
+    """Adjust the fleet verdict based on ledger status.
+
+    Rules:
+        - Ledger SUCCESS: verdict unchanged.
+        - Ledger SKIPPED: verdict unchanged (no artifacts yet).
+        - Ledger WARNING or FAILED:
+            - GREEN → GREEN_WITH_LEDGER_WARNING
+            - YELLOW → YELLOW_LEDGER_FAILED
+            - RED stays RED (already worse).
+            - GREEN_WITH_LEDGER_WARNING stays.
+            - Anything else → GREEN_WITH_LEDGER_WARNING if GREEN-ish.
+    """
+    if ledger_status in (LEDGER_STATUS_SUCCESS, LEDGER_STATUS_SKIPPED):
+        return base_verdict
+
+    # Ledger had problems
+    if "RED" in base_verdict:
+        return base_verdict
+    if "YELLOW" in base_verdict:
+        return "YELLOW_LEDGER_FAILED"
+    return "GREEN_WITH_LEDGER_WARNING"
 
 
 # ------------------------------------------------------------------
@@ -667,12 +807,52 @@ def run_active_cycle() -> int:
     print(f"  report:           {report_path.relative_to(_REPO_ROOT)}")
 
     # ------------------------------------------------------------------
+    # Step 6: Passive Measurement Ledger post-step
+    # ------------------------------------------------------------------
+    print("\n[STEP 6] Building passive Measurement Ledger...")
+    ledger_result = _run_ledger_post_step(
+        state_dir=_CYCLE_STATE_DIR,
+        evidence_dir=_EVIDENCE_DIR,
+        ledger_dir=_MEASUREMENT_DIR,
+    )
+    ledger_status = str(ledger_result["status"])
+    adjusted_verdict = _adjusted_fleet_verdict(
+        summary.fleet_verdict, ledger_status,
+    )
+
+    if ledger_status == LEDGER_STATUS_SUCCESS:
+        print("  status:               SUCCESS")
+        print(f"  cycles scanned:       {ledger_result['cycles_scanned']}")
+        print(f"  bot points:           {ledger_result['bot_points']}")
+        print(f"  fleet points:         {ledger_result['fleet_points']}")
+        print(f"  proposal records:     {ledger_result['proposal_records']}")
+        print(f"  attribution windows:  {ledger_result['attribution_windows']}")
+        print(f"  mutations all 0:      {ledger_result['mutations_all_zero']}")
+        raw_paths: object = ledger_result.get("ledger_paths", {})
+        if isinstance(raw_paths, dict):
+            for label, p in raw_paths.items():
+                if isinstance(p, str):
+                    try:
+                        print(f"  {label}:                {Path(p).relative_to(_REPO_ROOT)}")
+                    except ValueError:
+                        print(f"  {label}:                {p}")
+    elif ledger_status == LEDGER_STATUS_SKIPPED:
+        print(f"  status:               SKIPPED ({ledger_result['error']})")
+    else:
+        print(f"  status:               {ledger_status}")
+        print(f"  error:                {ledger_result['error']}")
+
+    print(f"  adjusted verdict:     {adjusted_verdict}")
+
+    # ------------------------------------------------------------------
     # Summary
     # ------------------------------------------------------------------
     print("\n" + "=" * 72)
     print("CYCLE COMPLETE")
     print("=" * 72)
     print(f"  fleet verdict:           {summary.fleet_verdict}")
+    print(f"  adjusted verdict:        {adjusted_verdict}")
+    print(f"  ledger status:           {ledger_status}")
     print(f"  shadow proposals:        {summary.shadow_proposal_count}")
     print(f"  no-proposal:             {summary.no_proposal_count}")
     print("  mutation counters:")
