@@ -1,10 +1,13 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot** — validated against merged main at commit
-> commit `0557b70` (PR #169 merge, issue #60 cache maintenance finalized).
+> **Canonical current-state snapshot** — validated against merged main at
+> commit `9ceeedd` (PR #215 — Rainbow read_only runtime source + freshness
+> guard).
 >
-> **Last updated:** 2026-06-11
-> **Branch:** `main` (HEAD = 0557b70, PR #169)
+> **Last updated:** 2026-06-14
+> **Branch:** `main` (HEAD = 9ceeedd, PR #215)
+> **Companion roadmap:** `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md`
+> **Live fleet snapshot:** `docs/state/canonical-trading-status.md`
 
 ---
 
@@ -15,8 +18,9 @@
 | Live trading | 🔴 `FORBIDDEN` — all bots `dry_run=true` |
 | Deployment mode | Containerized (Docker Compose) |
 | State machine | `LIVE_FORBIDDEN` — no path to live without RiskGuard validation + human approval |
-| Signal source | `ai-hedge-fund-crypto` (Bitget Futures OHLCV) |
+| Signal source | `ai-hedge-fund-crypto` (Bitget Futures OHLCV) + Rainbow §5 (read_only, observed only) |
 | Meta-orchestrator | `hermes-agent` in the `orchestrator` profile |
+| SI v2 controller | `PAUSED / L3_REPOSITORY_ONLY` |
 
 ### Bot Fleet
 
@@ -29,9 +33,7 @@
 
 ---
 
-## 2. SI v2 Controller Status (PR #160+ Post-PR #166)
-
-The continuous controller (introduced during the PR #158–#160 cycle) is:
+## 2. SI v2 Controller Status
 
 | Property | Value |
 |----------|-------|
@@ -42,31 +44,40 @@ The continuous controller (introduced during the PR #158–#160 cycle) is:
 | **Runtime policy** | `FORBIDDEN` |
 | **Pause reason** | `AWAITING_NEXT_APPROVED_EPIC` |
 | **Active epic** | None |
-| **Last controller merge** | PR #160 (`fdac27c`) |
-| **Last merge (overall)** | PR #169 (`0557b70`) — #60 cache maintenance |
 | **External state dir** | `/opt/data/si-v2-controller/state/` |
 | **Active worktree** | None |
 | **Active PR** | None |
 
-### Controller Layer Completed by PR #160
+### Active Cycle / Observation Loop
 
-- ✅ State contract finalized (separate mutable state, full validator rewrite)
-- ✅ 4-defect repair hardening (env export, inactive pilot timer policy, subprocess tests, ruff violations)
-- ✅ Production state stored at `/opt/data/si-v2-controller/state/`
-- ✅ Controller proven operational (proof report @ `runs/proof-report-20260611T154454Z.md`)
+* **Scheduler job:** `64866012641a` ("si-v2-active-cycle (6h, log-only)"),
+  schedule `17 */6 * * *`, profile `orchestrator`.
+* **Wrapper:** `/opt/data/scripts/si-v2-active-cycle-runner.sh` (mode 0700,
+  owner `hermes:hermes`).
+* **Latest cycle:** `20260614T204852Z` (2026-06-14 20:48:52 UTC).
+* **Fleet verdict:** `GREEN`. **Mutations:** 0 across
+  runtime/config/live_trading/docker/strategy. **Ping:** 4 / 4.
+* **Rainbow observation:** `SUCCESS` (source `read_only`, count 3).
+  Freshness 71 075 s, `fresh=False` — scoring gate is **0 / 10**
+  because the source SQLite carries stale 2026-06-14T01:04 timestamps.
+  This is the correct behavior of the PR #215 freshness guard; it is
+  not a loop failure.
+* **Ledger:** 27 fleet cycles, 108 bot measurement points, 24 proposal
+  records, `mutations_all_zero=True`, `secrets_found=False`.
 
-### Timer and Dedicated-User Activation — BLOCKED
+### Controller Isolation (#176)
 
-- **Timer-based automation** (cron-driven controller activation) is **not installed**.
-  `orchestrator/control/README.md` states: *"Runner and scheduler installation remain
-  a separate local VPS step. Their installation and activation require explicit
-  manual review. Nothing in this branch activates a scheduler or changes a running
-  service."*
-- **Dedicated-user / credential isolation** is **not implemented**. The controller
-  runs within the existing orchestrator profile. A dedicated Unix user with
-  scoped git+GitHub credentials has not been created.
-- Both require a **future root-level phase** and explicit human approval before
-  activation.
+* **#176 closed at Stage A** (label `status:stage-a-complete`). Stage A
+  isolation proof is the label-level attestation; the on-host
+  `si-v2-controller` Unix user **does not exist on this host today**
+  (`getent passwd si-v2-controller` returns nothing).
+* **Stage B** (dedicated Unix user, dedicated `HERMES_HOME`, scoped
+  GitHub/provider creds, hardened service unit) is future hardening,
+  deferred until the controller is actually activated. The current
+  observation loop is Stage A sufficient because it only reads Freqtrade
+  REST + Rainbow read_only HTTP via a loopback stub.
+* No `si-v2-controller` user is created in this PR. No systemd units
+  are installed. The Hermes scheduler is the only activation path.
 
 ---
 
@@ -77,56 +88,59 @@ The continuous controller (introduced during the PR #158–#160 cycle) is:
 | 0 | Stabilization & Foundation | ✅ Complete (all 12 issues closed) |
 | 1 | Shadowlock & Foundation | ✅ Complete (#12, #45, #47 merged) |
 | — | Controller Layer (PR #158–#160) | ✅ Complete (merged) |
-| 1 (Real-Data Intelligence) | Issues #55–#61 | ✅ Complete: #55–#59 merged (PRs #161–#166). #60, #61 OPEN |
-| 2 | Runtime Blockers (#43, #44, #40) | ⬜ Not started |
-| 3 | Rainbow Signal Integration | ⬜ Not started |
+| 1i | Real-Data Intelligence | ✅ Complete: #55–#59 (PRs #161–#166). #60 merged (PR #169). #61 closed. |
+| 1r | Rainbow Plumbing | ✅ Complete: PRs #212 (client), #213 (cycle/ledger), #214 (env override), #215 (runtime source + freshness guard) |
+| **2.0** | **Runtime Foundation & Docker Ownership** | 🟠 **IN PROGRESS** — owned by #200 |
+| 2.1 | SI v2 Autonomous Dry-Run Operation | ⏸ Pending — waiting on producer freshness for scoring gate |
+| 2.2 | Observability, Hardening & Self-Healing | ⏸ Pending — behind 2.0/2.1 |
+| 3 | Signal Weighting & Higher Autonomy | ⏸ Pending — behind 2.1 history gate |
 
-### Phase 0 — Completed Issues
+### Phase 0 — Status (Reconciled)
 
-All 12 Phase 0 issues (#22, #23, #32, #30, #31, #20, #21, #25, #26, #27, #38,
-#39, #12, #45, #47) have been completed via PRs #49–#54, #68–#75.
+All 12 Phase 0 issues (#22, #23, #32, #30, #31, #20, #21, #25, #26, #27,
+#38, #39, #12, #45, #47) have been completed via PRs #49–#54, #68–#75.
 
-Additionally, Phase 0 child issues [#43](https://github.com/GoLukeEnviro/trading-hub/issues/43)
-(FleetRiskManager fix, PR [#77](https://github.com/GoLukeEnviro/trading-hub/pull/77)) and
-[#40](https://github.com/GoLukeEnviro/trading-hub/issues/40) (dry-run signal revalidation,
-PR [#142](https://github.com/GoLukeEnviro/trading-hub/pull/142)) are now CLOSED.
+Additionally, Phase 0 child issues #43 (FleetRiskManager fix, PR #77)
+and #40 (dry-run signal revalidation, PR #142) are **CLOSED**.
 
-### Open Phase 0 Remaining Items
+### Phase 0 Remediation Issues (reconciled)
 
-| Issue | Title | Priority | Status |
-|-------|-------|----------|--------|
-| [#44](https://github.com/GoLukeEnviro/trading-hub/issues/44) | Runtime / Docker Compose ownership | 🟠 High | 🔴 BLOCKED — requires Docker/runtime access |
-| [#46](https://github.com/GoLukeEnviro/trading-hub/issues/46) | Branch/PR/worktree hygiene | 🟡 Medium | 🟡 OPEN — repo-only work |
+| Issue | Title | Status | Notes |
+|-------|-------|--------|-------|
+| [#44](https://github.com/GoLukeEnviro/trading-hub/issues/44) | Runtime / Docker Compose ownership and healthcheck hardening (parent) | ✅ **CLOSED** 2026-06-12 | Parent. Split into #199 (closed), #200 (open, see below), #201 (open, P2 hardening). |
+| [#199](https://github.com/GoLukeEnviro/trading-hub/issues/199) | infra: Add deterministic Docker healthchecks for Freqtrade fleet | ✅ **CLOSED** 2026-06-13 (PR #204) | Healthchecks present and observable in `canonical-trading-status.md`. |
+| [#200](https://github.com/GoLukeEnviro/trading-hub/issues/200) | infra: Canonicalize Compose project ownership, file authority, and unmanaged-container drift | 🟠 **OPEN** — current core runtime blocker | 7 of 20 running containers have no Compose project label. See §6 below. |
+| [#201](https://github.com/GoLukeEnviro/trading-hub/issues/201) | security: Evaluate non-root container execution for hermes-green and green-qdrant | 🟡 **OPEN** P2 hardening | Issue body says "P2 — Hardening, not blocking". Not a blocker for the current loop. Deferred to Phase 2.2. |
+| [#46](https://github.com/GoLukeEnviro/trading-hub/issues/46) | [SI v2][Phase 0] Branch, PR, and worktree hygiene execution plan | ✅ **CLOSED** 2026-06-11 | Branch/worktree hygiene accepted. |
+| [#60](https://github.com/GoLukeEnviro/trading-hub/issues/60) | [SI v2][Phase 1] Add Shadowlock SQLite maintenance command and approval-gated daily job plan | ✅ **CLOSED** 2026-06-11 (PR #169) | Maintenance running under approval-gate. |
 
 ---
 
-## 4. SI v2 Implementation Progress (Offline-Only)
+## 4. SI v2 Implementation Progress
 
-> **Note:** The SI v2 progress dashboard at
-> `self_improvement_v2/reports/progress/si_v2_progress_dashboard.md` is a
-> **deterministic offline snapshot** generated by a script. It does NOT make
-> GitHub API calls. The issue numbering in that dashboard references the
-> **ai4trade-bot** repo for Rainbow core issues (#51–#56, #79–#85), NOT the
-> trading-hub repo issue numbers.
+### Scheduled Observation Loop — 🟢 OPERATIONAL
 
-### Offline-Only Status — RED
+The SI v2 scheduled observation loop is **operational** as of the merge
+of PR #213 (Rainbow cycle + ledger integration) and PR #214 (env-var
+override) and PR #215 (runtime source + freshness guard). The
+**Measurement Ledger** (PR #210) and the **Active Cycle Runner**
+(PR #208) write deterministic JSONL artifacts. Mutation counters are
+zero across the board. The **Rainbow §5 read_only source** is observed
+but never scored, never applied, never executed.
 
-| Area | Issues | Status |
-|------|--------|--------|
-| Rainbow core (validator, snapshot, drift guard) | #79–#85 | ✅ Complete (offline/fixture-only) |
-| Post-Rainbow foundation (fixture harness, manifests) | #100–#104 | ✅ Complete |
-| Offline pipeline (golden path, evidence, regime fixtures) | #107–#112 | ✅ Complete |
-| Episode + readiness (skeleton, report, readiness matrix) | #97, #114–#118 | ✅ Complete |
-| Governance / CI / Approval | #120–#125 | 🔶 #124–#125 in progress, rest complete |
-| Rehearsal Control | #127–#132 | ⏳ Pending |
+### Capability Status
+
+See `docs/state/si-v2-capability-matrix.md` (rebuilt in this PR) for
+the full matrix.
 
 ### Live-Readiness Status — 🚫 BLOCKED
 
-- All SI v2 evidence, attribution, and readiness artifacts run on **fixtures only**
-- No real (live) market data pipeline is connected
-- No real Freqtrade trade data is ingested
-- Timer and dedicated-user activation are **blocked**
-- See [#124](https://github.com/GoLukeEnviro/trading-hub/issues/124) for blocker inventory
+* All SI v2 evidence, attribution, and readiness artifacts run on
+  **fixtures or read_only** observation.
+* No real (live) market data pipeline is connected.
+* No real Freqtrade trade data is ingested.
+* Timer and dedicated-user activation are **blocked**.
+* Scoring gate is **0 / 10** (awaiting producer freshness, not cycles).
 
 ---
 
@@ -139,19 +153,58 @@ PR [#142](https://github.com/GoLukeEnviro/trading-hub/pull/142)) are now CLOSED.
 | ShadowLogger contract | ✅ Defined | `docs/specs/runtime-safety-contract.md` |
 | RiskGuard implementation | 🔶 SI v2 spec only | Not a standalone service |
 | ShadowLogger implementation | ✅ Deployed | JSONL audit trail (`orchestrator/logs/shadow_decisions.jsonl`) |
-| FleetRiskManager | ✅ Deployed | With dry-run entry bug (#43) |
+| FleetRiskManager | ✅ Deployed | With dry-run entry bug (#43) — fixed |
 | CI safety gates | ✅ Implemented | PR #53 (#31) |
+| SI v2 mutation counters | ✅ Zero | Across all 27 fleet cycles |
 
 ---
 
-## 6. Related Documents
+## 6. Runtime Ownership — Unmanaged Container Drift (#200)
+
+20 containers running. 7 have no `com.docker.compose.project` label
+and are therefore **unmanaged** with respect to the canonical Compose
+authority. This is the exact failure mode #200 exists to fix.
+
+| Container | Compose project | Status |
+|-----------|-----------------|--------|
+| btc5m-bot | — | UNMANAGED (external) |
+| claude-worker | — | UNMANAGED (external) |
+| green-mem0 | — | UNMANAGED (external — likely `orchestrator/mem0/docker-compose.yml`) |
+| green-ollama | — | UNMANAGED (external — likely same) |
+| green-qdrant | — | UNMANAGED (external — likely same) |
+| trading-hermes-watchdog-1 | — | UNMANAGED (sidecar — verify in `freqtrade/docker-compose.fleet.yml`) |
+| weatherhermes | — | UNMANAGED (external) |
+
+**The 13 managed containers** (`trading-freqtrade-freqforge-1`,
+`trading-freqtrade-regime-hybrid-1`, `trading-freqtrade-freqforge-canary-1`,
+`trading-freqai-rebel-1`, `trading-freqtrade-webserver-1`,
+`trading-ai-hedge-fund-1`, `trading-shadowlock-1`, `trading-caddy-1`,
+`trading-docker-proxy-1`, `trading-dashboard`, `trading-guardian`,
+`hermes-green`, `rizzcoach-app-1`) all carry correct Compose project
+labels.
+
+**Impact on the SI v2 loop:** None today. The loop is Stage A isolated
+and reads only Freqtrade REST + the Rainbow read_only stub. The drift
+is a **fleet-automation reliability** concern, not a loop-failure
+concern.
+
+**Owner:** Hermes. **Reference:** `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md` Phase 2.0.
+
+---
+
+## 7. Related Documents
 
 | Document | Location | Status |
 |----------|----------|--------|
-| Implementation Roadmap | `docs/roadmap/implementation-roadmap.md` | ✅ Current (updated by this PR) |
-| SI v2 Documentation Index | `self_improvement_v2/docs/README.md` | 🔶 Historical (commit refs pre-date controller merge) |
-| SI v2 Architecture Index | `self_improvement_v2/docs/OFFLINE_SYSTEM_ARCHITECTURE_INDEX.md` | 🔶 Historical (uses old ai4trade-bot issue refs) |
-| SI v2 Progress Dashboard | `self_improvement_v2/reports/progress/si_v2_progress_dashboard.md` | 🔶 Historical (deterministic offline snapshot) |
-| Phase 1 Readiness Matrix | `self_improvement_v2/reports/readiness/phase_1_readiness_matrix.md` | 🔶 Historical (fixture-only, pre-controller) |
-| Controller Control README | `orchestrator/control/README.md` | ✅ Current |
+| Roadmap v2 (canonical forward-looking) | `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md` | ✅ Current |
+| Implementation Roadmap (historical) | `docs/roadmap/implementation-roadmap.md` | 🔶 Superseded by Roadmap v2 |
+| Current Operational State (this file) | `docs/state/current-operational-state.md` | ✅ Current |
+| Live Fleet Snapshot (regenerated) | `docs/state/canonical-trading-status.md` | ✅ Current |
+| SI v2 Capability Matrix (rebuilt) | `docs/state/si-v2-capability-matrix.md` | ✅ Current |
+| Phase 1 Intelligence Epic (historical) | `docs/state/phase-1-intelligence-epic.md` | 🔶 Historical snapshot at PR #161 |
+| Post-PR-160 Architecture (historical) | `docs/state/post-pr-160-architecture.md` | 🔶 Snapshot at PR #160 |
+| Issues #55–#61 Evidence Matrix (historical) | `docs/state/issues-55-61-evidence-matrix.md` | 🔶 Snapshot at PR #169 |
+| Phase 0 Closure Matrix (historical) | `docs/reports/phase0-closure-matrix-20260611.md` | 🔶 Superseded — see Roadmap v2 |
+| PR #215 evidence | `docs/context/2026-06-14-si-v2-rainbow-read-only-runtime-source.md` | ✅ Current |
+| PR #215 historical blocker snapshot | `docs/context/2026-06-14-si-v2-rainbow-read-only-prereq-blocked.md` | 🔶 Superseded by PR #215 |
 | AGENTS.md | `AGENTS.md` | ✅ Current |

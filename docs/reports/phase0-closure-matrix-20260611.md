@@ -1,5 +1,14 @@
 # Phase 0 Closure Matrix — 2026-06-11
 
+> **SUPERSEDED:** #44 and related Phase 0 issues have since been
+> reconciled. #44 is **CLOSED** (2026-06-12, parent). #46 is **CLOSED**
+> (2026-06-11). #199 is **CLOSED** (2026-06-13, PR #204). #200 is
+> **OPEN** and is the current runtime ownership blocker. #201 is
+> **OPEN** P2 hardening, not blocking. See
+> [`docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md`](../roadmap/roadmap-v2-blocker-first-runtime-ownership.md)
+> for the current state and Phase 2.0 plan. This file remains as
+> historical evidence of the 2026-06-11 closure matrix.
+>
 > **Purpose:** Full reconciliation matrix for Phase 0 (Stabilization & Foundation)
 > showing each child issue's status, PR, merge SHA, and remaining blockers.
 >
