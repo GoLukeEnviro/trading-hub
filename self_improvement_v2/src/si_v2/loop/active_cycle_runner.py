@@ -102,7 +102,52 @@ _RAINBOW_CONFIG = {
     "mode": "fixture",  # fixture | read_only
     "fixture_path": str(_REPO_ROOT / "self_improvement_v2" / "fixtures" / "rainbow-signals"),
     "max_records": None,
+    # read_only runtime source (None means "use RainbowClientConfig default"
+    # — required when mode=read_only; env-var override below)
+    "base_url": None,
+    "endpoint_path": "/signals/latest",
+    "timeout_seconds": 30,
+    # Freshness guard: a read_only/live observation is only scoring-eligible
+    # when the freshest observed signal is at most this many seconds old.
+    # Conservative default — Rainbow signals update on a multi-minute cadence.
+    "freshness_max_seconds": 900,  # 15 minutes
 }
+
+# Maximum allowed timeout for read_only HTTP fetches. Anything above is
+# capped to prevent runaway waits when a wrapper misconfigures the env var.
+_RAINBOW_TIMEOUT_MAX_SECONDS: int = 120
+
+
+def _is_rainbow_cycle_scoring_eligible(
+    rainbow_status: str,
+    rainbow_source: str,
+    rainbow_count: int,
+    rainbow_errors_count: int,
+    fresh: bool,
+) -> bool:
+    """Decide whether one Rainbow observation counts toward scoring history.
+
+    Rules (PR #215 acceptance criteria 6, 8, 9):
+
+    * Source MUST be ``read_only`` or ``live`` (NOT ``fixture``).
+    * Status MUST be ``SUCCESS``.
+    * Count MUST be >= 1.
+    * Errors MUST be 0.
+    * Freshness guard: ``fresh`` MUST be True (no stale replays).
+
+    This is a pure function — no I/O, no env reads, deterministic.
+    Centralized so the active cycle, the measurement ledger, and any
+    future scoring consumer stay in lockstep.
+    """
+    if rainbow_status != "SUCCESS":
+        return False
+    if rainbow_source not in ("read_only", "live"):
+        return False
+    if rainbow_count < 1:
+        return False
+    if rainbow_errors_count > 0:
+        return False
+    return fresh
 
 # ------------------------------------------------------------------
 # RiskGuard-style local check (same semantics as PR #207, #208)
@@ -429,22 +474,61 @@ def _load_rainbow_signals() -> dict[str, object]:
         "confidence_avg": None,
         "errors": [],
         "source": "",
+        # Freshness is only meaningful for read_only/live observations
+        # (fixtures are historical/replay data, never "fresh").
+        "freshness_seconds": None,
+        "freshness_max_seconds": None,
+        "fresh": False,
     }
 
-    cfg = _RAINBOW_CONFIG
+    cfg = dict(_RAINBOW_CONFIG)  # shallow copy to avoid mutating module default
 
     # Runtime env-var override: SI_V2_RAINBOW_ENABLED=true activates Rainbow
     # without changing the code default (which remains disabled/fail-closed).
     _env_override = os.environ.get("SI_V2_RAINBOW_ENABLED", "").strip().lower()
     if _env_override == "true":
-        cfg = dict(cfg)  # shallow copy to avoid mutating module default
         cfg["enabled"] = True
         _mode_override = os.environ.get("SI_V2_RAINBOW_MODE", "").strip().lower()
         if _mode_override in ("fixture", "read_only"):
             cfg["mode"] = _mode_override
+        # read_only runtime source — only consulted when mode=read_only.
+        # In fixture mode they are ignored (and remain None / unused).
+        _base_url = os.environ.get("SI_V2_RAINBOW_BASE_URL", "").strip()
+        if _base_url:
+            cfg["base_url"] = _base_url
+        _endpoint_path = os.environ.get(
+            "SI_V2_RAINBOW_ENDPOINT_PATH", ""
+        ).strip()
+        if _endpoint_path:
+            cfg["endpoint_path"] = _endpoint_path
+        _timeout_raw = os.environ.get("SI_V2_RAINBOW_TIMEOUT_SECONDS", "").strip()
+        if _timeout_raw:
+            try:
+                _timeout_int = int(_timeout_raw)
+                # Cap at the safety maximum to prevent runaway waits.
+                if 1 <= _timeout_int <= _RAINBOW_TIMEOUT_MAX_SECONDS:
+                    cfg["timeout_seconds"] = _timeout_int
+            except ValueError:
+                # Invalid input silently falls back to the code default.
+                pass
 
     if not cfg.get("enabled"):
         return default
+
+    mode = str(cfg.get("mode", "fixture"))
+    base_url = cfg.get("base_url")
+    # Fail-closed: read_only without a base_url cannot reach a source.
+    if mode == "read_only" and not (isinstance(base_url, str) and base_url.strip()):
+        return {
+            **default,
+            "status": "UNAVAILABLE",
+            "source": "read_only",
+            "errors": [
+                "read_only mode requires SI_V2_RAINBOW_BASE_URL (or "
+                "_RAINBOW_CONFIG.base_url); no credential-free HTTP source "
+                "configured"
+            ],
+        }
 
     try:
         from si_v2.rainbow.client import (
@@ -454,9 +538,12 @@ def _load_rainbow_signals() -> dict[str, object]:
 
         client_cfg = RainbowClientConfig(
             enabled=True,
-            mode=str(cfg.get("mode", "fixture")),
+            mode=mode,
             fixture_path=str(cfg.get("fixture_path")),
             max_records=cfg.get("max_records"),
+            base_url=base_url if isinstance(base_url, str) and base_url.strip() else None,
+            endpoint_path=str(cfg.get("endpoint_path", "/signals/latest")),
+            timeout_seconds=int(cfg.get("timeout_seconds", 30)),
         )
         client = RainbowSignalProviderClient.from_config(client_cfg)
         result = client.get_latest_signals()
@@ -471,6 +558,9 @@ def _load_rainbow_signals() -> dict[str, object]:
             "confidence_avg": None,
             "errors": [f"Rainbow client error: {str(exc)[:200]}"],
             "source": "error",
+            "freshness_seconds": None,
+            "freshness_max_seconds": None,
+            "fresh": False,
         }
 
     if not result.signals:
@@ -484,12 +574,17 @@ def _load_rainbow_signals() -> dict[str, object]:
             "confidence_avg": None,
             "errors": result.errors,
             "source": result.source,
+            "freshness_seconds": None,
+            "freshness_max_seconds": None,
+            "fresh": False,
         }
 
     # Collect signal metadata
     symbols: list[str] = []
     directions: list[str] = []
     confidences: list[float] = []
+    parsed_timestamps: list[datetime] = []
+    now_utc = datetime.now(UTC)
 
     for sig in result.signals:
         sym = str(sig.get("symbol", ""))
@@ -501,12 +596,51 @@ def _load_rainbow_signals() -> dict[str, object]:
         conf = sig.get("confidence")
         if isinstance(conf, (int, float)) and not isinstance(conf, bool):
             confidences.append(float(conf))
+        # Freshness: only computed for read_only / live sources (not fixtures).
+        # The client-mapper puts the producer timestamp in
+        # ``metadata.upstream_signal.timestamp`` or on the envelope root
+        # ``timestamp_utc``. We try both for forward-compat.
+        ts_raw = sig.get("timestamp_utc")
+        if not isinstance(ts_raw, str):
+            nested = sig.get("metadata")
+            if isinstance(nested, dict):
+                upstream = nested.get("upstream_signal")
+                if isinstance(upstream, dict):
+                    inner = upstream.get("timestamp")
+                    if isinstance(inner, str):
+                        ts_raw = inner
+        if isinstance(ts_raw, str) and ts_raw:
+            try:
+                ts_norm = ts_raw.replace("Z", "+00:00")
+                ts_parsed = datetime.fromisoformat(ts_norm)
+                if ts_parsed.tzinfo is None:
+                    ts_parsed = ts_parsed.replace(tzinfo=UTC)
+                parsed_timestamps.append(ts_parsed)
+            except ValueError:
+                # Unparseable timestamp — skip, freshness will be unknown.
+                pass
 
     confidence_min = min(confidences) if confidences else None
     confidence_max = max(confidences) if confidences else None
     confidence_avg = (
         round(sum(confidences) / len(confidences), 4) if confidences else None
     )
+
+    # Freshness: age (in seconds) of the freshest observed signal vs. now.
+    # Only meaningful for read_only / live observations — fixtures and
+    # unavailable sources return None and are never "fresh".
+    freshness_max_seconds = int(cfg.get("freshness_max_seconds", 900))
+    freshness_seconds: int | None = None
+    fresh = False
+    if parsed_timestamps and result.source in ("read_only", "live"):
+        freshest = max(parsed_timestamps)
+        age = (now_utc - freshest).total_seconds()
+        freshness_seconds = max(0, int(age))
+        fresh = freshness_seconds <= freshness_max_seconds
+    elif result.source == "fixture":
+        # Fixtures are historical/replay data — never "fresh" for scoring.
+        freshness_seconds = None
+        fresh = False
 
     return {
         "status": "SUCCESS",
@@ -518,6 +652,9 @@ def _load_rainbow_signals() -> dict[str, object]:
         "confidence_avg": confidence_avg,
         "errors": result.errors,
         "source": result.source,
+        "freshness_seconds": freshness_seconds,
+        "freshness_max_seconds": freshness_max_seconds,
+        "fresh": fresh,
     }
 
 
