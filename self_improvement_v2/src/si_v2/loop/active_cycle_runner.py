@@ -432,6 +432,17 @@ def _load_rainbow_signals() -> dict[str, object]:
     }
 
     cfg = _RAINBOW_CONFIG
+
+    # Runtime env-var override: SI_V2_RAINBOW_ENABLED=true activates Rainbow
+    # without changing the code default (which remains disabled/fail-closed).
+    _env_override = os.environ.get("SI_V2_RAINBOW_ENABLED", "").strip().lower()
+    if _env_override == "true":
+        cfg = dict(cfg)  # shallow copy to avoid mutating module default
+        cfg["enabled"] = True
+        _mode_override = os.environ.get("SI_V2_RAINBOW_MODE", "").strip().lower()
+        if _mode_override in ("fixture", "read_only"):
+            cfg["mode"] = _mode_override
+
     if not cfg.get("enabled"):
         return default
 
