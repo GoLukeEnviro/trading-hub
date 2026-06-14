@@ -139,6 +139,9 @@ class CycleState(BaseModel):
     docker_mutations: int = Field(ge=0, default=0)
     strategy_mutations: int = Field(ge=0, default=0)
 
+    # ── External signals (rainbow) ──────────────────────────────────────
+    external_signals: dict[str, object] = Field(default_factory=dict)
+
     # Controller state
     controller_state: str = Field(default="PAUSED / L3_REPOSITORY_ONLY")
 
@@ -254,6 +257,7 @@ def build_cycle_state(
     commit_sha: str,
     fleet_decision: FleetDecision,  # FleetDecision from fleet_analyzer
     per_bot_decisions_raw: list[dict[str, object]],
+    external_signals: dict[str, object] | None = None,
 ) -> CycleState:
     """Build a ``CycleState`` from the fleet analyzer output.
 
@@ -264,6 +268,8 @@ def build_cycle_state(
         fleet_decision: ``FleetDecision`` from ``analyze_fleet()``.
         per_bot_decisions_raw: List of raw per-bot decision dicts
             (``asdict()`` results from ``ShadowProposalDecision``).
+        external_signals: Optional dict with external signal summaries
+            (e.g. rainbow). Defaults to empty.
 
     Returns:
         A populated ``CycleState`` ready for persistence.
@@ -317,6 +323,7 @@ def build_cycle_state(
         docker_mutations=0,
         strategy_mutations=0,
         controller_state="PAUSED / L3_REPOSITORY_ONLY",
+        external_signals=external_signals or {},
     )
 
 
@@ -355,8 +362,13 @@ def print_cycle_state(state: CycleState) -> str:
         f"Strategy mutations:  {state.strategy_mutations}",
         f"Controller state:    {state.controller_state}",
         "",
-        "Per-bot decisions:",
     ]
+    if state.external_signals:
+        lines.append("External signals:")
+        for key, value in state.external_signals.items():
+            lines.append(f"  {key}: {value}")
+        lines.append("")
+    lines.append("Per-bot decisions:")
     for d in state.per_bot_decisions:
         lines.append(
             f"  - {d.bot_id}: {d.decision_type} (SHA={d.candidate_sha256[:8]}, "

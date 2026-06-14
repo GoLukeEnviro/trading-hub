@@ -95,6 +95,16 @@ LEDGER_STATUS_SKIPPED: str = "SKIPPED"
 LEDGER_STATUS_FAILED: str = "FAILED"
 
 # ------------------------------------------------------------------
+# Rainbow external signal source config (default: disabled)
+# ------------------------------------------------------------------
+_RAINBOW_CONFIG = {
+    "enabled": False,  # Master switch — must be True for Rainbow to load
+    "mode": "fixture",  # fixture | read_only
+    "fixture_path": str(_REPO_ROOT / "self_improvement_v2" / "fixtures" / "rainbow-signals"),
+    "max_records": None,
+}
+
+# ------------------------------------------------------------------
 # RiskGuard-style local check (same semantics as PR #207, #208)
 # ------------------------------------------------------------------
 RISKGUARD_RESULT_PASS_SHADOW_ONLY: str = "PASS_SHADOW_ONLY"
@@ -387,6 +397,120 @@ def _check_secret_leak(
 
 
 # ------------------------------------------------------------------
+# Rainbow external signal loading (disabled by default)
+# ------------------------------------------------------------------
+
+
+def _load_rainbow_signals() -> dict[str, object]:
+    """Load Rainbow external signals from the configured source.
+
+    Default is disabled — returns empty dict with status ``DISABLED``.
+    Rainbow errors never propagate — the cycle always continues.
+
+    Returns:
+        Dict with keys:
+        - status: DISABLED | SUCCESS | WARNING | UNAVAILABLE
+        - count: int
+        - symbols: list[str]
+        - directions: list[str]
+        - confidence_min: float or None
+        - confidence_max: float or None
+        - confidence_avg: float or None
+        - errors: list[str]
+        - source: str
+    """
+    default: dict[str, object] = {
+        "status": "DISABLED",
+        "count": 0,
+        "symbols": [],
+        "directions": [],
+        "confidence_min": None,
+        "confidence_max": None,
+        "confidence_avg": None,
+        "errors": [],
+        "source": "",
+    }
+
+    cfg = _RAINBOW_CONFIG
+    if not cfg.get("enabled"):
+        return default
+
+    try:
+        from si_v2.rainbow.client import (
+            RainbowClientConfig,
+            RainbowSignalProviderClient,
+        )
+
+        client_cfg = RainbowClientConfig(
+            enabled=True,
+            mode=str(cfg.get("mode", "fixture")),
+            fixture_path=str(cfg.get("fixture_path")),
+            max_records=cfg.get("max_records"),
+        )
+        client = RainbowSignalProviderClient.from_config(client_cfg)
+        result = client.get_latest_signals()
+    except Exception as exc:
+        return {
+            "status": "UNAVAILABLE",
+            "count": 0,
+            "symbols": [],
+            "directions": [],
+            "confidence_min": None,
+            "confidence_max": None,
+            "confidence_avg": None,
+            "errors": [f"Rainbow client error: {str(exc)[:200]}"],
+            "source": "error",
+        }
+
+    if not result.signals:
+        return {
+            "status": "WARNING" if result.errors else "SUCCESS",
+            "count": 0,
+            "symbols": [],
+            "directions": [],
+            "confidence_min": None,
+            "confidence_max": None,
+            "confidence_avg": None,
+            "errors": result.errors,
+            "source": result.source,
+        }
+
+    # Collect signal metadata
+    symbols: list[str] = []
+    directions: list[str] = []
+    confidences: list[float] = []
+
+    for sig in result.signals:
+        sym = str(sig.get("symbol", ""))
+        if sym:
+            symbols.append(sym)
+        direction = str(sig.get("direction", ""))
+        if direction:
+            directions.append(direction)
+        conf = sig.get("confidence")
+        if isinstance(conf, (int, float)) and not isinstance(conf, bool):
+            confidences.append(float(conf))
+
+    confidence_min = min(confidences) if confidences else None
+    confidence_max = max(confidences) if confidences else None
+    confidence_avg = (
+        round(sum(confidences) / len(confidences), 4) if confidences else None
+    )
+
+    return {
+        "status": "SUCCESS",
+        "count": len(result.signals),
+        "symbols": symbols,
+        "directions": list(set(directions)),
+        "confidence_min": confidence_min,
+        "confidence_max": confidence_max,
+        "confidence_avg": confidence_avg,
+        "errors": result.errors,
+        "source": result.source,
+    }
+
+
+# ------------------------------------------------------------------
 # Measurement Ledger passive post-step
 # ------------------------------------------------------------------
 
@@ -631,6 +755,39 @@ def run_active_cycle() -> int:
     ]
 
     # ------------------------------------------------------------------
+    # Step 2c: Load Rainbow external signals (disabled by default)
+    # ------------------------------------------------------------------
+    print("\\n[STEP 2c] Loading Rainbow external signals...")
+    rainbow_result = _load_rainbow_signals()
+    rainbow_status = str(rainbow_result.get("status", "DISABLED") or "")
+    rainbow_count_raw = rainbow_result.get("count", 0)
+    rainbow_count = int(rainbow_count_raw) if isinstance(rainbow_count_raw, int) else 0
+    print(f"  rainbow status:       {rainbow_status}")
+    print(f"  rainbow signals:      {rainbow_count}")
+    if rainbow_count > 0:
+        raw_dirs = rainbow_result.get("directions", [])
+        directions = raw_dirs if isinstance(raw_dirs, list) else []
+        raw_syms = rainbow_result.get("symbols", [])
+        symbols = raw_syms if isinstance(raw_syms, list) else []
+        if directions:
+            print(f"  directions:           {', '.join(str(d) for d in directions)}")
+        if symbols:
+            print(f"  symbols:              {', '.join(str(s) for s in symbols[:5])}...")
+        raw_ca = rainbow_result.get("confidence_avg")
+        if isinstance(raw_ca, (int, float)):
+            print(f"  confidence avg:       {raw_ca}")
+    if rainbow_result.get("errors"):
+        raw_errors = rainbow_result.get("errors", [])
+        error_list = raw_errors if isinstance(raw_errors, list) else []
+        for err in error_list:
+            print(f"  rainbow error:        {err}")
+
+    # Build external_signals section for cycle state
+    external_signals: dict[str, object] = {
+        "rainbow": rainbow_result,
+    }
+
+    # ------------------------------------------------------------------
     # Step 3: Analyze fleet
     # ------------------------------------------------------------------
     print("\n[STEP 3] Running fleet analyzer...")
@@ -786,6 +943,7 @@ def run_active_cycle() -> int:
         commit_sha=commit_sha,
         fleet_decision=decision,
         per_bot_decisions_raw=per_bot_raw,
+        external_signals=external_signals,
     )
     state_path = persist_cycle_state(state=cycle_state, state_dir=_CYCLE_STATE_DIR)
     print(f"  cycle state:      {state_path.relative_to(_REPO_ROOT)}")
@@ -801,6 +959,7 @@ def run_active_cycle() -> int:
         telemetry_list=telemetry_list,
         decision=decision,
         safety_results=safety_results,
+        rainbow_result=rainbow_result,
     )
     with open(report_path, "w") as f:
         f.write(report_text)
@@ -901,6 +1060,7 @@ def _build_report_markdown(
     telemetry_list: list[NormalizedTelemetry],
     decision,
     safety_results: list[dict[str, object]],
+    rainbow_result: dict[str, object] | None = None,
 ) -> str:
     """Render the cycle markdown report."""
     summary = decision.fleet_summary
@@ -978,6 +1138,43 @@ def _build_report_markdown(
     lines.append("| docker_mutations | `0` |")
     lines.append("| strategy_mutations | `0` |")
     lines.append("| controller_state | `PAUSED / L3_REPOSITORY_ONLY` |")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("## External Signals (Rainbow)")
+    lines.append("")
+    if rainbow_result:
+        rs = rainbow_result
+        r_status = str(rs.get("status", "DISABLED"))
+        r_count_raw = rs.get("count", 0)
+        r_count = int(r_count_raw) if isinstance(r_count_raw, int) else 0
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        lines.append(f"| Status | `{r_status}` |")
+        lines.append(f"| Signal Count | `{r_count}` |")
+        r_source = str(rs.get("source", ""))
+        if r_source:
+            lines.append(f"| Source | `{r_source}` |")
+        if r_count > 0:
+            raw_dirs = rs.get("directions", [])
+            directions = raw_dirs if isinstance(raw_dirs, list) else []
+            raw_syms = rs.get("symbols", [])
+            symbols = raw_syms if isinstance(raw_syms, list) else []
+            raw_ca = rs.get("confidence_avg")
+            if directions:
+                lines.append(f"| Directions | `{', '.join(str(d) for d in directions)}` |")
+            if symbols:
+                lines.append(f"| Symbols | `{', '.join(str(s) for s in symbols)}` |")
+            if isinstance(raw_ca, (int, float)):
+                lines.append(f"| Confidence Avg | `{raw_ca}` |")
+        raw_errs = rs.get("errors", [])
+        errors = raw_errs if isinstance(raw_errs, list) else []
+        if errors:
+            lines.append(f"| Errors | `{len(errors)}` |")
+            for e in errors:
+                lines.append(f"| | `{e}` |")
+    else:
+        lines.append("_Rainbow external signals disabled._")
     lines.append("")
     lines.append("---")
     lines.append("")
