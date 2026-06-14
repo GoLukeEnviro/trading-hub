@@ -154,6 +154,24 @@ def build_ledger(
         ctrl = str(state.get("controller_state", "UNKNOWN"))
         muts_all_zero = all(v == 0 for v in [rm, cm, ltm, dm, sm])
 
+        # ---- Rainbow external signal metrics ----
+        external_signals_raw: dict[str, object] = state.get("external_signals", {}) or {}
+        rainbow_raw: dict[str, object] = external_signals_raw.get("rainbow", {}) or {}
+        rainbow_raw = rainbow_raw if isinstance(rainbow_raw, dict) else {}
+        r_status = str(rainbow_raw.get("status", "DISABLED"))
+        rc_raw = rainbow_raw.get("count", 0)
+        r_count = int(rc_raw) if isinstance(rc_raw, int) else 0
+        r_symbols_raw = rainbow_raw.get("symbols", [])
+        r_symbols = tuple(str(s) for s in r_symbols_raw) if isinstance(r_symbols_raw, list) else ()
+        r_dirs_raw = rainbow_raw.get("directions", [])
+        r_dirs = tuple(str(d) for d in r_dirs_raw) if isinstance(r_dirs_raw, list) else ()
+        r_conf_min = _safe_float(rainbow_raw.get("confidence_min"))
+        r_conf_max = _safe_float(rainbow_raw.get("confidence_max"))
+        r_conf_avg = _safe_float(rainbow_raw.get("confidence_avg"))
+        r_errs_raw = rainbow_raw.get("errors", [])
+        r_errs_count = len(r_errs_raw) if isinstance(r_errs_raw, list) else 0
+        r_source = str(rainbow_raw.get("source", ""))
+
         fp = FleetMeasurementPoint(
             cycle_id=cycle_id,
             cycle_timestamp=ts,
@@ -178,6 +196,16 @@ def build_ledger(
                 else MeasurementStatus.PENDING_APPLICATION.value
             ),
             source_artifact=rel_path,
+            # Rainbow metrics
+            rainbow_signal_count=r_count,
+            rainbow_symbols=r_symbols,
+            rainbow_directions=r_dirs,
+            rainbow_confidence_min=r_conf_min,
+            rainbow_confidence_max=r_conf_max,
+            rainbow_confidence_avg=r_conf_avg,
+            rainbow_errors_count=r_errs_count,
+            rainbow_source=r_source,
+            rainbow_status=r_status,
         )
         fleet_points.append(fp)
 
@@ -281,6 +309,16 @@ def build_ledger(
             controller_state=fp.controller_state,
             measurement_status=fp.measurement_status,
             source_artifact=fp.source_artifact,
+            # Rainbow metrics (preserved from initial fp)
+            rainbow_signal_count=fp.rainbow_signal_count,
+            rainbow_symbols=fp.rainbow_symbols,
+            rainbow_directions=fp.rainbow_directions,
+            rainbow_confidence_min=fp.rainbow_confidence_min,
+            rainbow_confidence_max=fp.rainbow_confidence_max,
+            rainbow_confidence_avg=fp.rainbow_confidence_avg,
+            rainbow_errors_count=fp.rainbow_errors_count,
+            rainbow_source=fp.rainbow_source,
+            rainbow_status=fp.rainbow_status,
         )
 
     # ---- Build proposal tracking records ----

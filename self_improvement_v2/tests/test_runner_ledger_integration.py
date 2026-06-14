@@ -341,3 +341,67 @@ class TestLedgerSecretSafety:
                 assert pattern not in content.lower(), (
                     f"Potential secret '{pattern}' found in JSONL"
                 )
+
+
+# ======================================================================
+# Tests: Rainbow metrics in runner → ledger integration
+# ======================================================================
+
+
+class TestRunLedgerPostStepRainbow:
+    """Tests for Rainbow metrics flowing through runner → ledger."""
+
+    def test_rainbow_present_in_ledger_output(self) -> None:
+        """State with external_signals.rainbow produces fleet point with rainbow metrics."""
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            state_dir = base / "cycle_state"
+            evidence_dir = base / "evidence"
+            ledger_dir = base / "measurement"
+
+            state = _make_state("20260613T120000Z")
+            state["external_signals"] = {
+                "rainbow": {
+                    "status": "SUCCESS",
+                    "count": 2,
+                    "symbols": ["BTC/USDT:USDT"],
+                    "directions": ["long"],
+                    "confidence_min": 0.70,
+                    "confidence_max": 0.92,
+                    "confidence_avg": 0.81,
+                    "errors": [],
+                    "source": "fixture",
+                }
+            }
+            _write_state_file(state_dir, "20260613T120000Z", state)
+
+            result = _run_ledger_post_step(state_dir, evidence_dir, ledger_dir)
+            assert result["status"] == LEDGER_STATUS_SUCCESS
+
+            # Verify JSONL contains rainbow fields
+            jsonl_path = ledger_dir / "measurement_ledger.jsonl"
+            jsonl_content = jsonl_path.read_text()
+            assert "rainbow_status" in jsonl_content
+            assert "rainbow_signal_count" in jsonl_content
+            assert "rainbow_symbols" in jsonl_content
+            assert "rainbow_directions" in jsonl_content
+
+            # Verify summary file exists (rainbow data is in fleet points, not summary directly)
+            assert (ledger_dir / "measurement_summary.json").exists()
+
+    def test_rainbow_disabled_in_ledger_output(self) -> None:
+        """State without external_signals produces fleet point with DISABLED rainbow."""
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            state_dir = base / "cycle_state"
+            evidence_dir = base / "evidence"
+            ledger_dir = base / "measurement"
+
+            _write_state_file(state_dir, "20260613T120000Z", _make_state("20260613T120000Z"))
+            result = _run_ledger_post_step(state_dir, evidence_dir, ledger_dir)
+            assert result["status"] == LEDGER_STATUS_SUCCESS
+
+            jsonl_path = ledger_dir / "measurement_ledger.jsonl"
+            jsonl_content = jsonl_path.read_text()
+            # DISABLED state should produce status=DISABLED, count=0
+            assert '"rainbow_status": "DISABLED"' in jsonl_content or "DISABLED" in jsonl_content

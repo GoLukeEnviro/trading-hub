@@ -149,6 +149,23 @@ def render_attribution_report(
     lines.append("")
     lines.append("---")
     lines.append("")
+    lines.append("## External Signal Summary (Rainbow)")
+    lines.append("")
+    lines.append("| Cycle ID | Status | Count | Symbols | Directions | Confidence Avg | Errors |")
+    lines.append("|----------|--------|-------|---------|------------|----------------|--------|")
+    for fp in ledger.fleet_points:
+        r_syms = ", ".join(fp.rainbow_symbols[:3]) if fp.rainbow_symbols else "-"
+        r_dirs = ", ".join(fp.rainbow_directions) if fp.rainbow_directions else "-"
+        r_ca = f"{fp.rainbow_confidence_avg:.4f}" if fp.rainbow_confidence_avg is not None else "-"
+        r_errs = str(fp.rainbow_errors_count)
+        lines.append(
+            f"| `{fp.cycle_id}` | `{fp.rainbow_status}` | "
+            f"`{fp.rainbow_signal_count}` | `{r_syms}` | "
+            f"`{r_dirs}` | `{r_ca}` | `{r_errs}` |"
+        )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
     lines.append("## Baseline Metrics Summary")
     lines.append("")
     if ledger.cycle_count > 0:

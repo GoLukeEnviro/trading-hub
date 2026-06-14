@@ -173,8 +173,19 @@ class FleetMeasurementPoint:
     measurement_status: str
     source_artifact: str
 
+    # ── Rainbow external signal metrics ─────────────────────────────────
+    rainbow_signal_count: int = 0
+    rainbow_symbols: tuple[str, ...] = ()
+    rainbow_directions: tuple[str, ...] = ()
+    rainbow_confidence_min: float | None = None
+    rainbow_confidence_max: float | None = None
+    rainbow_confidence_avg: float | None = None
+    rainbow_errors_count: int = 0
+    rainbow_source: str = ""
+    rainbow_status: str = "DISABLED"
+
     def to_json_safe(self) -> JsonObject:
-        return {
+        result: JsonObject = {
             "cycle_id": self.cycle_id,
             "cycle_timestamp": self.cycle_timestamp,
             "fleet_verdict": self.fleet_verdict,
@@ -198,7 +209,30 @@ class FleetMeasurementPoint:
             "controller_state": self.controller_state,
             "measurement_status": self.measurement_status,
             "source_artifact": self.source_artifact,
+            # Rainbow metrics
+            "rainbow_signal_count": self.rainbow_signal_count,
+            "rainbow_symbols": list(self.rainbow_symbols),
+            "rainbow_directions": list(self.rainbow_directions),
+            "rainbow_confidence_min": (
+                round(self.rainbow_confidence_min, 4)
+                if self.rainbow_confidence_min is not None
+                else None
+            ),
+            "rainbow_confidence_max": (
+                round(self.rainbow_confidence_max, 4)
+                if self.rainbow_confidence_max is not None
+                else None
+            ),
+            "rainbow_confidence_avg": (
+                round(self.rainbow_confidence_avg, 4)
+                if self.rainbow_confidence_avg is not None
+                else None
+            ),
+            "rainbow_errors_count": self.rainbow_errors_count,
+            "rainbow_source": self.rainbow_source,
+            "rainbow_status": self.rainbow_status,
         }
+        return result
 
 
 @dataclass(frozen=True)

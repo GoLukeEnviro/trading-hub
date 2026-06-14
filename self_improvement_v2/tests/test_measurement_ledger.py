@@ -271,3 +271,128 @@ class TestBuildProposalRecords:
         assert len(records) == 1
         assert records[0].proposal_id == "sha123"
         assert records[0].decision_count == 1
+
+
+# ======================================================================
+# Tests: Rainbow metrics in Measurement Ledger
+# ======================================================================
+
+
+class TestLedgerRainbowMetrics:
+    """Tests for Rainbow external signal metrics in the measurement ledger."""
+
+    def test_rainbow_metrics_extracted_from_cycle_state(self) -> None:
+        """Rainbow metrics are extracted from cycle state external_signals."""
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "cycle_state"
+            state_dir.mkdir()
+            state = _make_state("20260613T120000Z", sp_count=0, np_count=4)
+            state["external_signals"] = {
+                "rainbow": {
+                    "status": "SUCCESS",
+                    "count": 3,
+                    "symbols": ["BTC/USDT:USDT", "ETH/USDT:USDT"],
+                    "directions": ["long", "short"],
+                    "confidence_min": 0.65,
+                    "confidence_max": 0.92,
+                    "confidence_avg": 0.78,
+                    "errors": [],
+                    "source": "fixture",
+                }
+            }
+            (state_dir / "active_cycle_20260613T120000Z.state.json").write_text(
+                json.dumps(state)
+            )
+            ledger = build_ledger(state_dir=state_dir)
+            assert ledger.cycle_count == 1
+            assert len(ledger.fleet_points) == 1
+            fp = ledger.fleet_points[0]
+            assert fp.rainbow_status == "SUCCESS"
+            assert fp.rainbow_signal_count == 3
+            assert "BTC/USDT:USDT" in fp.rainbow_symbols
+            assert "long" in fp.rainbow_directions
+            assert fp.rainbow_confidence_min == 0.65
+            assert fp.rainbow_confidence_max == 0.92
+            assert fp.rainbow_confidence_avg == 0.78
+            assert fp.rainbow_errors_count == 0
+            assert fp.rainbow_source == "fixture"
+
+    def test_rainbow_metrics_disabled_default(self) -> None:
+        """Rainbow metrics default to DISABLED when no external_signals in state."""
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "cycle_state"
+            state_dir.mkdir()
+            state = _make_state("20260613T120000Z", sp_count=0, np_count=4)
+            (state_dir / "active_cycle_20260613T120000Z.state.json").write_text(
+                json.dumps(state)
+            )
+            ledger = build_ledger(state_dir=state_dir)
+            assert len(ledger.fleet_points) == 1
+            fp = ledger.fleet_points[0]
+            assert fp.rainbow_status == "DISABLED"
+            assert fp.rainbow_signal_count == 0
+            assert fp.rainbow_symbols == ()
+            assert fp.rainbow_directions == ()
+            assert fp.rainbow_confidence_min is None
+            assert fp.rainbow_errors_count == 0
+            assert fp.rainbow_source == ""
+
+    def test_rainbow_metrics_with_errors(self) -> None:
+        """Rainbow metrics handle error states."""
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "cycle_state"
+            state_dir.mkdir()
+            state = _make_state("20260613T120000Z", sp_count=0, np_count=4)
+            state["external_signals"] = {
+                "rainbow": {
+                    "status": "UNAVAILABLE",
+                    "count": 0,
+                    "symbols": [],
+                    "directions": [],
+                    "confidence_min": None,
+                    "confidence_max": None,
+                    "confidence_avg": None,
+                    "errors": ["Connection failed"],
+                    "source": "error",
+                }
+            }
+            (state_dir / "active_cycle_20260613T120000Z.state.json").write_text(
+                json.dumps(state)
+            )
+            ledger = build_ledger(state_dir=state_dir)
+            assert len(ledger.fleet_points) == 1
+            fp = ledger.fleet_points[0]
+            assert fp.rainbow_status == "UNAVAILABLE"
+            assert fp.rainbow_signal_count == 0
+            assert fp.rainbow_errors_count == 1
+
+    def test_rainbow_metrics_preserved_in_fleet_update(self) -> None:
+        """Rainbow metrics are preserved when fleet point is updated with aggregates."""
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "cycle_state"
+            state_dir.mkdir()
+            state = _make_state("20260613T120000Z", sp_count=0, np_count=4)
+            state["external_signals"] = {
+                "rainbow": {
+                    "status": "SUCCESS",
+                    "count": 2,
+                    "symbols": ["BTC/USDT:USDT"],
+                    "directions": ["long"],
+                    "confidence_min": 0.70,
+                    "confidence_max": 0.85,
+                    "confidence_avg": 0.775,
+                    "errors": [],
+                    "source": "fixture",
+                }
+            }
+            (state_dir / "active_cycle_20260613T120000Z.state.json").write_text(
+                json.dumps(state)
+            )
+            ledger = build_ledger(state_dir=state_dir)
+            fp = ledger.fleet_points[0]
+            # Verify Rainbow metrics survived the fleet-point update step
+            assert fp.rainbow_status == "SUCCESS"
+            assert fp.rainbow_signal_count == 2
+            assert fp.rainbow_symbols == ("BTC/USDT:USDT",)
+            assert fp.rainbow_directions == ("long",)
+            assert fp.rainbow_confidence_avg == 0.775
