@@ -1,10 +1,14 @@
 # Trading Hub — Implementation Roadmap
 
-> **Canonical roadmap** — Source of truth for implementation phases, current
-> state, and next priorities.
+> **SUPERSEDED:** This document is historical. Current roadmap is
+> [`docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md`](roadmap-v2-blocker-first-runtime-ownership.md).
+> The Phase 0 "not started" claim is wrong — #44 is closed, #200 is the
+> current blocker, and the SI v2 scheduled observation loop is
+> operational. See `docs/state/current-operational-state.md` for the
+> reconciled snapshot.
 >
-> **Last updated:** 2026-06-11
-> **HEAD:** `0557b70` (PR #169 — cache maintenance)  
+> **Last updated:** 2026-06-11 (historical)
+> **HEAD at that update:** `0557b70` (PR #169 — cache maintenance)
 
 ---
 
