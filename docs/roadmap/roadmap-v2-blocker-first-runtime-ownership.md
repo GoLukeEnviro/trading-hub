@@ -238,21 +238,13 @@ Next blocker: observe 10/10 scoring-eligible cycles.
 
 ### Tasks
 
-1. **T2.1.1 — Producer freshness decision.** Decide whether scoring is
-   fed by:
-   * (a) **ai4trade-bot producer** — deploy the existing ai4trade-bot as
-     a tracked service exposing `GET /signals/latest` (Rainbow §5
-     envelope). Today there is a `signals.db` with 3 signals dated
-     2026-06-14T01:04, but no producer, no container, no listener.
-   * (b) **DB-backed stub with live write** — extend the in-tree stub
-     to be **written** to (not just read) by a low-frequency cron that
-     updates the SQLite's signal timestamps inside the 15-min window.
-     This is a *fixture* with synthetic freshness, explicitly labelled,
-     never scoring-eligible for real evidence.
-   * (c) **Other in-tree provider** — only if a candidate appears.
-   * Default: **(a) ai4trade producer** because scoring must be backed
-     by real upstream signal metadata to be defensible.
-2. **T2.1.2 — Producer deployment plan.** L3 PR plan covering:
+1. **T2.1.1 — Producer freshness decision.** ✅ **Completed 2026-06-15**
+   Decision: **(a) ai4trade-bot producer** deployed on 127.0.0.1:8000
+   via durable wrapper. Real fresh signals produced every 120s.
+   * (b) and (c) are **superseded** by the successful Option A deployment.
+2. **T2.1.2 — Producer deployment plan.** ✅ **Completed 2026-06-15**
+   See `docs/plans/producer-freshness-fix-deployment.md` and the runtime
+   deployment log below.
    * See `docs/plans/producer-freshness-fix-deployment.md` for the full
      implementation plan with preflight, credential configuration, compose
      profile, SI v2 reconfiguration, validation commands, rollback steps,
