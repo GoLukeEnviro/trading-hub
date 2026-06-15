@@ -302,7 +302,7 @@ services:
     - watchdog-logs:/var/log
     restart: unless-stopped
     networks:
-    - hermes-net
+    - trading_hermes-net
   caddy:
     image: caddy:alpine
     network_mode: host
@@ -361,7 +361,8 @@ volumes:
   green-ollama-data:
     external: true
   freqai-rebel-data: null
-  watchdog-logs: null
+  watchdog-logs:
+    external: true
   caddy_data:
     external: true
   caddy_config:
