@@ -407,3 +407,95 @@ Phase 1 (current PR) ──→ Phase 2 (L3 approval) ──→ Phase 3 (validati
 | Roadmap v2 | `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md` (§Phase 2.1) |
 | ai4trade-bot Rainbow | `/opt/data/ai4trade-bot/rainbow/main.py` |
 | Stub Server (current fallback) | `orchestrator/scripts/rainbow_db_stub_server.py` |
+
+---
+
+## Appendix A — Execution Record (2026-06-15)
+
+### Actual Deployment Model
+
+**Chosen:** Direct uvicorn process + s6 supervision + manager script
+
+**Why not Docker:** The rainbow.Dockerfile has a missing `core` module
+dependency (`from core.heartbeat_writer import ...`). Fixing the
+Dockerfile requires either bundling `core/` or restructuring the build
+context — deferred to follow-up.
+
+**Why not systemd:** Container environment (s6 init, no systemd).
+
+### Deployment Steps (Actual)
+
+1. Created `rainbow/config.yaml` with corrected asset names (`BTCUSDT`
+   instead of `BTC`) for Bitget API compatibility.
+2. Started uvicorn via ai4trade-bot `.venv`:
+   ```
+   .venv/bin/uvicorn rainbow.main:create_app --host 127.0.0.1 --port 8000 --factory
+   ```
+3. Created s6 service at `/run/service/rainbow-producer/` for auto-restart.
+4. Created `orchestrator/scripts/rainbow_producer_manager.sh` for
+   start/stop/status/restart.
+5. Created `orchestrator/scripts/rainbow_producer_acceptance_test.py`
+   for repeatable validation.
+6. Set SI v2 env vars:
+   - `SI_V2_RAINBOW_ENABLED=true`
+   - `SI_V2_RAINBOW_MODE=read_only`
+   - `SI_V2_RAINBOW_BASE_URL=http://localhost:8000`
+
+### Validation Results (2026-06-15 19:52 UTC)
+
+| Check | Result |
+|-------|--------|
+| GET /health | ✅ 200, healthy, ta=running |
+| GET /signals/latest | ✅ 21 signals (18 fresh + 3 stale) |
+| Freshest signal age | ✅ 93s (threshold 900s) |
+| fresh=True | ✅ |
+| Scoring eligible | ✅ (all 5 conditions) |
+| can_execute=False | ✅ 21/21 envelopes |
+| dry_run_only=True | ✅ 21/21 envelopes |
+| Mutation counters | ✅ All 0 |
+| Controller state | ✅ PAUSED / L3_REPOSITORY_ONLY |
+
+### What Was NOT Changed
+
+- No Docker compose changes
+- No Freqtrade bot restarts
+- No strategy promotion
+- No live trading enablement
+- No scheduler cadence change
+- No credential exposure (public Bitget API only)
+
+### Rollback Commands
+
+```bash
+# Stop producer
+orchestrator/scripts/rainbow_producer_manager.sh stop
+# Or via s6
+rm -rf /run/service/rainbow-producer
+
+# Remove SI v2 Rainbow env config
+sed -i '/SI_V2_RAINBOW_BASE_URL/d; /SI_V2_RAINBOW_ENABLED/d; /SI_V2_RAINBOW_MODE/d' .env
+
+# Restart stub server as fallback
+python3 orchestrator/scripts/rainbow_db_stub_server.py \
+  --db /opt/data/ai4trade-bot/rainbow/storage/signals.db \
+  --port 8765 &
+
+# Verify rollback
+python3 orchestrator/scripts/rainbow_producer_acceptance_test.py
+```
+
+### Remaining Risks
+
+1. **s6 supervision not fully verified.** The supervise directory exists
+   and the process survives SIGTERM, but the service was not registered
+   through the canonical s6-rc compile path.
+2. **TA collector uses public Bitget API.** No rate-limiting issues
+   observed at 120s interval, but Bitget could change their public API.
+3. **No auto-restart across container restarts.** If the Hermes container
+   restarts, the producer must be manually restarted via the manager
+   script or re-created if the s6 service directory persists.
+4. **Asset names mismatch.** The producer uses `BTCUSDT` format (Bitget)
+   while the SI v2 envelope schema uses `BTC/USDT:USDT`. The SI v2
+   client only checks that `symbol` is non-empty, so this is cosmetic
+   for now but should be aligned.
+

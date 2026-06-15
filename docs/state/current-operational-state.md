@@ -91,7 +91,7 @@
 | 1i | Real-Data Intelligence | ✅ Complete: #55–#59 (PRs #161–#166). #60 merged (PR #169). #61 closed. |
 | 1r | Rainbow Plumbing | ✅ Complete: PRs #212 (client), #213 (cycle/ledger), #214 (env override), #215 (runtime source + freshness guard) |
 || **2.0** | **Runtime Foundation & Docker Ownership** | ✅ **COMPLETE** — #200 closed, telemetry history gate merged (PR #262) |
-|| **2.1** | **SI v2 Autonomous Dry-Run Operation** | 🟠 **IN PROGRESS** — producer freshness / scoring eligibility (current blocker) |
+|| **2.1** | **SI v2 Autonomous Dry-Run Operation** | 🟢 **IN PROGRESS** — producer deployed, scoring eligible (2026-06-15) |
 | 2.2 | Observability, Hardening & Self-Healing | ⏸ Pending — behind 2.0/2.1 |
 | 3 | Signal Weighting & Higher Autonomy | ⏸ Pending — behind 2.1 history gate |
 

@@ -221,14 +221,20 @@ All T2.0.x tasks are now completed. Key deliverables:
 
 ---
 
-## Phase 2.1 – SI v2 Autonomous Dry-Run Operation 🟠 CURRENT BLOCKER
+## Phase 2.1 – SI v2 Autonomous Dry-Run Operation 🟢 PRODUCER DEPLOYED
 
 **Owner:** Hermes
 **Goal:** Reach Rainbow scoring eligibility = 10/10 with a **real
 producer**, without breaking dry-run-only.
 
+**Status:** ✅ Producer deployed 2026-06-15 via s6-supervised uvicorn
+process on 127.0.0.1:8000. TA collector running, fresh signals produced
+every 120s. Scoring eligibility: **True** (fresh=True, age ≤ 900s).
+Next blocker: observe 10/10 scoring-eligible cycles.
+
 **Dependencies met:** ✅ PR #262 (telemetry history & enforcement gate),
-✅ PR #261 (walk-forward cost model foundation).
+✅ PR #261 (walk-forward cost model foundation),
+✅ Producer deployment (PR #266, L3 approval 2026-06-15).
 
 ### Tasks
 
