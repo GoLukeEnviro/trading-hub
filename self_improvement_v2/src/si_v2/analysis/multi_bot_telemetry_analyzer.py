@@ -251,13 +251,17 @@ def analyze_fleet(
             bots_with_profit,
             key=lambda b: b.profit_value if b.profit_value is not None else 0.0,
         )
-        if worst.profit_value is not None and fleet_median_profit is not None:
-            if worst.profit_value < fleet_median_profit * 0.8:
-                weakest_bot = worst.bot_id
-                weakest_reason = (
-                    f"profit ratio {worst.profit_value:.4f} is "
-                    f"below 80% of fleet median {fleet_median_profit:.4f}"
-                )
+        is_weakest = (
+            worst.profit_value is not None
+            and fleet_median_profit is not None
+            and worst.profit_value < fleet_median_profit * 0.8
+        )
+        if is_weakest:
+            weakest_bot = worst.bot_id
+            weakest_reason = (
+                f"profit ratio {worst.profit_value:.4f} is "
+                f"below 80% of fleet median {fleet_median_profit:.4f}"
+            )
 
         confidence = "MEDIUM"
     else:
