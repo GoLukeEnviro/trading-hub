@@ -10,7 +10,6 @@ from si_v2.loop.cycle_state import build_cycle_state
 from si_v2.loop.fleet_analyzer import BotEvidence, analyze_fleet
 from si_v2.rainbow.client import RainbowClientResult
 
-
 BOT_IDS = [
     "freqtrade-freqforge",
     "freqtrade-regime-hybrid",
