@@ -1037,6 +1037,14 @@ def signal_css(signal_str):
 
 @app.route('/')
 def dashboard():
+    """Render the main trading dashboard page.
+
+    Collects data from all sources (Freqtrade fleet, AI signals, Rainbow,
+    RiskGuard, ShadowLogger) and renders a dark-theme HTML template.
+    Each data source is fetched independently — a single source failure
+    does not crash the page; the affected section shows 'error' status
+    while other sections remain functional.
+    """
     now_utc = datetime.now(timezone.utc)
     timestamp_str = now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
     update_str = now_utc.strftime('%H:%M:%S UTC')

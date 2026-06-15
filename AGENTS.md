@@ -21,6 +21,10 @@ snapshot and `docs/context/` for append-only historical reports.
    bootstrap, cleanup, or architecture changes.
 6. Never commit secrets, runtime state, databases, logs, backups, model files,
    or inspect dumps.
+7. Respect the kill switch (`freqtrade/shared/kill_switch.py`). If a cycle
+   or script detects `HALT_NEW` or `EMERGENCY` mode, no new entries may be
+   proposed or applied. Do not override an active kill switch without
+   explicit human approval.
 
 ## System architecture
 
@@ -43,23 +47,36 @@ snapshot and `docs/context/` for append-only historical reports.
 - Working directory: `/home/hermes/projects/trading`.
 - Project identity lives in `~/.hermes/profiles/orchestrator/SOUL.md`.
 
-### RiskGuard / Judge — Safety Layer (SPEC ONLY)
+### RiskGuard / Judge — Safety Layer (SI V2 SPEC)
 
-- This layer is a design reference in AGENTS.md only.
-- No deployed service, container, cron job, or script currently implements it as
-  a standalone component.
+- Design reference for signal-cycle safety gates.
 - Planned checks: schema validation, freshness, allowlist validation, action /
   confidence validation, and baseline-vs-LLM disagreement handling.
 - Verdicts: `ACCEPTED`, `WATCH_ONLY`, `BLOCK_ENTRY`.
 - Rules: BUY/SELL only for entries; TREND_HOLD / WATCH / HOLD never force an
   entry; weak or unknown signals degrade or block.
+- SI v2 integration: runtime cycle enforces mutation counters, measurement
+  ledger gating, and rainbow freshness guard (scoring gate = 0/10).
 
-### ShadowLogger — Evidence Layer (SPEC ONLY)
+### ShadowLogger — Evidence Layer (DEPLOYED)
 
-- This layer is the append-only audit concept for signal-cycle decisions.
-- No deployed service currently implements it as a standalone component.
-- Planned output: JSONL decision log, state snapshot, and snapshot directory.
+- Append-only JSONL audit trail for signal-cycle decisions.
+- Output: `orchestrator/logs/shadow_decisions.jsonl`.
+- SI v2 integration: Measurement Ledger (27 fleet cycles, 108 bot measurement
+  points, 24 proposal records) writes deterministic JSONL artifacts.
 - Principle: no side effects, no order execution, no hidden branching.
+
+### Kill Switch — Central Safety Choke Point (PR #220)
+
+- File-based atomic kill switch in `freqtrade/shared/kill_switch.py`.
+- Three modes: `NORMAL` (no blocking), `HALT_NEW` (block entries, keep positions),
+  `EMERGENCY` (block entries + signal position close).
+- Integrated into `primo_signal.py:primo_gate_allows()` as the highest-priority check.
+- CLI via `orchestrator/scripts/kill_switch_trigger.sh`.
+- Auto-check mode reads `fleet_risk_state.json` and activates at configurable
+  drawdown thresholds (default: HALT at 12%, EMERGENCY at 18%).
+- Drawdown guard: auto-activates but does not override an already-active kill switch.
+- See `docs/runbooks/kill-switch.md` for full operational procedures.
 
 ### FreqForge Shadow Evaluator — v0.1 (PASSIVE)
 
@@ -85,10 +102,21 @@ snapshot and `docs/context/` for append-only historical reports.
 | MVS | — | — | NOT_DEPLOYED | — |
 | Webserver | `trading-freqtrade-webserver-1` | — | UI only | — |
 
+### SI v2 — Self-Improvement Engine (ACTIVE)
+
+- Observation loop: Active Cycle Runner reads Freqtrade REST + Rainbow §5 (read_only)
+  every 6 hours via Hermes cron.
+- Measurement Ledger: 27 fleet cycles, 108 bot measurement points, 24 proposal records.
+- Rainbow read_only source: observed but never scored, never applied, never executed.
+- Controller status: `PAUSED / L3_REPOSITORY_ONLY` — all mutation counters zero.
+- Scoring gate: 0/10 (awaiting producer freshness, not cycles).
+- See `self_improvement_v2/README.md` for full module map and entry points.
+
 ### Decommissioned / historical
 
 - Honcho persistent memory was decommissioned and archived.
-- Caddy remains the reverse proxy layer for the host.
+- Momentum bot decommissioned (strategy archive-only).
+- MVS bot never deployed.
 
 ## Documentation discipline
 

@@ -20,6 +20,7 @@ Repository: `github.com/GoLukeEnviro/trading-hub` (privat). Arbeitsverzeichnis: 
 - **Niemals** `git add .` verwenden — Dateien immer explizit nach Pfad stagen.
 - **Niemals** force-push, `git reset --hard`, `git clean -fdx` oder History umschreiben.
 - **Niemals** Secrets, Runtime-State, Datenbanken, Logs, Backups oder `.env`-Dateien committen.
+- **Kill-Switch respektieren:** Wenn `HALT_NEW` oder `EMERGENCY` aktiv ist, keine neuen Entries vorschlagen oder anwenden. Einen aktiven Kill-Switch nicht ohne menschliche Freigabe ueberschreiben.
 - `docs/context/` nach jeder wesentlichen Aenderung, jedem Vorfall oder jeder Architekturentscheidung aktualisieren.
 
 ## Architektur
@@ -31,7 +32,8 @@ ai-hedge-fund-crypto (Port 8410)     Signal-Generator — TA-Ensemble + LLM via 
 Trading-Pipeline                     orchestrator/scripts/trading_pipeline.py
   ├── signal_bridge.py               Liest Signal, schreibt per-Bot-State-Dateien
   ├── riskguard.py                   Validiert Signal-Schema, Frische, Konfidenz
-  └── tools/freqforge/               Shadow-Evaluator — passiver Beobachter, handelt nie
+  ├── tools/freqforge/               Shadow-Evaluator — passiver Beobachter, handelt nie
+  └── kill_switch.py                 Zentrale Sicherheitssperre: NORMAL / HALT_NEW / EMERGENCY
         │ primo_signal_state.json
         ▼
 Freqtrade-Fleet (alles Dry-Run)      freqtrade/docker-compose.fleet.yml
@@ -39,6 +41,11 @@ Freqtrade-Fleet (alles Dry-Run)      freqtrade/docker-compose.fleet.yml
   ├── Canary             :8081        FreqForge_Override (abgeleitet)
   ├── Regime-Hybrid      :8085        RegimeSwitchingHybrid_v7_v04_Integration
   └── FreqAI-Rebel       :8087        RebelLiquidation + RebelXGBoostClassifier
+
+SI v2 Observation Loop (6h, PAUSED)  self_improvement_v2/src/si_v2/loop/
+  ActiveCycleRunner → CycleState → Measurement Ledger → ShadowProposal
+  Rainbow §5 (read_only) beobachtet, nie angewandt.
+  Controller: PAUSED / L3_REPOSITORY_ONLY — alle Mutations-Zaehler = 0.
 ```
 
 Zusaetzliche Infrastruktur in der root-`docker-compose.yml`: Docker-Socket-Proxy, Hermes-Agent-Container (hermes-green), Qdrant/Ollama/Mem0-Memory-Stack, Caddy-Reverse-Proxy und einfacher Watchdog-Container.
@@ -47,17 +54,20 @@ Zusaetzliche Infrastruktur in der root-`docker-compose.yml`: Docker-Socket-Proxy
 
 | Pfad | Zweck |
 |------|-------|
-| `orchestrator/scripts/` | Alle Automatisierungen: Healthchecks, Watchdogs, Audits, Bridge, Heartbeat, Fleet-Reparatur |
+| `orchestrator/scripts/` | Alle Automatisierungen: Healthchecks, Watchdogs, Audits, Bridge, Heartbeat, Fleet-Reparatur, **Kill-Switch-Trigger** (`kill_switch_trigger.sh`) |
 | `orchestrator/guardian/` | Externer Guardian-Docker-Container (traegt `external_cron_guardian.sh`) |
 | `orchestrator/state/` | Runtime-State (gitignored) — Equity, Drawdown, Quarantaene, Alerts |
 | `freqtrade/bots/` | Per-Bot-Verzeichnisse (config/, user_data/, docker-compose-Dateien) |
-| `freqtrade/shared/` | Gemeinsame Fleet-Bibliotheken: fleet_watcher, fleet_risk_manager, fleetguard, Strategien |
+| `freqtrade/shared/` | Gemeinsame Fleet-Bibliotheken: fleet_watcher, fleet_risk_manager, fleetguard, Strategien, **Kill-Switch** (`kill_switch.py`), **Primo-Signal** (`primo_signal.py`) |
 | `freqforge/` | FreqForge-Baseline-Bot: Config und user_data |
 | `tools/freqforge/` | FreqForge-Shadow-Evaluator (freqforge_shadow.py, freqforge_rules.py) |
 | `tools/riskguard/` | RiskGuard-Implementierung (riskguard.py, decisions.jsonl) |
 | `bridge/` | Hermes/Primo-Bridge (hermes_primo_bridge.py, Dockerfile) |
+| `self_improvement_v2/` | SI v2 Engine: Active Cycle Runner, Measurement Ledger, Rainbow Observation, Shadow Proposals |
+| `var/` | Runtime-State-Files: `kill_switch.json` (nicht in git getrackt) |
 | `docs/state/` | `current-operational-state.md` — der kanonische System-Snapshot |
 | `docs/context/` | Append-only historische Berichte und Migrationsnotizen |
+| `docs/runbooks/` | Operative Runbooks: Kill-Switch, Gateway-Debug, Health-Audits |
 
 ## Betriebbefehle
 
@@ -110,6 +120,7 @@ Die Cronjobs werden vom Hermes-Agent verwaltet (Profil: `orchestrator`). Die Job
 | `portfolio-rebalancer` | `portfolio_rebalancer.py` | woechentlich Mo 06:00 UTC | origin | Portfolio-Rebalancing-Empfehlungen |
 | `cron-guardian` | `restore_cron_jobs.sh` | alle 6 Std | local | Stellt Cron-Jobs aus Backup wieder her falls jobs.json korrupt oder fehlend |
 | `smart-heartbeat` | `smart_heartbeat.py` | alle 10 Min | local | Intelligenter Heartbeat mit Zustandsbewertung |
+| `si-v2-active-cycle` | `si-v2-active-cycle-runner.sh` | alle 6 Std (`17 */6 * * *`) | local | SI v2 Observation Loop: Active Cycle Runner, Measurement Ledger, Rainbow read_only. Controller PAUSED — keine Mutationen |
 
 **Wichtige Hinweise zu Cronjobs:**
 - Cron-Jobs duerfen **nicht** ohne explizite Freigabe geaendert, migriert oder geloescht werden.
@@ -156,6 +167,12 @@ trading-guardian (Docker-Container)
 ## Runbooks
 
 Die Runbooks liegen in `docs/runbooks/`. Jedes Runbook folgt dem gleichen Muster: Constraints, Audit-Steps, Decision-Matrix und Eskalationskriterien.
+
+### Kill-Switch-Runbook (`docs/runbooks/kill-switch.md`)
+
+Vollstaendiges Runbook fuer den zentralen Kill-Switch: NORMAL / HALT_NEW / EMERGENCY Modi,
+CLI-Bedienung via `kill_switch_trigger.sh`, Auto-Check (Drawdown-Guard) und Auto-Clear (Timer).
+Notfall-Szenarien: DD-Breach, manueller Override.
 
 ### Honcho-Health-Audit (`docs/runbooks/honcho-health-audit.md`)
 
