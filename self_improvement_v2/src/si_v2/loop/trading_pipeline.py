@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import copy
 import logging
-from kill_switch import get_kill_mode, is_kill_active, is_emergency
+
+from kill_switch import get_kill_mode, is_emergency, is_kill_active
+
 _logger = logging.getLogger(__name__)
 
 # ── Signal verdict constants ────────────────────────────────────────────

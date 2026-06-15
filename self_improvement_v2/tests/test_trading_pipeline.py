@@ -10,7 +10,6 @@ Tests cover:
 
 from __future__ import annotations
 
-from kill_switch import get_kill_mode, is_kill_active, is_emergency
 import pytest
 
 from si_v2.loop.trading_pipeline import (
