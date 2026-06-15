@@ -309,6 +309,7 @@ def main() -> int:
                     "status_code": snapshot.status_code,
                     "ok": snapshot.ok,
                     "response_summary": snapshot.response_summary[:160],
+                    "response_json": snapshot.response_json,
                     "fetched_at_utc": snapshot.fetched_at_utc,
                 }
                 result.endpoints[ep] = endpoint_result

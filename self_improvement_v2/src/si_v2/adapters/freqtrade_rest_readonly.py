@@ -22,6 +22,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Final
@@ -77,6 +78,8 @@ class FreqtradeSnapshot:
         status_code: HTTP status code returned by the server.
         ok: True if status_code == 200.
         response_summary: Truncated string summary of the response body.
+        response_json: Sanitized parsed JSON payload, or None if response
+            was not JSON or parsing failed. Sensitive fields are redacted.
         fetched_at_utc: ISO 8601 timestamp of the fetch.
     """
 
@@ -85,6 +88,7 @@ class FreqtradeSnapshot:
     status_code: int
     ok: bool
     response_summary: str
+    response_json: JsonValue | None = None
     fetched_at_utc: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -318,9 +322,11 @@ class SIV2FreqtradeTelemetryConnector:
                 status_code=0,
                 ok=False,
                 response_summary=f"connection_error: {exc}",
+                response_json=None,
             )
 
         response_summary = self._summarise(body_bytes)
+        response_json = self._parse_json_response(body_bytes)
 
         return FreqtradeSnapshot(
             bot_id=self._bot_id,
@@ -328,6 +334,7 @@ class SIV2FreqtradeTelemetryConnector:
             status_code=status_code,
             ok=status_code == 200,
             response_summary=response_summary,
+            response_json=response_json,
         )
 
     def _do_get_authenticated(
@@ -371,9 +378,11 @@ class SIV2FreqtradeTelemetryConnector:
                 status_code=0,
                 ok=False,
                 response_summary=f"connection_error: {exc}",
+                response_json=None,
             )
 
         response_summary = self._summarise(body_bytes)
+        response_json = self._parse_json_response(body_bytes)
 
         return FreqtradeSnapshot(
             bot_id=self._bot_id,
@@ -381,7 +390,34 @@ class SIV2FreqtradeTelemetryConnector:
             status_code=status_code,
             ok=status_code == 200,
             response_summary=response_summary,
+            response_json=response_json,
         )
+
+    @staticmethod
+    def _parse_json_response(body_bytes: bytes) -> JsonValue | None:
+        """Safely parse and redact a JSON response body.
+
+        Args:
+            body_bytes: Raw response bytes.
+
+        Returns:
+            Sanitized parsed JSON with sensitive fields redacted,
+            or None if the body is not valid JSON.
+        """
+        if not body_bytes:
+            return None
+        try:
+            text = body_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+        try:
+            parsed: JsonValue = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            return None
+        # Deep copy to avoid mutating the in-memory token accidentally
+        from copy import deepcopy
+        sanitized = deepcopy(parsed)
+        return SIV2FreqtradeTelemetryConnector._redact_sensitive(sanitized)
 
     @staticmethod
     def _summarise(body_bytes: bytes) -> str:

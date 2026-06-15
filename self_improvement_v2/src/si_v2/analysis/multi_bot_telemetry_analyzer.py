@@ -15,7 +15,6 @@ Output is always ANALYSIS_ONLY_RISK_REVIEW — never an actionable parameter cha
 
 from __future__ import annotations
 
-import json
 from typing import Final
 
 # ---------------------------------------------------------------------------
@@ -119,78 +118,6 @@ class FleetAnalysis:
         self.caveats = caveats or []
         self.validation_required = validation_required or []
         self.error = error
-
-
-# ---------------------------------------------------------------------------
-# JSON parsing helpers (safe, no Any, no type: ignore)
-# ---------------------------------------------------------------------------
-
-
-def _parse_profit_value(summary: str) -> float | None:
-    """Safely parse a profit metric from a Freqtrade /profit response summary.
-
-    Tries fields in order: profit_all_ratio, profit_closed_ratio,
-    profit_all_abs, profit_closed_coin (as float).
-
-    Args:
-        summary: The response_summary string from the connector snapshot.
-
-    Returns:
-        A float profit value, or None if parsing fails or no field matches.
-    """
-    if not summary or not isinstance(summary, str):
-        return None
-    try:
-        data = json.loads(summary)
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if not isinstance(data, dict):
-        return None
-
-    for key in ("profit_all_ratio", "profit_closed_ratio",
-                "profit_all_abs", "profit_closed_coin"):
-        val = data.get(key)
-        if val is not None:
-            try:
-                return float(val)
-            except (ValueError, TypeError):
-                continue
-    return None
-
-
-def _parse_count_value(summary: str) -> int | None:
-    """Safely parse a count value from a Freqtrade /count response summary.
-
-    Tries fields: current, count, open_trades. Falls back to parsing the
-    entire response as a plain integer.
-
-    Args:
-        summary: The response_summary string from the connector snapshot.
-
-    Returns:
-        An integer count, or None if parsing fails.
-    """
-    if not summary or not isinstance(summary, str):
-        return None
-    try:
-        data = json.loads(summary)
-    except (json.JSONDecodeError, ValueError):
-        # Try plain integer parsing
-        try:
-            return int(summary.strip())
-        except (ValueError, TypeError):
-            return None
-    if isinstance(data, dict):
-        for key in ("current", "count", "open_trades"):
-            val = data.get(key)
-            if val is not None:
-                try:
-                    return int(val)
-                except (ValueError, TypeError):
-                    continue
-    if isinstance(data, (int, float)):
-        return int(data)
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +241,10 @@ def build_bot_summaries(
 ) -> list[BotEndpointSummary]:
     """Convert proof-level bot results to sanitized analysis summaries.
 
+    Reads metrics from structured response_json, not from response_summary.
+    response_json is already sanitized (sensitive fields redacted) by the
+    connector before storage.
+
     Args:
         bot_results: List of BotTelemetryResult objects from the proof.
 
@@ -343,23 +274,40 @@ def build_bot_summaries(
             if isinstance(e, dict) and e.get("ok")
         )
 
-        # Extract /profit value if available
+        # Extract /profit value from structured response_json
         profit_result = endpoints.get("/api/v1/profit", {})
         profit_value: float | None = None
         profit_available = False
         if isinstance(profit_result, dict) and profit_result.get("ok"):
-            summary = profit_result.get("response_summary", "")
-            if isinstance(summary, str) and summary:
-                profit_available = True
-                profit_value = _parse_profit_value(summary)
+            rj = profit_result.get("response_json")
+            if isinstance(rj, dict):
+                for key in ("profit_all_ratio", "profit_closed_ratio",
+                            "profit_all_abs", "profit_closed_coin"):
+                    val = rj.get(key)
+                    if val is not None:
+                        try:
+                            profit_value = float(val)
+                            profit_available = True
+                            break
+                        except (ValueError, TypeError):
+                            continue
 
-        # Extract /count if available
+        # Extract /count from structured response_json
         count_open: int | None = None
         count_result = endpoints.get("/api/v1/count", {})
         if isinstance(count_result, dict) and count_result.get("ok"):
-            summary = count_result.get("response_summary", "")
-            if isinstance(summary, str) and summary:
-                count_open = _parse_count_value(summary)
+            rj = count_result.get("response_json")
+            if isinstance(rj, dict):
+                for key in ("current", "count", "open_trades"):
+                    val = rj.get(key)
+                    if val is not None:
+                        try:
+                            count_open = int(val)
+                            break
+                        except (ValueError, TypeError):
+                            continue
+            elif isinstance(rj, (int, float)):
+                count_open = int(rj)
 
         # Extract /status if available
         status_healthy: bool | None = None
