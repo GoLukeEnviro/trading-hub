@@ -17,7 +17,6 @@ CONSTRAINTS (enforced at code level)
   - No runtime mutation. No live trading enablement.
   - All four bots addressed — no single-bot-only logic.
 """
-
 from __future__ import annotations
 
 import json
@@ -212,6 +211,12 @@ def main() -> int:
     """
     sys.path.insert(0, str(_REPO_ROOT / "self_improvement_v2" / "src"))
 
+    from si_v2.adapters.freqtrade_auth_resolver import (
+        ALLOWED_CONFIG_PATHS,
+        RESOLVED_FROM_ENV,
+        RESOLVED_FROM_FILE,
+        resolve_all,
+    )
     from si_v2.adapters.freqtrade_rest_readonly import (
         SIV2FreqtradeTelemetryConnector,
     )
@@ -240,6 +245,22 @@ def main() -> int:
     if not enabled_bots:
         print("  ERROR: No enabled bots in registry")
         return 1
+
+    # Step 1a: Resolve auth credentials for all enabled bots
+    print("\n[STEP 1a] Resolving auth credentials for all enabled bots...")
+    auth_results = resolve_all(_CONFIG_PATH, ALLOWED_CONFIG_PATHS)
+    for ar in auth_results:
+        source = ar.status
+        if source == RESOLVED_FROM_ENV:
+            src_desc = "from env"
+        elif source == RESOLVED_FROM_FILE:
+            src_desc = f"from {Path(ar.source_path).name}"
+        else:
+            src_desc = f"MISSING: {ar.error[:60]}" if ar.error else "MISSING"
+        print(f"  {ar.bot_id:35s} user={ar.username_env:55s} {src_desc}")
+
+    resolved = sum(1 for ar in auth_results if ar.status in (RESOLVED_FROM_ENV, RESOLVED_FROM_FILE))
+    print(f"  Auth resolved: {resolved}/{len(auth_results)} bots")
 
     # Step 2-4: For each bot, collect telemetry
     print(f"\n[STEP 2-4] Collecting authenticated telemetry from "
