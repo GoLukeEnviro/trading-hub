@@ -58,9 +58,11 @@ _SHADOW_LOG_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "s
 # ------------------------------------------------------------------
 sys.path.insert(0, str(_REPO_ROOT / "self_improvement_v2" / "src"))
 
-from si_v2.adapters.freqtrade_rest_readonly import (  # noqa: E402
-    SIV2FreqtradeTelemetryConnector,
-)
+import importlib as _il  # noqa: E402
+
+_si_v2_adapters = _il.import_module("si_v2.adapters.freqtrade_rest_readonly")
+SIV2FreqtradeTelemetryConnector = _si_v2_adapters.SIV2FreqtradeTelemetryConnector
+
 from si_v2.deploy.shadow_logger import ShadowLogger  # noqa: E402
 from si_v2.loop.fleet_analyzer import (  # noqa: E402
     DECISION_SHADOW_PROPOSAL,
