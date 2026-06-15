@@ -73,6 +73,12 @@ from si_v2.measurement.ledger import (  # noqa: E402
     build_ledger,
     persist_ledger,
 )
+from si_v2.observe.telemetry_history import (  # noqa: E402
+    EvidenceWindow,
+    TelemetryHistoryAnalyzer,
+    TelemetryHistoryStore,
+    build_record_from_snapshots,
+)
 from si_v2.signals.freqtrade_signals import (  # noqa: E402
     collect_bot_signals,
 )
@@ -93,6 +99,18 @@ LEDGER_STATUS_SUCCESS: str = "SUCCESS"
 LEDGER_STATUS_WARNING: str = "WARNING"
 LEDGER_STATUS_SKIPPED: str = "SKIPPED"
 LEDGER_STATUS_FAILED: str = "FAILED"
+
+# ------------------------------------------------------------------
+# Telemetry history enforcement constants
+# ------------------------------------------------------------------
+MIN_REQUIRED_TELEMETRY_HISTORY_RUNS: int = 5
+
+HISTORY_STATUS_NORMAL: str = "NORMAL"
+HISTORY_STATUS_INSUFFICIENT: str = "INSUFFICIENT_HISTORY"
+HISTORY_STATUS_MISSING: str = "MISSING_EVIDENCE_WINDOW"
+
+HISTORY_REASON_INSUFFICIENT: str = "insufficient_telemetry_history"
+HISTORY_REASON_MISSING: str = "missing_evidence_window"
 
 # ------------------------------------------------------------------
 # Rainbow external signal source config (default: disabled)
@@ -958,6 +976,53 @@ def run_active_cycle() -> int:
     fleet_exit_code = 2 if summary.ping_ok_count == 0 and summary.total_bots > 0 else 0
 
     # ------------------------------------------------------------------
+    # Step 3b: Append telemetry history record and build EvidenceWindow
+    # ------------------------------------------------------------------
+    _history_store = TelemetryHistoryStore()
+    _evidence_window: EvidenceWindow | None = None
+
+    # Build a history record from the collected signal snapshots
+    # (snapshots exist only for authenticated bots; unauthenticated bots
+    # are omitted but the store analyser covers all 4 KNOWN_BOT_IDS).
+    _history_record = build_record_from_snapshots(
+        cycle_id=cycle_id,
+        fleet_verdict=summary.fleet_verdict,
+        snapshots=signal_snapshots,
+        fetched_at_utc=now_iso,
+    )
+    _history_store.append(_history_record)
+    try:
+        _history_path = _history_store._current_file()
+        print(f"  telemetry history:    {_history_path.relative_to(_REPO_ROOT)}")
+    except ValueError:
+        print(f"  telemetry history:    {_history_store._state_dir}")
+
+    # Read the last 5 runs and build an EvidenceWindow
+    _history_analyzer = TelemetryHistoryAnalyzer()
+    _trend = _history_analyzer.analyze_window(n=5)
+    if _trend.runs_observed > 0:
+        _evidence_window = _history_analyzer.build_evidence_window(n=5)
+        print(f"  evidence window:      runs_observed={_trend.runs_observed}, "
+              f"weakest_bot={_trend.weakest_bot or 'n/a'}, "
+              f"strongest_bot={_trend.strongest_bot or 'n/a'}, "
+              f"freshness={_trend.fleet_freshness}")
+    else:
+        _evidence_window = EvidenceWindow(
+            runs_observed=0,
+            window_start_utc="",
+            window_end_utc="",
+            per_bot_trend_summary={},
+        )
+        print("  evidence window:      no history yet (runs_observed=0)")
+
+    # Build a JSON-safe evidence_window dict for embedding in proposals
+    _evidence_window_dict: dict[str, object] = (
+        _evidence_window.model_dump(mode="json")
+        if _evidence_window is not None
+        else {}
+    )
+
+    # ------------------------------------------------------------------
     # Step 4: Safety path for every ShadowProposal
     # ------------------------------------------------------------------
     print("\n[STEP 4] Passing ShadowProposals through safety path...")
@@ -978,6 +1043,36 @@ def run_active_cycle() -> int:
             continue
 
         decision_dict = _asdict_proposal(d)
+
+        # Inject evidence_window into the decision for embedding in proposals
+        if _evidence_window_dict:
+            decision_dict["evidence_window"] = _evidence_window_dict
+            # Also inject into evidence_summary for downstream consumers
+            safe_evidence: dict[str, object] = dict(d.evidence_summary)
+            safe_evidence["evidence_window"] = _evidence_window_dict
+            decision_dict["evidence_summary"] = safe_evidence
+
+        # ── Telemetry history gating ────────────────────────────────────
+        # Check if sufficient history exists for normal proposal confidence.
+        # If evidence_window is missing or runs_observed < min_required_runs,
+        # the proposal is downgraded and blocked from promotion.
+        history_status: str = HISTORY_STATUS_NORMAL
+        history_reason_codes: list[str] = []
+
+        if not _evidence_window_dict:
+            history_status = HISTORY_STATUS_MISSING
+            history_reason_codes.append(HISTORY_REASON_MISSING)
+        else:
+            runs_obs_raw = _evidence_window_dict.get("runs_observed", 0)
+            runs_obs = int(runs_obs_raw) if isinstance(runs_obs_raw, int) else 0
+            if runs_obs < MIN_REQUIRED_TELEMETRY_HISTORY_RUNS:
+                history_status = HISTORY_STATUS_INSUFFICIENT
+                history_reason_codes.append(HISTORY_REASON_INSUFFICIENT)
+
+        decision_dict["history_status"] = history_status
+        decision_dict["history_reason_codes"] = history_reason_codes
+        decision_dict["min_required_runs"] = MIN_REQUIRED_TELEMETRY_HISTORY_RUNS
+
         riskguard = _riskguard_check(decision_dict)
 
         shadow_logger.log(
@@ -1007,6 +1102,9 @@ def run_active_cycle() -> int:
             "shadow_logger": "LOGGED" if entries else "EMPTY",
             "shadow_logger_entries": len(entries),
             "approval_status": "PENDING_HUMAN",
+            "history_status": history_status,
+            "history_reason_codes": history_reason_codes,
+            "min_required_runs": MIN_REQUIRED_TELEMETRY_HISTORY_RUNS,
         })
 
     print(f"  safety evaluations:   {len(safety_results)}")
@@ -1021,6 +1119,13 @@ def run_active_cycle() -> int:
 
     # 5a. Evidence bundle (JSON)
     per_bot_raw = [_asdict_proposal(d) for d in decision.per_bot]
+
+    # Re-inject evidence_window into per_bot_raw decisions
+    if _evidence_window_dict:
+        for pd in per_bot_raw:
+            pd["evidence_window"] = _evidence_window_dict
+            if "evidence_summary" in pd and isinstance(pd["evidence_summary"], dict):
+                pd["evidence_summary"]["evidence_window"] = _evidence_window_dict
 
     evidence_bundle: dict[str, object] = {
         "schema_version": 1,
@@ -1074,6 +1179,11 @@ def run_active_cycle() -> int:
             "docker_mutations": 0,
             "strategy_mutations": 0,
         },
+        "telemetry_history": {
+            "runs_observed": _trend.runs_observed if _trend.runs_observed > 0 else 0,
+            "fleet_freshness": _trend.fleet_freshness if _trend.runs_observed > 0 else "inactive",
+            "min_required_runs": MIN_REQUIRED_TELEMETRY_HISTORY_RUNS,
+        },
     }
 
     bundle_path = _EVIDENCE_DIR / f"active_cycle_{cycle_id}.json"
@@ -1108,6 +1218,7 @@ def run_active_cycle() -> int:
         decision=decision,
         safety_results=safety_results,
         rainbow_result=rainbow_result,
+        trend_runs_observed=_trend.runs_observed,
     )
     with open(report_path, "w") as f:
         f.write(report_text)
@@ -1209,6 +1320,7 @@ def _build_report_markdown(
     decision,
     safety_results: list[dict[str, object]],
     rainbow_result: dict[str, object] | None = None,
+    trend_runs_observed: int = 0,
 ) -> str:
     """Render the cycle markdown report."""
     summary = decision.fleet_summary
@@ -1338,6 +1450,17 @@ def _build_report_markdown(
     lines.append("| strategy_mutations | 0 |")
     lines.append("| secrets_in_bundle | No (checked) |")
     lines.append("| all_proposals_pending_human | Yes |")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("## Telemetry History & Evidence Window")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|--------|-------|")
+    lines.append(f"| history_runs_observed | {trend_runs_observed} |")
+    lines.append(f"| min_required_runs | {MIN_REQUIRED_TELEMETRY_HISTORY_RUNS} |")
+    lines.append("")
+    lines.append("**Proposals with `runs_observed < min_required_runs` are downgraded to `INSUFFICIENT_HISTORY`.**")
     lines.append("")
     return "\n".join(lines) + "\n"
 
