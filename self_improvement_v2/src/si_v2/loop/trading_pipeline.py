@@ -16,8 +16,7 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import Any
-
+from kill_switch import get_kill_mode, is_kill_active, is_emergency
 _logger = logging.getLogger(__name__)
 
 # ── Signal verdict constants ────────────────────────────────────────────
@@ -57,7 +56,7 @@ except ImportError:
 _KILL_ACTIVE: bool | None = None  # lazily populated
 
 
-def _check_kill_switch() -> dict[str, Any]:
+def _check_kill_switch() -> dict:
     """Read the kill-switch state and return a structured result.
 
     Returns a dict with:
@@ -84,9 +83,9 @@ def _check_kill_switch() -> dict[str, Any]:
 
 
 def process_signals(
-    signals: list[dict[str, Any]] | dict[str, Any],
-    kill_switch_check: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+    signals: list[dict] | dict,
+    kill_switch_check: dict | None = None,
+) -> dict:
     """Process signals through the kill-switch gate.
 
     This is the top-level entry point for the trading pipeline.  It checks
@@ -103,7 +102,7 @@ def process_signals(
 
     Returns:
         A dict with:
-            - ``pairs`` (list[dict[str, Any]]): processed signal decisions
+            - ``pairs`` (list[dict]): processed signal decisions
             - ``override_active`` (bool): whether kill-switch forced changes
             - ``kill_mode`` (str): current kill-switch mode
             - ``exit_signal`` (bool): True when EMERGENCY exit signal is active
@@ -116,7 +115,7 @@ def process_signals(
     forced_verdict: str | None = ks["forced_verdict"]
 
     # Normalise input
-    signal_list: list[dict[str, Any]]
+    signal_list: list[dict]
     if isinstance(signals, list):
         signal_list = signals
     elif isinstance(signals, dict):
@@ -125,14 +124,14 @@ def process_signals(
     else:
         signal_list = []
 
-    pairs: list[dict[str, Any]] = []
+    pairs: list[dict] = []
 
     for signal in signal_list:
         pair_key = str(signal.get("pair", signal.get("pair_key", "unknown")))
 
         if kill_override:
             # Force WATCH_ONLY on every signal
-            entry: dict[str, Any] = {
+            entry: dict = {
                 "pair": pair_key,
                 "pair_key": pair_key,
                 "verdict": forced_verdict,

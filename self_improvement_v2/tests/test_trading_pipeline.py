@@ -10,8 +10,7 @@ Tests cover:
 
 from __future__ import annotations
 
-from typing import Any
-
+from kill_switch import get_kill_mode, is_kill_active, is_emergency
 import pytest
 
 from si_v2.loop.trading_pipeline import (
@@ -24,7 +23,7 @@ from si_v2.loop.trading_pipeline import (
 
 
 @pytest.fixture
-def normal_ks() -> dict[str, Any]:
+def normal_ks() -> dict:
     """Kill-switch check result for NORMAL mode."""
     return {
         "kill_override": False,
@@ -36,7 +35,7 @@ def normal_ks() -> dict[str, Any]:
 
 
 @pytest.fixture
-def halt_new_ks() -> dict[str, Any]:
+def halt_new_ks() -> dict:
     """Kill-switch check result for HALT_NEW mode."""
     return {
         "kill_override": True,
@@ -48,7 +47,7 @@ def halt_new_ks() -> dict[str, Any]:
 
 
 @pytest.fixture
-def emergency_ks() -> dict[str, Any]:
+def emergency_ks() -> dict:
     """Kill-switch check result for EMERGENCY mode."""
     return {
         "kill_override": True,
@@ -60,7 +59,7 @@ def emergency_ks() -> dict[str, Any]:
 
 
 @pytest.fixture
-def sample_signals() -> list[dict[str, Any]]:
+def sample_signals() -> list[dict]:
     """A realistic set of trading signals."""
     return [
         {
@@ -81,7 +80,7 @@ def sample_signals() -> list[dict[str, Any]]:
 
 
 @pytest.fixture
-def sample_signals_dict() -> dict[str, Any]:
+def sample_signals_dict() -> dict:
     """Signals wrapped in a dict with a ``pairs`` key."""
     return {
         "pairs": [
@@ -105,8 +104,8 @@ class TestNormalMode:
 
     def test_signals_pass_through(
         self,
-        sample_signals: list[dict[str, Any]],
-        normal_ks: dict[str, Any],
+        sample_signals: list[dict],
+        normal_ks: dict,
     ) -> None:
         """All signals keep their original verdict and fields."""
         result = process_signals(sample_signals, kill_switch_check=normal_ks)
@@ -124,7 +123,7 @@ class TestNormalMode:
             assert entry["action"] == sample_signals[i].get("action")
             assert entry["pair"] == sample_signals[i].get("pair")
 
-    def test_empty_signals_normal(self, normal_ks: dict[str, Any]) -> None:
+    def test_empty_signals_normal(self, normal_ks: dict) -> None:
         """Empty signal list returns empty pairs."""
         result = process_signals([], kill_switch_check=normal_ks)
         assert result["override_active"] is False
@@ -132,8 +131,8 @@ class TestNormalMode:
 
     def test_dict_input_with_pairs(
         self,
-        sample_signals_dict: dict[str, Any],
-        normal_ks: dict[str, Any],
+        sample_signals_dict: dict,
+        normal_ks: dict,
     ) -> None:
         """Dict with ``pairs`` key is unpacked correctly."""
         result = process_signals(sample_signals_dict, kill_switch_check=normal_ks)
@@ -149,8 +148,8 @@ class TestHaltNewMode:
 
     def test_all_signals_forced_watch_only(
         self,
-        sample_signals: list[dict[str, Any]],
-        halt_new_ks: dict[str, Any],
+        sample_signals: list[dict],
+        halt_new_ks: dict,
     ) -> None:
         """Every signal gets forced WATCH_ONLY verdict."""
         result = process_signals(sample_signals, kill_switch_check=halt_new_ks)
@@ -172,8 +171,8 @@ class TestHaltNewMode:
 
     def test_no_exit_signal_in_halt_new(
         self,
-        sample_signals: list[dict[str, Any]],
-        halt_new_ks: dict[str, Any],
+        sample_signals: list[dict],
+        halt_new_ks: dict,
     ) -> None:
         """HALT_NEW does NOT set exit_signal."""
         result = process_signals(sample_signals, kill_switch_check=halt_new_ks)
@@ -181,7 +180,7 @@ class TestHaltNewMode:
             assert entry.get("exit_signal") is not True
             assert entry.get("exit_reason") is None
 
-    def test_summary_halt_new(self, halt_new_ks: dict[str, Any]) -> None:
+    def test_summary_halt_new(self, halt_new_ks: dict) -> None:
         """Summary correctly describes HALT_NEW state."""
         result = process_signals([{"pair": "BTC/USDT"}], kill_switch_check=halt_new_ks)
         assert "HALT_NEW" in result["summary"]
@@ -196,8 +195,8 @@ class TestEmergencyMode:
 
     def test_emergency_forces_watch_only(
         self,
-        sample_signals: list[dict[str, Any]],
-        emergency_ks: dict[str, Any],
+        sample_signals: list[dict],
+        emergency_ks: dict,
     ) -> None:
         """EMERGENCY mode forces WATCH_ONLY."""
         result = process_signals(sample_signals, kill_switch_check=emergency_ks)
@@ -213,8 +212,8 @@ class TestEmergencyMode:
 
     def test_emergency_sets_exit_signal(
         self,
-        sample_signals: list[dict[str, Any]],
-        emergency_ks: dict[str, Any],
+        sample_signals: list[dict],
+        emergency_ks: dict,
     ) -> None:
         """EMERGENCY mode sets exit_signal=True and exit_reason."""
         result = process_signals(sample_signals, kill_switch_check=emergency_ks)
@@ -222,7 +221,7 @@ class TestEmergencyMode:
             assert entry.get("exit_signal") is True
             assert entry.get("exit_reason") == "kill_switch_emergency"
 
-    def test_summary_emergency(self, emergency_ks: dict[str, Any]) -> None:
+    def test_summary_emergency(self, emergency_ks: dict) -> None:
         """Summary correctly describes EMERGENCY state."""
         result = process_signals([{"pair": "BTC/USDT"}], kill_switch_check=emergency_ks)
         assert "EMERGENCY" in result["summary"]
@@ -235,19 +234,19 @@ class TestEmergencyMode:
 class TestEdgeCases:
     """Edge cases: empty, missing keys, type variants."""
 
-    def test_missing_pair_key(self, halt_new_ks: dict[str, Any]) -> None:
+    def test_missing_pair_key(self, halt_new_ks: dict) -> None:
         """Signals without a 'pair' key still get a WATCH_ONLY entry."""
-        signals: list[dict[str, Any]] = [{"confidence": 0.9}]
+        signals: list[dict] = [{"confidence": 0.9}]
         result = process_signals(signals, kill_switch_check=halt_new_ks)
         assert len(result["pairs"]) == 1
         assert result["pairs"][0]["pair"] == "unknown"
 
-    def test_non_list_non_dict_input(self, halt_new_ks: dict[str, Any]) -> None:
+    def test_non_list_non_dict_input(self, halt_new_ks: dict) -> None:
         """Non-list, non-dict input (e.g. empty dict with no pairs) yields empty pairs."""
         result = process_signals({}, kill_switch_check=halt_new_ks)
         assert result["pairs"] == []
 
-    def test_signals_key_variant(self, halt_new_ks: dict[str, Any]) -> None:
+    def test_signals_key_variant(self, halt_new_ks: dict) -> None:
         """Dict with 'signals' key is unpacked correctly."""
         result = process_signals(
             {"signals": [{"pair": "SOL/USDT"}]},
@@ -256,7 +255,7 @@ class TestEdgeCases:
         assert len(result["pairs"]) == 1
         assert result["pairs"][0]["pair"] == "SOL/USDT"
 
-    def test_single_signal_dict_falls_through(self, halt_new_ks: dict[str, Any]) -> None:
+    def test_single_signal_dict_falls_through(self, halt_new_ks: dict) -> None:
         """A bare signal dict (not wrapped in list/pairs) yields no pairs."""
         result = process_signals(
             {"pair": "BTC/USDT", "confidence": 0.9},
@@ -266,8 +265,8 @@ class TestEdgeCases:
 
     def test_normal_does_not_mutate_original(
         self,
-        sample_signals: list[dict[str, Any]],
-        normal_ks: dict[str, Any],
+        sample_signals: list[dict],
+        normal_ks: dict,
     ) -> None:
         """NORMAL mode does not mutate the caller's signal dicts."""
         original_confidence = sample_signals[0].get("confidence")
