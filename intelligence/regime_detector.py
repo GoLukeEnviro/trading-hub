@@ -62,6 +62,11 @@ def detect_regime(df: pd.DataFrame,
         - ema_slope: float
         - details: dict
     """
+    required_columns = {"high", "low", "close"}
+    missing = sorted(required_columns - set(df.columns))
+    if missing:
+        return {"regime": "unknown", "confidence": 0.0, "error": f"missing_columns:{','.join(missing)}"}
+
     if len(df) < ema_period + 5:
         return {"regime": "unknown", "confidence": 0.0, "error": "insufficient_data"}
 
