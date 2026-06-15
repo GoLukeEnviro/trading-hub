@@ -303,6 +303,6 @@ class TestImportGuard:
         """Fallback functions return safe defaults when kill_switch unreachable."""
         import si_v2.loop.trading_pipeline as pipeline
 
-        assert pipeline.is_kill_active() is False
-        assert pipeline.is_emergency() is False
-        assert pipeline.get_kill_mode() == "NORMAL"
+        assert pipeline._is_kill_active() is False
+        assert pipeline._is_emergency() is False
+        assert pipeline._get_kill_mode() == "NORMAL"

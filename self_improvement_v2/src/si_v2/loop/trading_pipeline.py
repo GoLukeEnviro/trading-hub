@@ -27,14 +27,14 @@ VERDICT_WATCH_ONLY: str = "WATCH_ONLY"
 # ── Kill-switch wrapper (import with fallback) ──────────────────────────
 
 try:
-    from freqtrade.shared.kill_switch import (
-        MODE_EMERGENCY,
-        MODE_HALT_NEW,
-        MODE_NORMAL,
-        get_kill_mode,
-        is_emergency,
-        is_kill_active,
-    )
+    import importlib as _ks_il
+    _ks_mod = _ks_il.import_module("freqtrade.shared.kill_switch")
+    MODE_EMERGENCY = _ks_mod.MODE_EMERGENCY
+    MODE_HALT_NEW = _ks_mod.MODE_HALT_NEW
+    MODE_NORMAL = _ks_mod.MODE_NORMAL
+    _get_kill_mode = _ks_mod.get_kill_mode
+    _is_kill_active = _ks_mod.is_kill_active
+    _is_emergency = _ks_mod.is_emergency
 except ImportError:
     _logger.warning(
         "kill_switch module not available — kill-switch checks disabled"
@@ -44,13 +44,13 @@ except ImportError:
     MODE_HALT_NEW = "HALT_NEW"
     MODE_EMERGENCY = "EMERGENCY"
 
-    def get_kill_mode() -> str:
+    def _get_kill_mode() -> str:
         return MODE_NORMAL
 
-    def is_kill_active() -> bool:
+    def _is_kill_active() -> bool:
         return False
 
-    def is_emergency() -> bool:
+    def _is_emergency() -> bool:
         return False
 
 _KILL_ACTIVE: bool | None = None  # lazily populated
@@ -66,7 +66,7 @@ def _check_kill_switch() -> dict:
         - ``forced_verdict`` (str | None) — the forced verdict if active
         - ``exit_signal`` (bool) — True when positions should be closed
     """
-    mode = get_kill_mode()
+    mode = _get_kill_mode()
     kill_active = mode != MODE_NORMAL
     emergency = mode == MODE_EMERGENCY
 
