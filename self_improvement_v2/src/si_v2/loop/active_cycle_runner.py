@@ -1486,7 +1486,9 @@ def _build_report_markdown(
     lines.append("| docker_mutations | 0 |")
     lines.append("| strategy_mutations | 0 |")
     lines.append("| secrets_in_bundle | No (checked) |")
-    lines.append("| all_proposals_pending_human | Yes |")
+    lines.append("| all_proposals_pending_human | No if telemetry history is insufficient |")
+    lines.append("| history_gate_enforced | Yes |")
+    lines.append("| promotion_blocked_when_history_insufficient | Yes |")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -1497,7 +1499,11 @@ def _build_report_markdown(
     lines.append(f"| history_runs_observed | {trend_runs_observed} |")
     lines.append(f"| min_required_runs | {MIN_REQUIRED_TELEMETRY_HISTORY_RUNS} |")
     lines.append("")
-    lines.append("**Proposals with `runs_observed < min_required_runs` are downgraded to `INSUFFICIENT_HISTORY`.**")
+    lines.append(
+        "**Proposals with `runs_observed < min_required_runs` are blocked from promotion "
+        "with `promotion_blocked=true` and "
+        "`approval_status=BLOCKED_INSUFFICIENT_HISTORY`.**"
+    )
     lines.append("")
     return "\n".join(lines) + "\n"
 
