@@ -146,6 +146,6 @@ EOF
 
 | Document | Location | Relationship |
 |----------|----------|-------------|
-| SI v2 Documentation Index | `self_improvement_v2/docs/README.md` | Links v1→v2 migration docs |
+| Repository Documentation Index | `docs/README.md` | Canonical documentation index (add an SI v2 index link here if/when created) |
 | V1-to-V2 Cron Migration | `self_improvement_v2/docs/V1_TO_V2_CRON_MIGRATION.md` | V1 cron status |
-| SI v2 Status Report | `src/si_v2/status/report.py` | Current SI v2 state |
+| Current Operational State | `docs/state/current-operational-state.md` | Canonical status snapshot |
