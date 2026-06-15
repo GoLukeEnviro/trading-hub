@@ -1,4 +1,11 @@
 # Rainbow Producer — Trading Hub Container
+# EXPERIMENTAL — NOT THE ACTIVE DEPLOYMENT PATH
+# =============================================
+# This Dockerfile is a fallback for future use. The current active
+# deployment uses the direct uvicorn + manager.sh approach because:
+#   - Docker daemon blocks builds on this host (HTTP 403)
+#   - ai4trade-bot rainbow.Dockerfile has missing core/ dependency
+#
 # Build from ai4trade-bot root context:
 #   docker build -t trading-rainbow-producer -f /home/hermes/projects/trading/orchestrator/profiles/rainbow-producer.Dockerfile /opt/data/ai4trade-bot
 #

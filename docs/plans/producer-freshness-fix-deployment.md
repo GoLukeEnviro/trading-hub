@@ -414,14 +414,21 @@ Phase 1 (current PR) ──→ Phase 2 (L3 approval) ──→ Phase 3 (validati
 
 ### Actual Deployment Model
 
-**Chosen:** Direct uvicorn process + s6 supervision + manager script
+**Chosen:** Direct uvicorn process + manager.sh (canonical lifecycle script)
 
 **Why not Docker:** The rainbow.Dockerfile has a missing `core` module
-dependency (`from core.heartbeat_writer import ...`). Fixing the
-Dockerfile requires either bundling `core/` or restructuring the build
-context — deferred to follow-up.
+dependency (`from core.heartbeat_writer import ...`). Additionally, the
+Docker daemon on this VPS blocks builds (HTTP 403). Docker deployment
+deferred to follow-up.
 
-**Why not systemd:** Container environment (s6 init, no systemd).
+**Why not systemd/systemctl:** Neither `systemctl` nor `sudo` are available
+in this VPS runtime environment. The canonical lifecycle manager
+`rainbow_producer_manager.sh` provides start/stop/status/restart via
+`setsid` process groups for clean shutdown.
+
+**Why not s6:** s6 supervision was attempted but not fully validated
+(cannotonical s6-rc compile path, no boot recovery proof). The manager
+script is the single source of truth for process lifecycle.
 
 ### Deployment Steps (Actual)
 
@@ -431,9 +438,8 @@ context — deferred to follow-up.
    ```
    .venv/bin/uvicorn rainbow.main:create_app --host 127.0.0.1 --port 8000 --factory
    ```
-3. Created s6 service at `/run/service/rainbow-producer/` for auto-restart.
-4. Created `orchestrator/scripts/rainbow_producer_manager.sh` for
-   start/stop/status/restart.
+3. Created `orchestrator/scripts/rainbow_producer_manager.sh` for
+   start/stop/status/restart (canonical lifecycle).
 5. Created `orchestrator/scripts/rainbow_producer_acceptance_test.py`
    for repeatable validation.
 6. Set SI v2 env vars:
@@ -469,11 +475,9 @@ context — deferred to follow-up.
 ```bash
 # Stop producer
 orchestrator/scripts/rainbow_producer_manager.sh stop
-# Or via s6
-rm -rf /run/service/rainbow-producer
 
 # Remove SI v2 Rainbow env config
-sed -i '/SI_V2_RAINBOW_BASE_URL/d; /SI_V2_RAINBOW_ENABLED/d; /SI_V2_RAINBOW_MODE/d' .env
+sed -i '/SI_V2_RAINBOW_BASE_URL/d; /SI_V2_RAINBOW_ENABLED/d; /SI_V2_RAINBOW_MODE/d' /home/hermes/projects/trading/.env
 
 # Restart stub server as fallback
 python3 orchestrator/scripts/rainbow_db_stub_server.py \
@@ -486,16 +490,13 @@ python3 orchestrator/scripts/rainbow_producer_acceptance_test.py
 
 ### Remaining Risks
 
-1. **s6 supervision not fully verified.** The supervise directory exists
-   and the process survives SIGTERM, but the service was not registered
-   through the canonical s6-rc compile path.
+1. **No boot persistence.** If the VPS restarts, the producer must be
+   manually restarted via `orchestrator/scripts/rainbow_producer_manager.sh start`.
+   No systemd/s6/cron `@reboot` is configured.
 2. **TA collector uses public Bitget API.** No rate-limiting issues
    observed at 120s interval, but Bitget could change their public API.
-3. **No auto-restart across container restarts.** If the Hermes container
-   restarts, the producer must be manually restarted via the manager
-   script or re-created if the s6 service directory persists.
-4. **Asset names mismatch.** The producer uses `BTCUSDT` format (Bitget)
-   while the SI v2 envelope schema uses `BTC/USDT:USDT`. The SI v2
-   client only checks that `symbol` is non-empty, so this is cosmetic
-   for now but should be aligned.
+3. **Asset names mismatch.** The producer uses `BTCUSDT` format (Bitget)
+   while the SI v2 envelope schema uses `BTC/USDT:USDT`. A symbol
+   normalizer exists at `orchestrator/scripts/rainbow_symbol_normalizer.py`
+   but is not yet wired into the envelope mapping pipeline.
 

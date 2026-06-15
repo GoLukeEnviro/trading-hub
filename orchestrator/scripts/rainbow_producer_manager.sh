@@ -1,18 +1,18 @@
 #!/bin/bash
-# Rainbow Producer Manager — start/stop/status/restart
-# Usage: rainbow_producer_manager.sh {start|stop|status|restart}
+# Rainbow Producer Manager — canonical lifecycle script
+# Usage: rainbow_producer_manager.sh {start|stop|status|restart|health}
 #
-# Manages the Rainbow producer (uvicorn) for SI v2 scoring eligibility.
-# Designed for container environments without systemd.
+# Canonical lifecycle manager for the Rainbow producer (uvicorn).
+# This is the ONE source of truth for producer process management.
+# Use `start` to launch, `stop` to clean up, `status` to check.
 
 set -euo pipefail
 
 SCRIPT_NAME="$(basename "$0")"
 WORKDIR="/opt/data/ai4trade-bot"
 VENV_PYTHON="$WORKDIR/.venv/bin/python3"
-UVICORN="$WORKDIR/.venv/bin/uvicorn"
 PIDFILE="/tmp/rainbow-producer.pid"
-LOGFILE="/opt/data/ai4trade-bot/logs/rainbow-producer/current"
+LOGFILE="/tmp/rainbow-producer.log"
 PORT=8000
 HOST="127.0.0.1"
 
@@ -27,6 +27,11 @@ _health_check() {
     curl -sf "http://$HOST:$PORT/health" >/dev/null 2>&1
 }
 
+_get_uvicorn_pids() {
+    # Find all uvicorn rainbow processes (not the manager itself)
+    pgrep -f "uvicorn.*rainbow.main:create_app" 2>/dev/null | grep -v "^$$\$" || true
+}
+
 _get_pid() {
     # Try PID file first
     if [ -f "$PIDFILE" ]; then
@@ -36,29 +41,37 @@ _get_pid() {
             echo "$pid"
             return 0
         fi
+        # Stale PID file
+        rm -f "$PIDFILE"
     fi
-    # Fallback: pgrep — take the first (parent) PID
-    pgrep -f "uvicorn.*rainbow.main:create_app" 2>/dev/null | head -1 || true
+    # Fallback: find uvicorn process
+    _get_uvicorn_pids | head -1 || true
 }
 
 start() {
     local existing
-    existing=$(_get_pid)
+    existing=$(_get_uvicorn_pids)
     if [ -n "$existing" ]; then
-        warn "Producer already running (PID $existing)"
-        if _health_check; then
-            info "Health check passed — already serving on $HOST:$PORT"
+        local count
+        count=$(echo "$existing" | wc -l)
+        if [ "$count" -gt 1 ]; then
+            warn "Found $count uvicorn processes — duplicate! Cleaning up..."
+            echo "$existing" | xargs kill 2>/dev/null || true
+            sleep 1
+        elif _health_check; then
+            info "Producer already running (PID $(echo "$existing" | head -1))"
+            local pid
+            pid=$(echo "$existing" | head -1)
+            echo "$pid" > "$PIDFILE"
             return 0
-        else
-            warn "Process exists but health check failed — restarting"
-            stop
         fi
     fi
 
-    mkdir -p "$(dirname "$LOGFILE")"
     info "Starting Rainbow producer..."
     cd "$WORKDIR"
-    exec "$VENV_PYTHON" -m uvicorn rainbow.main:create_app \
+
+    # Use setsid to create a clean process group for reliable kill
+    setsid "$VENV_PYTHON" -m uvicorn rainbow.main:create_app \
         --host "$HOST" --port "$PORT" \
         --factory --log-level info \
         >> "$LOGFILE" 2>&1 &
@@ -67,16 +80,16 @@ start() {
 
     # Wait for health
     local attempt=0
-    while [ $attempt -lt 10 ]; do
+    while [ $attempt -lt 15 ]; do
         sleep 1
         if _health_check; then
-            info "Producer started (PID $pid) — health check passed"
+            info "Producer started (PID $pid, process group) — health check passed"
             return 0
         fi
         attempt=$((attempt + 1))
     done
 
-    error "Health check failed after 10s — check logs at $LOGFILE"
+    error "Health check failed after 15s — check log: $LOGFILE"
     return 1
 }
 
@@ -89,19 +102,41 @@ stop() {
         return 0
     fi
 
-    info "Stopping producer (PID $pid)..."
-    kill "$pid" 2>/dev/null || true
+    info "Stopping producer (PID $pid, process group)..."
+    # Kill the entire process group (negative PID = PGID when using setsid)
+    # The PGID equals the PID since setsid creates a new session
+    local pgid
+    pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ' || echo "$pid")
+    if [ -n "$pgid" ] && [ "$pgid" != "0" ]; then
+        # Kill process group
+        kill -- "-$pgid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+    else
+        kill "$pid" 2>/dev/null || true
+    fi
+
     local wait=0
     while kill -0 "$pid" 2>/dev/null && [ $wait -lt 10 ]; do
         sleep 1
         wait=$((wait + 1))
     done
     if kill -0 "$pid" 2>/dev/null; then
+        local pgid
+        pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ' || echo "")
+        if [ -n "$pgid" ] && [ "$pgid" != "0" ]; then
+            kill -9 -- "-$pgid" 2>/dev/null || true
+        fi
         kill -9 "$pid" 2>/dev/null || true
         info "Force killed PID $pid"
     fi
     rm -f "$PIDFILE"
-    info "Producer stopped"
+
+    # Verify port is free
+    sleep 1
+    if _health_check 2>/dev/null; then
+        error "Port $PORT still in use after stop — something else is listening"
+        return 1
+    fi
+    info "Producer stopped. Port $PORT free."
 }
 
 status() {
@@ -109,10 +144,12 @@ status() {
     pid=$(_get_pid)
     if [ -n "$pid" ]; then
         if _health_check; then
-            echo -e "${GREEN}RUNNING${NC} (PID $pid) — serving on http://$HOST:$PORT"
+            local uptime
+            uptime=$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ' || echo "?")
+            echo -e "${GREEN}RUNNING${NC} (PID $pid, uptime $uptime) — http://$HOST:$PORT/health"
             return 0
         else
-            echo -e "${YELLOW}STALE${NC} (PID $pid) — process exists but health endpoint unreachable"
+            echo -e "${YELLOW}STALE${NC} (PID $pid) — process exists but /health unreachable"
             return 1
         fi
     else
@@ -124,8 +161,18 @@ status() {
 restart() {
     info "Restarting producer..."
     stop || true
-    sleep 1
+    sleep 2
     start
+}
+
+health() {
+    if _health_check; then
+        curl -s "http://$HOST:$PORT/health" 2>/dev/null || echo '{"status":"error"}'
+        return 0
+    else
+        echo '{"status":"unreachable"}'
+        return 1
+    fi
 }
 
 case "${1:-}" in
@@ -141,11 +188,14 @@ case "${1:-}" in
     restart)
         restart
         ;;
+    health)
+        health
+        ;;
     *)
-        echo "Usage: $SCRIPT_NAME {start|stop|status|restart}"
+        echo "Usage: $SCRIPT_NAME {start|stop|status|restart|health}"
         echo ""
-        echo "Manages the Rainbow producer (uvicorn) for SI v2 scoring."
-        echo "Logs: $LOGFILE"
+        echo "Canonical lifecycle manager for Rainbow producer (uvicorn)."
+        echo "Log: $LOGFILE | PID: $PIDFILE | Port: $HOST:$PORT"
         exit 1
         ;;
 esac

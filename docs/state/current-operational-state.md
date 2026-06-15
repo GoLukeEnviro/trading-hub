@@ -1,11 +1,11 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against merged main at
-> commit `266a930` (PR #261 — walk-forward cost model + net metrics, after
-> PR #262 — telemetry history store + enforcement gate).
+> commit `100acf6` (after PRs #261–#267).
 >
-> **Last updated:** 2026-06-16 (state reconciliation after PRs #261/#262)
-> **Branch:** `main` (HEAD = 266a930, after PRs #258–#262)
+> **Last updated:** 2026-06-16 (PR #267 — Rainbow producer hardening, scoring proof fixes)
+> **Branch:** `feat/rainbow-producer-durable-runtime-proof` (PR #267 — pending merge)
+> **HEAD:** `fa48038`
 > **Companion roadmap:** `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md`
 > **Live fleet snapshot:** `docs/state/canonical-trading-status.md`
 
@@ -90,8 +90,8 @@
 | — | Controller Layer (PR #158–#160) | ✅ Complete (merged) |
 | 1i | Real-Data Intelligence | ✅ Complete: #55–#59 (PRs #161–#166). #60 merged (PR #169). #61 closed. |
 | 1r | Rainbow Plumbing | ✅ Complete: PRs #212 (client), #213 (cycle/ledger), #214 (env override), #215 (runtime source + freshness guard) |
-|| **2.0** | **Runtime Foundation & Docker Ownership** | ✅ **COMPLETE** — #200 closed, telemetry history gate merged (PR #262) |
-|| **2.1** | **SI v2 Autonomous Dry-Run Operation** | 🟢 **IN PROGRESS** — producer deployed, scoring eligible (2026-06-15) |
+||| **2.0** | **Runtime Foundation & Docker Ownership** | ✅ **COMPLETE** — #200 closed, telemetry history gate merged (PR #262) |
+||| **2.1** | **SI v2 Autonomous Dry-Run Operation** | 🟡 **PARTIAL** — producer deployed, scoring eligible via manual acceptance test. Awaiting first scheduled SI v2 cycle to persist 1/10 scoring. |
 | 2.2 | Observability, Hardening & Self-Healing | ⏸ Pending — behind 2.0/2.1 |
 | 3 | Signal Weighting & Higher Autonomy | ⏸ Pending — behind 2.1 history gate |
 

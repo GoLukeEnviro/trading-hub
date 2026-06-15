@@ -221,16 +221,18 @@ All T2.0.x tasks are now completed. Key deliverables:
 
 ---
 
-## Phase 2.1 – SI v2 Autonomous Dry-Run Operation 🟢 PRODUCER DEPLOYED
+## Phase 2.1 – SI v2 Autonomous Dry-Run Operation 🟡 PARTIAL
 
 **Owner:** Hermes
 **Goal:** Reach Rainbow scoring eligibility = 10/10 with a **real
 producer**, without breaking dry-run-only.
 
-**Status:** ✅ Producer deployed 2026-06-15 via s6-supervised uvicorn
-process on 127.0.0.1:8000. TA collector running, fresh signals produced
-every 120s. Scoring eligibility: **True** (fresh=True, age ≤ 900s).
-Next blocker: observe 10/10 scoring-eligible cycles.
+**Status:** 🟡 **PARTIAL** — Producer deployed 2026-06-15 via manager.sh
+(uvicorn on 127.0.0.1:8000). TA collector running, fresh signals produced
+every 120s. Manual acceptance test confirms scoring eligibility (**True**,
+fresh=True, age ≤ 900s). **Not yet GREEN:** first scheduled SI v2 cycle
+with read_only source has not yet persisted a scoring-eligible measurement
+to the ledger. See "Remaining blockers" below.
 
 **Dependencies met:** ✅ PR #262 (telemetry history & enforcement gate),
 ✅ PR #261 (walk-forward cost model foundation),
