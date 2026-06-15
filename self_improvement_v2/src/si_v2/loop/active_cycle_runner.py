@@ -1055,7 +1055,7 @@ def run_active_cycle() -> int:
         # ── Telemetry history gating ────────────────────────────────────
         # Check if sufficient history exists for normal proposal confidence.
         # If evidence_window is missing or runs_observed < min_required_runs,
-        # the proposal is downgraded and blocked from promotion.
+        # the proposal is BLOCKED and blocked from promotion.
         history_status: str = HISTORY_STATUS_NORMAL
         history_reason_codes: list[str] = []
 
@@ -1069,9 +1069,19 @@ def run_active_cycle() -> int:
                 history_status = HISTORY_STATUS_INSUFFICIENT
                 history_reason_codes.append(HISTORY_REASON_INSUFFICIENT)
 
+        promotion_blocked: bool = history_status != HISTORY_STATUS_NORMAL
+        promotion_block_reason_codes: list[str] = (
+            list(history_reason_codes) if promotion_blocked else []
+        )
+
+        # Derive approval_status from history gate
+        _approval_status = "BLOCKED_INSUFFICIENT_HISTORY" if promotion_blocked else "PENDING_HUMAN"
+
         decision_dict["history_status"] = history_status
         decision_dict["history_reason_codes"] = history_reason_codes
         decision_dict["min_required_runs"] = MIN_REQUIRED_TELEMETRY_HISTORY_RUNS
+        decision_dict["promotion_blocked"] = promotion_blocked
+        decision_dict["promotion_block_reason_codes"] = promotion_block_reason_codes
 
         riskguard = _riskguard_check(decision_dict)
 
@@ -1101,10 +1111,12 @@ def run_active_cycle() -> int:
             "riskguard_reason": riskguard["reason"],
             "shadow_logger": "LOGGED" if entries else "EMPTY",
             "shadow_logger_entries": len(entries),
-            "approval_status": "PENDING_HUMAN",
+            "approval_status": _approval_status,
             "history_status": history_status,
             "history_reason_codes": history_reason_codes,
             "min_required_runs": MIN_REQUIRED_TELEMETRY_HISTORY_RUNS,
+            "promotion_blocked": promotion_blocked,
+            "promotion_block_reason_codes": promotion_block_reason_codes,
         })
 
     print(f"  safety evaluations:   {len(safety_results)}")
@@ -1120,12 +1132,37 @@ def run_active_cycle() -> int:
     # 5a. Evidence bundle (JSON)
     per_bot_raw = [_asdict_proposal(d) for d in decision.per_bot]
 
-    # Re-inject evidence_window into per_bot_raw decisions
+    # Re-inject evidence_window and history enforcement fields into per_bot_raw decisions
     if _evidence_window_dict:
         for pd in per_bot_raw:
             pd["evidence_window"] = _evidence_window_dict
             if "evidence_summary" in pd and isinstance(pd["evidence_summary"], dict):
                 pd["evidence_summary"]["evidence_window"] = _evidence_window_dict
+
+    # Inject history enforcement fields into per_bot_decisions
+    # (these are computed in Step 4; the per_bot_raw list is rebuilt here)
+    for pd in per_bot_raw:
+        pd["history_status"] = next(
+            (s["history_status"] for s in safety_results if s["bot_id"] == pd.get("bot_id")),
+            HISTORY_STATUS_MISSING,
+        )
+        pd["history_reason_codes"] = next(
+            (s["history_reason_codes"] for s in safety_results if s["bot_id"] == pd.get("bot_id")),
+            [HISTORY_REASON_MISSING],
+        )
+        pd["min_required_runs"] = MIN_REQUIRED_TELEMETRY_HISTORY_RUNS
+        pd["promotion_blocked"] = next(
+            (s["promotion_blocked"] for s in safety_results if s["bot_id"] == pd.get("bot_id")),
+            True,
+        )
+        pd["promotion_block_reason_codes"] = next(
+            (s["promotion_block_reason_codes"] for s in safety_results if s["bot_id"] == pd.get("bot_id")),
+            [HISTORY_REASON_MISSING],
+        )
+        pd["approval_status"] = next(
+            (s["approval_status"] for s in safety_results if s["bot_id"] == pd.get("bot_id")),
+            "BLOCKED_INSUFFICIENT_HISTORY",
+        )
 
     evidence_bundle: dict[str, object] = {
         "schema_version": 1,

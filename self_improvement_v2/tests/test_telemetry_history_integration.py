@@ -344,6 +344,14 @@ class TestTelemetryHistoryGate:
       - If runs_observed < min_required_runs → INSUFFICIENT_HISTORY
       - Otherwise                           → NORMAL
     min_required_runs defaults to 5.
+
+    When history_status != NORMAL:
+      - approval_status = "BLOCKED_INSUFFICIENT_HISTORY"
+      - promotion_blocked = True
+
+    When history_status == NORMAL:
+      - approval_status = "PENDING_HUMAN"
+      - promotion_blocked = False
     """
 
     MIN_REQUIRED = 5
@@ -358,7 +366,7 @@ class TestTelemetryHistoryGate:
         )
 
     def test_missing_evidence_window(self, th):
-        """Missing evidence_window → fail closed."""
+        """Missing evidence_window → fail closed → BLOCKED."""
         ew_dict = {}
         assert not ew_dict  # empty dict = missing
 
@@ -366,15 +374,21 @@ class TestTelemetryHistoryGate:
         if not ew_dict:
             status = "MISSING_EVIDENCE_WINDOW"
             reason_codes = ["missing_evidence_window"]
+            blocked = True
+            approval = "BLOCKED_INSUFFICIENT_HISTORY"
         else:
             status = "NORMAL"
             reason_codes = []
+            blocked = False
+            approval = "PENDING_HUMAN"
 
         assert status == "MISSING_EVIDENCE_WINDOW"
         assert "missing_evidence_window" in reason_codes
+        assert blocked is True
+        assert approval == "BLOCKED_INSUFFICIENT_HISTORY"
 
     def test_runs_observed_zero(self, th):
-        """runs_observed=0 → INSUFFICIENT_HISTORY."""
+        """runs_observed=0 → INSUFFICIENT_HISTORY → BLOCKED."""
         ew = self._make_evidence_window(th, runs_observed=0)
         ew_dict = ew.model_dump(mode="json")
 
@@ -382,44 +396,62 @@ class TestTelemetryHistoryGate:
         if runs_obs < self.MIN_REQUIRED:
             status = "INSUFFICIENT_HISTORY"
             reason_codes = ["insufficient_telemetry_history"]
+            blocked = True
+            approval = "BLOCKED_INSUFFICIENT_HISTORY"
         else:
             status = "NORMAL"
             reason_codes = []
+            blocked = False
+            approval = "PENDING_HUMAN"
 
         assert status == "INSUFFICIENT_HISTORY"
         assert "insufficient_telemetry_history" in reason_codes
+        assert blocked is True
+        assert approval == "BLOCKED_INSUFFICIENT_HISTORY"
 
     def test_runs_observed_four(self, th):
-        """runs_observed=4 (below 5) → INSUFFICIENT_HISTORY."""
+        """runs_observed=4 (below 5) → INSUFFICIENT_HISTORY → BLOCKED."""
         ew = self._make_evidence_window(th, runs_observed=4)
         ew_dict = ew.model_dump(mode="json")
 
         runs_obs = int(ew_dict.get("runs_observed", 0))
         status = "INSUFFICIENT_HISTORY" if runs_obs < self.MIN_REQUIRED else "NORMAL"
+        blocked = status != "NORMAL"
+        approval = "BLOCKED_INSUFFICIENT_HISTORY" if blocked else "PENDING_HUMAN"
 
         assert status == "INSUFFICIENT_HISTORY"
         assert ew_dict["runs_observed"] == 4
+        assert blocked is True
+        assert approval == "BLOCKED_INSUFFICIENT_HISTORY"
 
     def test_runs_observed_five(self, th):
-        """runs_observed=5 (== min_required) → NORMAL."""
+        """runs_observed=5 (== min_required) → NORMAL → PENDING_HUMAN."""
         ew = self._make_evidence_window(th, runs_observed=5)
         ew_dict = ew.model_dump(mode="json")
 
         runs_obs = int(ew_dict.get("runs_observed", 0))
         status = "NORMAL" if runs_obs >= self.MIN_REQUIRED else "INSUFFICIENT_HISTORY"
+        blocked = status != "NORMAL"
+        approval = "BLOCKED_INSUFFICIENT_HISTORY" if blocked else "PENDING_HUMAN"
 
         assert status == "NORMAL"
         assert ew_dict["runs_observed"] == 5
+        assert blocked is False
+        assert approval == "PENDING_HUMAN"
 
     def test_runs_observed_above_threshold(self, th):
-        """runs_observed=10 → NORMAL."""
+        """runs_observed=10 → NORMAL → PENDING_HUMAN."""
         ew = self._make_evidence_window(th, runs_observed=10)
         ew_dict = ew.model_dump(mode="json")
 
         runs_obs = int(ew_dict.get("runs_observed", 0))
         status = "NORMAL" if runs_obs >= self.MIN_REQUIRED else "INSUFFICIENT_HISTORY"
+        blocked = status != "NORMAL"
+        approval = "BLOCKED_INSUFFICIENT_HISTORY" if blocked else "PENDING_HUMAN"
 
         assert status == "NORMAL"
+        assert blocked is False
+        assert approval == "PENDING_HUMAN"
 
     def test_evidence_window_has_per_bot_data(self, th):
         """EvidenceWindow must contain per-bot trend summaries."""
