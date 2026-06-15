@@ -470,7 +470,6 @@ def main() -> int:
         icon = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}
         print(f"  {icon.get(r.classification, '?')} {r.bot_id}: {r.classification}")
     print(f"  Auth-only POST calls: {total_auth_posts}")
-    print(f"  Mutation POST/PUT/DELETE: 0")
     print(f"  RiskGuard: {riskguard_result['result']}")
     print(f"  Approval:  {artifact['approval_status']}")
     print("=" * 72)
