@@ -7,7 +7,7 @@ ai-hedge-fund-crypto is the signal layer, Hermes the meta-orchestrator, Freqtrad
 The system operates under a strict dry-run-only policy until explicitly cleared for live trading.
 
 **Version:** 2.0
-**Updated:** 2026-05-12
+**Updated:** 2026-06-15 (GAP audit follow-up merged: #258, #259)
 **Profile:** orchestrator
 **Project:** /home/hermes/projects/trading
 **Repo:** github.com/GoLukeEnviro/trading-hub (private)
