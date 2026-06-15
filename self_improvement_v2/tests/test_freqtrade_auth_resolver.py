@@ -119,7 +119,7 @@ class TestConfigReading:
         cfg.write_text(json.dumps({
             "api_server": {"username": "", "password": "pass"},
         }))
-        with pytest.raises(ValueError, match="non-empty.*username"):
+        with pytest.raises(ValueError, match=r"non-empty.*username"):
             resolver_module._read_api_credentials(cfg)
 
     def test_rejects_empty_password(self, resolver_module, tmp_path):
@@ -127,7 +127,7 @@ class TestConfigReading:
         cfg.write_text(json.dumps({
             "api_server": {"username": "user", "password": ""},
         }))
-        with pytest.raises(ValueError, match="non-empty.*password"):
+        with pytest.raises(ValueError, match=r"non-empty.*password"):
             resolver_module._read_api_credentials(cfg)
 
 
