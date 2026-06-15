@@ -188,6 +188,7 @@ concern, not a loop-failure concern.
 | SI v2 Capability Matrix (rebuilt) | `docs/state/si-v2-capability-matrix.md` | ✅ Current |
 | Telemetry History Store (PR #262) | `self_improvement_v2/src/si_v2/observe/telemetry_history.py` | ✅ Merged |
 | Walk-Forward Cost Model (PR #261) | `backtests/cost_model/` + `docs/backtesting/walk-forward-cost-model.md` | ✅ Merged |
+| Producer Freshness Fix Plan | `docs/plans/producer-freshness-fix-deployment.md` | ✅ L3 Plan — ready for approval |
 | Phase 1 Intelligence Epic (historical) | `docs/state/phase-1-intelligence-epic.md` | 🔶 Historical snapshot at PR #161 |
 | Post-PR-160 Architecture (historical) | `docs/state/post-pr-160-architecture.md` | 🔶 Snapshot at PR #160 |
 | Issues #55–#61 Evidence Matrix (historical) | `docs/state/issues-55-61-evidence-matrix.md` | 🔶 Snapshot at PR #169 |
