@@ -1,0 +1,13 @@
+[run]
+branch = True
+source = .
+omit =
+    */tests/*
+    */.venv/*
+    */__pycache__/*
+    */.pytest_cache/*
+    */site-packages/*
+
+[report]
+show_missing = True
+skip_covered = True

@@ -201,9 +201,12 @@ def _load_json(path: Path, label: str) -> dict:
         raise FileNotFoundError(f"{label} file not found: {path}")
     try:
         with open(path) as f:
-            return dict(json.load(f))
+            value = json.load(f)
     except (json.JSONDecodeError, OSError) as exc:
         raise ValueError(f"Cannot parse {label} file {path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} file {path} must contain a JSON object")
+    return value
 
 
 def _validate_state(state: dict, path: Path) -> None:
