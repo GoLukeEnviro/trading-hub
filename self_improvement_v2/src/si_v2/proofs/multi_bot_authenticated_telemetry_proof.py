@@ -342,10 +342,6 @@ def main() -> int:
             result.classification = BOT_RED
         elif auth_oks >= 3:
             result.classification = BOT_GREEN
-        elif auth_oks >= 1:
-            result.classification = BOT_YELLOW
-        elif auth_available:
-            result.classification = BOT_YELLOW
         else:
             result.classification = BOT_YELLOW
 
