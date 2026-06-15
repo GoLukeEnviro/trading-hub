@@ -18,7 +18,7 @@ permissions:
 jobs:
   main-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,26 +31,48 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ruff
+          python -m pip install -e ".[dev]"
+          python -m pip install -e ./self_improvement_v2
 
-      - name: Compile check (control plane)
+      - name: Compile check (critical Python paths)
         run: |
-          python -m compileall -x '(support|fixtures)' \
-            orchestrator/control \
+          python -m compileall -x '(support|fixtures|__pycache__)' \
+            bridge \
+            primo \
+            shadowlock \
+            intelligence \
+            orchestrator \
+            tests \
+            scripts \
             self_improvement_v2
 
-      - name: Ruff check (control plane)
+      - name: Ruff check (touched root contracts and tooling)
         run: |
-          ruff check orchestrator/control
+          ruff check \
+            freqtrade/shared/kill_switch.py \
+            scripts/secret_scan.py \
+            tests/test_kill_switch_dry_run_integration.py \
+            tests/test_runtime_config_containment.py \
+            tests/test_secret_scan_contracts.py
 
       - name: Ruff check (SI v2)
         run: |
           ruff check self_improvement_v2
 
+      - name: Repository secret scan
+        run: |
+          python scripts/secret_scan.py --tracked
+
+      - name: Root safe test suite
+        run: |
+          python -m pytest tests -q
+
+      - name: Docker/Fleet static contract tests
+        run: |
+          python -m pytest tests/test_docker_compose_contracts.py -q
+
       - name: Control plane tests
         run: |
-          python -m pip install -e ./self_improvement_v2
-          python -m pip install pytest
           PYTHONPATH=. pytest orchestrator/control/tests/ -q
 
       - name: Live-trading invariants
