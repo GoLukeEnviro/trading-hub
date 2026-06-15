@@ -56,7 +56,7 @@ snapshot and `docs/context/` for append-only historical reports.
 - Rules: BUY/SELL only for entries; TREND_HOLD / WATCH / HOLD never force an
   entry; weak or unknown signals degrade or block.
 - SI v2 integration: runtime cycle enforces mutation counters, measurement
-  ledger gating, and rainbow freshness guard (scoring gate = 0/10).
+  ledger gating, and rainbow freshness guard (scoring gate progressing toward 10/10, currently 4/10).
 
 ### ShadowLogger — Evidence Layer (DEPLOYED)
 
@@ -100,7 +100,7 @@ snapshot and `docs/context/` for append-only historical reports.
 | FreqAI-Rebel | `trading-freqai-rebel-1` | 8087 | `RebelLiquidation + RebelXGBoostClassifier` | dry-run |
 | Momentum | — | — | DECOMMISSIONED | — |
 | MVS | — | — | NOT_DEPLOYED | — |
-|| Webserver | `trading-freqtrade-webserver-1` | — | UI only | — |
+| Webserver | `trading-freqtrade-webserver-1` | — | UI only | — |
 
 ### Primo & Bridge — Endpoint Auth (PR #259)
 
@@ -118,9 +118,10 @@ snapshot and `docs/context/` for append-only historical reports.
 - Observation loop: Active Cycle Runner reads Freqtrade REST + Rainbow §5 (read_only)
   every 6 hours via Hermes cron.
 - Measurement Ledger: 27 fleet cycles, 108 bot measurement points, 24 proposal records.
-- Rainbow read_only source: observed but never scored, never applied, never executed.
+- Rainbow read_only source: active with scoring-eligible cycles (4/10 persisted in ledger).
+  Scored via `_is_rainbow_cycle_scoring_eligible` but never applied, never executed.
 - Controller status: `PAUSED / L3_REPOSITORY_ONLY` — all mutation counters zero.
-- Scoring gate: 0/10 (awaiting producer freshness, not cycles).
+- Scoring gate: progressing toward 10/10 (currently 4/10 persisted in ledger).
 - See `self_improvement_v2/README.md` for full module map and entry points.
 
 ### Decommissioned / historical

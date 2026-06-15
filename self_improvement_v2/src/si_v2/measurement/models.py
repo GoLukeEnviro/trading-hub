@@ -189,6 +189,10 @@ class FleetMeasurementPoint:
     rainbow_scoring_eligible: bool = False
     rainbow_fresh_signal_count: int = 0
     rainbow_stale_signal_count: int = 0
+    rainbow_future_signal_count: int = 0
+    rainbow_invalid_timestamp_count: int = 0
+    rainbow_batch_freshness_status: str = "UNKNOWN"
+    # Batch-level freshness classification: FULL | PARTIAL | STALE | INVALID | UNKNOWN
 
     def to_json_safe(self) -> JsonObject:
         result: JsonObject = {
@@ -243,6 +247,9 @@ class FleetMeasurementPoint:
             "rainbow_scoring_eligible": self.rainbow_scoring_eligible,
             "rainbow_fresh_signal_count": self.rainbow_fresh_signal_count,
             "rainbow_stale_signal_count": self.rainbow_stale_signal_count,
+            "rainbow_future_signal_count": self.rainbow_future_signal_count,
+            "rainbow_invalid_timestamp_count": self.rainbow_invalid_timestamp_count,
+            "rainbow_batch_freshness_status": self.rainbow_batch_freshness_status,
         }
         return result
 

@@ -47,10 +47,25 @@ def normalize_symbol(raw: str | None) -> str:
             base = raw[: -len(quote)]
             return f"{base}/{quote}:{quote}"
 
-    # Fallback: return as-is (may cause downstream mapping issues)
-    return raw
+    # Unknown symbol — return UNMAPPED prefix to prevent silent downstream
+    # mapping issues. The raw upstream asset remains auditable via
+    # metadata.upstream_signal.raw_asset.
+    return f"UNMAPPED:{raw}"
 
 
 def normalize_symbols(raw_symbols: list[str]) -> list[str]:
     """Normalize a list of symbols."""
     return [normalize_symbol(s) for s in raw_symbols]
+
+
+def is_known_symbol(raw: str | None) -> bool:
+    """Check whether a symbol is known to the normalizer."""
+    if not raw:
+        return False
+    if raw in _KNOWN_MAP:
+        return True
+    if ":" in raw and "/" in raw:
+        return True
+    if "/" in raw:
+        return True
+    return any(raw.endswith(quote) and len(raw) > len(quote) for quote in ("USDT", "USDC", "BUSD", "BTC", "ETH"))

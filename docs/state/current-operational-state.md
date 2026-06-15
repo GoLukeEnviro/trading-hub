@@ -1,13 +1,13 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against merged main at
-> commit `100acf6` (after PRs #261–#267).
+> commit `4dd4d5c` (PR #267 — Rainbow producer hardening, scoring proof fixes).
 >
-> **Last updated:** 2026-06-16 (PR #267 — Rainbow producer hardening, scoring proof fixes)
-> **Branch:** `feat/rainbow-producer-durable-runtime-proof` (PR #267 — pending merge)
-> **HEAD:** `fa48038`
+> **Last updated:** 2026-06-16 (post-PR-#267 deep fix pass)
+> **Branch:** `main`
+> **HEAD:** `4dd4d5c8`
 > **Companion roadmap:** `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md`
-> **Live fleet snapshot:** `docs/state/canonical-trading-status.md`
+> **Live fleet snapshot:** `docs/state/canonical-trading-status.md` (⚠️ STALE — regenerated before PR #267, needs re-generation)
 
 ---
 
@@ -30,6 +30,9 @@
 | Regime-Hybrid | dry-run | `RegimeSwitchingHybrid_v7_v04_Integration` |
 | FreqForge-Canary | dry-run | `FreqForge_Override` |
 | FreqAI-Rebel | dry-run | `RebelLiquidation + RebelXGBoostClassifier` |
+| Webserver | — | UI only |
+| Momentum | — | DECOMMISSIONED |
+| MVS | — | NOT_DEPLOYED |
 
 ---
 
@@ -58,10 +61,9 @@
 * **Fleet verdict:** `GREEN`. **Mutations:** 0 across
   runtime/config/live_trading/docker/strategy. **Ping:** 4 / 4.
 * **Rainbow observation:** `SUCCESS` (source `read_only`, count 3).
-  Freshness 71 075 s, `fresh=False` — scoring gate is **0 / 10**
-  because the source SQLite carries stale 2026-06-14T01:04 timestamps.
-  This is the correct behavior of the PR #215 freshness guard; it is
-  not a loop failure.
+  Freshness scoring-eligible cycles **4 / 10 persisted in ledger**.
+  Producer is deployed via `rainbow_producer_manager.sh`, health checks passing.
+  See §3 Phase 2.1 for status.
 * **Ledger:** 27 fleet cycles, 108 bot measurement points, 24 proposal
   records, `mutations_all_zero=True`, `secrets_found=False`.
 
@@ -191,7 +193,7 @@ concern, not a loop-failure concern.
 | Walk-Forward Cost Model (PR #261) | `backtests/cost_model/` + `docs/backtesting/walk-forward-cost-model.md` | ✅ Merged |
 | Producer Freshness Fix Plan | `docs/plans/producer-freshness-fix-deployment.md` | ✅ L3 deployment completed 2026-06-15 |
 | Producer Acceptance Test | `orchestrator/scripts/rainbow_producer_acceptance_test.py` | ✅ Production-grade |
-| Producer Wrapper (durable) | `orchestrator/scripts/rainbow_producer_wrapper.sh` | ✅ Deployed (restart-on-fail + PID) |
+| Producer Manager (canonical) | `orchestrator/scripts/rainbow_producer_manager.sh` | ✅ Canonical lifecycle script |
 | Scoring Proof Script | `orchestrator/scripts/rainbow_scoring_proof.py` | ✅ Validates scoring eligibility |
 | Phase 1 Intelligence Epic (historical) | `docs/state/phase-1-intelligence-epic.md` | 🔶 Historical snapshot at PR #161 |
 | Post-PR-160 Architecture (historical) | `docs/state/post-pr-160-architecture.md` | 🔶 Snapshot at PR #160 |
