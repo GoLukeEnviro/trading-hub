@@ -43,7 +43,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+# JSON type aliases (no Any)
 
 # ------------------------------------------------------------------
 # Repository-relative paths
@@ -75,7 +75,7 @@ from si_v2.loop.fleet_analyzer import (  # noqa: E402
 RISKGUARD_RESULT_PASS_SHADOW_ONLY: str = "PASS_SHADOW_ONLY"
 
 
-def _riskguard_check(decision: dict[str, Any]) -> dict[str, Any]:
+def _riskguard_check(decision: dict) -> dict:
     """Validate that a ShadowProposal decision is safe-by-construction.
 
     This is the same RiskGuard-style check used in the single-bot proof.
@@ -140,7 +140,7 @@ def _riskguard_check(decision: dict[str, Any]) -> dict[str, Any]:
 # ------------------------------------------------------------------
 
 
-def _collect_one(bot: dict[str, Any], now_iso: str) -> tuple[BotEvidence, dict[str, Any]]:
+def _collect_one(bot: dict, now_iso: str) -> tuple[BotEvidence, dict]:
     """Collect /ping and /status evidence for a single bot.
 
     Returns a tuple of (BotEvidence, debug_dict). The debug_dict is only
@@ -149,7 +149,7 @@ def _collect_one(bot: dict[str, Any], now_iso: str) -> tuple[BotEvidence, dict[s
     """
     bot_id: str = bot["bot_id"]
     base_url: str = bot["base_url"]
-    auth_cfg: dict[str, Any] = bot.get("auth", {}) or {}
+    auth_cfg: dict = bot.get("auth", {}) or {}
     auth_type: str = auth_cfg.get("type", "none")
     username_env: str | None = auth_cfg.get("username_env")
     password_env: str | None = auth_cfg.get("password_env")
@@ -330,7 +330,7 @@ def main() -> int:
     # Step 2: Collect per-bot evidence
     print("\n[STEP 2] Collecting per-bot evidence (ping + status)...")
     evidence_list: list[BotEvidence] = []
-    debug_by_bot: dict[str, dict[str, Any]] = {}
+    debug_by_bot: dict[str, dict] = {}
     for bot in bots:
         bot_id = bot.get("bot_id", "<missing>")
         print(f"\n  --- {bot_id} @ {bot.get('base_url')} ---")
@@ -366,7 +366,7 @@ def main() -> int:
     # Step 4: Safety path for every ShadowProposal
     print("\n[STEP 4] Passing ShadowProposals through the shadow-only safety path...")
     shadow_logger = ShadowLogger(log_dir=_SHADOW_LOG_DIR)
-    safety_results: list[dict[str, Any]] = []
+    safety_results: list[dict] = []
     for d in decision.per_bot:
         if d.decision_type != DECISION_SHADOW_PROPOSAL:
             safety_results.append(
@@ -421,7 +421,7 @@ def main() -> int:
     _REPORT_DIR.mkdir(parents=True, exist_ok=True)
     _SHADOW_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-    evidence_bundle: dict[str, Any] = {
+    evidence_bundle: dict = {
         "schema_version": 1,
         "artifact_type": "multi_bot_read_analyze_shadow_proposal",
         "cycle_id": cycle_id,
@@ -484,7 +484,6 @@ def main() -> int:
     # Use JSON-quoted-value check to avoid false positives when a username
     # (e.g., "freqforge") is a substring of a legitimate bot_id
     # (e.g., "freqtrade-freqforge").
-    import re
     bundle_text = json.dumps(evidence_bundle)
     for ev in evidence_list:
         for env_name in (ev.username_env, ev.password_env):
@@ -525,7 +524,7 @@ def main() -> int:
     return 0
 
 
-def asdict_shadow_proposal(decision) -> dict[str, Any]:
+def asdict_shadow_proposal(decision) -> dict:
     """Convert a ShadowProposalDecision to a dict without importing dataclasses."""
     return {
         "decision_type": decision.decision_type,
@@ -555,7 +554,7 @@ def _build_report_markdown(
     now_iso: str,
     evidence_list: list[BotEvidence],
     decision,
-    safety_results: list[dict[str, Any]],
+    safety_results: list[dict],
 ) -> str:
     summary = decision.fleet_summary
 
