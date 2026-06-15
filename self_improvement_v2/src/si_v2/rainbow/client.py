@@ -22,6 +22,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
+from si_v2.rainbow.symbol_normalizer import normalize_symbol
+
 JsonScalar = str | int | float | bool | None
 JsonValue = JsonScalar | dict[str, "JsonValue"] | list["JsonValue"]
 JsonObject = dict[str, JsonValue]
@@ -468,7 +470,7 @@ class RainbowSignalProviderClient:
             "source_id": signal_id,
             "strategy_id": source,
             "model_id": None,
-            "symbol": asset,
+            "symbol": normalize_symbol(asset),
             "timeframe": timeframe,
             "timestamp_utc": normalized_timestamp,
             "emitted_at_utc": emitted_at,

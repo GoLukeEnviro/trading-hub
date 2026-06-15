@@ -171,6 +171,23 @@ def build_ledger(
         r_errs_raw = rainbow_raw.get("errors", [])
         r_errs_count = len(r_errs_raw) if isinstance(r_errs_raw, list) else 0
         r_source = str(rainbow_raw.get("source", ""))
+        # Freshness fields (added 2026-06-15 for scoring proof)
+        r_fresh = bool(rainbow_raw.get("fresh", False))
+        r_freshness_sec: int | None = _safe_int(rainbow_raw.get("freshness_seconds"))
+        r_freshness_max: int | None = _safe_int(rainbow_raw.get("freshness_max_seconds"))
+        r_fresh_count = int(rainbow_raw.get("fresh_signal_count", 0))
+        r_stale_count = int(rainbow_raw.get("stale_signal_count", 0))
+        # Compute scoring eligibility inline (mirrors _is_rainbow_cycle_scoring_eligible)
+        r_scoring_eligible = (
+            r_status == "SUCCESS"
+            and r_source in ("read_only", "live")
+            and r_count >= 1
+            and r_errs_count == 0
+            and r_fresh
+            and r_freshness_sec is not None
+            and 0 <= r_freshness_sec <= (r_freshness_max or 900)
+        )
+        # Scoring eligibility computed inline above
 
         fp = FleetMeasurementPoint(
             cycle_id=cycle_id,
@@ -206,6 +223,13 @@ def build_ledger(
             rainbow_errors_count=r_errs_count,
             rainbow_source=r_source,
             rainbow_status=r_status,
+            # Freshness fields
+            rainbow_fresh=r_fresh,
+            rainbow_freshness_seconds=r_freshness_sec,
+            rainbow_freshness_max_seconds=r_freshness_max,
+            rainbow_scoring_eligible=r_scoring_eligible,
+            rainbow_fresh_signal_count=r_fresh_count,
+            rainbow_stale_signal_count=r_stale_count,
         )
         fleet_points.append(fp)
 
@@ -319,6 +343,13 @@ def build_ledger(
             rainbow_errors_count=fp.rainbow_errors_count,
             rainbow_source=fp.rainbow_source,
             rainbow_status=fp.rainbow_status,
+            # Freshness fields (preserved from initial fp)
+            rainbow_fresh=fp.rainbow_fresh,
+            rainbow_freshness_seconds=fp.rainbow_freshness_seconds,
+            rainbow_freshness_max_seconds=fp.rainbow_freshness_max_seconds,
+            rainbow_scoring_eligible=fp.rainbow_scoring_eligible,
+            rainbow_fresh_signal_count=fp.rainbow_fresh_signal_count,
+            rainbow_stale_signal_count=fp.rainbow_stale_signal_count,
         )
 
     # ---- Build proposal tracking records ----

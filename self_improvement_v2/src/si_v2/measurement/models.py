@@ -183,6 +183,12 @@ class FleetMeasurementPoint:
     rainbow_errors_count: int = 0
     rainbow_source: str = ""
     rainbow_status: str = "DISABLED"
+    rainbow_fresh: bool = False
+    rainbow_freshness_seconds: int | None = None
+    rainbow_freshness_max_seconds: int | None = None
+    rainbow_scoring_eligible: bool = False
+    rainbow_fresh_signal_count: int = 0
+    rainbow_stale_signal_count: int = 0
 
     def to_json_safe(self) -> JsonObject:
         result: JsonObject = {
@@ -231,6 +237,12 @@ class FleetMeasurementPoint:
             "rainbow_errors_count": self.rainbow_errors_count,
             "rainbow_source": self.rainbow_source,
             "rainbow_status": self.rainbow_status,
+            "rainbow_fresh": self.rainbow_fresh,
+            "rainbow_freshness_seconds": self.rainbow_freshness_seconds,
+            "rainbow_freshness_max_seconds": self.rainbow_freshness_max_seconds,
+            "rainbow_scoring_eligible": self.rainbow_scoring_eligible,
+            "rainbow_fresh_signal_count": self.rainbow_fresh_signal_count,
+            "rainbow_stale_signal_count": self.rainbow_stale_signal_count,
         }
         return result
 

@@ -647,14 +647,38 @@ def _load_rainbow_signals() -> dict[str, object]:
     # Freshness: age (in seconds) of the freshest observed signal vs. now.
     # Only meaningful for read_only / live observations — fixtures and
     # unavailable sources return None and are never "fresh".
+    _max_rainbow_clock_skew_seconds = 30
+
     freshness_max_seconds = int(cfg.get("freshness_max_seconds", 900))
     freshness_seconds: int | None = None
     fresh = False
+
+    # Per-signal freshness tracking for mixed-batch honesty
+    fresh_signal_count = 0
+    stale_signal_count = 0
+    fresh_symbols: list[str] = []
+    stale_symbols: list[str] = []
+
     if parsed_timestamps and result.source in ("read_only", "live"):
-        freshest = max(parsed_timestamps)
-        age = (now_utc - freshest).total_seconds()
-        freshness_seconds = max(0, int(age))
-        fresh = freshness_seconds <= freshness_max_seconds
+        for i, sig_ts in enumerate(parsed_timestamps):
+            age_secs = (now_utc - sig_ts).total_seconds()
+            symbol = symbols[i] if i < len(symbols) else "?"
+            if age_secs < -_max_rainbow_clock_skew_seconds:
+                # Future timestamp beyond tolerated clock skew — reject
+                stale_signal_count += 1
+                stale_symbols.append(symbol)
+            elif 0 <= age_secs <= freshness_max_seconds:
+                fresh_signal_count += 1
+                fresh_symbols.append(symbol)
+            else:
+                stale_signal_count += 1
+                stale_symbols.append(symbol)
+
+        # Batch-level fresh = at least one fresh signal exists
+        fresh = fresh_signal_count > 0
+        freshness_seconds = max(0, int(
+            (now_utc - max(parsed_timestamps)).total_seconds()
+        )) if parsed_timestamps else None
     elif result.source == "fixture":
         # Fixtures are historical/replay data — never "fresh" for scoring.
         freshness_seconds = None
@@ -673,6 +697,10 @@ def _load_rainbow_signals() -> dict[str, object]:
         "freshness_seconds": freshness_seconds,
         "freshness_max_seconds": freshness_max_seconds,
         "fresh": fresh,
+        "fresh_signal_count": fresh_signal_count,
+        "stale_signal_count": stale_signal_count,
+        "fresh_symbols": fresh_symbols,
+        "stale_symbols": stale_symbols,
     }
 
 

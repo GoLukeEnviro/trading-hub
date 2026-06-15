@@ -407,3 +407,96 @@ Phase 1 (current PR) ──→ Phase 2 (L3 approval) ──→ Phase 3 (validati
 | Roadmap v2 | `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md` (§Phase 2.1) |
 | ai4trade-bot Rainbow | `/opt/data/ai4trade-bot/rainbow/main.py` |
 | Stub Server (current fallback) | `orchestrator/scripts/rainbow_db_stub_server.py` |
+
+---
+
+## Appendix A — Execution Record (2026-06-15)
+
+### Actual Deployment Model
+
+**Chosen:** Direct uvicorn process + manager.sh (canonical lifecycle script)
+
+**Why not Docker:** The rainbow.Dockerfile has a missing `core` module
+dependency (`from core.heartbeat_writer import ...`). Additionally, the
+Docker daemon on this VPS blocks builds (HTTP 403). Docker deployment
+deferred to follow-up.
+
+**Why not systemd/systemctl:** Neither `systemctl` nor `sudo` are available
+in this VPS runtime environment. The canonical lifecycle manager
+`rainbow_producer_manager.sh` provides start/stop/status/restart via
+`setsid` process groups for clean shutdown.
+
+**Why not s6:** s6 supervision was attempted but not fully validated
+(cannotonical s6-rc compile path, no boot recovery proof). The manager
+script is the single source of truth for process lifecycle.
+
+### Deployment Steps (Actual)
+
+1. Created `rainbow/config.yaml` with corrected asset names (`BTCUSDT`
+   instead of `BTC`) for Bitget API compatibility.
+2. Started uvicorn via ai4trade-bot `.venv`:
+   ```
+   .venv/bin/uvicorn rainbow.main:create_app --host 127.0.0.1 --port 8000 --factory
+   ```
+3. Created `orchestrator/scripts/rainbow_producer_manager.sh` for
+   start/stop/status/restart (canonical lifecycle).
+5. Created `orchestrator/scripts/rainbow_producer_acceptance_test.py`
+   for repeatable validation.
+6. Set SI v2 env vars:
+   - `SI_V2_RAINBOW_ENABLED=true`
+   - `SI_V2_RAINBOW_MODE=read_only`
+   - `SI_V2_RAINBOW_BASE_URL=http://localhost:8000`
+
+### Validation Results (2026-06-15 19:52 UTC)
+
+| Check | Result |
+|-------|--------|
+| GET /health | ✅ 200, healthy, ta=running |
+| GET /signals/latest | ✅ 21 signals (18 fresh + 3 stale) |
+| Freshest signal age | ✅ 93s (threshold 900s) |
+| fresh=True | ✅ |
+| Scoring eligible | ✅ (all 5 conditions) |
+| can_execute=False | ✅ 21/21 envelopes |
+| dry_run_only=True | ✅ 21/21 envelopes |
+| Mutation counters | ✅ All 0 |
+| Controller state | ✅ PAUSED / L3_REPOSITORY_ONLY |
+
+### What Was NOT Changed
+
+- No Docker compose changes
+- No Freqtrade bot restarts
+- No strategy promotion
+- No live trading enablement
+- No scheduler cadence change
+- No credential exposure (public Bitget API only)
+
+### Rollback Commands
+
+```bash
+# Stop producer
+orchestrator/scripts/rainbow_producer_manager.sh stop
+
+# Remove SI v2 Rainbow env config
+sed -i '/SI_V2_RAINBOW_BASE_URL/d; /SI_V2_RAINBOW_ENABLED/d; /SI_V2_RAINBOW_MODE/d' /home/hermes/projects/trading/.env
+
+# Restart stub server as fallback
+python3 orchestrator/scripts/rainbow_db_stub_server.py \
+  --db /opt/data/ai4trade-bot/rainbow/storage/signals.db \
+  --port 8765 &
+
+# Verify rollback
+python3 orchestrator/scripts/rainbow_producer_acceptance_test.py
+```
+
+### Remaining Risks
+
+1. **No boot persistence.** If the VPS restarts, the producer must be
+   manually restarted via `orchestrator/scripts/rainbow_producer_manager.sh start`.
+   No systemd/s6/cron `@reboot` is configured.
+2. **TA collector uses public Bitget API.** No rate-limiting issues
+   observed at 120s interval, but Bitget could change their public API.
+3. **Asset names mismatch.** The producer uses `BTCUSDT` format (Bitget)
+   while the SI v2 envelope schema uses `BTC/USDT:USDT`. A symbol
+   normalizer exists at `orchestrator/scripts/rainbow_symbol_normalizer.py`
+   but is not yet wired into the envelope mapping pipeline.
+
