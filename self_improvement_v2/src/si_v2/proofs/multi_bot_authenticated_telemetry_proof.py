@@ -211,16 +211,15 @@ def main() -> int:
     """
     sys.path.insert(0, str(_REPO_ROOT / "self_improvement_v2" / "src"))
 
-    from si_v2.adapters.freqtrade_rest_readonly import (
-        SIV2FreqtradeTelemetryConnector,
-    )
     from si_v2.adapters.freqtrade_auth_resolver import (
-        AuthResolution,
         ALLOWED_CONFIG_PATHS,
+        MISSING as AUTH_MISSING,
         RESOLVED_FROM_ENV,
         RESOLVED_FROM_FILE,
-        MISSING as AUTH_MISSING,
         resolve_all,
+    )
+    from si_v2.adapters.freqtrade_rest_readonly import (
+        SIV2FreqtradeTelemetryConnector,
     )
     from si_v2.deploy.shadow_logger import ShadowLogger
     from si_v2.state.schemas import MutationCandidate

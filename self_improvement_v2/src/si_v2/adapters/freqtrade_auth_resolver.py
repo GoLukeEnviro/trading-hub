@@ -68,8 +68,8 @@ class AuthResolution:
     compatibility issues with importlib.util.spec_from_file_location in tests.
     """
 
-    __slots__ = ("bot_id", "username_env", "password_env", "status",
-                 "source_path", "error")
+    __slots__ = ("bot_id", "error", "password_env", "source_path",
+                 "status", "username_env")
 
     def __init__(
         self,
