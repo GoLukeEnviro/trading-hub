@@ -6,13 +6,22 @@ strategies as a conservative side-filter:
 - HOLD / missing pair -> normal strategy logic (fallback)
 - explicit LONG/BUY -> allow long, block short
 - explicit SHORT/SELL -> allow short, block long
+
+Kill Switch integration (2026-06-15)
+-------------------------------------
+If the central kill switch is active (HALT_NEW or EMERGENCY), primo_gate_allows()
+returns False immediately, overriding all other signal logic.
+This is the single choke point for fleet-wide entry blocking.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger("primo_signal")
 
 DEFAULT_STATE_FILE = "/freqtrade/user_data/primo_signal_state.json"
 
@@ -21,6 +30,20 @@ try:
     from fleet_risk_manager import STALENESS_MINUTES as MAX_AGE_MINUTES
 except ImportError:
     MAX_AGE_MINUTES = 30.0  # fallback — keep in sync with fleet_risk_manager
+
+# Kill switch integration — fail-safe: if module missing, treat as NORMAL (no block)
+try:
+    from kill_switch import is_kill_active, is_emergency
+    _KILL_SWITCH_AVAILABLE = True
+except ImportError:
+    logger.warning("kill_switch module not found — kill switch protection disabled")
+    _KILL_SWITCH_AVAILABLE = False
+
+    def is_kill_active() -> bool:  # type: ignore[misc]
+        return False
+
+    def is_emergency() -> bool:  # type: ignore[misc]
+        return False
 
 
 def normalize_pair(pair: Optional[str]) -> str:
@@ -38,12 +61,10 @@ def load_signal_state(state_file: str = DEFAULT_STATE_FILE) -> Optional[Dict[str
     path = Path(state_file)
     if not path.exists():
         return None
-
     try:
         data = json.loads(path.read_text())
     except Exception:
         return None
-
     if not isinstance(data, dict):
         return None
     return data
@@ -55,17 +76,36 @@ def primo_gate_allows(
     state_file: str = DEFAULT_STATE_FILE,
     max_age_minutes: float = MAX_AGE_MINUTES,
 ) -> bool:
-    """Return True when the strategy should keep its normal logic.
+    """Return True when the strategy should keep its normal entry logic.
 
-    The helper is intentionally conservative:
-    - stale/missing signal file => fallback to normal strategy logic
-    - pair not present => fallback
-    - HOLD/UNKNOWN/other non-directional actions => fallback
-    - WATCH_ONLY verdict => fallback (no directional bias)
-    - BLOCK_ENTRY verdict => fallback (no Primo permission)
-    - explicit LONG/BUY with ACCEPTED verdict => block shorts, allow longs
-    - explicit SHORT/SELL with ACCEPTED verdict => block longs, allow shorts
+    Kill Switch check (highest priority)
+    -------------------------------------
+    If the central kill switch is HALT_NEW or EMERGENCY, returns False immediately.
+    This is a hard block — not a fallback to native strategy logic.
+
+    Normal signal logic (when kill switch NORMAL)
+    -----------------------------------------------
+    - stale/missing signal file        => fallback (True)
+    - pair not present                 => fallback (True)
+    - HOLD/UNKNOWN/non-directional     => fallback (True)
+    - WATCH_ONLY verdict               => check bias flags
+    - ACCEPTED verdict                 => check bias flags
+    - schema 0.1 fallback              => use action field directly
     """
+    # -------------------------------------------------------------------------
+    # KILL SWITCH — highest priority, hard block
+    # -------------------------------------------------------------------------
+    if is_kill_active():
+        mode = "EMERGENCY" if is_emergency() else "HALT_NEW"
+        logger.info(
+            "primo_gate_allows: BLOCKED by kill switch (mode=%s) pair=%s side=%s",
+            mode, pair, side,
+        )
+        return False
+
+    # -------------------------------------------------------------------------
+    # Normal primo signal logic (unchanged)
+    # -------------------------------------------------------------------------
     state = load_signal_state(state_file)
     if not state:
         return True
@@ -90,27 +130,25 @@ def primo_gate_allows(
 
     # NEW (schema 0.2): Check verdict first
     verdict = str(entry.get("verdict", "UNKNOWN")).upper().strip()
-    
-    # WATCH_ONLY: check bias flags (schema 0.2) — block if bias is explicitly false
+
     if verdict == "WATCH_ONLY":
         if side.lower() == "long":
             return bool(entry.get("allow_long_bias", False))
         if side.lower() == "short":
             return bool(entry.get("allow_short_bias", False))
-        return True  # no bias info = fallback to strategy logic
-    
-    # ACCEPTED verdict: use bias flags if available (schema 0.2)
+        return True
+
     if verdict == "ACCEPTED":
         if side.lower() == "long":
             return bool(entry.get("allow_long_bias", False))
         if side.lower() == "short":
             return bool(entry.get("allow_short_bias", False))
         return True
-    
-    # FALLBACK (schema 0.1 backward compatibility): use action directly
+
+    # FALLBACK (schema 0.1 backward compatibility)
     action = str(entry.get("action", "")).upper().strip()
     side = str(side).lower().strip()
-    
+
     if action in {"BUY", "LONG"}:
         return side != "short"
     if action in {"SELL", "SHORT"}:
