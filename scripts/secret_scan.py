@@ -75,6 +75,9 @@ FIXTURE_PATH_MARKERS = ("/tests/fixtures/", "/fixtures/")
 # these are excluded from assignment-pattern scanning to avoid false positives.
 DOC_PATTERN_EXCLUDE = ("/docs/context/", "/docs/roadmap/", "/docs/reports/", "/docs/plans/",
                        "/self_improvement_v2/docs/", "/self_improvement_v2/reports/")
+# Test files for the scanner itself contain deliberate fake tokens; exclude from
+# production scanning to avoid self-flagging false positives.
+SCANNER_TEST_EXCLUDE = ("/test_secret_scan",)
 
 
 @dataclass(frozen=True)
@@ -136,6 +139,8 @@ def _is_placeholder(value: object) -> bool:
     if upper in {word.upper() for word in SAFE_VALUE_WORDS}:
         return True
     if text.startswith("${") and text.endswith("}"):
+        return True
+    if text.startswith("$"):
         return True
     if any(marker in upper for marker in PLACEHOLDER_MARKERS):
         return True
@@ -248,6 +253,8 @@ def scan_paths(root: Path, files: Iterable[Path]) -> list[Finding]:
         if not path.exists() or not path.is_file() or _safe_to_skip_path(path, root):
             continue
         rel = path.relative_to(root).as_posix() if path.is_relative_to(root) else path.as_posix()
+        if any(marker in rel for marker in SCANNER_TEST_EXCLUDE):
+            continue
         text = path.read_text(encoding="utf-8", errors="ignore")
         if path.suffix == ".json":
             findings.extend(_scan_json(path, rel, text))
