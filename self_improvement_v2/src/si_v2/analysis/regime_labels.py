@@ -6,7 +6,6 @@ All labels are synthetic — no live market data or exchange calls.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from enum import Enum
 
 
