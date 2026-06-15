@@ -39,6 +39,8 @@ SIGNAL_BUS_DIR = Path(os.environ.get(
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "60"))
 SIGNAL_FRESHNESS = int(os.environ.get("SIGNAL_FRESHNESS_SECONDS", "90"))
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
+# Optional API key for /status and / endpoints
+BRIDGE_API_KEY = os.environ.get("HERMES_BRIDGE_API_KEY", "")
 
 ALLOWED_PAIRS = os.environ.get(
     "ALLOWED_PAIRS",
@@ -298,7 +300,20 @@ def run_loop() -> None:
             time.sleep(1)
 
 
-# ── /status and /health endpoint ────────────────────────────────────
+# ── /status, /health and / endpoint (with optional API key auth) ────
+
+def _auth_required(handler) -> bool:  # noqa: ANN001
+    """Return True when the request carries the correct API key (if one is configured).
+
+    When BRIDGE_API_KEY is empty (default) all requests are allowed.
+    When it is set, the request must have an X-API-Key header matching it.
+    Never logs the key value.
+    """
+    if not BRIDGE_API_KEY:
+        return True
+    provided = handler.headers.get("X-API-Key", "")
+    return provided == BRIDGE_API_KEY
+
 
 def _serve_status():
     """HTTP status server for health checks and monitoring."""
@@ -306,12 +321,8 @@ def _serve_status():
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path == "/status":
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps(_state, indent=2, default=str).encode())
-            elif self.path == "/health":
+            if self.path == "/health":
+                # Health endpoint is always open for Docker healthchecks
                 is_ok = _state["hermes_status"] == "running"
                 self.send_response(200 if is_ok else 503)
                 self.send_header("Content-Type", "application/json")
@@ -324,6 +335,21 @@ def _serve_status():
                     "polls_failed": _state["polls_failed"],
                 }
                 self.wfile.write(json.dumps(payload).encode())
+                return
+
+            # All other endpoints require auth when BRIDGE_API_KEY is set
+            if not _auth_required(self):
+                self.send_response(401)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error":"unauthorized"}')
+                return
+
+            if self.path == "/status":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(_state, indent=2, default=str).encode())
             elif self.path == "/":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/plain")
@@ -338,6 +364,8 @@ def _serve_status():
 
     server = HTTPServer(("0.0.0.0", BRIDGE_PORT), Handler)
     logger.info(f"/status and /health endpoints on :{BRIDGE_PORT}")
+    if BRIDGE_API_KEY:
+        logger.info("API key authentication enabled for /status and /")
     server.serve_forever()
 
 

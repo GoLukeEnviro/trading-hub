@@ -25,14 +25,13 @@ from __future__ import annotations
 
 import os
 import sys
-import json
 import logging
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 # ── path setup ─────────────────────────────────────────────────────
@@ -67,6 +66,23 @@ OLLAMA_BASE_URL = os.environ.get("OLLAMA_CLOUD_BASE_URL", "https://ollama.com/v1
 LLM_ENABLED = os.environ.get("PRIMO_LLM_ENABLED", "true").lower() in ("true", "1", "yes")
 
 app = FastAPI(title="PrimoAgent Signal API", version="2.0.0")
+
+# Optional API key for signal and pair endpoints (health always open)
+PRIMO_API_KEY = os.environ.get("PRIMO_API_KEY", "")
+
+
+def _require_auth(request: Request) -> None:
+    """FastAPI dependency: require X-API-Key header when PRIMO_API_KEY is set.
+
+    Health endpoint bypasses this check.
+    Never logs the key value.
+    """
+    if not PRIMO_API_KEY:
+        return
+    provided = request.headers.get("X-API-Key", "")
+    if provided != PRIMO_API_KEY:
+        raise HTTPException(status_code=401, detail="unauthorized")
+
 
 # ── lazy imports ───────────────────────────────────────────────────
 _adapter_mod = None
@@ -123,7 +139,7 @@ def generate_signal_for_pair(pair_freqtrade: str) -> Dict[str, Any]:
 
     try:
         # Step 1: Market data + indicators
-        exchange = adapter.get_exchange()
+        exchange = adapter.get_exchange()  # noqa: F841
         df = adapter.fetch_ohlcv(normalized, TIMEFRAME, limit=300)
         if df is None or len(df) < 50:
             logger.warning(f"Insufficient data for {pair_freqtrade}")
@@ -273,13 +289,16 @@ def health():
 
 
 @app.get("/pairs")
-def list_pairs():
+def list_pairs(auth: None = Depends(_require_auth)):
     """List all monitored pairs."""
     return {"pairs": ALLOWED_PAIRS, "timeframe": TIMEFRAME, "llm_enabled": LLM_ENABLED}
 
 
 @app.get("/signal")
-def get_signal(pair: str = Query(..., description="Pair in Freqtrade format, e.g. BTC/USDT:USDT")):
+def get_signal(
+    auth: None = Depends(_require_auth),
+    pair: str = Query(..., description="Pair in Freqtrade format, e.g. BTC/USDT:USDT"),
+):
     """Generate signal for a single pair."""
     if pair not in ALLOWED_PAIRS:
         raise HTTPException(status_code=400, detail=f"Pair {pair} not in allowed list")
@@ -296,7 +315,7 @@ class MultiSignalRequest(BaseModel):
 
 
 @app.post("/signal")
-def post_signal(req: MultiSignalRequest):
+def post_signal(req: MultiSignalRequest, auth: None = Depends(_require_auth)):
     """Generate signals for multiple pairs."""
     signals = []
     for pair in req.pairs:
