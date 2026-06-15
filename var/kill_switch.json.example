@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "mode": "NORMAL",
+  "activated_at_utc": null,
+  "activated_by": null,
+  "reason": null,
+  "auto_clear_at": null,
+  "drawdown_triggers": []
+}
