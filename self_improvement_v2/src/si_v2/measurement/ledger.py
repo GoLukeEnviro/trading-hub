@@ -177,6 +177,9 @@ def build_ledger(
         r_freshness_max: int | None = _safe_int(rainbow_raw.get("freshness_max_seconds"))
         r_fresh_count = int(rainbow_raw.get("fresh_signal_count", 0))
         r_stale_count = int(rainbow_raw.get("stale_signal_count", 0))
+        r_future_count = int(rainbow_raw.get("future_signal_count", 0))
+        r_invalid_ts_count = int(rainbow_raw.get("invalid_timestamp_count", 0))
+        r_batch_status = str(rainbow_raw.get("batch_freshness_status", "UNKNOWN"))
         # Compute scoring eligibility inline (mirrors _is_rainbow_cycle_scoring_eligible)
         r_scoring_eligible = (
             r_status == "SUCCESS"
@@ -230,6 +233,9 @@ def build_ledger(
             rainbow_scoring_eligible=r_scoring_eligible,
             rainbow_fresh_signal_count=r_fresh_count,
             rainbow_stale_signal_count=r_stale_count,
+            rainbow_future_signal_count=r_future_count,
+            rainbow_invalid_timestamp_count=r_invalid_ts_count,
+            rainbow_batch_freshness_status=r_batch_status,
         )
         fleet_points.append(fp)
 
@@ -350,6 +356,9 @@ def build_ledger(
             rainbow_scoring_eligible=fp.rainbow_scoring_eligible,
             rainbow_fresh_signal_count=fp.rainbow_fresh_signal_count,
             rainbow_stale_signal_count=fp.rainbow_stale_signal_count,
+            rainbow_future_signal_count=fp.rainbow_future_signal_count,
+            rainbow_invalid_timestamp_count=fp.rainbow_invalid_timestamp_count,
+            rainbow_batch_freshness_status=fp.rainbow_batch_freshness_status,
         )
 
     # ---- Build proposal tracking records ----

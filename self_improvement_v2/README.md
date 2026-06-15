@@ -195,8 +195,8 @@ ruff check src/
 
 | Variable | Purpose |
 |----------|---------|
-| `SI_V2_RAINBOW_ENABLED` | Enable Rainbow read-only source (default: true) |
-| `SI_V2_RAINBOW_MODE` | `live` or `fixture` |
+| `SI_V2_RAINBOW_ENABLED` | Enable Rainbow read-only source (default: false — disabled unless env override set) |
+| `SI_V2_RAINBOW_MODE` | `fixture` or `read_only` (NOT `live`) |
 | `FREQTRADE_API_KEY_*` | FT API credentials (see `freqtrade_auth_resolver.py`) |
 
 ---

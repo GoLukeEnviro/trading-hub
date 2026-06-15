@@ -656,16 +656,19 @@ def _load_rainbow_signals() -> dict[str, object]:
     # Per-signal freshness tracking for mixed-batch honesty
     fresh_signal_count = 0
     stale_signal_count = 0
+    future_signal_count = 0
+    invalid_timestamp_count = 0
     fresh_symbols: list[str] = []
     stale_symbols: list[str] = []
+    batch_freshness_status: str = "UNKNOWN"
 
     if parsed_timestamps and result.source in ("read_only", "live"):
         for i, sig_ts in enumerate(parsed_timestamps):
             age_secs = (now_utc - sig_ts).total_seconds()
             symbol = symbols[i] if i < len(symbols) else "?"
             if age_secs < -_max_rainbow_clock_skew_seconds:
-                # Future timestamp beyond tolerated clock skew — reject
-                stale_signal_count += 1
+                # Future timestamp beyond tolerated clock skew
+                future_signal_count += 1
                 stale_symbols.append(symbol)
             elif 0 <= age_secs <= freshness_max_seconds:
                 fresh_signal_count += 1
@@ -674,15 +677,40 @@ def _load_rainbow_signals() -> dict[str, object]:
                 stale_signal_count += 1
                 stale_symbols.append(symbol)
 
+        # Count invalid timestamps (unparseable timestamps skipped above)
+        invalid_timestamp_count = len(result.signals) - len(parsed_timestamps)
+
+        # Batch-level freshness classification
+        total_signals = fresh_signal_count + stale_signal_count + future_signal_count + invalid_timestamp_count
+        if future_signal_count > 0 or invalid_timestamp_count == len(result.signals):
+            batch_freshness_status = "INVALID"
+        elif fresh_signal_count == total_signals:
+            batch_freshness_status = "FULL"
+        elif fresh_signal_count > 0 and stale_signal_count > 0:
+            batch_freshness_status = "PARTIAL"
+        elif fresh_signal_count > 0:
+            batch_freshness_status = "FULL"
+        else:
+            batch_freshness_status = "STALE"
+
         # Batch-level fresh = at least one fresh signal exists
         fresh = fresh_signal_count > 0
-        freshness_seconds = max(0, int(
-            (now_utc - max(parsed_timestamps)).total_seconds()
-        )) if parsed_timestamps else None
+        # Compute freshness_seconds from freshest signal (max timestamp), but
+        # clamp to 0 only when no future timestamps skew the calculation
+        if parsed_timestamps and all(
+            (now_utc - ts).total_seconds() >= -_max_rainbow_clock_skew_seconds
+            for ts in parsed_timestamps
+        ):
+            freshness_seconds = max(0, int(
+                (now_utc - max(parsed_timestamps)).total_seconds()
+            ))
+        else:
+            freshness_seconds = None
     elif result.source == "fixture":
         # Fixtures are historical/replay data — never "fresh" for scoring.
         freshness_seconds = None
         fresh = False
+        batch_freshness_status = "STALE"
 
     return {
         "status": "SUCCESS",
@@ -699,6 +727,9 @@ def _load_rainbow_signals() -> dict[str, object]:
         "fresh": fresh,
         "fresh_signal_count": fresh_signal_count,
         "stale_signal_count": stale_signal_count,
+        "future_signal_count": future_signal_count,
+        "invalid_timestamp_count": invalid_timestamp_count,
+        "batch_freshness_status": batch_freshness_status,
         "fresh_symbols": fresh_symbols,
         "stale_symbols": stale_symbols,
     }

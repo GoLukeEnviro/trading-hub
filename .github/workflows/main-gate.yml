@@ -34,6 +34,10 @@ jobs:
           python -m pip install -e ".[dev]"
           python -m pip install -e ./self_improvement_v2
 
+      - name: Shell syntax check (orchestrator scripts)
+        run: |
+          bash -n orchestrator/scripts/*.sh
+
       - name: Compile check (critical Python paths)
         run: |
           python -m compileall -x '(support|fixtures|__pycache__)' \

@@ -131,23 +131,35 @@ def main(argv: list[str] | None = None) -> int:
     print("\n--- Freshness Invariants ---")
     age_ok = r_age is not None and 0 <= r_age <= (r_max_age or 900)
     if r_age is not None:
-        age_abs = abs(r_age)
         if r_age < -30:
             # Future timestamp — should not happen with fixed code
-            failures += 0 if not check(
+            failures += 1  # always counts as failure
+            check(
                 "Future timestamp rejected", False,
                 f"age={r_age}s (future), threshold={r_max_age}s",
-            ) else 0
+            )
+        elif not age_ok:
+            failures += 1
+            check(
+                f"Freshness age out of range: {r_age}s not in [0, {r_max_age}s]", False,
+            )
         else:
-            failures += 0 if check(
-                f"Freshness age in valid range: {r_age}s <= {r_max_age}s", age_ok,
-            ) else 0
+            check(
+                f"Freshness age in valid range: {r_age}s <= {r_max_age}s", True,
+            )
     else:
-        failures += 0 if check("Freshness age is not None", False) else 1
+        failures += 1
+        check("Freshness age is not None", False)
 
-    failures += 0 if check(
-        f"At least one fresh signal ({r_fresh_count})", r_fresh_count > 0,
-    ) else 1
+    if r_fresh_count <= 0:
+        failures += 1
+        check(
+            f"At least one fresh signal ({r_fresh_count})", False,
+        )
+    else:
+        check(
+            f"At least one fresh signal ({r_fresh_count})", True,
+        )
 
     # ── Scoring eligibility ──────────────────────────────────────────────
     print("\n--- Scoring Eligibility ---")

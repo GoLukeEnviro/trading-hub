@@ -5,8 +5,8 @@
 > implementation phases, current state, and next priorities. The older
 > roadmap is preserved as historical context and marked superseded.
 >
-> **Grounded at:** commit `266a930` (PR #261 — walk-forward cost model, after
-> PR #262 — telemetry history store + enforcement gate) on `main`, 2026-06-16.
+> **Grounded at:** commit `4dd4d5c` (PR #267 — Rainbow producer hardening, scoring proof fixes)
+> on `main`, 2026-06-16.
 >
 > **Companion docs:**
 > * `docs/state/current-operational-state.md` — current validated snapshot
@@ -30,15 +30,17 @@
   slippage, funding, aggregate net metrics, and walk-forward evaluator.
 * **SI v2 scheduled observation loop is operational** — 27+ cycles, 4/4 bots,
   `fleet_verdict=GREEN`, controller `PAUSED / L3_REPOSITORY_ONLY`, 0 mutations.
-* **Rainbow scoring is gated on producer freshness, not on cycle count.**
-  0 / 10 scoring-eligible cycles today because the read_only source's
-  `signals.db` has stale timestamps (≥ 19h). Need a *producer* (not the
-  DB-backed stub) to emit fresh signals inside the 15-min freshness window.
-* **Live trading remains forbidden** at every phase.
+* **Rainbow scoring is progressing.** 4 / 10 scoring-eligible cycles persisted
+  in ledger. Producer deployed via `rainbow_producer_manager.sh`, health checks passing.
+  Walk-Forward integration blocked until 10/10.
 * **Apply/Scoring auto-execution is explicitly out of scope** for this
   roadmap. Human approval gates stay.
 * **Controller stays `PAUSED / L3_REPOSITORY_ONLY`** until an explicit
   future gate.
+* **Post-#267 deep fix pass** (this PR): removed competing lifecycle wrapper,
+  hardened scoring proof failure accounting, added batch freshness semantics,
+  made symbol normalizer fail-safe, reconciled canonical docs, hardened secret
+  scanner, added CI shell syntax check.
 
 ---
 
@@ -54,7 +56,7 @@
 | #46 status | "OPEN" (per stale doc) | **CLOSED** 2026-06-11 | `gh issue view 46` |
 | SI v2 loop | "Not started" / "fixture only" | **Operational**: 27 cycles, `fleet_verdict=GREEN`, 0 mutations | `self_improvement_v2/reports/phase2/measurement/measurement_ledger.jsonl` |
 | Rainbow read_only | "PR #212 merged, but plumbing only" | **End-to-end read_only path** with env-override bridge + DB-backed stub + freshness guard | PRs #212, #213, #214, #215 |
-| Scoring gate | "0 / 10 — wait for cycles" | "0 / 10 — wait for **producer freshness**" | `_is_rainbow_cycle_scoring_eligible` in `active_cycle_runner.py` |
+| Scoring gate | "0 / 10 — wait for cycles" | "4 / 10 — scoring eligible cycles persisted in ledger, progressing toward 10/10" | `_is_rainbow_cycle_scoring_eligible` in `active_cycle_runner.py` and `measurement_ledger.jsonl` |
 | Live trading | "Forbidden" | **Forbidden** (no change) | `AGENTS.md`, `SOUL.md`, scheduler config |
 
 ---

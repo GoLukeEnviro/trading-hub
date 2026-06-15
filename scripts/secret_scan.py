@@ -71,6 +71,10 @@ SKIP_DIR_PARTS = {
 }
 SCHEMA_PATH_MARKERS = (".schema.json", "/schema/", "/schemas/")
 FIXTURE_PATH_MARKERS = ("/tests/fixtures/", "/fixtures/")
+# Paths known to contain historical documentation with configuration examples;
+# these are excluded from assignment-pattern scanning to avoid false positives.
+DOC_PATTERN_EXCLUDE = ("/docs/context/", "/docs/roadmap/", "/docs/reports/", "/docs/plans/",
+                       "/self_improvement_v2/docs/", "/self_improvement_v2/reports/")
 
 
 @dataclass(frozen=True)
@@ -215,9 +219,26 @@ def _scan_json(path: Path, rel: str, text: str) -> list[Finding]:
 
 def _scan_text(path: Path, rel: str, text: str) -> list[Finding]:
     findings: list[Finding] = []
+    # Tracked Python source files have their own static analysis; only scan
+    # config-like and documentation files for assignment patterns.
+    _assignment_extensions = {".yml", ".yaml", ".env", ".sh", ".toml", ".cfg", ".ini", ".conf", ".md"}
+    _check_assignments = path.suffix.lower() in _assignment_extensions
+    # Exclude known historical documentation paths from assignment scanning
+    # to avoid false positives from configuration examples in docs.
+    if _check_assignments:
+        normalized_rel = "/" + rel
+        _check_assignments = not any(marker in normalized_rel for marker in DOC_PATTERN_EXCLUDE)
     for line_no, line in enumerate(text.splitlines(), start=1):
         if TOKEN_RE.search(line):
             findings.append(Finding(path=rel, line=line_no, rule="known-token-prefix"))
+        # Check for .env-style key=value assignments in non-JSON files.
+        # Only flag when the captured value is not a documentation placeholder.
+        if _check_assignments:
+            m = ASSIGNMENT_RE.search(line)
+            if m:
+                val = m.group(2)
+                if val and not _is_placeholder(val) and _looks_like_secret_value(val):
+                    findings.append(Finding(path=rel, line=line_no, rule="assignment-pattern"))
     return findings
 
 
