@@ -20,14 +20,22 @@ CONSTRAINTS (enforced at code level)
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from si_v2.state.schemas import MutationCandidate
+
+# ---------------------------------------------------------------------------
+# JSON type aliases (mirrors adapter; no Any)
+# ---------------------------------------------------------------------------
+JsonScalar = str | int | float | bool | None
+JsonValue = JsonScalar | dict[str, "JsonValue"] | list["JsonValue"]
+JsonObject = dict[str, JsonValue]
 
 # ---------------------------------------------------------------------------
 # Repository-relative paths
@@ -64,7 +72,7 @@ class BotTelemetryResult:
     issues when loaded via spec_from_file_location in tests)."""
     def __init__(self, bot_id: str, base_url: str,
                  classification: str = BOT_RED,
-                 endpoints: dict[str, dict[str, Any]] | None = None,
+                 endpoints: dict[str, dict[str, JsonValue]] | None = None,
                  auth_attempted: bool = False,
                  auth_success: bool = False,
                  error: str = "") -> None:

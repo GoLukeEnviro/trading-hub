@@ -14,6 +14,7 @@ These tests do NOT require live Freqtrade or auth env vars.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -212,8 +213,6 @@ class TestForbiddenPatterns:
     def test_no_dry_run_false(self, proof_module):
         """Proof must not contain dry_run=False as a parameter assignment."""
         src = _PROOF_PATH.read_text()
-        # The string 'dry_run=false' may appear in docstrings/comments as a
-        # non-goal declaration. Check for it as a Python literal assignment.
         assert "parameters={\"dry_run\": 0" not in src
         assert "dry_run=False" not in src
 
@@ -224,6 +223,35 @@ class TestForbiddenPatterns:
                      "'PUT'", "'PATCH'", "'DELETE'"]
         for method in forbidden:
             assert method not in src, f"Unexpected {method} in proof (code usage)"
+
+    def test_no_any_type_in_proof(self, proof_module):
+        """Proof source must not use typing.Any or the Any shortcut."""
+        src = _PROOF_PATH.read_text()
+        # Check for actual Any type usage, not prose mentions
+        forbidden_patterns = [
+            r'from typing import.*\bAny\b',
+            r'\bdict\[str, Any\]\b',
+            r'\blist\[Any\]\b',
+            r':\s*Any\b',
+            r'\bAny\b.*=.*\bAny\b',
+        ]
+        for pat in forbidden_patterns:
+            if re.search(pat, src):
+                pytest.fail(f"Found forbidden pattern '{pat}' in proof source")
+
+    def test_no_any_type_in_test(self, proof_module):
+        """Test source must not use typing.Any or the Any type."""
+        src = (_REPO_ROOT / "self_improvement_v2" / "tests"
+               / "test_multi_bot_authenticated_telemetry_proof.py").read_text()
+        forbidden_patterns = [
+            r'from typing import.*\bAny\b',
+            r'\bdict\[str, Any\]\b',
+            r'\blist\[Any\]\b',
+            r':\s*Any\b',
+        ]
+        for pat in forbidden_patterns:
+            if re.search(pat, src):
+                pytest.fail(f"Found forbidden pattern '{pat}' in test source")
 
     def test_allowed_endpoints_only(self, proof_module):
         """Verify only our explicit endpoint list is used."""
