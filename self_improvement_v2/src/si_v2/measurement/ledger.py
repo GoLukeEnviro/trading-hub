@@ -187,6 +187,7 @@ def build_ledger(
             and r_freshness_sec is not None
             and 0 <= r_freshness_sec <= (r_freshness_max or 900)
         )
+        # Scoring eligibility computed inline above
 
         fp = FleetMeasurementPoint(
             cycle_id=cycle_id,
@@ -342,6 +343,13 @@ def build_ledger(
             rainbow_errors_count=fp.rainbow_errors_count,
             rainbow_source=fp.rainbow_source,
             rainbow_status=fp.rainbow_status,
+            # Freshness fields (preserved from initial fp)
+            rainbow_fresh=fp.rainbow_fresh,
+            rainbow_freshness_seconds=fp.rainbow_freshness_seconds,
+            rainbow_freshness_max_seconds=fp.rainbow_freshness_max_seconds,
+            rainbow_scoring_eligible=fp.rainbow_scoring_eligible,
+            rainbow_fresh_signal_count=fp.rainbow_fresh_signal_count,
+            rainbow_stale_signal_count=fp.rainbow_stale_signal_count,
         )
 
     # ---- Build proposal tracking records ----

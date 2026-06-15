@@ -140,7 +140,7 @@ the full matrix.
 * No real (live) market data pipeline is connected.
 * No real Freqtrade trade data is ingested.
 * Timer and dedicated-user activation are **blocked**.
-* Scoring gate: **producer deployed, fresh=True, awaiting 10/10 cycles**
+* Scoring gate: **producer deployed, fresh=True, scoring-eligible persisted (4/10 cycles in ledger)**
   (see `docs/plans/producer-freshness-fix-deployment.md` for deployment log)
 
 ---

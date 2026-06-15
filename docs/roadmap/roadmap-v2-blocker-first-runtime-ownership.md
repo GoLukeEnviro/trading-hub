@@ -229,10 +229,10 @@ producer**, without breaking dry-run-only.
 
 **Status:** 🟡 **PARTIAL** — Producer deployed 2026-06-15 via manager.sh
 (uvicorn on 127.0.0.1:8000). TA collector running, fresh signals produced
-every 120s. Manual acceptance test confirms scoring eligibility (**True**,
-fresh=True, age ≤ 900s). **Not yet GREEN:** first scheduled SI v2 cycle
-with read_only source has not yet persisted a scoring-eligible measurement
-to the ledger. See "Remaining blockers" below.
+every 120s. **Scoring-eligible cycles: 4/10 persisted in ledger.**
+Manual acceptance test confirms scoring eligibility (**True**,
+fresh=True, age ≤ 900s). **Not yet GREEN:** need 10/10 scoring-eligible
+cycles before Walk-Forward integration.
 
 **Dependencies met:** ✅ PR #262 (telemetry history & enforcement gate),
 ✅ PR #261 (walk-forward cost model foundation),
