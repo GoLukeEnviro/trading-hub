@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class ProposalDecision(str, Enum):
+class ProposalDecision(StrEnum):
     """Possible outcomes of the human review process."""
 
     ACCEPT = "accept"
@@ -20,7 +20,7 @@ class ProposalDecision(str, Enum):
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
 
-class ProposalSource(str, Enum):
+class ProposalSource(StrEnum):
     """Origin of the proposal candidate."""
 
     FLEET_ANALYZER = "fleet_analyzer"
