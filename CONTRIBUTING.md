@@ -63,6 +63,10 @@ docs(ARCHITECTURE): add kill-switch wiring Mermaid diagram
 Before opening a PR, verify:
 
 - [ ] `main-gate` CI is green (or CI is not applicable to this change)
+- [ ] Local validation commands are listed in the PR body
+- [ ] New modules, routes, jobs, scripts, integrations, or dependencies include tests or an explicit validation plan
+- [ ] New dependencies include a reason, scope, and reproduction command
+- [ ] `python3 scripts/secret_scan.py --tracked` passes for repository changes
 - [ ] No `dry_run=false` changes in the diff
 - [ ] No credentials, secrets, or API keys in the diff
 - [ ] No force-push or history rewrite

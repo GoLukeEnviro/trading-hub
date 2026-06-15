@@ -52,7 +52,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -144,6 +143,7 @@ def load_kill_state(
                 raw["reason"] = "auto-cleared at " + auto_clear
                 raw["auto_clear_at"] = ""
                 _atomic_write(raw, p)
+                mtime = p.stat().st_mtime
         except Exception:
             pass
 
@@ -179,6 +179,21 @@ def _atomic_write(state: Dict[str, Any], path: Path) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, indent=2))
     os.replace(tmp, path)
+    _refresh_cache(path, state)
+
+
+def _refresh_cache(path: Path, state: Dict[str, Any]) -> None:
+    """Keep the mtime cache coherent after same-tick writes."""
+    kwdefaults = load_kill_state.__kwdefaults__ or {}
+    cache = kwdefaults.get("_cache")
+    if not isinstance(cache, dict):
+        return
+    try:
+        cached = dict(state)
+        cached["_mtime"] = path.stat().st_mtime
+        cache[str(path)] = cached
+    except OSError:
+        cache.pop(str(path), None)
 
 
 def set_kill_mode(

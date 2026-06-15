@@ -1,0 +1,53 @@
+{
+  "cancel_open_orders_on_exit": true,
+  "dry_run": true,
+  "dry_run_wallet": 1000,
+  "entry_pricing": {
+    "order_book_top": 1,
+    "price_side": "other",
+    "use_order_book": true
+  },
+  "exchange": {
+    "ccxt_config": {
+      "enableRateLimit": true,
+      "options": {
+        "defaultType": "swap"
+      }
+    },
+    "key": "CHANGE_ME_LOCAL_ONLY_KEY",
+    "name": "bitget",
+    "pair_blacklist": [],
+    "pair_whitelist": [
+      "BTC/USDT:USDT",
+      "ETH/USDT:USDT",
+      "SOL/USDT:USDT",
+      "NEAR/USDT:USDT",
+      "ARB/USDT:USDT",
+      "OP/USDT:USDT",
+      "AVAX/USDT:USDT",
+      "AAVE/USDT:USDT",
+      "APT/USDT:USDT",
+      "ATOM/USDT:USDT"
+    ],
+    "secret": "CHANGE_ME_LOCAL_ONLY_SECRET"
+  },
+  "exit_pricing": {
+    "order_book_top": 1,
+    "price_side": "other",
+    "use_order_book": true
+  },
+  "initial_state": "running",
+  "margin_mode": "isolated",
+  "max_open_trades": 4,
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  "stake_amount": 100,
+  "stake_currency": "USDT",
+  "strategy": "MomentumBG15_v2",
+  "timeframe": "15m",
+  "tradable_balance_ratio": 0.99,
+  "trading_mode": "futures"
+}

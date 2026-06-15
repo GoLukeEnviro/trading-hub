@@ -34,12 +34,16 @@ node_modules/
 freqtrade/bots/*/config/config*.json
 freqtrade/bots/*/config/config*.json.*
 freqtrade/bots/*/config/config*.json.bak*
+freqtrade/bots/*/config/research/config*.json
 !freqtrade/bots/*/config/config*.example.json
+!freqtrade/bots/*/config/research/config*.example.json
 
 # Freqforge configs — contain jwt_secret_key and passwords
 freqforge/config/config*.json
 freqforge/baseline_v1/*/config*.json
+freqforge*/user_data/config*.json
 !freqforge/config/config*.example.json
+!freqforge*/user_data/config*.example.json
 
 # Backtest lab configs — may contain secrets
 backtests/daily_lab/config*.json
@@ -217,6 +221,8 @@ Thumbs.db
 # The config/ path rule above misses these — they contain jwt_secret_key + password
 freqtrade/bots/*/user_data/config.json
 freqtrade/bots/*/user_data/config*.json
+freqtrade/bots/*/user_data/*backtest*.json
+!freqtrade/bots/*/user_data/*.example.json
 
 # Canary/standalone bot configs with secrets
 freqforge-canary/config/config*.json
@@ -249,6 +255,9 @@ tools/riskguard/decisions.jsonl
 # Runtime fleet reports
 orchestrator/reports/fleet_health_latest.json
 orchestrator/reports/fleet_health_latest.md
+orchestrator/reports/*.json
+orchestrator/reports/*.jsonl
+!orchestrator/reports/*.example.json
 
 # ── Runtime State (FIX 2026-06-05) — nicht committen ────────
 freqtrade/shared/kill_switch.json

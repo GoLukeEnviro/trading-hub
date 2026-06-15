@@ -1,0 +1,11 @@
+# Prevent PR diffs from rendering deleted runtime credential/config artifacts.
+# These paths are removed from tracking and ignored; see docs/security/runtime-config-containment.md.
+freqforge/user_data/config.json -diff
+freqforge-canary/user_data/config.json -diff
+freqtrade/bots/regime-hybrid/config/research/config_regime_hybrid_sideaware_v1.json -diff
+freqtrade/bots/regime-hybrid/config/research/config_regime_hybrid_sideaware_v2.json -diff
+freqtrade/bots/regime-hybrid/config/research/config_regime_hybrid_sideaware_v3.json -diff
+freqtrade/bots/regime-hybrid/user_data/momentum_v2_backtest.json -diff
+orchestrator/reports/canonical_trading_status_latest.json -diff
+orchestrator/reports/phase-33-observation-log.jsonl -diff
+var/kill_switch.json -diff
