@@ -53,9 +53,10 @@ class BotEndpointSummary:
     Not a dataclass to avoid Python 3.13 importlib compatibility issues.
     """
 
-    __slots__ = ("bot_id", "classification", "endpoints_ok", "endpoints_total",
+    __slots__ = ("bot_id", "classification", "count_open_trades",
+                 "endpoints_ok", "endpoints_total",
                  "profit_telemetry_available", "profit_value",
-                 "count_open_trades", "status_healthy")
+                 "status_healthy")
 
     def __init__(self, bot_id: str = "", classification: str = "RED",
                  endpoints_ok: int = 0, endpoints_total: int = 0,
@@ -84,10 +85,11 @@ class FleetAnalysis:
     """
 
     __slots__ = (
-        "analysis_type", "bots_total", "bots_green", "bots_yellow",
-        "bots_red", "endpoints_ok", "endpoints_failed", "weakest_bot",
-        "weakest_bot_reason", "fleet_median_profit", "confidence",
-        "recommendation_type", "caveats", "validation_required", "error",
+        "analysis_type", "bots_green", "bots_red", "bots_total",
+        "bots_yellow", "caveats", "confidence", "endpoints_failed",
+        "endpoints_ok", "error", "fleet_median_profit",
+        "recommendation_type", "validation_required", "weakest_bot",
+        "weakest_bot_reason",
     )
 
     def __init__(self, analysis_type: str = ANALYSIS_ONLY_RISK_REVIEW,
