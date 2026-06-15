@@ -6,10 +6,10 @@ All labels are synthetic — no live market data or exchange calls.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class RegimeLabel(str, Enum):
+class RegimeLabel(StrEnum):
     """Canonical regime labels used in SI v2 analysis."""
 
     BULLISH = "bullish"

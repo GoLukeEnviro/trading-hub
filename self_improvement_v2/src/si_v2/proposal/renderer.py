@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from si_v2.proposal.schema import ProposalCandidate, ProposalDecision
+from si_v2.proposal.schema import ProposalCandidate
 
 
 def render_proposal_packet(candidate: ProposalCandidate) -> str:
