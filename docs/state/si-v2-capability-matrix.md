@@ -1,7 +1,7 @@
 # SI v2 — Fixture vs. Real-Data Capability Matrix
 
-> **Grounded at commit `9ceeedd`** — PR #215 (Rainbow read_only runtime
-> source + freshness guard) on `main`, 2026-06-14.
+> **Grounded at commit `266a930`** — after PR #261 (walk-forward cost model)
+> and PR #262 (telemetry history store + enforcement gate) on `main`, 2026-06-16.
 >
 > This matrix documents which SI v2 components operate on **fixtures**,
 > which operate on **read_only** upstream observation, and which can

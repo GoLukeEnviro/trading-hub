@@ -5,25 +5,30 @@
 > implementation phases, current state, and next priorities. The older
 > roadmap is preserved as historical context and marked superseded.
 >
-> **Grounded at:** commit `9ceeedd` (PR #215 — Rainbow read_only runtime
-> source + freshness guard) on `main`, 2026-06-14.
+> **Grounded at:** commit `266a930` (PR #261 — walk-forward cost model, after
+> PR #262 — telemetry history store + enforcement gate) on `main`, 2026-06-16.
 >
 > **Companion docs:**
 > * `docs/state/current-operational-state.md` — current validated snapshot
 > * `docs/state/canonical-trading-status.md` — live fleet snapshot (regenerated)
-> * `docs/context/2026-06-14-si-v2-rainbow-read-only-runtime-source.md` — PR #215 evidence
+> * `docs/backtesting/walk-forward-cost-model.md` — cost model foundation (PR #261)
+> * `self_improvement_v2/README.md` — includes telemetry history store (PR #262)
 
 ---
 
 ## Executive Summary
 
 * **#44 is closed.** It is no longer the active blocker.
-* **#200 is the current top runtime blocker** — canonicalize Compose project
-  ownership, file authority, and unmanaged-container drift.
+* **#200 and #201 are closed.** Docker ownership was resolved; the
+  telemetry history enforcement gate (PR #262) provides deterministic
+  coverage. #201 (P2 non-root hardening) was closed without action.
 * **#176 is closed at Stage A.** Stage B (dedicated on-host Unix user) is
   future hardening, not a current blocker.
-* **#201 is P2 hardening,** not a blocker for the current loop.
-* **SI v2 scheduled observation loop is operational** — 27 cycles, 4/4 bots,
+* **PR #262 is merged** — telemetry history store, wiring, and history
+  enforcement gate (`BLOCKED_INSUFFICIENT_HISTORY`).
+* **PR #261 is merged** — walk-forward cost model with deterministic fees,
+  slippage, funding, aggregate net metrics, and walk-forward evaluator.
+* **SI v2 scheduled observation loop is operational** — 27+ cycles, 4/4 bots,
   `fleet_verdict=GREEN`, controller `PAUSED / L3_REPOSITORY_ONLY`, 0 mutations.
 * **Rainbow scoring is gated on producer freshness, not on cycle count.**
   0 / 10 scoring-eligible cycles today because the read_only source's
@@ -43,8 +48,8 @@
 |------|----------------|------------------|--------|
 | #44 status | "🔴 BLOCKED — requires Docker/runtime access" | **CLOSED** 2026-06-12 (parent) | `gh issue view 44` |
 | #176 status | "Open, controller isolation needed" | **CLOSED** Stage A (`status:stage-a-complete`); Stage B (dedicated Unix user on host) is future work | `gh issue view 176`; `getent passwd si-v2-controller` returns nothing on this host |
-| #200 status | "Not yet tracked" | **OPEN** — current core runtime blocker | `gh issue view 200`; 7 of 20 running containers have no Compose project label |
-| #201 status | "Security concern, blocking" | **OPEN** P2 hardening, body says "P2 — Hardening, not blocking" | `gh issue view 201` |
+| #200 status | "Not yet tracked" | **CLOSED** 2026-06-16. Docker ownership resolved. Telemetry history gate (PR #262) provides enforcement. | `gh issue view 200` |
+| #201 status | "Security concern, blocking" | **CLOSED** 2026-06-16. P2 non-root hardening closed without action. | `gh issue view 201` |
 | #60 status | "OPEN" (per stale doc) | **CLOSED** 2026-06-11, merged at `0557b70` (PR #169) | `gh issue view 60` |
 | #46 status | "OPEN" (per stale doc) | **CLOSED** 2026-06-11 | `gh issue view 46` |
 | SI v2 loop | "Not started" / "fixture only" | **Operational**: 27 cycles, `fleet_verdict=GREEN`, 0 mutations | `self_improvement_v2/reports/phase2/measurement/measurement_ledger.jsonl` |
@@ -62,7 +67,7 @@ ISSUE-B (#200 audit-only plan).
 
 | File | Stale claim | Current truth | Fix in this PR |
 |------|-------------|---------------|----------------|
-| `docs/state/current-operational-state.md` | Pinned to `0557b70`. #44 listed as "🔴 BLOCKED". Phase 2 "⬜ Not started". #46 "OPEN". | HEAD is `9ceeedd`. #44 is **CLOSED** parent. #46 is **CLOSED**. SI v2 scheduled loop operational. | **Updated in this PR.** |
+| `docs/state/current-operational-state.md` | Pinned to `0222adb`. #200/#201 listed as open. Phase 2.0 IN PROGRESS — owned by #200. | HEAD is `266a930`. #200/#201 are **CLOSED**. Phase 2.0 is **COMPLETE**. PR #261 (walk-forward) and PR #262 (telemetry history) are merged. | **Updated in this reconciliation.** |
 | `docs/roadmap/implementation-roadmap.md` | "Phase 2 — Runtime Blockers — ⬜ Not started — #43/#44". #44 listed as "🔴 BLOCKED — requires Docker/runtime access". Phase 3 Rainbow Signal Integration "Not started". | Rainbow PR #212–#215 all merged. Phase 2 is no longer "not started" — it is owned by #200. | **Header `SUPERSEDED` added in this PR.** This roadmap-v2 replaces it. |
 | `docs/state/si-v2-capability-matrix.md` | "#55–#60 OPEN". "Issue #55 is OPEN". "Issue #60 OPEN". "Regime Detector ⬜ Not started". "Performance Attribution Engine ⬜ Not started". Grounded at `fdac27c`. | All of #55–#60 are **CLOSED** (since 2026-06-11). Capability matrix not refreshed since 2026-06-11. Rainbow now has `read_only` source in addition to `fixture`. Measurement Ledger is producing 108 bot points across 27 cycles. | **Updated in this PR.** |
 | `docs/reports/phase0-closure-matrix-20260611.md` | "#44 … 🔴 OPEN — BLOCKED". "4 of 6 child issues closed ✅ — 2 remaining". | #44 closed 2026-06-12, #46 closed 2026-06-11. All 6 child issues now closed. | **Header `SUPERSEDED` added in this PR.** Archive (move to `docs/reports/archive/`) deferred to a separate task. |
@@ -95,14 +100,28 @@ ISSUE-B (#200 audit-only plan).
 
 ---
 
-## Phase 2.0 – Runtime Foundation & Docker Ownership
+## Phase 2.0 – Runtime Foundation & Docker Ownership ✅ COMPLETE
 
-**Owner:** Hermes
-**Goal:** Resolve #200 end-to-end without runtime disruption. Establish a
+**Status:** ✅ **COMPLETE** — #200 is closed, telemetry history enforcement gate
+(PR #262) provides deterministic coverage.
+
+**Previous goal:** Resolve #200 end-to-end without runtime disruption. Establish a
 single canonical Compose project + file authority map. Decide whether
 Stage B controller isolation is needed now or later.
 
-### Tasks
+### Completed Tasks
+
+All T2.0.x tasks are now completed. Key deliverables:
+
+* **T2.0.1–T2.0.5** — Container ownership map, Compose authority, file authority
+  matrix, wrapper ownership review, and ownership decisions.
+* **T2.0.6** — `current-operational-state.md` reconciliation was done.
+* **T2.0.7** — Stage B isolation deferred until Phase 2.1 scoring gate.
+* **T2.0.8** — Scheduler wrapper ownership confirmed.
+* **PR #262** — Telemetry history store, wiring, and enforcement gate merged,
+  providing the history gating that Phase 2.0 required.
+
+### Legacy Tasks (archived — listed for historical reference)
 
 1. **T2.0.1 — Container ownership map** (read-only report).
    * For each of the 20 running containers, capture: compose project label
@@ -202,11 +221,14 @@ Stage B controller isolation is needed now or later.
 
 ---
 
-## Phase 2.1 – SI v2 Autonomous Dry-Run Operation
+## Phase 2.1 – SI v2 Autonomous Dry-Run Operation 🟠 CURRENT BLOCKER
 
-**Owner:** SI v2 Controller (still `PAUSED / L3_REPOSITORY_ONLY`) + Hermes
+**Owner:** Hermes
 **Goal:** Reach Rainbow scoring eligibility = 10/10 with a **real
 producer**, without breaking dry-run-only.
+
+**Dependencies met:** ✅ PR #262 (telemetry history & enforcement gate),
+✅ PR #261 (walk-forward cost model foundation).
 
 ### Tasks
 
@@ -370,7 +392,9 @@ auto-promotion.
 |-----------|---------|----------------|
 | M2.0.1 | Roadmap v2 merged | Roadmap v2 is the canonical forward-looking doc |
 | M2.0.2 | T2.0.1–T2.0.5 complete | Container ownership map published; all 7 unmanaged containers classified |
-| M2.0.3 | T2.0.6 done | `current-operational-state.md` reconciled *(this PR)* |
+| M2.0.3 | T2.0.6 done | `current-operational-state.md` reconciled |
+| M2.0.4 | PR #262 merged | Telemetry history store + enforcement gate operational |
+| M2.0.5 | PR #261 merged | Walk-forward cost model foundation in tree |
 | M2.1.1 | Producer decision (T2.1.1) | ai4trade-bot producer or equivalent committed to L3 PR plan |
 | M2.1.2 | First scoring-eligible cycle | Ledger shows `rainbow_fresh=True` ≥ 1 |
 | M2.1.3 | History gate met | 10/10 scoring-eligible cycles |
@@ -396,29 +420,22 @@ auto-promotion.
 
 | Issue | Title | Type | Effort | Owner |
 |-------|-------|------|--------|-------|
-| ISSUE-A | Update stale operational docs after PRs #212–#215 | docs | S | Hermes (this PR) |
-| ISSUE-B | #200 implementation plan / audit-only remediation | infra (read-only audit) | M | Hermes |
 | ISSUE-C | SI v2 scheduler status and Rainbow history monitor | observability | S | Hermes |
 | ISSUE-D | Rainbow producer freshness / ai4trade producer decision | infra (L3 plan) | L | Hermes + Human |
 | ISSUE-E | Future Rainbow evidence weighting (gated 10/10) | si-v2 (L3) | M | SI v2 Controller + Human |
 | ISSUE-F | Optional #201 hardening plan | security (L2 plan) | M | Hermes |
 
-**No issues are opened in this PR.** Filing requires separate approval.
+**Note:** ISSUE-A (doc reconciliation) is done in this PR. ISSUE-B (#200) is
+obsolete — #200 is closed. No issues are opened without separate approval.
 
 ---
 
 ## Nächste Sofortmaßnahmen
 
-1. **Approve this PR** as the basis for Roadmap v2.
-2. **Open ISSUE-B** (#200 implementation plan / audit-only remediation) —
-   read-only ownership map and adopt/external decision file. Read-only
-   audit only; no runtime mutation.
-3. **Open ISSUE-C** (daily SI v2 loop health + Rainbow history-gate
-   report) — observability-only.
-4. **Defer** ISSUE-D (producer) to a separate task with an explicit L3 PR
-   plan. Do not deploy the ai4trade producer without separate approval.
-5. **Defer** ISSUE-E (weighting) until the 10/10 history gate is met.
-6. **Defer** ISSUE-F (#201 non-root) to Phase 2.2.
-
-The single safest next action right now is: merge this PR, then open
-ISSUE-B. No Docker, no scoring, no apply, no live trading.
+1. **State Reconciliation is done in this PR** — docs reflect merged PRs #261/#262.
+2. **Phase 2.0 is complete.** #200 and #201 are closed.
+3. **Next active blocker: producer freshness and scoring eligibility.**
+   Start the Producer Freshness Audit (Phase 2 of the prioritised plan) to
+   identify why the Rainbow read_only producer remains scoring-ineligible.
+4. **Defer** ISSUE-F (#201 non-root) to Phase 2.2.
+5. **No Docker, no scoring, no apply, no live trading.**
