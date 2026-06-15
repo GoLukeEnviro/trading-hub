@@ -176,7 +176,7 @@ class TestProposalRules:
                 self.endpoints = {
                     "/api/v1/ping": {"ok": True, "status_code": 200},
                     "/api/v1/profit": {"ok": True, "status_code": 200,
-                                        "response_summary": '{"profit": 0.05}'},
+                                        "response_summary": '{"profit_all_ratio": 0.05}'},
                 }
 
         results = analyzer_module.build_bot_summaries([DummyBot()])
@@ -184,6 +184,74 @@ class TestProposalRules:
         assert results[0].bot_id == "test_bot"
         assert results[0].endpoints_ok == 2
         assert results[0].endpoints_total == 2
+        assert results[0].profit_value == 0.05
+        assert results[0].profit_telemetry_available is True
+
+    def test_parse_profit_positive(self, analyzer_module):
+        val = analyzer_module._parse_profit_value('{"profit_all_ratio": 0.12}')
+        assert val == 0.12
+
+    def test_parse_profit_negative(self, analyzer_module):
+        val = analyzer_module._parse_profit_value('{"profit_all_ratio": -0.05}')
+        assert val == -0.05
+
+    def test_parse_profit_missing_field(self, analyzer_module):
+        val = analyzer_module._parse_profit_value('{"other_field": 42}')
+        assert val is None
+
+    def test_parse_profit_invalid_json(self, analyzer_module):
+        val = analyzer_module._parse_profit_value("not json")
+        assert val is None
+
+    def test_parse_profit_empty(self, analyzer_module):
+        val = analyzer_module._parse_profit_value("")
+        assert val is None
+
+    def test_parse_count_from_json(self, analyzer_module):
+        val = analyzer_module._parse_count_value('{"current": 5}')
+        assert val == 5
+
+    def test_parse_count_from_int(self, analyzer_module):
+        val = analyzer_module._parse_count_value("3")
+        assert val == 3
+
+    def test_parse_count_missing(self, analyzer_module):
+        val = analyzer_module._parse_count_value("")
+        assert val is None
+
+    def test_weakest_bot_via_build_bot_summaries(self, analyzer_module):
+        """Test weakest-bot detection using build_bot_summaries output."""
+        class BotA:
+            bot_id = "bot_a"
+            classification = "GREEN"
+            endpoints = {
+                "/api/v1/ping": {"ok": True},
+                "/api/v1/profit": {"ok": True, "response_summary": '{"profit_all_ratio": 0.10}'},
+                "/api/v1/count": {"ok": True, "response_summary": '{"current": 3}'},
+                "/api/v1/status": {"ok": True},
+                "/api/v1/version": {"ok": True},
+            }
+
+        class BotB:
+            bot_id = "bot_b"
+            classification = "GREEN"
+            endpoints = {
+                "/api/v1/ping": {"ok": True},
+                "/api/v1/profit": {"ok": True, "response_summary": '{"profit_all_ratio": 0.02}'},
+                "/api/v1/count": {"ok": True, "response_summary": '{"current": 1}'},
+                "/api/v1/status": {"ok": True},
+                "/api/v1/version": {"ok": True},
+            }
+
+        summaries = analyzer_module.build_bot_summaries([BotA(), BotB()])
+        assert len(summaries) == 2
+        assert summaries[0].profit_value == 0.10
+        assert summaries[1].profit_value == 0.02
+
+        result = analyzer_module.analyze_fleet(summaries)
+        assert result.weakest_bot == "bot_b"
+        assert result.confidence == "MEDIUM"
+        assert result.recommendation_type == analyzer_module.PARAMETER_REVIEW_CANDIDATE
 
     def test_analysis_is_analysis_only(self, analyzer_module):
         """Analysis type must never be an execute/apply type."""

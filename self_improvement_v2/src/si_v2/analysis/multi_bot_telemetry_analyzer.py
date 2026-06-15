@@ -15,6 +15,7 @@ Output is always ANALYSIS_ONLY_RISK_REVIEW — never an actionable parameter cha
 
 from __future__ import annotations
 
+import json
 from typing import Final
 
 # ---------------------------------------------------------------------------
@@ -119,6 +120,78 @@ class FleetAnalysis:
 
 
 # ---------------------------------------------------------------------------
+# JSON parsing helpers (safe, no Any, no type: ignore)
+# ---------------------------------------------------------------------------
+
+
+def _parse_profit_value(summary: str) -> float | None:
+    """Safely parse a profit metric from a Freqtrade /profit response summary.
+
+    Tries fields in order: profit_all_ratio, profit_closed_ratio,
+    profit_all_abs, profit_closed_coin (as float).
+
+    Args:
+        summary: The response_summary string from the connector snapshot.
+
+    Returns:
+        A float profit value, or None if parsing fails or no field matches.
+    """
+    if not summary or not isinstance(summary, str):
+        return None
+    try:
+        data = json.loads(summary)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    for key in ("profit_all_ratio", "profit_closed_ratio",
+                "profit_all_abs", "profit_closed_coin"):
+        val = data.get(key)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def _parse_count_value(summary: str) -> int | None:
+    """Safely parse a count value from a Freqtrade /count response summary.
+
+    Tries fields: current, count, open_trades. Falls back to parsing the
+    entire response as a plain integer.
+
+    Args:
+        summary: The response_summary string from the connector snapshot.
+
+    Returns:
+        An integer count, or None if parsing fails.
+    """
+    if not summary or not isinstance(summary, str):
+        return None
+    try:
+        data = json.loads(summary)
+    except (json.JSONDecodeError, ValueError):
+        # Try plain integer parsing
+        try:
+            return int(summary.strip())
+        except (ValueError, TypeError):
+            return None
+    if isinstance(data, dict):
+        for key in ("current", "count", "open_trades"):
+            val = data.get(key)
+            if val is not None:
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    continue
+    if isinstance(data, (int, float)):
+        return int(data)
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Analyzer
 # ---------------------------------------------------------------------------
 
@@ -161,7 +234,10 @@ def analyze_fleet(
 
     if len(bots_with_profit) >= MIN_PROFIT_BOTS_FOR_COMPARISON:
         # Compute median profit
-        profit_values = sorted(b.profit_value for b in bots_with_profit)  # type: ignore[misc]
+        profit_values = sorted(
+            b.profit_value for b in bots_with_profit
+            if b.profit_value is not None
+        )
         n = len(profit_values)
         if n % 2 == 1:
             fleet_median_profit = profit_values[n // 2]
@@ -169,7 +245,10 @@ def analyze_fleet(
             fleet_median_profit = (profit_values[n // 2 - 1] + profit_values[n // 2]) / 2.0
 
         # Find weakest: bot with lowest profit, by some margin
-        worst = min(bots_with_profit, key=lambda b: b.profit_value)  # type: ignore[arg-type, return-value]
+        worst = min(
+            bots_with_profit,
+            key=lambda b: b.profit_value if b.profit_value is not None else 0.0,
+        )
         if worst.profit_value is not None and fleet_median_profit is not None:
             if worst.profit_value < fleet_median_profit * 0.8:
                 weakest_bot = worst.bot_id
@@ -266,20 +345,15 @@ def build_bot_summaries(
             summary = profit_result.get("response_summary", "")
             if isinstance(summary, str) and summary:
                 profit_available = True
-                # Try to parse a safe numeric value from the summary
-                # Freqtrade /profit returns JSON; summary is truncated string
-                # For Phase 2, just note availability; value parsing is Phase 3
-                profit_value = 0.0
+                profit_value = _parse_profit_value(summary)
 
         # Extract /count if available
         count_open: int | None = None
         count_result = endpoints.get("/api/v1/count", {})
         if isinstance(count_result, dict) and count_result.get("ok"):
-            try:
-                # Freqtrade /count returns integer
-                count_open = 1  # placeholder; real parsing is Phase 3
-            except (ValueError, TypeError):
-                pass
+            summary = count_result.get("response_summary", "")
+            if isinstance(summary, str) and summary:
+                count_open = _parse_count_value(summary)
 
         # Extract /status if available
         status_healthy: bool | None = None
