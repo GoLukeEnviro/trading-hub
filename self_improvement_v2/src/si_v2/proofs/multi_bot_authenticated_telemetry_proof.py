@@ -220,6 +220,10 @@ def main() -> int:
     from si_v2.adapters.freqtrade_rest_readonly import (
         SIV2FreqtradeTelemetryConnector,
     )
+    from si_v2.analysis.multi_bot_telemetry_analyzer import (
+        analyze_fleet,
+        build_bot_summaries,
+    )
     from si_v2.deploy.shadow_logger import ShadowLogger
     from si_v2.state.schemas import MutationCandidate
 
@@ -385,6 +389,22 @@ def main() -> int:
     red_bots = sum(1 for r in bot_results if r.classification == BOT_RED)
     print(f"\n  Fleet: {green} GREEN, {yellow} YELLOW, {red_bots} RED")
     print(f"  Auth-only POST calls: {total_auth_posts}")
+
+    # Step 4a: Fleet telemetry analysis
+    print("\n[STEP 4a] Running fleet telemetry analysis...")
+    bot_summaries = build_bot_summaries(bot_results)
+    fleet_analysis = analyze_fleet(bot_summaries)
+    print(f"  Analysis type: {fleet_analysis.analysis_type}")
+    print(f"  Confidence:    {fleet_analysis.confidence}")
+    if fleet_analysis.weakest_bot:
+        print(f"  Weakest bot:   {fleet_analysis.weakest_bot}")
+        print(f"  Reason:        {fleet_analysis.weakest_bot_reason}")
+    else:
+        print("  Weakest bot:   None (no significant anomaly)")
+    if fleet_analysis.caveats:
+        for c in fleet_analysis.caveats:
+            print(f"  Caveat:        {c}")
+    print(f"  Recommendation: {fleet_analysis.recommendation_type}")
 
     # Step 5: Build fleet-level MutationCandidate
     print("\n[STEP 5] Building fleet-level metadata-only MutationCandidate...")
