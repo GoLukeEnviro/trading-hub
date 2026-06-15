@@ -247,6 +247,10 @@ producer**, without breaking dry-run-only.
    * Default: **(a) ai4trade producer** because scoring must be backed
      by real upstream signal metadata to be defensible.
 2. **T2.1.2 — Producer deployment plan.** L3 PR plan covering:
+   * See `docs/plans/producer-freshness-fix-deployment.md` for the full
+     implementation plan with preflight, credential configuration, compose
+     profile, SI v2 reconfiguration, validation commands, rollback steps,
+     and approval gates (token: `APPROVE_RAINBOW_PRODUCER_DEPLOY`).
    * container definition under a new Compose project
      (e.g. `ai4trade-producer`)
    * volume ownership for `signals.db`
