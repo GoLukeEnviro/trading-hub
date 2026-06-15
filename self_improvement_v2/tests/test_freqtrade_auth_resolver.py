@@ -12,8 +12,6 @@ Tests cover:
 from __future__ import annotations
 
 import json
-import os
-import re
 from pathlib import Path
 
 import pytest
@@ -221,15 +219,15 @@ class TestResolverIntegration:
 class TestResolverStandards:
     def test_no_any_in_resolver(self, resolver_module):
         src = _RESOLVER_PATH.read_text()
-        # Escape regex-special characters in patterns
+        # Literal substring checks (not regex — avoids RUF043 on CI)
         forbidden = [
-            re.escape("from typing import Any"),  # noqa: F811
-            re.escape("dict[str, Any]"),
-            re.escape("list[Any]"),
+            "from typing import Any",
+            "dict[str, Any]",
+            "list[Any]",
         ]
         for pat in forbidden:
-            if re.search(pat, src):
-                pytest.fail(f"Found Any-type pattern in auth resolver")
+            if pat in src:
+                pytest.fail("Found Any-type pattern in auth resolver")
 
     def test_forbidden_patterns(self, resolver_module):
         """No dry_run=false in resolver code."""

@@ -213,7 +213,6 @@ def main() -> int:
 
     from si_v2.adapters.freqtrade_auth_resolver import (
         ALLOWED_CONFIG_PATHS,
-        MISSING as AUTH_MISSING,
         RESOLVED_FROM_ENV,
         RESOLVED_FROM_FILE,
         resolve_all,
