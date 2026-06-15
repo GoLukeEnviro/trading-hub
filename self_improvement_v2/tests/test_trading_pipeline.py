@@ -7,7 +7,6 @@ Tests cover:
     - Edge cases: empty signal list, missing pair keys, dict-vs-list input
     - Import guard: fallback when kill_switch module unavailable
 """
-
 from __future__ import annotations
 
 import pytest
