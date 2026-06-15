@@ -510,7 +510,7 @@ def _write_report(
     _dry_run_flag = "dry_r" + "un=false"
 
     report_lines = [
-        f"# SI v2 Phase 2 — Multi-Bot Authenticated Telemetry Proof",
+        "# SI v2 Phase 2 — Multi-Bot Authenticated Telemetry Proof",
         "",
         f"**Date:** {ts}",
         "**Proof script:** `self_improvement_v2/src/si_v2/proofs/multi_bot_authenticated_telemetry_proof.py`",
@@ -528,7 +528,7 @@ def _write_report(
         "2. Authenticated via POST /api/v1/token/login (Basic Auth → JWT).",
         "3. Queried via GET-only on: /version, /status, /count, /profit.",
         "",
-        f"Results are classified per bot and aggregated into one fleet-level ShadowProposal.",
+        "Results are classified per bot and aggregated into one fleet-level ShadowProposal.",
         "",
         f"**Result:** {green} GREEN / {yellow} YELLOW / {red_bots} RED.",
         "",
