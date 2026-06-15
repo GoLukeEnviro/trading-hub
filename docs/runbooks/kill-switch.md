@@ -231,6 +231,82 @@ The following should be surfaced on the operational dashboard:
 ## 9. Reference
 
 - `freqtrade/shared/kill_switch.py` — 270 lines, 3 modes, atomic file-based state
-- `orchestrator/scripts/kill_switch_trigger.sh` — 127 lines, 5 commands
+- `orchestrator/scripts/kill_switch_trigger.sh` — CLI wrapper (status/halt/emergency/clear/auto-check)
 - `freqtrade/shared/primo_signal.py:primo_gate_allows()` — integration point
-- `var/kill_switch.json` — initial NORMAL state file
+- `var/kill_switch.json` — runtime state file (not tracked in git)
+- `var/kill_switch.json.example` — template for state file (tracked, never mutated)
+- `orchestrator/scripts/drawdown_guard.py` — periodic fleet-health + drawdown monitor; calls `kill_switch_trigger.sh auto-check` at configured cadence
+
+---
+
+## 10. Activation Ceremony — Guarded Cron / Scheduler Configuration
+
+### Purpose
+
+Enable the `auto-check` drawdown guard as a scheduled (cron) job *only* after a
+validated activation ceremony. This prevents accidental or premature wiring of
+the kill switch auto-trigger before the following preconditions are met.
+
+### Preconditions (all must be GREEN)
+
+| # | Check | Required state | Evidence |
+|---|-------|----------------|----------|
+| 1 | Controller status | `PAUSED`, `IDLE`, or `STOPPED` | `orchestrator/control/STATE.json` |
+| 2 | Queue empty | No pending work items | `orchestrator/control/QUEUE.json` |
+| 3 | Active fields null | No active work item, branch, or PR | `orchestrator/control/STATE.json` |
+| 4 | Baseline reconciled | `STATE.canonical_main_commit == QUEUE.base_commit` | Both files |
+| 5 | `var/kill_switch.json` exists | NORMAL mode, valid JSON | `python3 freqtrade/shared/kill_switch.py status` |
+| 6 | `var/kill_switch.json.example` present | Template matches current schema | `diff var/kill_switch.json.example var/kill_switch.json` (keys only) |
+
+### Ceremony Steps
+
+```bash
+# ── Step 1: Verify preconditions ──
+./orchestrator/scripts/kill_switch_trigger.sh status
+# Expected: Mode: NORMAL, Reason: (empty), Triggered_by: (empty)
+
+# ── Step 2: Verify state file template ──
+diff <(python3 -c "import json; print(sorted(json.load(open('var/kill_switch.json.example')).keys()))") \
+      <(python3 -c "import json; print(sorted(json.load(open('var/kill_switch.json')).keys()))")
+
+# ── Step 3: Dry-run the auto-check (no-op if no threshold breached) ──
+DD_HALT_THRESHOLD=12 DD_EMERGENCY_THRESHOLD=18 \
+    ./orchestrator/scripts/kill_switch_trigger.sh auto-check
+
+# ── Step 4: Enable the cron job ──
+# Add the following entry to the Hermes cron config or system crontab:
+#   */30 * * * * hermes /home/hermes/projects/trading/orchestrator/scripts/kill_switch_trigger.sh auto-check >> /home/hermes/projects/trading/orchestrator/logs/kill_switch_auto_check.log 2>&1
+
+# ── Step 5: Observe for 2 cycles (60 min) ──
+# Verify logs at orchestrator/logs/kill_switch_auto_check.log
+# Verify no spurious activations
+```
+
+### Verification
+
+After ceremony, run:
+
+```bash
+./orchestrator/scripts/kill_switch_trigger.sh status
+# Mode: NORMAL  (unless a threshold was actually breached during observation)
+```
+
+### Rollback
+
+If the cron job fires spuriously:
+
+```bash
+# 1. Remove the cron entry
+# 2. Clear any unintended activation
+./orchestrator/scripts/kill_switch_trigger.sh clear "rollback: spurious activation during ceremony"
+# 3. Investigate root cause (thresholds too low, stale fleet_risk_state, etc.)
+```
+
+### Safety invariants (enforced by design)
+
+1. **Fail-closed:** `auto-check` never overrides an already-active kill switch.
+2. **Dry-run first:** The script only activates when thresholds are actually breached.
+3. **Observability:** Every auto-check decision is logged and surfaced via `status`.
+4. **Idempotent:** Re-running `auto-check` when already active is a no-op.
+5. **Ceremony-gated:** Cron is never enabled without explicit validated ceremony.
+6. **No runtime mutation:** The trigger script is pure file I/O — no Docker, no Freqtrade API calls, no network.

@@ -1,0 +1,8 @@
+{
+  "mode": "NORMAL",
+  "reason": "",
+  "triggered_at": "",
+  "triggered_by": "",
+  "auto_clear_at": "",
+  "_comment": "Valid modes: NORMAL, HALT_NEW, EMERGENCY. This file is a TEMPLATE — copy to var/kill_switch.json (runtime state, gitignored)."
+}

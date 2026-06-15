@@ -108,6 +108,13 @@ SIGNAL_FILE = Path("/home/hermes/projects/trading/freqtrade/shared/primo_signal_
 ENV_FILE    = Path("/home/hermes/projects/trading/orchestrator/.env")
 FLEET_HC    = Path("/home/hermes/projects/trading/orchestrator/scripts/fleet_healthcheck.py")
 
+# ── Kill-switch auto-check config ─────────────────────────────────
+KILL_SWITCH_TRIGGER = Path("/home/hermes/projects/trading/orchestrator/scripts/kill_switch_trigger.sh")
+KILL_SWITCH_AUTO_CHECK_INTERVAL_MIN = 30  # How often to run auto-check
+KILL_SWITCH_AUTO_CHECK_TRACKER = Path(
+    "/home/hermes/projects/trading/orchestrator/state/kill_switch_auto_check_tracker.json"
+)
+
 # ── Previous state for change detection ─────────────────────────
 PREV_STATE_FILE = Path("/home/hermes/projects/trading/orchestrator/state/drawdown_state_prev.json")
 
@@ -417,6 +424,85 @@ def run_fleet_healthcheck() -> dict:
         return {"status": "error", "error": str(e)}
 
 
+# ── Kill-switch auto-check ────────────────────────────────────────
+def _load_kill_switch_check_tracker() -> dict:
+    """Load the last auto-check timestamp from tracker file."""
+    try:
+        if KILL_SWITCH_AUTO_CHECK_TRACKER.exists():
+            return json.loads(KILL_SWITCH_AUTO_CHECK_TRACKER.read_text())
+    except Exception:
+        pass
+    return {"last_check_ts": 0.0}
+
+
+def _save_kill_switch_check_tracker(ts: float) -> None:
+    """Persist the last auto-check timestamp."""
+    try:
+        KILL_SWITCH_AUTO_CHECK_TRACKER.parent.mkdir(parents=True, exist_ok=True)
+        KILL_SWITCH_AUTO_CHECK_TRACKER.write_text(
+            json.dumps({"last_check_ts": ts}, indent=2)
+        )
+    except Exception as e:
+        log(f"  kill-switch tracker write failed: {e}")
+
+
+def _should_run_kill_switch_auto_check() -> bool:
+    """Return True if enough time has elapsed since the last auto-check."""
+    tracker = _load_kill_switch_check_tracker()
+    last_ts = float(tracker.get("last_check_ts", 0.0))
+    elapsed_min = (datetime.now().timestamp() - last_ts) / 60.0
+    return elapsed_min >= KILL_SWITCH_AUTO_CHECK_INTERVAL_MIN
+
+
+def run_kill_switch_auto_check() -> dict:
+    """Call kill_switch_trigger.sh auto-check at configured intervals.
+
+    Returns the subprocess result dict with keys:
+      - called (bool): whether the check was actually invoked
+      - returncode (int or None): exit code of the trigger script
+      - stdout (str): captured stdout
+      - stderr (str): captured stderr
+    """
+    if not _should_run_kill_switch_auto_check():
+        return {"called": False, "returncode": None,
+                "stdout": "", "stderr": "interval not elapsed"}
+
+    if not KILL_SWITCH_TRIGGER.exists():
+        log(f"  kill-switch trigger not found: {KILL_SWITCH_TRIGGER}")
+        return {"called": False, "returncode": -1,
+                "stdout": "", "stderr": "trigger script not found"}
+
+    now_ts = datetime.now().timestamp()
+
+    try:
+        r = subprocess.run(
+            [str(KILL_SWITCH_TRIGGER), "auto-check"],
+            capture_output=True, text=True, timeout=60,
+        )
+        _save_kill_switch_check_tracker(now_ts)
+
+        if r.returncode == 0:
+            log(f"  kill-switch auto-check OK: {r.stdout.strip()}")
+        else:
+            log(f"  kill-switch auto-check FAIL (rc={r.returncode}): "
+                f"{r.stderr.strip() or r.stdout.strip()}")
+
+        return {
+            "called": True,
+            "returncode": r.returncode,
+            "stdout": r.stdout.strip(),
+            "stderr": r.stderr.strip(),
+        }
+    except subprocess.TimeoutExpired:
+        log("  kill-switch auto-check TIMEOUT (>60s)")
+        return {"called": True, "returncode": -1,
+                "stdout": "", "stderr": "timeout"}
+    except Exception as e:
+        log(f"  kill-switch auto-check ERROR: {e}")
+        return {"called": True, "returncode": -1,
+                "stdout": "", "stderr": str(e)}
+
+
 # ── Previous State Loading ──────────────────────────────────────
 def load_prev_state() -> dict:
     try:
@@ -625,6 +711,11 @@ def check_drawdown():
         json.dump(output, f, indent=2)
 
     save_prev_state(output)
+
+    # ── Kill-switch auto-check ──
+    ks_result = run_kill_switch_auto_check()
+    output["kill_switch_auto_check"] = ks_result
+    log(f"  kill-switch auto-check called={ks_result['called']}")
 
     log(f"State -> {STATE_FILE}")
     log("DrawdownGuard v3 END")
