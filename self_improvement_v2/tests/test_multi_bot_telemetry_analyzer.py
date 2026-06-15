@@ -222,26 +222,28 @@ class TestProposalRules:
     def test_weakest_bot_via_build_bot_summaries(self, analyzer_module):
         """Test weakest-bot detection using build_bot_summaries output."""
         class BotA:
-            bot_id = "bot_a"
-            classification = "GREEN"
-            endpoints = {
-                "/api/v1/ping": {"ok": True},
-                "/api/v1/profit": {"ok": True, "response_summary": '{"profit_all_ratio": 0.10}'},
-                "/api/v1/count": {"ok": True, "response_summary": '{"current": 3}'},
-                "/api/v1/status": {"ok": True},
-                "/api/v1/version": {"ok": True},
-            }
+            def __init__(self):
+                self.bot_id = "bot_a"
+                self.classification = "GREEN"
+                self.endpoints = {
+                    "/api/v1/ping": {"ok": True},
+                    "/api/v1/profit": {"ok": True, "response_summary": '{"profit_all_ratio": 0.10}'},
+                    "/api/v1/count": {"ok": True, "response_summary": '{"current": 3}'},
+                    "/api/v1/status": {"ok": True},
+                    "/api/v1/version": {"ok": True},
+                }
 
         class BotB:
-            bot_id = "bot_b"
-            classification = "GREEN"
-            endpoints = {
-                "/api/v1/ping": {"ok": True},
-                "/api/v1/profit": {"ok": True, "response_summary": '{"profit_all_ratio": 0.02}'},
-                "/api/v1/count": {"ok": True, "response_summary": '{"current": 1}'},
-                "/api/v1/status": {"ok": True},
-                "/api/v1/version": {"ok": True},
-            }
+            def __init__(self):
+                self.bot_id = "bot_b"
+                self.classification = "GREEN"
+                self.endpoints = {
+                    "/api/v1/ping": {"ok": True},
+                    "/api/v1/profit": {"ok": True, "response_summary": '{"profit_all_ratio": 0.02}'},
+                    "/api/v1/count": {"ok": True, "response_summary": '{"current": 1}'},
+                    "/api/v1/status": {"ok": True},
+                    "/api/v1/version": {"ok": True},
+                }
 
         summaries = analyzer_module.build_bot_summaries([BotA(), BotB()])
         assert len(summaries) == 2
