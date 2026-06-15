@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "description": "Synthetic proposal candidate fixtures for offline testing",
+  "generated_at": "2026-06-15T00:00:00Z",
+  "candidates": [
+    {
+      "proposal_id": "prop-001",
+      "source": "fleet_analyzer",
+      "suggested_decision": "accept",
+      "title": "Increase max_open_trades to 5 for FreqForge",
+      "description": "Based on consistent win rate above 60% over 48 hours",
+      "rationale": "High confidence signals with low drawddown suggest capacity headroom",
+      "bot_id": "freqtrade-freqforge",
+      "regime_label": "bullish",
+      "confidence_bucket": "high",
+      "estimated_impact": "positive",
+      "evidence_refs": [
+        {"category": "telemetry", "path": "reports/phase2/evidence/multi_bot_cycle_20260613T111045Z.json", "schema_version": 1, "summary": "Ping reachable, status OK"}
+      ]
+    },
+    {
+      "proposal_id": "prop-002",
+      "source": "telemetry_analyzer",
+      "suggested_decision": "reject",
+      "title": "Reduce stake amount for Rebel",
+      "description": "High volatility detected, not enough confidence to reduce",
+      "rationale": "Bearish regime with incomplete metadata — insufficient evidence",
+      "bot_id": "freqai-rebel",
+      "regime_label": "bearish",
+      "confidence_bucket": "low",
+      "estimated_impact": "negative",
+      "evidence_refs": []
+    },
+    {
+      "proposal_id": "prop-003",
+      "source": "attribution_engine",
+      "suggested_decision": "defer",
+      "title": "Switch Regime-Hybrid to trend-following mode",
+      "description": "Neutral regime with mixed win/loss ratio",
+      "rationale": "More data needed — only 3 cycles of evidence available",
+      "bot_id": "freqtrade-regime-hybrid",
+      "regime_label": "neutral",
+      "confidence_bucket": "medium",
+      "estimated_impact": "neutral",
+      "evidence_refs": []
+    },
+    {
+      "proposal_id": "prop-004",
+      "source": "manual",
+      "suggested_decision": "insufficient_evidence",
+      "title": "Enable Telegram approval for Canary",
+      "description": "Requires Telegram adapter deployment first",
+      "rationale": "Dependency not yet implemented — see issue #25",
+      "bot_id": "freqtrade-freqforge-canary",
+      "regime_label": null,
+      "confidence_bucket": null,
+      "estimated_impact": "unknown",
+      "evidence_refs": []
+    }
+  ]
+}

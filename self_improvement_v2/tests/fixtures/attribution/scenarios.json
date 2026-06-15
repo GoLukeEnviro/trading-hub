@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "description": "Synthetic attribution scenario fixtures for offline testing",
+  "generated_at": "2026-06-15T00:00:00Z",
+  "scenarios": [
+    {
+      "id": "winning-long-confidence-high",
+      "source_id": "freqtrade-freqforge",
+      "regime_label": "bullish",
+      "confidence_bucket": "high",
+      "result_bucket": "win",
+      "pnl": 152.34,
+      "duration_hours": 48,
+      "expected_summary_keywords": ["win", "high confidence", "bullish"],
+      "metadata_complete": true
+    },
+    {
+      "id": "winning-long-confidence-medium",
+      "source_id": "freqtrade-freqforge-canary",
+      "regime_label": "neutral",
+      "confidence_bucket": "medium",
+      "result_bucket": "win",
+      "pnl": 23.10,
+      "duration_hours": 12,
+      "expected_summary_keywords": ["win", "medium confidence", "neutral"],
+      "metadata_complete": true
+    },
+    {
+      "id": "losing-short-confidence-high",
+      "source_id": "freqai-rebel",
+      "regime_label": "bearish",
+      "confidence_bucket": "high",
+      "result_bucket": "loss",
+      "pnl": -45.67,
+      "duration_hours": 24,
+      "expected_summary_keywords": ["loss", "high confidence", "bearish"],
+      "metadata_complete": true
+    },
+    {
+      "id": "losing-long-confidence-low",
+      "source_id": "freqtrade-regime-hybrid",
+      "regime_label": "bullish",
+      "confidence_bucket": "low",
+      "result_bucket": "loss",
+      "pnl": -12.34,
+      "duration_hours": 6,
+      "expected_summary_keywords": ["loss", "low confidence", "bullish"],
+      "metadata_complete": true
+    },
+    {
+      "id": "neutral-confidence-medium",
+      "source_id": "freqtrade-freqforge",
+      "regime_label": "neutral",
+      "confidence_bucket": "medium",
+      "result_bucket": "neutral",
+      "pnl": 0.50,
+      "duration_hours": 24,
+      "expected_summary_keywords": ["neutral", "medium confidence"],
+      "metadata_complete": true
+    },
+    {
+      "id": "stale-missing-metadata",
+      "source_id": "freqtrade-freqforge-canary",
+      "regime_label": null,
+      "confidence_bucket": null,
+      "result_bucket": "unknown",
+      "pnl": null,
+      "duration_hours": null,
+      "expected_summary_keywords": ["stale", "incomplete"],
+      "metadata_complete": false,
+      "missing_fields": ["regime_label", "confidence_bucket", "pnl", "duration_hours"]
+    },
+    {
+      "id": "incomplete-regime-only",
+      "source_id": "freqai-rebel",
+      "regime_label": "bearish",
+      "confidence_bucket": null,
+      "result_bucket": "unknown",
+      "pnl": null,
+      "duration_hours": 48,
+      "expected_summary_keywords": ["incomplete", "bearish", "missing confidence"],
+      "metadata_complete": false,
+      "missing_fields": ["confidence_bucket", "pnl"]
+    }
+  ]
+}
