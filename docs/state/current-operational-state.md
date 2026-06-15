@@ -1,11 +1,11 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against merged main at
-> commit `9ceeedd` (PR #215 — Rainbow read_only runtime source + freshness
-> guard).
+> commit `0222adb` (PR #259 — endpoint auth, regression tests, unified audit
+> contracts).
 >
-> **Last updated:** 2026-06-15
-> **Branch:** `main` (HEAD = 9ceeedd, PR #215)
+> **Last updated:** 2026-06-15 (end of GAP audit follow-up sprint)
+> **Branch:** `main` (HEAD = 0222adb, after PRs #258 and #259)
 > **Companion roadmap:** `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md`
 > **Live fleet snapshot:** `docs/state/canonical-trading-status.md`
 

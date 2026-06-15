@@ -100,7 +100,18 @@ snapshot and `docs/context/` for append-only historical reports.
 | FreqAI-Rebel | `trading-freqai-rebel-1` | 8087 | `RebelLiquidation + RebelXGBoostClassifier` | dry-run |
 | Momentum | — | — | DECOMMISSIONED | — |
 | MVS | — | — | NOT_DEPLOYED | — |
-| Webserver | `trading-freqtrade-webserver-1` | — | UI only | — |
+|| Webserver | `trading-freqtrade-webserver-1` | — | UI only | — |
+
+### Primo & Bridge — Endpoint Auth (PR #259)
+
+- PrimoAgent (`primo/primo_api.py`) FastAPI server: `/health` (open),
+  `/signal` (GET/POST) and `/pairs` — the latter two require `X-API-Key`
+  header when `PRIMO_API_KEY` env var is set.
+- Hermes Bridge (`bridge/hermes_primo_bridge.py`) stdlib HTTP server:
+  `/health` (open for Docker), `/status` and `/` — the latter two require
+  `X-API-Key` header when `HERMES_BRIDGE_API_KEY` env var is set.
+- No secret values logged. Auth is opt-in; endpoints remain backward
+  compatible when no key is configured.
 
 ### SI v2 — Self-Improvement Engine (ACTIVE)
 
