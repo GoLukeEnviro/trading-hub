@@ -612,7 +612,7 @@ No mutations. No Docker. No runtime changes.
 |  Safety: RiskGuard={riskguard_result['result']}                             |
 |          ShadowLogger=LOGGED                                           |
 |          Approval={artifact['approval_status']}                          |
-|  Verdict: {'GREEN' if red_bots == 0 else 'YELLOW'} — {'All telemetry available' if red_bots == 0 else 'Partial coverage'}     |
+|  Verdict: {'GREEN' if red_bots == 0 else 'YELLOW'} — {'All' if red_bots == 0 else 'Partial'} coverage     |
 +-----------------------------------------------------------------------+
 ```
 """
