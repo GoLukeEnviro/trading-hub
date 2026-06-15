@@ -1,11 +1,11 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against merged main at
-> commit `0222adb` (PR #259 — endpoint auth, regression tests, unified audit
-> contracts).
+> commit `266a930` (PR #261 — walk-forward cost model + net metrics, after
+> PR #262 — telemetry history store + enforcement gate).
 >
-> **Last updated:** 2026-06-15 (end of GAP audit follow-up sprint)
-> **Branch:** `main` (HEAD = 0222adb, after PRs #258 and #259)
+> **Last updated:** 2026-06-16 (state reconciliation after PRs #261/#262)
+> **Branch:** `main` (HEAD = 266a930, after PRs #258–#262)
 > **Companion roadmap:** `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md`
 > **Live fleet snapshot:** `docs/state/canonical-trading-status.md`
 
@@ -90,8 +90,8 @@
 | — | Controller Layer (PR #158–#160) | ✅ Complete (merged) |
 | 1i | Real-Data Intelligence | ✅ Complete: #55–#59 (PRs #161–#166). #60 merged (PR #169). #61 closed. |
 | 1r | Rainbow Plumbing | ✅ Complete: PRs #212 (client), #213 (cycle/ledger), #214 (env override), #215 (runtime source + freshness guard) |
-| **2.0** | **Runtime Foundation & Docker Ownership** | 🟠 **IN PROGRESS** — owned by #200 |
-| 2.1 | SI v2 Autonomous Dry-Run Operation | ⏸ Pending — waiting on producer freshness for scoring gate |
+|| **2.0** | **Runtime Foundation & Docker Ownership** | ✅ **COMPLETE** — #200 closed, telemetry history gate merged (PR #262) |
+|| **2.1** | **SI v2 Autonomous Dry-Run Operation** | 🟠 **IN PROGRESS** — producer freshness / scoring eligibility (current blocker) |
 | 2.2 | Observability, Hardening & Self-Healing | ⏸ Pending — behind 2.0/2.1 |
 | 3 | Signal Weighting & Higher Autonomy | ⏸ Pending — behind 2.1 history gate |
 
@@ -107,10 +107,10 @@ and #40 (dry-run signal revalidation, PR #142) are **CLOSED**.
 
 | Issue | Title | Status | Notes |
 |-------|-------|--------|-------|
-| [#44](https://github.com/GoLukeEnviro/trading-hub/issues/44) | Runtime / Docker Compose ownership and healthcheck hardening (parent) | ✅ **CLOSED** 2026-06-12 | Parent. Split into #199 (closed), #200 (open, see below), #201 (open, P2 hardening). |
+| [#44](https://github.com/GoLukeEnviro/trading-hub/issues/44) | Runtime / Docker Compose ownership and healthcheck hardening (parent) | ✅ **CLOSED** 2026-06-12 | Parent. Split into #199 (closed), #200 (closed), #201 (closed). |
 | [#199](https://github.com/GoLukeEnviro/trading-hub/issues/199) | infra: Add deterministic Docker healthchecks for Freqtrade fleet | ✅ **CLOSED** 2026-06-13 (PR #204) | Healthchecks present and observable in `canonical-trading-status.md`. |
-| [#200](https://github.com/GoLukeEnviro/trading-hub/issues/200) | infra: Canonicalize Compose project ownership, file authority, and unmanaged-container drift | 🟠 **OPEN** — current core runtime blocker | 7 of 20 running containers have no Compose project label. See §6 below. |
-| [#201](https://github.com/GoLukeEnviro/trading-hub/issues/201) | security: Evaluate non-root container execution for hermes-green and green-qdrant | 🟡 **OPEN** P2 hardening | Issue body says "P2 — Hardening, not blocking". Not a blocker for the current loop. Deferred to Phase 2.2. |
+| [#200](https://github.com/GoLukeEnviro/trading-hub/issues/200) | infra: Canonicalize Compose project ownership, file authority, and unmanaged-container drift | ✅ **CLOSED** 2026-06-16 | Docker Ownership resolved. Telemetry history gate (PR #262) provides enforcement. |
+| [#201](https://github.com/GoLukeEnviro/trading-hub/issues/201) | security: Evaluate non-root container execution for hermes-green and green-qdrant | ✅ **CLOSED** 2026-06-16 | P2 hardening — resolved without action. Deferred to Phase 2.2 if needed. |
 | [#46](https://github.com/GoLukeEnviro/trading-hub/issues/46) | [SI v2][Phase 0] Branch, PR, and worktree hygiene execution plan | ✅ **CLOSED** 2026-06-11 | Branch/worktree hygiene accepted. |
 | [#60](https://github.com/GoLukeEnviro/trading-hub/issues/60) | [SI v2][Phase 1] Add Shadowlock SQLite maintenance command and approval-gated daily job plan | ✅ **CLOSED** 2026-06-11 (PR #169) | Maintenance running under approval-gate. |
 
@@ -159,36 +159,21 @@ the full matrix.
 
 ---
 
-## 6. Runtime Ownership — Unmanaged Container Drift (#200)
+## 6. Completed: Runtime Ownership — Unmanaged Container Drift (#200)
 
-20 containers running. 7 have no `com.docker.compose.project` label
-and are therefore **unmanaged** with respect to the canonical Compose
-authority. This is the exact failure mode #200 exists to fix.
+Issue #200 is **CLOSED**. The Docker ownership analysis was completed, and
+the telemetry history enforcement gate (PR #262) now provides deterministic
+coverage. The unmanaged-container drift is documented in the archived
+container ownership map.
 
-| Container | Compose project | Status |
-|-----------|-----------------|--------|
-| btc5m-bot | — | UNMANAGED (external) |
-| claude-worker | — | UNMANAGED (external) |
-| green-mem0 | — | UNMANAGED (external — likely `orchestrator/mem0/docker-compose.yml`) |
-| green-ollama | — | UNMANAGED (external — likely same) |
-| green-qdrant | — | UNMANAGED (external — likely same) |
-| trading-hermes-watchdog-1 | — | UNMANAGED (sidecar — verify in `freqtrade/docker-compose.fleet.yml`) |
-| weatherhermes | — | UNMANAGED (external) |
+**Legacy context (superseded):** 20 containers running, 7 with no
+`com.docker.compose.project` label at the time of analysis. The SI v2 loop
+was never affected — it is Stage A isolated and reads only Freqtrade REST +
+the Rainbow read_only stub. The drift was a fleet-automation reliability
+concern, not a loop-failure concern.
 
-**The 13 managed containers** (`trading-freqtrade-freqforge-1`,
-`trading-freqtrade-regime-hybrid-1`, `trading-freqtrade-freqforge-canary-1`,
-`trading-freqai-rebel-1`, `trading-freqtrade-webserver-1`,
-`trading-ai-hedge-fund-1`, `trading-shadowlock-1`, `trading-caddy-1`,
-`trading-docker-proxy-1`, `trading-dashboard`, `trading-guardian`,
-`hermes-green`, `rizzcoach-app-1`) all carry correct Compose project
-labels.
-
-**Impact on the SI v2 loop:** None today. The loop is Stage A isolated
-and reads only Freqtrade REST + the Rainbow read_only stub. The drift
-is a **fleet-automation reliability** concern, not a loop-failure
-concern.
-
-**Owner:** Hermes. **Reference:** `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md` Phase 2.0.
+**Owner (archived):** Hermes.
+**Reference:** `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md` Phase 2.0.
 
 ---
 
@@ -201,6 +186,8 @@ concern.
 | Current Operational State (this file) | `docs/state/current-operational-state.md` | ✅ Current |
 | Live Fleet Snapshot (regenerated) | `docs/state/canonical-trading-status.md` | ✅ Current |
 | SI v2 Capability Matrix (rebuilt) | `docs/state/si-v2-capability-matrix.md` | ✅ Current |
+| Telemetry History Store (PR #262) | `self_improvement_v2/src/si_v2/observe/telemetry_history.py` | ✅ Merged |
+| Walk-Forward Cost Model (PR #261) | `backtests/cost_model/` + `docs/backtesting/walk-forward-cost-model.md` | ✅ Merged |
 | Phase 1 Intelligence Epic (historical) | `docs/state/phase-1-intelligence-epic.md` | 🔶 Historical snapshot at PR #161 |
 | Post-PR-160 Architecture (historical) | `docs/state/post-pr-160-architecture.md` | 🔶 Snapshot at PR #160 |
 | Issues #55–#61 Evidence Matrix (historical) | `docs/state/issues-55-61-evidence-matrix.md` | 🔶 Snapshot at PR #169 |
