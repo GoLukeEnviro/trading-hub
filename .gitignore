@@ -278,3 +278,8 @@ self_improvement_v2/reports/runtime_probe/**/*.jsonl
 
 # Auto-generated runtime artifacts
 HERMES_METRICS.json
+
+# Git cleanup audit 2026-06-15 — generated reports and nested external repos
+docs/reports/*.json
+self_improvement_v2/reports/phase2/**
+polymarket-fadi/
