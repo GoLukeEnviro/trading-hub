@@ -1,6 +1,6 @@
 # Canonical Trading Status
 
-Generated at: 2026-06-05T20:42:32.642012+00:00
+Generated at: 2026-06-15T09:04:22.315820+00:00
 
 Verdict: WARNING
 
@@ -22,7 +22,7 @@ Verdict: WARNING
 | SIGNAL_CORE | GREEN | 2026-06-05T09:47:04.312649+00:00 | Raw signal producer is fresh. |
 | SIGNAL_BRIDGE | GREEN | 2026-06-05T09:50:29+00:00 (reported age 3.1 min) | Bridge lag acceptable. |
 | LIVE_RISK | STALE | 2026-06-01T04:01:25.183014+00:00 | Not verified current; do not use as sole live source. |
-| LEDGER_RISK | WARNING | 2026-06-05T20:42:32.642012+00:00 | Secondary ledger / historical view. Watchdog @ 2026-06-05T20:42:32.642012+00:00: no new findings (idempotent). |
+| LEDGER_RISK | WARNING | 2026-06-15T09:04:22.315820+00:00 | Secondary ledger / historical view. Watchdog @ 2026-06-15T09:04:22.315820+00:00: no new findings (idempotent). |
 | MCP_PAPER_SANDBOX | SANDBOX_ONLY | live paper balance snapshot | Synthetic prices, not market truth. |
 | REPORTING_HEALTH | WARNING | fleet reports + docs | Legacy docs/reports remain non-canonical. |
 

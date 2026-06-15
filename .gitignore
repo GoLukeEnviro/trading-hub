@@ -275,3 +275,6 @@ docs/context/mem0-dream-mode-*.md
 
 # SI v2 runtime probe evidence (generated, not committed)
 self_improvement_v2/reports/runtime_probe/**/*.jsonl
+
+# Auto-generated runtime artifacts
+HERMES_METRICS.json
