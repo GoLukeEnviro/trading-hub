@@ -46,7 +46,7 @@ Affected bots:
 | MVS | Yes | ☐ |
 
 Procedure:
-1. Generate new secret: `openssl rand -hex 32`.
+1. Generate a new JWT signing value with: `openssl rand -hex 32`.
 2. Replace `jwt_secret_key` value in the local runtime config.
 3. Restart the bot (Docker container restart) for the new key to take effect.
 4. Verify the bot's REST API responds with 200 on health endpoint after restart.
