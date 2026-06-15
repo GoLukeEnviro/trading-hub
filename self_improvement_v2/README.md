@@ -90,6 +90,7 @@ applies them autonomously.
 |--------|---------|
 | `market_data.py` | Market data observation |
 | `trade_exporter.py` | Export trade history from Freqtrade |
+| `telemetry_history.py` | Append-only JSONL telemetry history store, reader, and trend analyzer for multi-bot telemetry. Enables trend-based ShadowProposals with evidence windows |
 
 ### Deploy (`src/si_v2/deploy/`)
 
@@ -221,3 +222,70 @@ ruff check src/
 | Architecture | `docs/ARCHITECTURE.md` (planned) |
 | SI v2 Docs | `self_improvement_v2/docs/` (ADR-style per-issue docs) |
 | CI Offline Smoke | `self_improvement_v2/docs/CI_OFFLINE_SMOKE.md` |
+
+---
+
+## 8. Telemetry History Contract
+
+The telemetry history store (`src/si_v2/observe/telemetry_history.py`) is an append-only
+JSONL-based storage for per-bot telemetry snapshots across multiple SI v2 active cycles.
+
+### Schema
+
+- **Format:** JSONL (one JSON object per line, append-only)
+- **File:** `state/telemetry_history/telemetry_YYYYMMDD.jsonl` (date-based rotation)
+- **Version:** `telemetry_history_v1`
+- **Safety:** No secrets, JWTs, or credential values are ever persisted.
+  A belt-and-suspenders `_assert_no_secrets` check runs on every append.
+
+### Key Components
+
+| Class | Responsibility |
+|-------|---------------|
+| `BotSnapshot` | Normalized, secret-free telemetry snapshot for one bot in one cycle |
+| `TelemetryHistoryRecord` | One complete SI v2 run record (all bots grouped) |
+| `TelemetryHistoryStore` | Append-only JSONL writer with secret redaction |
+| `TelemetryHistoryReader` | Safe reader for last N runs (handles corruption, schema mismatch) |
+| `TelemetryHistoryAnalyzer` | Trend computation: strongest/weakest bot, profit trend, failure rate |
+| `EvidenceWindow` | Serializable window metadata for ShadowProposal extension |
+
+### Per-bot Trend Analysis
+
+The `TelemetryHistoryAnalyzer` can compute over the last N runs:
+
+- **Strongest bot** — highest mean profit ratio
+- **Weakest bot** — lowest mean profit ratio
+- **Profit trend** — improving / declining / stable (first-half vs second-half comparison)
+- **Failure rate** — ratio of read failures to total attempts
+- **Ping success rate** — ratio of successful pings
+- **Fleet freshness** — whether the most recent run is within 24h
+
+### Validation
+
+```bash
+python -m pytest tests/test_telemetry_history.py -q
+ruff check src/si_v2/observe/telemetry_history.py
+```
+
+### History Enforcement Gate
+
+Starting with the first active cycle that writes history, proposals are evaluated
+against a minimum telemetry history requirement:
+
+- **`MIN_REQUIRED_TELEMETRY_HISTORY_RUNS = 5`** (default, configurable)
+- If `EvidenceWindow.runs_observed < min_required_runs`:
+  - Proposal status set to `INSUFFICIENT_HISTORY`
+  - Reason code: `insufficient_telemetry_history`
+  - Promotion/apply eligibility blocked
+- If `EvidenceWindow` is completely missing:
+  - Proposal status set to `MISSING_EVIDENCE_WINDOW`
+  - Reason code: `missing_evidence_window`
+  - Fail-closed: no normal proposal evaluation possible
+- If `runs_observed >= min_required_runs`:
+  - Status: `NORMAL`
+  - Normal proposal evaluation proceeds
+
+The enforcement status is visible in:
+- `safety_results[].history_status` and `.history_reason_codes` (Step 4 output)
+- `per_bot_decisions[].history_status` and `.min_required_runs` (evidence bundle)
+- `telemetry_history.min_required_runs` (fleet-level evidence bundle)
