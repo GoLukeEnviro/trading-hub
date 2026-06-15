@@ -168,7 +168,7 @@ class TestProposalRules:
         assert results == []
 
     def test_build_bot_summaries_dummy_object(self, analyzer_module):
-        """Test with simple objects mimicking BotTelemetryResult."""
+        """Test with simple objects using response_json."""
         class DummyBot:
             def __init__(self):
                 self.bot_id = "test_bot"
@@ -176,7 +176,7 @@ class TestProposalRules:
                 self.endpoints = {
                     "/api/v1/ping": {"ok": True, "status_code": 200},
                     "/api/v1/profit": {"ok": True, "status_code": 200,
-                                        "response_summary": '{"profit_all_ratio": 0.05}'},
+                                        "response_json": {"profit_all_ratio": 0.05}},
                 }
 
         results = analyzer_module.build_bot_summaries([DummyBot()])
@@ -187,37 +187,58 @@ class TestProposalRules:
         assert results[0].profit_value == 0.05
         assert results[0].profit_telemetry_available is True
 
-    def test_parse_profit_positive(self, analyzer_module):
-        val = analyzer_module._parse_profit_value('{"profit_all_ratio": 0.12}')
-        assert val == 0.12
+    def test_build_bot_summaries_negative_profit(self, analyzer_module):
+        """Negative profit values must be preserved."""
+        class DummyBot:
+            def __init__(self):
+                self.bot_id = "neg_bot"
+                self.classification = "GREEN"
+                self.endpoints = {
+                    "/api/v1/profit": {"ok": True, "response_json": {"profit_all_ratio": -0.05}},
+                }
 
-    def test_parse_profit_negative(self, analyzer_module):
-        val = analyzer_module._parse_profit_value('{"profit_all_ratio": -0.05}')
-        assert val == -0.05
+        results = analyzer_module.build_bot_summaries([DummyBot()])
+        assert results[0].profit_value == -0.05
 
-    def test_parse_profit_missing_field(self, analyzer_module):
-        val = analyzer_module._parse_profit_value('{"other_field": 42}')
-        assert val is None
+    def test_build_bot_summaries_missing_profit_field(self, analyzer_module):
+        """When profit JSON lacks known fields, profit_value must be None."""
+        class DummyBot:
+            def __init__(self):
+                self.bot_id = "no_profit"
+                self.classification = "GREEN"
+                self.endpoints = {
+                    "/api/v1/profit": {"ok": True, "response_json": {"other_field": 42}},
+                }
 
-    def test_parse_profit_invalid_json(self, analyzer_module):
-        val = analyzer_module._parse_profit_value("not json")
-        assert val is None
+        results = analyzer_module.build_bot_summaries([DummyBot()])
+        assert results[0].profit_value is None
+        assert results[0].profit_telemetry_available is False
 
-    def test_parse_profit_empty(self, analyzer_module):
-        val = analyzer_module._parse_profit_value("")
-        assert val is None
+    def test_build_bot_summaries_no_response_json(self, analyzer_module):
+        """When response_json is None, profit_value must be None."""
+        class DummyBot:
+            def __init__(self):
+                self.bot_id = "no_json"
+                self.classification = "GREEN"
+                self.endpoints = {
+                    "/api/v1/profit": {"ok": True, "response_json": None},
+                }
 
-    def test_parse_count_from_json(self, analyzer_module):
-        val = analyzer_module._parse_count_value('{"current": 5}')
-        assert val == 5
+        results = analyzer_module.build_bot_summaries([DummyBot()])
+        assert results[0].profit_value is None
 
-    def test_parse_count_from_int(self, analyzer_module):
-        val = analyzer_module._parse_count_value("3")
-        assert val == 3
+    def test_build_bot_summaries_count_from_json(self, analyzer_module):
+        """Count must be parsed from response_json."""
+        class DummyBot:
+            def __init__(self):
+                self.bot_id = "count_bot"
+                self.classification = "GREEN"
+                self.endpoints = {
+                    "/api/v1/count": {"ok": True, "response_json": {"current": 7}},
+                }
 
-    def test_parse_count_missing(self, analyzer_module):
-        val = analyzer_module._parse_count_value("")
-        assert val is None
+        results = analyzer_module.build_bot_summaries([DummyBot()])
+        assert results[0].count_open_trades == 7
 
     def test_weakest_bot_via_build_bot_summaries(self, analyzer_module):
         """Test weakest-bot detection using build_bot_summaries output."""
@@ -227,8 +248,8 @@ class TestProposalRules:
                 self.classification = "GREEN"
                 self.endpoints = {
                     "/api/v1/ping": {"ok": True},
-                    "/api/v1/profit": {"ok": True, "response_summary": '{"profit_all_ratio": 0.10}'},
-                    "/api/v1/count": {"ok": True, "response_summary": '{"current": 3}'},
+                    "/api/v1/profit": {"ok": True, "response_json": {"profit_all_ratio": 0.10}},
+                    "/api/v1/count": {"ok": True, "response_json": {"current": 3}},
                     "/api/v1/status": {"ok": True},
                     "/api/v1/version": {"ok": True},
                 }
@@ -239,8 +260,8 @@ class TestProposalRules:
                 self.classification = "GREEN"
                 self.endpoints = {
                     "/api/v1/ping": {"ok": True},
-                    "/api/v1/profit": {"ok": True, "response_summary": '{"profit_all_ratio": 0.02}'},
-                    "/api/v1/count": {"ok": True, "response_summary": '{"current": 1}'},
+                    "/api/v1/profit": {"ok": True, "response_json": {"profit_all_ratio": 0.02}},
+                    "/api/v1/count": {"ok": True, "response_json": {"current": 1}},
                     "/api/v1/status": {"ok": True},
                     "/api/v1/version": {"ok": True},
                 }
