@@ -4,7 +4,7 @@
 > commit `9ceeedd` (PR #215 — Rainbow read_only runtime source + freshness
 > guard).
 >
-> **Last updated:** 2026-06-14
+> **Last updated:** 2026-06-15
 > **Branch:** `main` (HEAD = 9ceeedd, PR #215)
 > **Companion roadmap:** `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md`
 > **Live fleet snapshot:** `docs/state/canonical-trading-status.md`
@@ -208,3 +208,43 @@ concern.
 | PR #215 evidence | `docs/context/2026-06-14-si-v2-rainbow-read-only-runtime-source.md` | ✅ Current |
 | PR #215 historical blocker snapshot | `docs/context/2026-06-14-si-v2-rainbow-read-only-prereq-blocked.md` | 🔶 Superseded by PR #215 |
 | AGENTS.md | `AGENTS.md` | ✅ Current |
+
+---
+
+## 8. Hermes Memory State
+
+As of 2026-06-15, the orchestrator profile's durable memory was curated in a
+two-pass operation. No trading runtime, Docker, Freqtrade, or credential state
+was changed.
+
+### Memory Footprint
+
+| Store | Chars | Limit | Usage | Entries |
+|-------|-------|-------|-------|---------|
+| MEMORY | 1,083 | 2,200 | 49% | 6 |
+| USER PROFILE | 700 | 1,375 | 50% | 5 |
+
+### Curation Actions
+
+- Removed stale snapshot entries (fleet container count, PR progress, Honcho
+  Deriver).
+- Consolidated GitHub/SSH authentication into one compact entry.
+- Replaced volatile detail with durable rules (fleet dry-run rule, CI quirks).
+- Moved `Trading Hub runtime mutations` preference from MEMORY to its proper
+  home in USER PROFILE (already present there).
+- Added Honcho decommissioned/archived marker.
+- Shortened all 5 USER PROFILE entries for headroom while preserving all
+  semantic content.
+
+### Memory Hygiene Rules (active)
+
+1. Keep MEMORY under ~1,500 chars for operating headroom.
+2. Store task progress, PR numbers, and incident details in `docs/context/`,
+   not canonical memory.
+3. Replace snapshot-like runtime facts with durable rules.
+4. Treat Honcho references as stale unless explicitly reactivated.
+
+### Related Context Reports
+
+- `docs/context/hermes-memory-curation-20260615-120328.md` — Pass 1 (MEMORY)
+- `docs/context/hermes-memory-curation-user-profile-20260615-120600.md` — Pass 2 (USER PROFILE)
