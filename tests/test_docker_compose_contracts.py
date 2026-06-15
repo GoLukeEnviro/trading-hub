@@ -16,6 +16,10 @@ FREQTRADE_FLEET_SERVICES = [
     "freqforge-canary",
 ]
 
+# Expected dashboard build context and Dockerfile
+DASHBOARD_BUILD_CONTEXT = "docker/dashboard"
+DASHBOARD_DOCKERFILE = "Dockerfile"
+
 
 @pytest.fixture(scope="module")
 def main_compose() -> dict:
@@ -63,3 +67,68 @@ class TestDockerComposeContracts:
         svc = fleet_compose["services"][service_name]
         assert not svc.get("privileged", False)
         assert svc.get("restart") == "unless-stopped"
+
+
+class TestDashboardContract:
+    """Contract tests for the trading-dashboard service."""
+
+    def test_dashboard_build_context_exists(self) -> None:
+        """The Dockerfile referenced by docker-compose must exist."""
+        context_path = ROOT / DASHBOARD_BUILD_CONTEXT / DASHBOARD_DOCKERFILE
+        assert context_path.exists(), (
+            f"Dashboard Dockerfile not found at {context_path}. "
+            f"Compose references build context ./{DASHBOARD_BUILD_CONTEXT} "
+            f"with dockerfile={DASHBOARD_DOCKERFILE}."
+        )
+
+    def test_dashboard_service_in_main_compose(self, main_compose: dict) -> None:
+        """The trading-dashboard service exists in the main compose file."""
+        services = main_compose["services"]
+        assert "trading-dashboard" in services
+
+    def test_dashboard_builds_from_correct_context(self, main_compose: dict) -> None:
+        """Verify the trading-dashboard build context matches the expected path."""
+        svc = main_compose["services"]["trading-dashboard"]
+        build = svc.get("build", {})
+        assert build.get("context") == f"./{DASHBOARD_BUILD_CONTEXT}", (
+            f"Expected build context './{DASHBOARD_BUILD_CONTEXT}', "
+            f"got {build.get('context')!r}"
+        )
+        assert build.get("dockerfile") == DASHBOARD_DOCKERFILE, (
+            f"Expected dockerfile {DASHBOARD_DOCKERFILE!r}, "
+            f"got {build.get('dockerfile')!r}"
+        )
+
+    def test_dashboard_mounts_dashboard_py(self, main_compose: dict) -> None:
+        """The dashboard.py mount points to the correct source path."""
+        svc = main_compose["services"]["trading-dashboard"]
+        volumes = svc.get("volumes", [])
+        dashboard_mounts = [v for v in volumes if "dashboard.py" in str(v)]
+        assert len(dashboard_mounts) >= 1, (
+            "No volume mount for dashboard.py found. "
+            "Expected './dashboard.py:/app/dashboard.py:ro'"
+        )
+        mount = str(dashboard_mounts[0])
+        assert mount.startswith("./dashboard.py"), (
+            f"Expected mount source './dashboard.py', got {mount}"
+        )
+
+    def test_dashboard_flask_dependency(self) -> None:
+        """Verify that dashboard.py imports Flask (code-level contract)."""
+        dashboard_path = ROOT / "dashboard.py"
+        assert dashboard_path.exists(), "dashboard.py not found"
+        content = dashboard_path.read_text(encoding="utf-8")
+        assert "from flask import" in content or "import flask" in content, (
+            "dashboard.py does not import Flask. "
+            "It requires Flask to run."
+        )
+
+    def test_dashboard_dockerfile_installs_flask(self) -> None:
+        """Verify the Dockerfile installs Flask for the dashboard container."""
+        dockerfile_path = ROOT / DASHBOARD_BUILD_CONTEXT / DASHBOARD_DOCKERFILE
+        assert dockerfile_path.exists()
+        content = dockerfile_path.read_text(encoding="utf-8")
+        assert "flask" in content.lower(), (
+            f"Dockerfile at {dockerfile_path} does not reference Flask. "
+            f"The dashboard.py requires Flask at runtime."
+        )
