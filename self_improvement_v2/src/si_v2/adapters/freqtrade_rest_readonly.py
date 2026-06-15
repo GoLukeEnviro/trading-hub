@@ -22,7 +22,6 @@ import json
 import os
 import urllib.error
 import urllib.request
-from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Final
