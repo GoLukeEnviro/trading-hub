@@ -509,110 +509,111 @@ def _write_report(
 
     _dry_run_flag = "dry_r" + "un=false"
 
-    report = f"""# SI v2 Phase 2 — Multi-Bot Authenticated Telemetry Proof
-
-**Date:** {ts}
-**Proof script:** `self_improvement_v2/src/si_v2/proofs/multi_bot_authenticated_telemetry_proof.py`
-**Branch:** `feat/si-v2-multibot-auth-telemetry-proof`
-
----
-
-## Executive Summary
-
-This proof extends the multi-bot ping proof (#223) to authenticated read-only
-telemetry for all four configured Freqtrade dry-run bots.
-
-Each bot is:
-1. Pinged (unauthenticated, connectivity baseline).
-2. Authenticated via POST /api/v1/token/login (Basic Auth → JWT).
-3. Queried via GET-only on: /version, /status, /count, /profit.
-
-Results are classified per bot and aggregated into one fleet-level ShadowProposal.
-
-**Result:** {green} GREEN / {yellow} YELLOW / {red_bots} RED.
-
----
-
-## Fleet Telemetry Matrix
-
-| Status | Bot | Classification | Auth Success | Endpoints | Notes |
-|--------|-----|---------------|--------------|-----------|-------|
-{rows}---
-
-## Auth-Only POST Calls
-
-| Metric | Count |
-|--------|-------|
-| POST /api/v1/token/login | {auth_post_count} |
-| Mutation POST/PUT/DELETE | 0 |
-
----
-
-## Fleet ShadowProposal
-
-| Field | Value |
-|-------|-------|
-| Type | MutationCandidate (metadata-only, fleet-level) |
-| candidate_sha256 | `{candidate_sha}` |
-| Fleet bot_id | `{candidate.bot_id}` |
-| Bots | {len(bot_results)} ({green}G/{yellow}Y/{red_bots}R) |
-| base_mode | `{candidate.base_mode}` |
-| requires_human_approval | `{candidate.requires_human_approval}` |
-| Source | `multi_bot_authenticated_rest_telemetry` |
-
-### Safety Gates
-
-| Gate | Result |
-|------|--------|
-| RiskGuard | **{riskguard_result['result']}** |
-| ShadowLogger | **LOGGED** ({shadow_logger_result['entries_count']} entries) |
-| Approval | **{artifact['approval_status']}** |
-| runtime_mutations | 0 |
-| config_mutations | 0 |
-| freqtrade_mutation_requests | 0 |
-
----
-
-## Controller Status
-
-Controller remains **PAUSED / L3_REPOSITORY_ONLY**.
-
----
-
-## Explicit Non-Actions
-
-- No live trading enablement
-- No dry_run=false
-- No config mutation
-- No strategy edits
-- No Freqtrade CLI
-- No Docker or docker compose
-- No cron/scheduler changes
-- No single-bot-only assumption
-- No secrets printed or committed
-
----
-
-## Final Verdict
-
-**{'GREEN' if red_bots == 0 else 'YELLOW'}** — {'All' if red_bots == 0 else 'Partial'} telemetry collected.
-No mutations. No Docker. No runtime changes.
-
-```
-+-----------------------------------------------------------------------+
-|  SI v2 Phase 2 — Multi-Bot Authenticated Telemetry Proof              |
-|                                                                       |
-|  Fleet:  {len(bot_results)} bots ({green}G/{yellow}Y/{red_bots}R)                    |
-|  Auth:   {auth_post_count} token/login POST(s)                                   |
-|  POSTs:  {auth_post_count} (auth only, 0 mutation)                            |
-|  Safety: RiskGuard={riskguard_result['result']}                             |
-|          ShadowLogger=LOGGED                                           |
-|          Approval={artifact['approval_status']}                          |
-|  Verdict: {'GREEN' if red_bots == 0 else 'YELLOW'} — {'All' if red_bots == 0 else 'Partial'} coverage     |
-+-----------------------------------------------------------------------+
-```
-"""
-    _REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    report_lines = [
+        f"# SI v2 Phase 2 — Multi-Bot Authenticated Telemetry Proof",
+        "",
+        f"**Date:** {ts}",
+        "**Proof script:** `self_improvement_v2/src/si_v2/proofs/multi_bot_authenticated_telemetry_proof.py`",
+        "**Branch:** `feat/si-v2-multibot-auth-telemetry-proof`",
+        "",
+        "---",
+        "",
+        "## Executive Summary",
+        "",
+        "This proof extends the multi-bot ping proof (#223) to authenticated read-only",
+        "telemetry for all four configured Freqtrade dry-run bots.",
+        "",
+        "Each bot is:",
+        "1. Pinged (unauthenticated, connectivity baseline).",
+        "2. Authenticated via POST /api/v1/token/login (Basic Auth → JWT).",
+        "3. Queried via GET-only on: /version, /status, /count, /profit.",
+        "",
+        f"Results are classified per bot and aggregated into one fleet-level ShadowProposal.",
+        "",
+        f"**Result:** {green} GREEN / {yellow} YELLOW / {red_bots} RED.",
+        "",
+        "---",
+        "",
+        "## Fleet Telemetry Matrix",
+        "",
+        "| Status | Bot | Classification | Auth Success | Endpoints | Notes |",
+        "|--------|-----|---------------|--------------|-----------|-------|",
+        f"{rows}---",
+        "",
+        "## Auth-Only POST Calls",
+        "",
+        "| Metric | Count |",
+        "|--------|-------|",
+        f"| POST /api/v1/token/login | {auth_post_count} |",
+        "| Mutation POST/PUT/DELETE | 0 |",
+        "",
+        "---",
+        "",
+        "## Fleet ShadowProposal",
+        "",
+        "| Field | Value |",
+        "|-------|-------|",
+        "| Type | MutationCandidate (metadata-only, fleet-level) |",
+        f"| candidate_sha256 | `{candidate_sha}` |",
+        f"| Fleet bot_id | `{candidate.bot_id}` |",
+        f"| Bots | {len(bot_results)} ({green}G/{yellow}Y/{red_bots}R) |",
+        f"| base_mode | `{candidate.base_mode}` |",
+        f"| requires_human_approval | `{candidate.requires_human_approval}` |",
+        "| Source | `multi_bot_authenticated_rest_telemetry` |",
+        "",
+        "### Safety Gates",
+        "",
+        "| Gate | Result |",
+        "|------|--------|",
+        f"| RiskGuard | **{riskguard_result['result']}** |",
+        f"| ShadowLogger | **LOGGED** ({shadow_logger_result['entries_count']} entries) |",
+        f"| Approval | **{artifact['approval_status']}** |",
+        "| runtime_mutations | 0 |",
+        "| config_mutations | 0 |",
+        "| freqtrade_mutation_requests | 0 |",
+        "",
+        "---",
+        "",
+        "## Controller Status",
+        "",
+        "Controller remains **PAUSED / L3_REPOSITORY_ONLY**.",
+        "",
+        "---",
+        "",
+        "## Explicit Non-Actions",
+        "",
+        "- No live trading enablement",
+        f"- No {_dry_run_flag}",
+        "- No config mutation",
+        "- No strategy edits",
+        "- No Freqtrade CLI",
+        "- No Docker or docker compose",
+        "- No cron/scheduler changes",
+        "- No single-bot-only assumption",
+        "- No secrets printed or committed",
+        "",
+        "---",
+        "",
+        "## Final Verdict",
+        "",
+        f"**{'GREEN' if red_bots == 0 else 'YELLOW'}** — {'All' if red_bots == 0 else 'Partial'} telemetry collected.",
+        "No mutations. No Docker. No runtime changes.",
+        "",
+        "```",
+        "+-----------------------------------------------------------------------+",
+        "|  SI v2 Phase 2 — Multi-Bot Authenticated Telemetry Proof              |",
+        "|                                                                       |",
+        f"|  Fleet:  {len(bot_results)} bots ({green}G/{yellow}Y/{red_bots}R)                    |",
+        f"|  Auth:   {auth_post_count} token/login POST(s)                                   |",
+        f"|  POSTs:  {auth_post_count} (auth only, 0 mutation)                            |",
+        f"|  Safety: RiskGuard={riskguard_result['result']}                             |",
+        "|          ShadowLogger=LOGGED                                           |",
+        f"|          Approval={artifact['approval_status']}                          |",
+        f"|  Verdict: {'GREEN' if red_bots == 0 else 'YELLOW'} — {'All' if red_bots == 0 else 'Partial'} coverage|",
+        "+-----------------------------------------------------------------------+",
+        "```",
+    ]
+    report = "\n".join(report_lines)
     with open(_REPORT_PATH, "w") as f:
         f.write(report)
 
