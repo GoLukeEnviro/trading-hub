@@ -1091,6 +1091,20 @@ def run_active_cycle() -> int:
     safety_results: list[dict[str, object]] = []
     for d in decision.per_bot:
         if d.decision_type != DECISION_SHADOW_PROPOSAL:
+            # Compute history status for NO_PROPOSAL (same logic as SHADOW_PROPOSAL)
+            if not _evidence_window_dict:
+                no_proposal_history_status = HISTORY_STATUS_MISSING
+                no_proposal_history_reason_codes = [HISTORY_REASON_MISSING]
+            else:
+                runs_obs_raw = _evidence_window_dict.get("runs_observed", 0)
+                runs_obs = int(runs_obs_raw) if isinstance(runs_obs_raw, int) else 0
+                if runs_obs < MIN_REQUIRED_TELEMETRY_HISTORY_RUNS:
+                    no_proposal_history_status = HISTORY_STATUS_INSUFFICIENT
+                    no_proposal_history_reason_codes = [HISTORY_REASON_INSUFFICIENT]
+                else:
+                    no_proposal_history_status = HISTORY_STATUS_NORMAL
+                    no_proposal_history_reason_codes = []
+
             safety_results.append({
                 "bot_id": d.bot_id,
                 "decision_type": d.decision_type,
@@ -1098,6 +1112,11 @@ def run_active_cycle() -> int:
                 "riskguard": "SKIPPED_NO_PROPOSAL",
                 "shadow_logger": "SKIPPED_NO_PROPOSAL",
                 "approval_status": "NOT_APPLICABLE",
+                "history_status": no_proposal_history_status,
+                "history_reason_codes": no_proposal_history_reason_codes,
+                "min_required_runs": MIN_REQUIRED_TELEMETRY_HISTORY_RUNS,
+                "promotion_blocked": True,
+                "promotion_block_reason_codes": ["no_proposal", *no_proposal_history_reason_codes],
             })
             continue
 
