@@ -14,22 +14,18 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-
 from si_v2.evaluation.walk_forward_net_metrics import (
+    REASON_CODE_HIGH_DRAWDOWN,
+    REASON_CODE_INSUFFICIENT_EVIDENCE,
+    REASON_CODE_NEGATIVE_NET_METRICS,
     STATUS_INSUFFICIENT_EVIDENCE,
     STATUS_NEGATIVE_NET_METRICS,
     STATUS_NOT_APPLICABLE,
     STATUS_PASS_REVIEW,
-    REASON_CODE_HIGH_DRAWDOWN,
-    REASON_CODE_INSUFFICIENT_EVIDENCE,
-    REASON_CODE_NEGATIVE_NET_METRICS,
-    WalkForwardEvaluation,
     default_no_proposal_evaluation,
     evaluate_from_aggregate_metrics,
     evaluate_net_metrics,
 )
-
 
 # =========================================================================
 # 1. Positive net metrics
