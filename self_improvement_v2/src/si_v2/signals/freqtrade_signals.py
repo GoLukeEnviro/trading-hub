@@ -112,6 +112,8 @@ def collect_bot_signals(
     profit_all_ratio = _safe_float(profit_data.get("profit_all_ratio"), 0.0)
     profit_closed_coin = _safe_float(profit_data.get("profit_closed_coin"), 0.0)
     profit_all_coin = _safe_float(profit_data.get("profit_all_coin"), 0.0)
+    num_trades = _safe_int(profit_data.get("num_trades"), 0)
+    profit_factor = _safe_float(profit_data.get("profit_factor"), 0.0)
     bot_start_date = str(profit_data.get("bot_start_date", ""))
 
     # /performance
@@ -198,6 +200,8 @@ def collect_bot_signals(
         profit_all_coin=profit_all_coin,
         profit_all_percent=profit_all_percent,
         profit_all_ratio=profit_all_ratio,
+        num_trades=num_trades,
+        profit_factor=profit_factor,
         bot_start_date=bot_start_date,
         performance_pair_count=perf_pair_count,
         performance_top_pair=perf_top_pair,
