@@ -17,6 +17,7 @@ from __future__ import annotations
 from si_v2.evaluation.walk_forward_net_metrics import (
     REASON_CODE_HIGH_DRAWDOWN,
     REASON_CODE_INSUFFICIENT_EVIDENCE,
+    REASON_CODE_MISSING_DRAWDOWN,
     REASON_CODE_NEGATIVE_NET_METRICS,
     STATUS_INSUFFICIENT_EVIDENCE,
     STATUS_NEGATIVE_NET_METRICS,
@@ -254,18 +255,19 @@ class TestFromAggregateMetrics:
         assert result.promotion_blocked is False
 
     def test_missing_fields_default_to_zero(self) -> None:
-        """Missing optional fields don't crash and default to 0."""
+        """Missing optional fields default to 0, but missing drawdown blocks."""
         result = evaluate_from_aggregate_metrics({
             "total_trades": 10,
             "total_net_pnl": 100.0,
         })
-        # max_drawdown_pct defaults to 0, which is fine
-        # profit_factor defaults to 0
         assert result.total_trades == 10
         assert result.total_net_pnl == 100.0
         assert result.max_drawdown_pct == 0.0
-        # profit_factor=0 with positive PnL is unusual but not wrong
         assert result.profit_factor == 0.0
+        # max_drawdown_pct key absent -> missing drawdown detected -> blocked
+        assert result.evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
+        assert result.promotion_blocked is True
+        assert REASON_CODE_MISSING_DRAWDOWN in result.promotion_block_reason_codes
 
 
 # =========================================================================

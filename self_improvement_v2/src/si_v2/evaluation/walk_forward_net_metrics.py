@@ -53,6 +53,7 @@ STATUS_NOT_APPLICABLE: Final[str] = "NOT_APPLICABLE"
 REASON_CODE_INSUFFICIENT_EVIDENCE: Final[str] = "walk_forward_insufficient_evidence"
 REASON_CODE_NEGATIVE_NET_METRICS: Final[str] = "walk_forward_net_metrics_negative"
 REASON_CODE_HIGH_DRAWDOWN: Final[str] = "walk_forward_high_drawdown"
+REASON_CODE_MISSING_DRAWDOWN: Final[str] = "walk_forward_missing_drawdown"
 
 # ---------------------------------------------------------------------------
 # Default thresholds (conservative)
@@ -146,10 +147,11 @@ def evaluate_net_metrics(
     min_trades: int = _MIN_TRADES_FOR_EVALUATION,
     max_drawdown_threshold_pct: float = _MAX_DRAWDOWN_THRESHOLD_PCT,
     negative_pnl_threshold: float = _NEGATIVE_PNL_THRESHOLD,
+    max_drawdown_measured: bool = True,
 ) -> WalkForwardEvaluation:
     """Evaluate net metrics and produce a promotion recommendation.
 
-    This is a pure function — no I/O, no side effects, no external state.
+    This is a pure function -- no I/O, no side effects, no external state.
 
     Args:
         total_trades: Total number of trades evaluated.
@@ -163,13 +165,15 @@ def evaluate_net_metrics(
         min_trades: Minimum trade count for a meaningful evaluation.
         max_drawdown_threshold_pct: Drawdown above this blocks promotion.
         negative_pnl_threshold: Net PnL at or below this blocks promotion.
+        max_drawdown_measured: If False, max_drawdown_pct is not trustworthy
+            and promotion is blocked. Default True for backward compat.
 
     Returns:
         WalkForwardEvaluation with evaluation_status and safety fields.
     """
     reason_codes: list[str] = []
 
-    # ── Insufficient evidence check ────────────────────────────────────
+    # -- Insufficient evidence check ------------------------------------------
     if total_trades < min_trades:
         return WalkForwardEvaluation(
             total_trades=total_trades,
@@ -185,11 +189,27 @@ def evaluate_net_metrics(
             promotion_block_reason_codes=[REASON_CODE_INSUFFICIENT_EVIDENCE],
         )
 
-    # ── Negative net PnL ───────────────────────────────────────────────
+    # -- Missing drawdown check -----------------------------------------------
+    if not max_drawdown_measured:
+        return WalkForwardEvaluation(
+            total_trades=total_trades,
+            total_net_pnl=total_net_pnl,
+            total_fees=total_fees,
+            total_slippage=total_slippage,
+            total_funding=total_funding,
+            max_drawdown_pct=max_drawdown_pct,
+            profit_factor=profit_factor,
+            win_rate_pct=win_rate_pct,
+            evaluation_status=STATUS_INSUFFICIENT_EVIDENCE,
+            promotion_blocked=True,
+            promotion_block_reason_codes=[REASON_CODE_MISSING_DRAWDOWN],
+        )
+
+    # -- Negative net PnL -----------------------------------------------------
     if total_net_pnl <= negative_pnl_threshold:
         reason_codes.append(REASON_CODE_NEGATIVE_NET_METRICS)
 
-    # ── Excessive drawdown ─────────────────────────────────────────────
+    # -- Excessive drawdown ---------------------------------------------------
     if max_drawdown_pct >= max_drawdown_threshold_pct:
         reason_codes.append(REASON_CODE_HIGH_DRAWDOWN)
 
@@ -237,6 +257,10 @@ def evaluate_from_aggregate_metrics(
     Accepts any dict with the expected fields (including JSON-deserialized
     AggregateMetrics). Fields missing or non-numeric are treated as 0.
 
+    When max_drawdown_pct key is absent from the dict, drawdown is
+    treated as unmeasured and promotion is blocked with
+    REASON_CODE_MISSING_DRAWDOWN.
+
     Args:
         metrics_dict: Dict matching AggregateMetrics field names.
         min_trades: Minimum trades for evaluation.
@@ -245,6 +269,8 @@ def evaluate_from_aggregate_metrics(
     Returns:
         WalkForwardEvaluation result.
     """
+    max_drawdown_measured = "max_drawdown_pct" in metrics_dict
+
     return evaluate_net_metrics(
         total_trades=_safe_int(metrics_dict, "total_trades"),
         total_net_pnl=_safe_float(metrics_dict, "total_net_pnl"),
@@ -256,6 +282,7 @@ def evaluate_from_aggregate_metrics(
         win_rate_pct=_safe_float(metrics_dict, "win_rate_pct"),
         min_trades=min_trades,
         max_drawdown_threshold_pct=max_drawdown_threshold_pct,
+        max_drawdown_measured=max_drawdown_measured,
     )
 
 

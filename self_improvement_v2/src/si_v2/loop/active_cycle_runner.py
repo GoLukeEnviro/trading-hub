@@ -1201,13 +1201,17 @@ def run_active_cycle() -> int:
 
     # ── Walk-Forward Net Metrics enrichment ────────────────────────────
     # Inject walk_forward_net_metrics into each safety result for
-    # downstream persistence. Currently defaults to INSUFFICIENT_EVIDENCE
-    # since the cycle collects ping/status evidence, not trade data.
-    # Future cycles can pass real AggregateMetrics when trade data is
-    # available in the observation pipeline.
+    # downstream persistence. Uses real per-bot signal snapshots when
+    # available, with safe fallback to INSUFFICIENT_EVIDENCE.
+    from si_v2.evaluation.aggregate_metrics_adapter import (
+        METRICS_SOURCE_NOT_APPLICABLE,
+        METRICS_SOURCE_PARTIAL,
+        METRICS_SOURCE_REAL,
+        derive_aggregate_metrics,
+    )
     from si_v2.evaluation.walk_forward_net_metrics import (
         default_no_proposal_evaluation,
-        evaluate_net_metrics,
+        evaluate_from_aggregate_metrics,
     )
 
     _wf_metrics_added = 0
@@ -1215,17 +1219,34 @@ def run_active_cycle() -> int:
         if not isinstance(sr, dict):
             continue
         wf_key = "walk_forward_net_metrics"
+        bot_id = str(sr.get("bot_id", ""))
         if sr.get("decision_type") == "NO_PROPOSAL":
             sr[wf_key] = default_no_proposal_evaluation().to_dict()
+            sr[wf_key]["metrics_source"] = METRICS_SOURCE_NOT_APPLICABLE
         else:
-            # SHADOW_PROPOSAL — evaluate with whatever evidence is available
-            # Currently no trade data flows through the cycle runner, so
-            # this defaults to INSUFFICIENT_EVIDENCE. When walk-forward
-            # backtest data becomes available, pass the metrics here.
-            sr[wf_key] = evaluate_net_metrics(
-                total_trades=0,  # no trade evidence yet
-                min_trades=5,
-            ).to_dict()
+            # SHADOW_PROPOSAL — attempt real aggregate metrics from signals
+            snap = signal_snapshots_by_bot.get(bot_id)
+            agg_metrics, source_tag = derive_aggregate_metrics(snap)
+            if agg_metrics is not None:
+                wf_eval = evaluate_from_aggregate_metrics(agg_metrics)
+                sr[wf_key] = wf_eval.to_dict()
+                has_drawdown = "max_drawdown_pct" in agg_metrics
+                sr[wf_key]["metrics_source"] = (
+                    METRICS_SOURCE_REAL if has_drawdown else METRICS_SOURCE_PARTIAL
+                )
+            else:
+                # No usable trade evidence — fall back to INSUFFICIENT_EVIDENCE
+                from si_v2.evaluation.walk_forward_net_metrics import (
+                    REASON_CODE_INSUFFICIENT_EVIDENCE,
+                    STATUS_INSUFFICIENT_EVIDENCE,
+                    WalkForwardEvaluation,
+                )
+                sr[wf_key] = WalkForwardEvaluation(
+                    evaluation_status=STATUS_INSUFFICIENT_EVIDENCE,
+                    promotion_blocked=True,
+                    promotion_block_reason_codes=[REASON_CODE_INSUFFICIENT_EVIDENCE],
+                ).to_dict()
+                sr[wf_key]["metrics_source"] = source_tag
         _wf_metrics_added += 1
     print(f"  walk_forward_net_metrics injected: {_wf_metrics_added}")
 
