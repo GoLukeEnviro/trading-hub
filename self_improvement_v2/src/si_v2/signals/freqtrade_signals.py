@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from math import isfinite
 
 from si_v2.adapters.freqtrade_rest_readonly import (
     SIV2FreqtradeTelemetryConnector,
@@ -64,7 +65,10 @@ def collect_bot_signals(
                     error_summary="" if snap.ok else snap.response_summary[:100],
                 )
             )
-            data = _try_parse_json(snap.response_summary) if snap.ok else None
+            response_json = getattr(snap, "response_json", None)
+            data = response_json if snap.ok and response_json is not None else (
+                _try_parse_json(snap.response_summary) if snap.ok else None
+            )
             responses[ep] = data
         except (ValueError, RuntimeError) as exc:
             avail_list.append(
@@ -112,8 +116,15 @@ def collect_bot_signals(
     profit_all_ratio = _safe_float(profit_data.get("profit_all_ratio"), 0.0)
     profit_closed_coin = _safe_float(profit_data.get("profit_closed_coin"), 0.0)
     profit_all_coin = _safe_float(profit_data.get("profit_all_coin"), 0.0)
-    num_trades = _safe_int(profit_data.get("num_trades"), 0)
+    num_trades = _safe_int(
+        profit_data.get(
+            "num_trades",
+            profit_data.get("closed_trade_count", profit_data.get("trade_count")),
+        ),
+        0,
+    )
     profit_factor = _safe_float(profit_data.get("profit_factor"), 0.0)
+    max_drawdown_pct = _extract_max_drawdown_pct(profit_data)
     bot_start_date = str(profit_data.get("bot_start_date", ""))
 
     # /performance
@@ -202,6 +213,7 @@ def collect_bot_signals(
         profit_all_ratio=profit_all_ratio,
         num_trades=num_trades,
         profit_factor=profit_factor,
+        max_drawdown_pct=max_drawdown_pct,
         bot_start_date=bot_start_date,
         performance_pair_count=perf_pair_count,
         performance_top_pair=perf_top_pair,
@@ -243,3 +255,38 @@ def _safe_float(value: object, default: float) -> float:
         return float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return default
+
+
+def _extract_max_drawdown_pct(profit_data: dict) -> float | None:
+    """Extract real max drawdown percentage from Freqtrade /profit data.
+
+    Freqtrade's ``/api/v1/profit`` schema exposes ``max_drawdown`` as a
+    relative account drawdown ratio (for example, ``0.0825`` for 8.25%) and
+    ``max_drawdown_abs`` as the absolute quote-currency loss. This helper maps
+    the relative value to the explicit SI v2 ``max_drawdown_pct`` field.
+
+    If a fixture or future response already provides ``max_drawdown_pct``, that
+    value is used directly. Missing/non-numeric values return ``None`` so the
+    walk-forward evaluator keeps blocking with ``walk_forward_missing_drawdown``.
+    """
+    explicit_pct = _safe_optional_float(profit_data.get("max_drawdown_pct"))
+    if explicit_pct is not None:
+        return explicit_pct
+
+    raw_drawdown = _safe_optional_float(profit_data.get("max_drawdown"))
+    if raw_drawdown is None:
+        return None
+
+    if 0.0 <= raw_drawdown <= 1.0:
+        return raw_drawdown * 100.0
+    return raw_drawdown
+
+
+def _safe_optional_float(value: object) -> float | None:
+    try:
+        parsed = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not isfinite(parsed):
+        return None
+    return parsed

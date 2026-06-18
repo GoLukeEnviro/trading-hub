@@ -96,6 +96,7 @@ class BotSignalSnapshot:
     profit_all_ratio: float = 0.0
     num_trades: int = 0
     profit_factor: float = 0.0
+    max_drawdown_pct: float | None = None
     bot_start_date: str = ""
 
     # /api/v1/performance (per-pair aggregate)
@@ -159,6 +160,7 @@ class BotSignalSnapshot:
             "profit_all_ratio": self.profit_all_ratio,
             "num_trades": self.num_trades,
             "profit_factor": self.profit_factor,
+            "max_drawdown_pct": self.max_drawdown_pct,
             "performance_pair_count": self.performance_pair_count,
             "performance_top_pair": self.performance_top_pair,
             "performance_top_pair_profit_pct": self.performance_top_pair_profit_pct,

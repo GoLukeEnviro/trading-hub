@@ -19,6 +19,7 @@ from si_v2.evaluation.aggregate_metrics_adapter import (
     METRICS_SOURCE_INSUFFICIENT,
     METRICS_SOURCE_MISSING,
     METRICS_SOURCE_NOT_APPLICABLE,
+    METRICS_SOURCE_PARTIAL,
     METRICS_SOURCE_REAL,
     derive_aggregate_metrics,
 )
@@ -49,6 +50,7 @@ class _FakeSignalSnapshot:
     profit_closed_coin: float = 0.0
     profit_all_coin: float = 0.0
     profit_factor: float = 0.0
+    max_drawdown_pct: float | None = None
     daily_trade_count_total: int = 0
     profit_closed_percent: float = 0.0
     profit_all_percent: float = 0.0
@@ -88,6 +90,7 @@ class TestPositiveMetrics:
             num_trades=10,
             profit_closed_coin=150.0,
             profit_factor=1.8,
+            max_drawdown_pct=6.5,
         )
         metrics, source = derive_aggregate_metrics(snap)
         assert source == METRICS_SOURCE_REAL
@@ -95,8 +98,7 @@ class TestPositiveMetrics:
         assert metrics["total_trades"] == 10
         assert metrics["total_net_pnl"] == 150.0
         assert metrics["profit_factor"] == 1.8
-        # Inject real drawdown data -- adapter does not provide it yet
-        metrics["max_drawdown_pct"] = 5.0
+        assert metrics["max_drawdown_pct"] == 6.5
 
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
@@ -110,12 +112,13 @@ class TestPositiveMetrics:
             daily_trade_count_total=7,
             profit_closed_coin=85.0,
             profit_factor=1.5,
+            max_drawdown_pct=4.0,
         )
         metrics, source = derive_aggregate_metrics(snap)
         assert source == METRICS_SOURCE_REAL
         assert metrics is not None
         assert metrics["total_trades"] == 7
-        metrics["max_drawdown_pct"] = 5.0
+        assert metrics["max_drawdown_pct"] == 4.0
 
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
@@ -127,9 +130,9 @@ class TestPositiveMetrics:
             num_trades=10,
             profit_closed_coin=250.0,
             profit_factor=2.0,
+            max_drawdown_pct=5.0,
         )
         metrics, _ = derive_aggregate_metrics(snap)
-        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
         assert result.promotion_blocked is False
@@ -193,6 +196,7 @@ class TestInsufficientTrades:
             num_trades=1,
             profit_closed_coin=10.0,
             profit_factor=1.2,
+            max_drawdown_pct=2.0,
         )
         metrics, source = derive_aggregate_metrics(snap)
         assert source == METRICS_SOURCE_REAL
@@ -210,6 +214,7 @@ class TestInsufficientTrades:
             num_trades=4,
             profit_closed_coin=50.0,
             profit_factor=1.5,
+            max_drawdown_pct=3.0,
         )
         metrics, _ = derive_aggregate_metrics(snap)
         result = evaluate_from_aggregate_metrics(metrics)
@@ -222,9 +227,9 @@ class TestInsufficientTrades:
             num_trades=5,
             profit_closed_coin=25.0,
             profit_factor=1.1,
+            max_drawdown_pct=5.0,
         )
         metrics, _ = derive_aggregate_metrics(snap)
-        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
         assert result.promotion_blocked is False
@@ -244,9 +249,9 @@ class TestNegativeNetPnl:
             num_trades=10,
             profit_closed_coin=-50.0,
             profit_factor=0.8,
+            max_drawdown_pct=5.0,
         )
         metrics, _ = derive_aggregate_metrics(snap)
-        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_NEGATIVE_NET_METRICS
         assert result.promotion_blocked is True
@@ -258,9 +263,9 @@ class TestNegativeNetPnl:
             num_trades=10,
             profit_closed_coin=0.0,
             profit_factor=1.0,
+            max_drawdown_pct=5.0,
         )
         metrics, _ = derive_aggregate_metrics(snap)
-        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_NEGATIVE_NET_METRICS
         assert result.promotion_blocked is True
@@ -272,9 +277,9 @@ class TestNegativeNetPnl:
             num_trades=5,
             profit_closed_coin=0.01,
             profit_factor=1.0,
+            max_drawdown_pct=5.0,
         )
         metrics, _ = derive_aggregate_metrics(snap)
-        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
         assert result.promotion_blocked is False
@@ -375,6 +380,7 @@ class TestMultiBot:
             num_trades=10,
             profit_closed_coin=200.0,
             profit_factor=2.0,
+            max_drawdown_pct=5.0,
         )
         snap_b = _FakeSignalSnapshot(
             bot_id="freqai-rebel",
@@ -383,16 +389,15 @@ class TestMultiBot:
             profit_factor=0.5,
         )
 
-        # Bot A -- inject drawdown data to enable PASS_REVIEW
+        # Bot A -- complete drawdown data enables PASS_REVIEW
         metrics_a, _ = derive_aggregate_metrics(snap_a)
-        metrics_a["max_drawdown_pct"] = 5.0
         result_a = evaluate_from_aggregate_metrics(metrics_a)
         assert result_a.evaluation_status == STATUS_PASS_REVIEW
         assert result_a.promotion_blocked is False
 
         # Bot B -- few trades, negative PnL
         metrics_b, source_b = derive_aggregate_metrics(snap_b)
-        assert source_b == METRICS_SOURCE_REAL  # has some data, just insufficient
+        assert source_b == METRICS_SOURCE_PARTIAL  # has data, but drawdown is missing
         result_b = evaluate_from_aggregate_metrics(metrics_b)
         assert result_b.evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
         assert result_b.promotion_blocked is True
@@ -406,20 +411,18 @@ class TestMultiBot:
             "freqai-rebel",
         ]
         snapshots = [
-            _FakeSignalSnapshot(bot_id=bot_ids[0], num_trades=10, profit_closed_coin=150.0),
+            _FakeSignalSnapshot(bot_id=bot_ids[0], num_trades=10, profit_closed_coin=150.0,
+                                max_drawdown_pct=5.0),
             _FakeSignalSnapshot(bot_id=bot_ids[1], num_trades=0, profit_closed_coin=0.0),
-            _FakeSignalSnapshot(bot_id=bot_ids[2], num_trades=7, profit_closed_coin=-20.0),
+            _FakeSignalSnapshot(bot_id=bot_ids[2], num_trades=7, profit_closed_coin=-20.0,
+                                max_drawdown_pct=5.0),
             _FakeSignalSnapshot(bot_id=bot_ids[3], num_trades=2, profit_closed_coin=5.0),
         ]
 
         results = []
-        for i, snap in enumerate(snapshots):
+        for snap in snapshots:
             metrics, _ = derive_aggregate_metrics(snap)
             if metrics is not None:
-                # Inject drawdown for bots that have enough trades to evaluate
-                # so the test focuses on multi-bot independence, not adapter gaps.
-                if i == 0 or i == 2:  # Bot A (positive) and Bot C (negative)
-                    metrics["max_drawdown_pct"] = 5.0
                 wf = evaluate_from_aggregate_metrics(metrics)
             else:
                 from si_v2.evaluation.walk_forward_net_metrics import (
@@ -518,9 +521,13 @@ class TestEdgeCases:
 
     def test_annual_trade_count(self):
         """Large trade count (e.g., 500) is handled correctly."""
-        snap = _FakeSignalSnapshot(num_trades=500, profit_closed_coin=2500.0, profit_factor=1.2)
+        snap = _FakeSignalSnapshot(
+            num_trades=500,
+            profit_closed_coin=2500.0,
+            profit_factor=1.2,
+            max_drawdown_pct=5.0,
+        )
         metrics, _ = derive_aggregate_metrics(snap)
-        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
         assert result.total_trades == 500
@@ -531,10 +538,10 @@ class TestEdgeCases:
             num_trades=10,
             profit_closed_coin=100.0,
             profit_factor=0.0,  # not provided by Freqtrade
+            max_drawdown_pct=5.0,
         )
         metrics, _ = derive_aggregate_metrics(snap)
         assert metrics["profit_factor"] == 0.0
-        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW  # profit_factor not a blocker
         assert result.profit_factor == 0.0
@@ -547,7 +554,15 @@ class TestEdgeCases:
 
         snap2 = _FakeSignalSnapshot(num_trades=1, profit_closed_coin=10.0)
         _, source2 = derive_aggregate_metrics(snap2)
-        assert source2 == METRICS_SOURCE_REAL
+        assert source2 == METRICS_SOURCE_PARTIAL
+
+        snap3 = _FakeSignalSnapshot(
+            num_trades=1,
+            profit_closed_coin=10.0,
+            max_drawdown_pct=1.0,
+        )
+        _, source3 = derive_aggregate_metrics(snap3)
+        assert source3 == METRICS_SOURCE_REAL
 
 
 # ------------------------------------------------------------------
@@ -567,8 +582,8 @@ class TestMissingDrawdownBlocksPass:
             profit_factor=2.0,
         )
         metrics, _ = derive_aggregate_metrics(snap)
-        # Intentionally do NOT inject max_drawdown_pct -- adapter doesn't
-        # provide it, so evaluate_from_aggregate_metrics should detect absence.
+        # Intentionally leave max_drawdown_pct missing; adapter must omit it
+        # so evaluate_from_aggregate_metrics detects absence.
         assert "max_drawdown_pct" not in metrics
 
         result = evaluate_from_aggregate_metrics(metrics)
@@ -587,10 +602,11 @@ class TestMissingDrawdownBlocksPass:
             num_trades=20,
             profit_closed_coin=1000.0,
             profit_factor=2.0,
+            max_drawdown_pct=8.0,
         )
-        metrics, _ = derive_aggregate_metrics(snap)
-        # Inject real safe drawdown data
-        metrics["max_drawdown_pct"] = 8.0
+        metrics, source = derive_aggregate_metrics(snap)
+        assert source == METRICS_SOURCE_REAL
+        assert metrics["max_drawdown_pct"] == 8.0
 
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
@@ -644,13 +660,14 @@ class TestMultiBotMissingDrawdown:
 
     def test_multi_bot_mixed_drawdown(self):
         """Bot A complete positive -> may pass; Bot B positive but missing
-        drawdown -> blocked; Bot C negative PnL -> blocked; Bot D
+        drawdown -> blocked; Bot C high drawdown -> blocked; Bot D
         insufficient trades -> blocked."""
         snap_a = _FakeSignalSnapshot(
             bot_id="bot-a",
             num_trades=15,
             profit_closed_coin=500.0,
             profit_factor=1.8,
+            max_drawdown_pct=6.0,
         )
         snap_b = _FakeSignalSnapshot(
             bot_id="bot-b",
@@ -661,8 +678,9 @@ class TestMultiBotMissingDrawdown:
         snap_c = _FakeSignalSnapshot(
             bot_id="bot-c",
             num_trades=10,
-            profit_closed_coin=-50.0,
-            profit_factor=0.7,
+            profit_closed_coin=50.0,
+            profit_factor=1.3,
+            max_drawdown_pct=22.0,
         )
         snap_d = _FakeSignalSnapshot(
             bot_id="bot-d",
@@ -672,12 +690,8 @@ class TestMultiBotMissingDrawdown:
         )
 
         results = []
-        for i, snap in enumerate([snap_a, snap_b, snap_c, snap_d]):
+        for snap in (snap_a, snap_b, snap_c, snap_d):
             metrics, _ = derive_aggregate_metrics(snap)
-            if i == 0:
-                # Bot A: inject real drawdown
-                metrics["max_drawdown_pct"] = 6.0
-            # B, C, D: no drawdown, adapter does not provide it
             wf = evaluate_from_aggregate_metrics(metrics)
             results.append(wf)
 
@@ -690,11 +704,10 @@ class TestMultiBotMissingDrawdown:
         assert results[1].promotion_blocked is True
         assert REASON_CODE_MISSING_DRAWDOWN in results[1].promotion_block_reason_codes
 
-        # Bot C: negative PnL (and missing drawdown) -> blocked by missing
-        # drawdown (fires before PnL check)
-        assert results[2].evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
+        # Bot C: high real drawdown -> blocked with high-drawdown reason
+        assert results[2].evaluation_status == STATUS_NEGATIVE_NET_METRICS
         assert results[2].promotion_blocked is True
-        assert REASON_CODE_MISSING_DRAWDOWN in results[2].promotion_block_reason_codes
+        assert REASON_CODE_HIGH_DRAWDOWN in results[2].promotion_block_reason_codes
 
         # Bot D: insufficient trades -> blocked (drawdown check never reached)
         assert results[3].evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
@@ -739,15 +752,10 @@ class TestMetricsSourceLabeling:
             profit_closed_coin=1000.0,
             profit_factor=2.0,
         )
-        metrics, _ = derive_aggregate_metrics(snap)
+        metrics, source = derive_aggregate_metrics(snap)
         assert "max_drawdown_pct" not in metrics
-
-        # Simulate cycle runner labeling logic
-        has_drawdown = "max_drawdown_pct" in metrics
-        from si_v2.evaluation.aggregate_metrics_adapter import METRICS_SOURCE_PARTIAL, METRICS_SOURCE_REAL
-        source_label = METRICS_SOURCE_REAL if has_drawdown else METRICS_SOURCE_PARTIAL
-        assert source_label == METRICS_SOURCE_PARTIAL
-        assert source_label != METRICS_SOURCE_REAL
+        assert source == METRICS_SOURCE_PARTIAL
+        assert source != METRICS_SOURCE_REAL
 
         # Evaluation must also be blocked (metrics completeness gate)
         result = evaluate_from_aggregate_metrics(metrics)
@@ -760,16 +768,11 @@ class TestMetricsSourceLabeling:
             num_trades=20,
             profit_closed_coin=1000.0,
             profit_factor=2.0,
+            max_drawdown_pct=8.0,
         )
-        metrics, _ = derive_aggregate_metrics(snap)
-        # Inject real drawdown
-        metrics["max_drawdown_pct"] = 8.0
-
-        # Simulate cycle runner labeling logic
-        has_drawdown = "max_drawdown_pct" in metrics
-        from si_v2.evaluation.aggregate_metrics_adapter import METRICS_SOURCE_PARTIAL, METRICS_SOURCE_REAL
-        source_label = METRICS_SOURCE_REAL if has_drawdown else METRICS_SOURCE_PARTIAL
-        assert source_label == METRICS_SOURCE_REAL
+        metrics, source = derive_aggregate_metrics(snap)
+        assert metrics["max_drawdown_pct"] == 8.0
+        assert source == METRICS_SOURCE_REAL
 
         # Evaluation may pass review (positive metrics + real drawdown)
         result = evaluate_from_aggregate_metrics(metrics)

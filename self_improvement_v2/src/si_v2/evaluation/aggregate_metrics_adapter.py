@@ -18,9 +18,9 @@ Mapping:
   - ``num_trades`` (from /api/v1/profit) → ``total_trades`` (lifetime closed trades)
   - ``profit_closed_coin`` → ``total_net_pnl``
   - ``profit_factor`` → ``profit_factor``
-  - ``max_drawdown_pct`` → not mapped (not available from current signal
-    endpoints; evaluator will detect absence and block with
-    ``REASON_CODE_MISSING_DRAWDOWN``)
+  - ``max_drawdown_pct`` (from Freqtrade ``/api/v1/profit`` max_drawdown)
+    → ``max_drawdown_pct`` when present; omitted when unmeasured so the
+    evaluator blocks with ``REASON_CODE_MISSING_DRAWDOWN``
   - ``win_rate_pct`` → 0.0 (not available from current signal endpoints)
 """
 
@@ -58,16 +58,16 @@ def derive_aggregate_metrics(
     Args:
         signal_snapshot: A BotSignalSnapshot-like object with
             ``num_trades``, ``profit_closed_coin``, ``profit_factor``,
-            ``daily_trade_count_total``, ``profit_all_coin`` attributes,
-            or None.
+            ``max_drawdown_pct``, ``daily_trade_count_total``,
+            ``profit_all_coin`` attributes, or None.
 
     Returns:
         A tuple of (metrics_dict, source_tag):
             metrics_dict: dict suitable for ``evaluate_from_aggregate_metrics()``
                 with keys ``total_trades``, ``total_net_pnl``, ``total_fees``,
                 ``total_slippage``, ``total_funding``,
-                ``profit_factor``, ``win_rate_pct``. Returns None when no
-                usable data exists.
+                ``profit_factor``, ``win_rate_pct``, and optionally
+                ``max_drawdown_pct``. Returns None when no usable data exists.
             source_tag: One of ``METRICS_SOURCE_*`` constants.
     """
     if signal_snapshot is None:
@@ -77,6 +77,7 @@ def derive_aggregate_metrics(
     num_trades = _safe_int(signal_snapshot, "num_trades", 0)
     profit_closed_coin = _safe_float(signal_snapshot, "profit_closed_coin", 0.0)
     profit_factor = _safe_float(signal_snapshot, "profit_factor", 0.0)
+    max_drawdown_pct = _safe_optional_float(signal_snapshot, "max_drawdown_pct")
     daily_trade_count_total = _safe_int(
         signal_snapshot, "daily_trade_count_total", 0
     )
@@ -94,10 +95,14 @@ def derive_aggregate_metrics(
     if total_trades == 0 and total_net_pnl == 0.0 and profit_factor == 0.0:
         return None, METRICS_SOURCE_MISSING
 
-    # If trades exist but too few for meaningful evaluation,
-    # still return the metrics so the evaluator can produce
-    # INSUFFICIENT_EVIDENCE with accurate trade count metadata.
-    source_tag = METRICS_SOURCE_REAL if total_trades > 0 else METRICS_SOURCE_INSUFFICIENT
+    # If trades exist but drawdown is absent, still return the metrics so the
+    # evaluator can block specifically with walk_forward_missing_drawdown.
+    if total_trades <= 0:
+        source_tag = METRICS_SOURCE_INSUFFICIENT
+    elif max_drawdown_pct is None:
+        source_tag = METRICS_SOURCE_PARTIAL
+    else:
+        source_tag = METRICS_SOURCE_REAL
 
     metrics: dict[str, object] = {
         "total_trades": total_trades,
@@ -108,6 +113,9 @@ def derive_aggregate_metrics(
         "profit_factor": profit_factor,
         "win_rate_pct": 0.0,
     }
+
+    if max_drawdown_pct is not None:
+        metrics["max_drawdown_pct"] = max_drawdown_pct
 
     return metrics, source_tag
 
@@ -133,3 +141,11 @@ def _safe_float(obj: object, attr: str, default: float) -> float:
     if isinstance(val, (int, float)):
         return float(val)
     return default
+
+
+def _safe_optional_float(obj: object, attr: str) -> float | None:
+    """Safely extract an optional float attribute from a duck-typed object."""
+    val = getattr(obj, attr, None)
+    if isinstance(val, (int, float)):
+        return float(val)
+    return None
