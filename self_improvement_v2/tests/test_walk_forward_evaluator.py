@@ -269,6 +269,49 @@ class TestFromAggregateMetrics:
         assert result.promotion_blocked is True
         assert REASON_CODE_MISSING_DRAWDOWN in result.promotion_block_reason_codes
 
+    def test_positive_metrics_missing_drawdown_blocks_specific_reason(self) -> None:
+        """Positive PnL + enough trades cannot pass without measured drawdown."""
+        result = evaluate_from_aggregate_metrics({
+            "total_trades": 20,
+            "total_net_pnl": 1000.0,
+            "profit_factor": 2.0,
+            "win_rate_pct": 60.0,
+        })
+
+        assert result.evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
+        assert result.promotion_blocked is True
+        assert result.total_trades == 20
+        assert result.total_net_pnl == 1000.0
+        assert REASON_CODE_MISSING_DRAWDOWN in result.promotion_block_reason_codes
+
+    def test_positive_metrics_with_safe_real_drawdown_pass_review(self) -> None:
+        """Positive PnL + enough trades + safe real drawdown may pass review."""
+        result = evaluate_from_aggregate_metrics({
+            "total_trades": 20,
+            "total_net_pnl": 1000.0,
+            "profit_factor": 2.0,
+            "win_rate_pct": 60.0,
+            "max_drawdown_pct": 8.0,
+        })
+
+        assert result.evaluation_status == STATUS_PASS_REVIEW
+        assert result.promotion_blocked is False
+        assert result.promotion_block_reason_codes == []
+
+    def test_high_real_drawdown_blocks_specific_reason(self) -> None:
+        """Real drawdown above threshold blocks even with positive PnL."""
+        result = evaluate_from_aggregate_metrics({
+            "total_trades": 20,
+            "total_net_pnl": 1000.0,
+            "profit_factor": 2.0,
+            "win_rate_pct": 60.0,
+            "max_drawdown_pct": 22.0,
+        })
+
+        assert result.evaluation_status == STATUS_NEGATIVE_NET_METRICS
+        assert result.promotion_blocked is True
+        assert REASON_CODE_HIGH_DRAWDOWN in result.promotion_block_reason_codes
+
 
 # =========================================================================
 # 7. Edge cases

@@ -1205,8 +1205,6 @@ def run_active_cycle() -> int:
     # available, with safe fallback to INSUFFICIENT_EVIDENCE.
     from si_v2.evaluation.aggregate_metrics_adapter import (
         METRICS_SOURCE_NOT_APPLICABLE,
-        METRICS_SOURCE_PARTIAL,
-        METRICS_SOURCE_REAL,
         derive_aggregate_metrics,
     )
     from si_v2.evaluation.walk_forward_net_metrics import (
@@ -1230,10 +1228,7 @@ def run_active_cycle() -> int:
             if agg_metrics is not None:
                 wf_eval = evaluate_from_aggregate_metrics(agg_metrics)
                 sr[wf_key] = wf_eval.to_dict()
-                has_drawdown = "max_drawdown_pct" in agg_metrics
-                sr[wf_key]["metrics_source"] = (
-                    METRICS_SOURCE_REAL if has_drawdown else METRICS_SOURCE_PARTIAL
-                )
+                sr[wf_key]["metrics_source"] = source_tag
             else:
                 # No usable trade evidence — fall back to INSUFFICIENT_EVIDENCE
                 from si_v2.evaluation.walk_forward_net_metrics import (

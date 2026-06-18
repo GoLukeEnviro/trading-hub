@@ -9,7 +9,11 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
-from si_v2.signals.freqtrade_signals import collect_bot_signals
+from si_v2.adapters.freqtrade_rest_readonly import (
+    ALLOWED_GET_ENDPOINTS,
+    ALLOWED_POST_ENDPOINTS,
+)
+from si_v2.signals.freqtrade_signals import _SIGNAL_ENDPOINTS, collect_bot_signals
 from si_v2.signals.fusion import build_proposal_evidence, fuse_signals
 from si_v2.signals.models import (
     BotSignalSnapshot,
@@ -17,6 +21,19 @@ from si_v2.signals.models import (
     SignalAvailability,
     SignalQuality,
 )
+
+
+def test_signal_collection_uses_readonly_allowlisted_endpoints_only() -> None:
+    """Drawdown wiring must not add mutating Freqtrade endpoints."""
+    assert set(_SIGNAL_ENDPOINTS).issubset(ALLOWED_GET_ENDPOINTS)
+    assert "/api/v1/profit" in _SIGNAL_ENDPOINTS
+    assert frozenset({"/api/v1/token/login"}) == ALLOWED_POST_ENDPOINTS
+    forbidden_mutating_fragments = ("/force", "/buy", "/sell", "/cancel", "/trade")
+    assert not any(
+        fragment in endpoint
+        for endpoint in _SIGNAL_ENDPOINTS
+        for fragment in forbidden_mutating_fragments
+    )
 
 
 class TestCollectBotSignals:
@@ -30,6 +47,7 @@ class TestCollectBotSignals:
 
         def fetch_side_effect(endpoint: str):
             mock_snap = MagicMock()
+            mock_snap.response_json = None
             if endpoint in available_eps:
                 mock_snap.ok = True
                 mock_snap.status_code = 200
@@ -47,7 +65,9 @@ class TestCollectBotSignals:
                     mock_snap.response_summary = json.dumps(
                         {"profit_closed_percent": 2.3, "profit_all_percent": 1.5,
                          "profit_all_ratio": 0.015, "profit_closed_coin": 22.0,
-                         "profit_all_coin": 21.8, "bot_start_date": "2026-01-01"}
+                         "profit_all_coin": 21.8, "closed_trade_count": 9,
+                         "profit_factor": 1.7, "max_drawdown": 0.0825,
+                         "bot_start_date": "2026-01-01"}
                     )
                 elif endpoint == "/api/v1/performance":
                     mock_snap.response_summary = json.dumps([
@@ -89,8 +109,47 @@ class TestCollectBotSignals:
         assert snap.auth_outcome == "AUTHENTICATED"
         assert snap.signal_depth == 1.0
         assert snap.profit_closed_percent == 2.3
+        assert snap.num_trades == 9
+        assert snap.profit_factor == 1.7
+        assert abs((snap.max_drawdown_pct or 0.0) - 8.25) < 1e-9
         assert snap.performance_top_pair == "ETH/USDT"  # ETH has higher profit_pct (1.32 > 1.27)
         assert snap.whitelist_pair_count == 2
+
+    def test_profit_response_json_drawdown_survives_truncated_summary(self) -> None:
+        """Parsed response_json is the real source for /profit drawdown fields."""
+        connector = self.make_mock_connector({
+            "/api/v1/ping", "/api/v1/status", "/api/v1/count",
+            "/api/v1/profit",
+        })
+
+        def fetch_side_effect(endpoint: str):
+            mock_snap = MagicMock()
+            mock_snap.ok = True
+            mock_snap.status_code = 200
+            mock_snap.response_json = None
+            mock_snap.response_summary = "{}"
+            if endpoint == "/api/v1/profit":
+                mock_snap.response_summary = '{"profit_closed_coin": 125.0, ... [truncated]'
+                mock_snap.response_json = {
+                    "profit_closed_coin": 125.0,
+                    "profit_closed_percent": 3.0,
+                    "profit_all_coin": 130.0,
+                    "profit_all_percent": 3.2,
+                    "profit_all_ratio": 0.032,
+                    "closed_trade_count": 12,
+                    "profit_factor": 2.1,
+                    "max_drawdown": 0.045,
+                    "bot_start_date": "2026-01-01",
+                }
+            return mock_snap
+
+        connector.fetch_snapshot.side_effect = fetch_side_effect
+        snap = collect_bot_signals(connector, "test-bot", "test-cycle")
+
+        assert snap.num_trades == 12
+        assert snap.profit_closed_coin == 125.0
+        assert snap.profit_factor == 2.1
+        assert snap.max_drawdown_pct == 4.5
 
     def test_only_ping_and_status(self) -> None:
         connector = self.make_mock_connector({"/api/v1/ping", "/api/v1/status"})
@@ -126,6 +185,16 @@ class TestCollectBotSignals:
         assert "password" not in text.lower()
         assert "secret" not in text.lower()
         assert "access_token" not in text.lower()
+
+    def test_to_json_safe_preserves_missing_drawdown_as_null(self) -> None:
+        """Missing max_drawdown_pct must serialize as None, never 0.0."""
+        connector = self.make_mock_connector({"/api/v1/ping", "/api/v1/status"})
+        snap = collect_bot_signals(connector, "test-bot", "test-cycle")
+        safe = snap.to_json_safe()
+
+        assert "max_drawdown_pct" in safe
+        assert safe["max_drawdown_pct"] is None
+        assert safe["max_drawdown_pct"] != 0.0
 
 
 class TestBuildProposalEvidence:
