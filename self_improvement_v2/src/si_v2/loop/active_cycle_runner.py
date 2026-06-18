@@ -1203,15 +1203,15 @@ def run_active_cycle() -> int:
     # Inject walk_forward_net_metrics into each safety result for
     # downstream persistence. Uses real per-bot signal snapshots when
     # available, with safe fallback to INSUFFICIENT_EVIDENCE.
+    from si_v2.evaluation.aggregate_metrics_adapter import (
+        METRICS_SOURCE_NOT_APPLICABLE,
+        METRICS_SOURCE_PARTIAL,
+        METRICS_SOURCE_REAL,
+        derive_aggregate_metrics,
+    )
     from si_v2.evaluation.walk_forward_net_metrics import (
         default_no_proposal_evaluation,
         evaluate_from_aggregate_metrics,
-    )
-    from si_v2.evaluation.aggregate_metrics_adapter import (
-        derive_aggregate_metrics,
-        METRICS_SOURCE_REAL,
-        METRICS_SOURCE_MISSING,
-        METRICS_SOURCE_NOT_APPLICABLE,
     )
 
     _wf_metrics_added = 0
@@ -1230,13 +1230,16 @@ def run_active_cycle() -> int:
             if agg_metrics is not None:
                 wf_eval = evaluate_from_aggregate_metrics(agg_metrics)
                 sr[wf_key] = wf_eval.to_dict()
-                sr[wf_key]["metrics_source"] = METRICS_SOURCE_REAL
+                has_drawdown = "max_drawdown_pct" in agg_metrics
+                sr[wf_key]["metrics_source"] = (
+                    METRICS_SOURCE_REAL if has_drawdown else METRICS_SOURCE_PARTIAL
+                )
             else:
                 # No usable trade evidence — fall back to INSUFFICIENT_EVIDENCE
                 from si_v2.evaluation.walk_forward_net_metrics import (
-                    WalkForwardEvaluation,
-                    STATUS_INSUFFICIENT_EVIDENCE,
                     REASON_CODE_INSUFFICIENT_EVIDENCE,
+                    STATUS_INSUFFICIENT_EVIDENCE,
+                    WalkForwardEvaluation,
                 )
                 sr[wf_key] = WalkForwardEvaluation(
                     evaluation_status=STATUS_INSUFFICIENT_EVIDENCE,

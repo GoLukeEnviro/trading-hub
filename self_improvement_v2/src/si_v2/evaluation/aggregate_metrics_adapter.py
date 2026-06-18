@@ -26,7 +26,6 @@ Mapping:
 
 from __future__ import annotations
 
-
 # ------------------------------------------------------------------
 # Source tags
 # ------------------------------------------------------------------
@@ -41,6 +40,9 @@ METRICS_SOURCE_INSUFFICIENT: str = "insufficient"
 
 METRICS_SOURCE_NOT_APPLICABLE: str = "not_applicable"
 """Called for NO_PROPOSAL decisions — no metrics to evaluate."""
+
+METRICS_SOURCE_PARTIAL: str = "partial"
+"""Metrics exist but drawdown data (max_drawdown_pct) is not available."""
 
 
 # ------------------------------------------------------------------

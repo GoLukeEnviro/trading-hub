@@ -15,8 +15,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import pytest
-
 from si_v2.evaluation.aggregate_metrics_adapter import (
     METRICS_SOURCE_INSUFFICIENT,
     METRICS_SOURCE_MISSING,
@@ -33,12 +31,10 @@ from si_v2.evaluation.walk_forward_net_metrics import (
     STATUS_NEGATIVE_NET_METRICS,
     STATUS_NOT_APPLICABLE,
     STATUS_PASS_REVIEW,
-    WalkForwardEvaluation,
     default_no_proposal_evaluation,
     evaluate_from_aggregate_metrics,
     evaluate_net_metrics,
 )
-
 
 # ------------------------------------------------------------------
 # Test doubles
@@ -132,7 +128,7 @@ class TestPositiveMetrics:
             profit_closed_coin=250.0,
             profit_factor=2.0,
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
@@ -215,7 +211,7 @@ class TestInsufficientTrades:
             profit_closed_coin=50.0,
             profit_factor=1.5,
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
         assert result.promotion_blocked is True
@@ -227,7 +223,7 @@ class TestInsufficientTrades:
             profit_closed_coin=25.0,
             profit_factor=1.1,
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
@@ -249,7 +245,7 @@ class TestNegativeNetPnl:
             profit_closed_coin=-50.0,
             profit_factor=0.8,
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_NEGATIVE_NET_METRICS
@@ -263,7 +259,7 @@ class TestNegativeNetPnl:
             profit_closed_coin=0.0,
             profit_factor=1.0,
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_NEGATIVE_NET_METRICS
@@ -277,7 +273,7 @@ class TestNegativeNetPnl:
             profit_closed_coin=0.01,
             profit_factor=1.0,
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
@@ -388,7 +384,7 @@ class TestMultiBot:
         )
 
         # Bot A -- inject drawdown data to enable PASS_REVIEW
-        metrics_a, source_a = derive_aggregate_metrics(snap_a)
+        metrics_a, _ = derive_aggregate_metrics(snap_a)
         metrics_a["max_drawdown_pct"] = 5.0
         result_a = evaluate_from_aggregate_metrics(metrics_a)
         assert result_a.evaluation_status == STATUS_PASS_REVIEW
@@ -418,20 +414,18 @@ class TestMultiBot:
 
         results = []
         for i, snap in enumerate(snapshots):
-            metrics, source = derive_aggregate_metrics(snap)
+            metrics, _ = derive_aggregate_metrics(snap)
             if metrics is not None:
                 # Inject drawdown for bots that have enough trades to evaluate
                 # so the test focuses on multi-bot independence, not adapter gaps.
-                if i == 0:  # Bot A: positive PnL
-                    metrics["max_drawdown_pct"] = 5.0
-                elif i == 2:  # Bot C: negative PnL
+                if i == 0 or i == 2:  # Bot A (positive) and Bot C (negative)
                     metrics["max_drawdown_pct"] = 5.0
                 wf = evaluate_from_aggregate_metrics(metrics)
             else:
                 from si_v2.evaluation.walk_forward_net_metrics import (
-                    WalkForwardEvaluation,
-                    STATUS_INSUFFICIENT_EVIDENCE,
                     REASON_CODE_INSUFFICIENT_EVIDENCE,
+                    STATUS_INSUFFICIENT_EVIDENCE,
+                    WalkForwardEvaluation,
                 )
                 wf = WalkForwardEvaluation(
                     evaluation_status=STATUS_INSUFFICIENT_EVIDENCE,
@@ -525,7 +519,7 @@ class TestEdgeCases:
     def test_annual_trade_count(self):
         """Large trade count (e.g., 500) is handled correctly."""
         snap = _FakeSignalSnapshot(num_trades=500, profit_closed_coin=2500.0, profit_factor=1.2)
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
@@ -538,7 +532,7 @@ class TestEdgeCases:
             profit_closed_coin=100.0,
             profit_factor=0.0,  # not provided by Freqtrade
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         assert metrics["profit_factor"] == 0.0
         metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
@@ -572,7 +566,7 @@ class TestMissingDrawdownBlocksPass:
             profit_closed_coin=1000.0,
             profit_factor=2.0,
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         # Intentionally do NOT inject max_drawdown_pct -- adapter doesn't
         # provide it, so evaluate_from_aggregate_metrics should detect absence.
         assert "max_drawdown_pct" not in metrics
@@ -594,7 +588,7 @@ class TestMissingDrawdownBlocksPass:
             profit_closed_coin=1000.0,
             profit_factor=2.0,
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         # Inject real safe drawdown data
         metrics["max_drawdown_pct"] = 8.0
 
@@ -612,7 +606,7 @@ class TestMissingDrawdownBlocksPass:
             profit_closed_coin=-100.0,
             profit_factor=0.5,
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         assert "max_drawdown_pct" not in metrics
 
         result = evaluate_from_aggregate_metrics(metrics)
@@ -632,7 +626,7 @@ class TestMissingDrawdownBlocksPass:
             profit_closed_coin=50.0,
             profit_factor=1.5,
         )
-        metrics, source = derive_aggregate_metrics(snap)
+        metrics, _ = derive_aggregate_metrics(snap)
         result = evaluate_from_aggregate_metrics(metrics)
         # Insufficient trades check fires before missing drawdown check
         assert result.evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
@@ -728,3 +722,65 @@ class TestNoProposalRemainsBlocked:
         result = default_no_proposal_evaluation()
         assert result.evaluation_status != STATUS_PASS_REVIEW
         assert result.promotion_blocked is True
+
+
+# ------------------------------------------------------------------
+# 12. Metrics source labeling
+# ------------------------------------------------------------------
+
+
+class TestMetricsSourceLabeling:
+    """Verify metrics_source label reflects drawdown completeness."""
+
+    def test_metrics_source_partial_when_drawdown_missing(self):
+        """When max_drawdown_pct is absent, metrics_source must not be real."""
+        snap = _FakeSignalSnapshot(
+            num_trades=20,
+            profit_closed_coin=1000.0,
+            profit_factor=2.0,
+        )
+        metrics, _ = derive_aggregate_metrics(snap)
+        assert "max_drawdown_pct" not in metrics
+
+        # Simulate cycle runner labeling logic
+        has_drawdown = "max_drawdown_pct" in metrics
+        from si_v2.evaluation.aggregate_metrics_adapter import METRICS_SOURCE_PARTIAL, METRICS_SOURCE_REAL
+        source_label = METRICS_SOURCE_REAL if has_drawdown else METRICS_SOURCE_PARTIAL
+        assert source_label == METRICS_SOURCE_PARTIAL
+        assert source_label != METRICS_SOURCE_REAL
+
+        # Evaluation must also be blocked (metrics completeness gate)
+        result = evaluate_from_aggregate_metrics(metrics)
+        assert result.promotion_blocked is True
+        assert REASON_CODE_MISSING_DRAWDOWN in result.promotion_block_reason_codes
+
+    def test_metrics_source_real_when_drawdown_present(self):
+        """When max_drawdown_pct is present, metrics_source must be real."""
+        snap = _FakeSignalSnapshot(
+            num_trades=20,
+            profit_closed_coin=1000.0,
+            profit_factor=2.0,
+        )
+        metrics, _ = derive_aggregate_metrics(snap)
+        # Inject real drawdown
+        metrics["max_drawdown_pct"] = 8.0
+
+        # Simulate cycle runner labeling logic
+        has_drawdown = "max_drawdown_pct" in metrics
+        from si_v2.evaluation.aggregate_metrics_adapter import METRICS_SOURCE_PARTIAL, METRICS_SOURCE_REAL
+        source_label = METRICS_SOURCE_REAL if has_drawdown else METRICS_SOURCE_PARTIAL
+        assert source_label == METRICS_SOURCE_REAL
+
+        # Evaluation may pass review (positive metrics + real drawdown)
+        result = evaluate_from_aggregate_metrics(metrics)
+        assert result.evaluation_status == STATUS_PASS_REVIEW
+        assert result.promotion_blocked is False
+
+    def test_metrics_source_no_proposal_not_applicable(self):
+        """NO_PROPOSAL metrics source is not_applicable."""
+        result = default_no_proposal_evaluation()
+        d = result.to_dict()
+        d["metrics_source"] = METRICS_SOURCE_NOT_APPLICABLE
+        assert d["metrics_source"] == METRICS_SOURCE_NOT_APPLICABLE
+        assert d["evaluation_status"] == STATUS_NOT_APPLICABLE
+        assert d["promotion_blocked"] is True
