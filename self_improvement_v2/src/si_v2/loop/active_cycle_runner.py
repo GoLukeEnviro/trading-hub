@@ -1199,6 +1199,36 @@ def run_active_cycle() -> int:
 
     print(f"  safety evaluations:   {len(safety_results)}")
 
+    # ── Walk-Forward Net Metrics enrichment ────────────────────────────
+    # Inject walk_forward_net_metrics into each safety result for
+    # downstream persistence. Currently defaults to INSUFFICIENT_EVIDENCE
+    # since the cycle collects ping/status evidence, not trade data.
+    # Future cycles can pass real AggregateMetrics when trade data is
+    # available in the observation pipeline.
+    from si_v2.evaluation.walk_forward_net_metrics import (
+        default_no_proposal_evaluation,
+        evaluate_net_metrics,
+    )
+
+    _wf_metrics_added = 0
+    for sr in safety_results:
+        if not isinstance(sr, dict):
+            continue
+        wf_key = "walk_forward_net_metrics"
+        if sr.get("decision_type") == "NO_PROPOSAL":
+            sr[wf_key] = default_no_proposal_evaluation().to_dict()
+        else:
+            # SHADOW_PROPOSAL — evaluate with whatever evidence is available
+            # Currently no trade data flows through the cycle runner, so
+            # this defaults to INSUFFICIENT_EVIDENCE. When walk-forward
+            # backtest data becomes available, pass the metrics here.
+            sr[wf_key] = evaluate_net_metrics(
+                total_trades=0,  # no trade evidence yet
+                min_trades=5,
+            ).to_dict()
+        _wf_metrics_added += 1
+    print(f"  walk_forward_net_metrics injected: {_wf_metrics_added}")
+
     # ------------------------------------------------------------------
     # Step 5: Persist artifacts
     # ------------------------------------------------------------------
@@ -1240,6 +1270,12 @@ def run_active_cycle() -> int:
         pd["approval_status"] = next(
             (s["approval_status"] for s in safety_results if s["bot_id"] == pd.get("bot_id")),
             "BLOCKED_INSUFFICIENT_HISTORY",
+        )
+        # Inject walk_forward_net_metrics from safety_results
+        _wf_key = "walk_forward_net_metrics"
+        pd[_wf_key] = next(
+            (s.get(_wf_key, {}) for s in safety_results if s["bot_id"] == pd.get("bot_id")),
+            {},
         )
 
     evidence_bundle: dict[str, object] = {
