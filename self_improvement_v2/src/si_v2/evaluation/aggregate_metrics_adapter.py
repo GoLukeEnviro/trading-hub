@@ -18,7 +18,9 @@ Mapping:
   - ``num_trades`` (from /api/v1/profit) → ``total_trades`` (lifetime closed trades)
   - ``profit_closed_coin`` → ``total_net_pnl``
   - ``profit_factor`` → ``profit_factor``
-  - ``max_drawdown_pct`` → 0.0 (not available from current signal endpoints)
+  - ``max_drawdown_pct`` → not mapped (not available from current signal
+    endpoints; evaluator will detect absence and block with
+    ``REASON_CODE_MISSING_DRAWDOWN``)
   - ``win_rate_pct`` → 0.0 (not available from current signal endpoints)
 """
 
@@ -61,7 +63,7 @@ def derive_aggregate_metrics(
         A tuple of (metrics_dict, source_tag):
             metrics_dict: dict suitable for ``evaluate_from_aggregate_metrics()``
                 with keys ``total_trades``, ``total_net_pnl``, ``total_fees``,
-                ``total_slippage``, ``total_funding``, ``max_drawdown_pct``,
+                ``total_slippage``, ``total_funding``,
                 ``profit_factor``, ``win_rate_pct``. Returns None when no
                 usable data exists.
             source_tag: One of ``METRICS_SOURCE_*`` constants.
@@ -101,7 +103,6 @@ def derive_aggregate_metrics(
         "total_fees": 0,
         "total_slippage": 0,
         "total_funding": 0,
-        "max_drawdown_pct": 0.0,
         "profit_factor": profit_factor,
         "win_rate_pct": 0.0,
     }

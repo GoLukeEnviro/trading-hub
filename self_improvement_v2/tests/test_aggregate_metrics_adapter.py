@@ -27,6 +27,7 @@ from si_v2.evaluation.aggregate_metrics_adapter import (
 from si_v2.evaluation.walk_forward_net_metrics import (
     REASON_CODE_HIGH_DRAWDOWN,
     REASON_CODE_INSUFFICIENT_EVIDENCE,
+    REASON_CODE_MISSING_DRAWDOWN,
     REASON_CODE_NEGATIVE_NET_METRICS,
     STATUS_INSUFFICIENT_EVIDENCE,
     STATUS_NEGATIVE_NET_METRICS,
@@ -83,7 +84,7 @@ class _FakeSignalSnapshot:
 
 
 class TestPositiveMetrics:
-    """Sufficient trades, positive PnL → PASS_REVIEW, not promotion_blocked."""
+    """Sufficient trades, positive PnL, real drawdown data -> PASS_REVIEW."""
 
     def test_positive_net_pnl_passes_review(self):
         """Real positive metrics yield PASS_REVIEW and promotion_blocked=False."""
@@ -98,6 +99,8 @@ class TestPositiveMetrics:
         assert metrics["total_trades"] == 10
         assert metrics["total_net_pnl"] == 150.0
         assert metrics["profit_factor"] == 1.8
+        # Inject real drawdown data -- adapter does not provide it yet
+        metrics["max_drawdown_pct"] = 5.0
 
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
@@ -116,6 +119,7 @@ class TestPositiveMetrics:
         assert source == METRICS_SOURCE_REAL
         assert metrics is not None
         assert metrics["total_trades"] == 7
+        metrics["max_drawdown_pct"] = 5.0
 
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
@@ -129,10 +133,11 @@ class TestPositiveMetrics:
             profit_factor=2.0,
         )
         metrics, source = derive_aggregate_metrics(snap)
+        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
         assert result.promotion_blocked is False
-        # Caller must still enforce PENDING_HUMAN — no auto-approval field exists
+        # Caller must still enforce PENDING_HUMAN -- no auto-approval field exists
 
 
 # ------------------------------------------------------------------
@@ -223,6 +228,7 @@ class TestInsufficientTrades:
             profit_factor=1.1,
         )
         metrics, source = derive_aggregate_metrics(snap)
+        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
         assert result.promotion_blocked is False
@@ -244,6 +250,7 @@ class TestNegativeNetPnl:
             profit_factor=0.8,
         )
         metrics, source = derive_aggregate_metrics(snap)
+        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_NEGATIVE_NET_METRICS
         assert result.promotion_blocked is True
@@ -257,6 +264,7 @@ class TestNegativeNetPnl:
             profit_factor=1.0,
         )
         metrics, source = derive_aggregate_metrics(snap)
+        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_NEGATIVE_NET_METRICS
         assert result.promotion_blocked is True
@@ -270,6 +278,7 @@ class TestNegativeNetPnl:
             profit_factor=1.0,
         )
         metrics, source = derive_aggregate_metrics(snap)
+        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
         assert result.promotion_blocked is False
@@ -378,13 +387,14 @@ class TestMultiBot:
             profit_factor=0.5,
         )
 
-        # Bot A
+        # Bot A -- inject drawdown data to enable PASS_REVIEW
         metrics_a, source_a = derive_aggregate_metrics(snap_a)
+        metrics_a["max_drawdown_pct"] = 5.0
         result_a = evaluate_from_aggregate_metrics(metrics_a)
         assert result_a.evaluation_status == STATUS_PASS_REVIEW
         assert result_a.promotion_blocked is False
 
-        # Bot B — few trades, negative PnL
+        # Bot B -- few trades, negative PnL
         metrics_b, source_b = derive_aggregate_metrics(snap_b)
         assert source_b == METRICS_SOURCE_REAL  # has some data, just insufficient
         result_b = evaluate_from_aggregate_metrics(metrics_b)
@@ -407,9 +417,15 @@ class TestMultiBot:
         ]
 
         results = []
-        for snap in snapshots:
+        for i, snap in enumerate(snapshots):
             metrics, source = derive_aggregate_metrics(snap)
             if metrics is not None:
+                # Inject drawdown for bots that have enough trades to evaluate
+                # so the test focuses on multi-bot independence, not adapter gaps.
+                if i == 0:  # Bot A: positive PnL
+                    metrics["max_drawdown_pct"] = 5.0
+                elif i == 2:  # Bot C: negative PnL
+                    metrics["max_drawdown_pct"] = 5.0
                 wf = evaluate_from_aggregate_metrics(metrics)
             else:
                 from si_v2.evaluation.walk_forward_net_metrics import (
@@ -424,13 +440,13 @@ class TestMultiBot:
                 )
             results.append((snap.bot_id, wf.evaluation_status, wf.promotion_blocked))
 
-        # Bot A: PASS_REVIEW, not blocked
+        # Bot A: PASS_REVIEW, not blocked (positive PnL, enough trades, drawdown provided)
         assert results[0] == (bot_ids[0], STATUS_PASS_REVIEW, False)
         # Bot B: INSUFFICIENT (zero data)
         assert results[1][0] == bot_ids[1]
         assert results[1][1] == STATUS_INSUFFICIENT_EVIDENCE
         assert results[1][2] is True
-        # Bot C: NEGATIVE_NET_METRICS (negative PnL, enough trades)
+        # Bot C: NEGATIVE_NET_METRICS (negative PnL, enough trades, drawdown provided)
         assert results[2][0] == bot_ids[2]
         assert results[2][1] == STATUS_NEGATIVE_NET_METRICS
         assert results[2][2] is True
@@ -510,6 +526,7 @@ class TestEdgeCases:
         """Large trade count (e.g., 500) is handled correctly."""
         snap = _FakeSignalSnapshot(num_trades=500, profit_closed_coin=2500.0, profit_factor=1.2)
         metrics, source = derive_aggregate_metrics(snap)
+        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW
         assert result.total_trades == 500
@@ -523,6 +540,7 @@ class TestEdgeCases:
         )
         metrics, source = derive_aggregate_metrics(snap)
         assert metrics["profit_factor"] == 0.0
+        metrics["max_drawdown_pct"] = 5.0
         result = evaluate_from_aggregate_metrics(metrics)
         assert result.evaluation_status == STATUS_PASS_REVIEW  # profit_factor not a blocker
         assert result.profit_factor == 0.0
@@ -536,3 +554,177 @@ class TestEdgeCases:
         snap2 = _FakeSignalSnapshot(num_trades=1, profit_closed_coin=10.0)
         _, source2 = derive_aggregate_metrics(snap2)
         assert source2 == METRICS_SOURCE_REAL
+
+
+# ------------------------------------------------------------------
+# 9. Missing drawdown blocks PASS_REVIEW
+# ------------------------------------------------------------------
+
+
+class TestMissingDrawdownBlocksPass:
+    """Missing max_drawdown_pct must block PASS_REVIEW."""
+
+    def test_positive_all_but_missing_drawdown_blocks(self):
+        """Positive PnL + enough trades + good profit factor but missing
+        drawdown -> must not produce unblocked PASS_REVIEW."""
+        snap = _FakeSignalSnapshot(
+            num_trades=20,
+            profit_closed_coin=1000.0,
+            profit_factor=2.0,
+        )
+        metrics, source = derive_aggregate_metrics(snap)
+        # Intentionally do NOT inject max_drawdown_pct -- adapter doesn't
+        # provide it, so evaluate_from_aggregate_metrics should detect absence.
+        assert "max_drawdown_pct" not in metrics
+
+        result = evaluate_from_aggregate_metrics(metrics)
+        assert result.evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
+        assert result.promotion_blocked is True
+        assert REASON_CODE_MISSING_DRAWDOWN in result.promotion_block_reason_codes
+        # Still carries available metric metadata
+        assert result.total_trades == 20
+        assert result.total_net_pnl == 1000.0
+        assert result.profit_factor == 2.0
+
+    def test_positive_all_with_real_drawdown_may_pass(self):
+        """Positive PnL + enough trades + profit factor + real safe drawdown
+        -> may produce PASS_REVIEW (still requires human approval)."""
+        snap = _FakeSignalSnapshot(
+            num_trades=20,
+            profit_closed_coin=1000.0,
+            profit_factor=2.0,
+        )
+        metrics, source = derive_aggregate_metrics(snap)
+        # Inject real safe drawdown data
+        metrics["max_drawdown_pct"] = 8.0
+
+        result = evaluate_from_aggregate_metrics(metrics)
+        assert result.evaluation_status == STATUS_PASS_REVIEW
+        assert result.promotion_blocked is False
+        # Still requires human approval -- no auto-apply field exists
+        assert result.promotion_block_reason_codes == []
+
+    def test_missing_drawdown_with_negative_pnl(self):
+        """Missing drawdown + negative PnL -> blocked by missing drawdown
+        (fires before PnL check)."""
+        snap = _FakeSignalSnapshot(
+            num_trades=10,
+            profit_closed_coin=-100.0,
+            profit_factor=0.5,
+        )
+        metrics, source = derive_aggregate_metrics(snap)
+        assert "max_drawdown_pct" not in metrics
+
+        result = evaluate_from_aggregate_metrics(metrics)
+        # Missing drawdown check fires before negative PnL check
+        assert result.evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
+        assert result.promotion_blocked is True
+        assert REASON_CODE_MISSING_DRAWDOWN in result.promotion_block_reason_codes
+        # Still carries available metric metadata
+        assert result.total_trades == 10
+        assert result.total_net_pnl == -100.0
+
+    def test_missing_drawdown_with_few_trades(self):
+        """Missing drawdown + insufficient trades -> blocked by insufficient
+        trades (fires before missing drawdown check)."""
+        snap = _FakeSignalSnapshot(
+            num_trades=3,
+            profit_closed_coin=50.0,
+            profit_factor=1.5,
+        )
+        metrics, source = derive_aggregate_metrics(snap)
+        result = evaluate_from_aggregate_metrics(metrics)
+        # Insufficient trades check fires before missing drawdown check
+        assert result.evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
+        assert result.promotion_blocked is True
+        assert REASON_CODE_INSUFFICIENT_EVIDENCE in result.promotion_block_reason_codes
+
+
+# ------------------------------------------------------------------
+# 10. Multi-bot missing drawdown scenarios
+# ------------------------------------------------------------------
+
+
+class TestMultiBotMissingDrawdown:
+    """Multi-bot evaluation with mixed drawdown completeness."""
+
+    def test_multi_bot_mixed_drawdown(self):
+        """Bot A complete positive -> may pass; Bot B positive but missing
+        drawdown -> blocked; Bot C negative PnL -> blocked; Bot D
+        insufficient trades -> blocked."""
+        snap_a = _FakeSignalSnapshot(
+            bot_id="bot-a",
+            num_trades=15,
+            profit_closed_coin=500.0,
+            profit_factor=1.8,
+        )
+        snap_b = _FakeSignalSnapshot(
+            bot_id="bot-b",
+            num_trades=10,
+            profit_closed_coin=200.0,
+            profit_factor=1.5,
+        )
+        snap_c = _FakeSignalSnapshot(
+            bot_id="bot-c",
+            num_trades=10,
+            profit_closed_coin=-50.0,
+            profit_factor=0.7,
+        )
+        snap_d = _FakeSignalSnapshot(
+            bot_id="bot-d",
+            num_trades=3,
+            profit_closed_coin=10.0,
+            profit_factor=1.2,
+        )
+
+        results = []
+        for i, snap in enumerate([snap_a, snap_b, snap_c, snap_d]):
+            metrics, _ = derive_aggregate_metrics(snap)
+            if i == 0:
+                # Bot A: inject real drawdown
+                metrics["max_drawdown_pct"] = 6.0
+            # B, C, D: no drawdown, adapter does not provide it
+            wf = evaluate_from_aggregate_metrics(metrics)
+            results.append(wf)
+
+        # Bot A: complete positive metrics -> may pass review
+        assert results[0].evaluation_status == STATUS_PASS_REVIEW
+        assert results[0].promotion_blocked is False
+
+        # Bot B: positive PnL but missing drawdown -> blocked
+        assert results[1].evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
+        assert results[1].promotion_blocked is True
+        assert REASON_CODE_MISSING_DRAWDOWN in results[1].promotion_block_reason_codes
+
+        # Bot C: negative PnL (and missing drawdown) -> blocked by missing
+        # drawdown (fires before PnL check)
+        assert results[2].evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
+        assert results[2].promotion_blocked is True
+        assert REASON_CODE_MISSING_DRAWDOWN in results[2].promotion_block_reason_codes
+
+        # Bot D: insufficient trades -> blocked (drawdown check never reached)
+        assert results[3].evaluation_status == STATUS_INSUFFICIENT_EVIDENCE
+        assert results[3].promotion_blocked is True
+        assert REASON_CODE_INSUFFICIENT_EVIDENCE in results[3].promotion_block_reason_codes
+
+
+# ------------------------------------------------------------------
+# 11. NO_PROPOSAL remains NOT_APPLICABLE
+# ------------------------------------------------------------------
+
+
+class TestNoProposalRemainsBlocked:
+    """NO_PROPOSAL must continue to produce NOT_APPLICABLE, blocked."""
+
+    def test_no_proposal_not_applicable(self):
+        """NO_PROPOSAL -> NOT_APPLICABLE, promotion_blocked=True."""
+        result = default_no_proposal_evaluation()
+        assert result.evaluation_status == STATUS_NOT_APPLICABLE
+        assert result.promotion_blocked is True
+        assert "no_proposal" in result.promotion_block_reason_codes
+
+    def test_no_proposal_never_promotable(self):
+        """NOT_APPLICABLE must never be promotable."""
+        result = default_no_proposal_evaluation()
+        assert result.evaluation_status != STATUS_PASS_REVIEW
+        assert result.promotion_blocked is True
