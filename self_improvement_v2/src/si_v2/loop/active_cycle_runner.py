@@ -1289,6 +1289,54 @@ def run_active_cycle() -> int:
         }
         print("  profitability gate:  skipped (no walk_forward_metrics)")
 
+    # ── Human Approval Gate evaluation (#276) ──────────────────────────
+    # After walk-forward enrichment and profitability gate, evaluate each
+    # bot's formal approval eligibility. This validates evidence completeness
+    # and sets structured approval_status, approval_eligible, and
+    # approval_reason_codes per bot.
+    from si_v2.approval.approval_gate import (
+        evaluate_approval_eligibility,
+    )
+
+    _approval_gate_count = 0
+    for sr in safety_results:
+        if not isinstance(sr, dict):
+            continue
+        bot_id = str(sr.get("bot_id", ""))
+        wf = sr.get("walk_forward_net_metrics", {})
+        if not isinstance(wf, dict):
+            wf = {}
+
+        # Extract metrics fields, treating missing values as None
+        _pnl = wf.get("total_net_pnl")
+        _pf = wf.get("profit_factor")
+        _dd = wf.get("max_drawdown_pct")
+
+        _block_codes_raw = sr.get("promotion_block_reason_codes", [])
+        _block_codes: list[str] = (
+            [str(x) for x in _block_codes_raw]
+            if isinstance(_block_codes_raw, list)
+            else []
+        )
+
+        verdict = evaluate_approval_eligibility(
+            bot_id=bot_id,
+            decision_type=str(sr.get("decision_type", "NO_PROPOSAL")),
+            evaluation_status=str(wf.get("evaluation_status", "NOT_APPLICABLE")),
+            metrics_source=str(wf.get("metrics_source", "not_applicable")),
+            promotion_blocked=bool(sr.get("promotion_blocked", True)),
+            promotion_block_reason_codes=_block_codes,
+            total_trades=int(wf.get("total_trades", 0) or 0),
+            total_net_pnl=float(_pnl) if isinstance(_pnl, (int, float)) else None,
+            profit_factor=float(_pf) if isinstance(_pf, (int, float)) else None,
+            max_drawdown_pct=float(_dd) if isinstance(_dd, (int, float)) else None,
+        )
+        sr["approval_status"] = str(verdict.approval_status)
+        sr["approval_eligible"] = verdict.approval_eligible
+        sr["approval_reason_codes"] = list(verdict.reason_codes)
+        _approval_gate_count += 1
+    print(f"  approval gate evaluations: {_approval_gate_count}")
+
     # ------------------------------------------------------------------
     # Step 5: Persist artifacts
     # ------------------------------------------------------------------
@@ -1330,6 +1378,14 @@ def run_active_cycle() -> int:
         pd["approval_status"] = next(
             (s["approval_status"] for s in safety_results if s["bot_id"] == pd.get("bot_id")),
             "BLOCKED_INSUFFICIENT_HISTORY",
+        )
+        pd["approval_eligible"] = next(
+            (s.get("approval_eligible", False) for s in safety_results if s["bot_id"] == pd.get("bot_id")),
+            False,
+        )
+        pd["approval_reason_codes"] = next(
+            (s.get("approval_reason_codes", []) for s in safety_results if s["bot_id"] == pd.get("bot_id")),
+            [],
         )
         # Inject walk_forward_net_metrics from safety_results
         _wf_key = "walk_forward_net_metrics"
