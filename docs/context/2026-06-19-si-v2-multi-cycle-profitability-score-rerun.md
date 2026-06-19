@@ -28,8 +28,8 @@ Telemetry records analyzed:
 
 ## Ranking
 
-1. **freqtrade-freqforge** — `watch`; candidate_score `50.0`; positive read-path telemetry but still lacks real walk-forward metrics.
-2. **freqtrade-freqforge-canary** — `watch`; candidate_score `50.0`; positive read-path telemetry but still lacks real walk-forward metrics.
+1. **freqtrade-freqforge** — `watch`; candidate_score `50.0`; positive read-path telemetry, but still no real walk-forward metrics.
+2. **freqtrade-freqforge-canary** — `watch`; candidate_score `50.0`; positive read-path telemetry, but still no real walk-forward metrics.
 3. **freqtrade-regime-hybrid** — `blocked`; candidate_score `90.7`; repeated real metrics remain net-negative.
 4. **freqai-rebel** — `blocked`; candidate_score `87.5`; repeated real metrics remain net-negative.
 
