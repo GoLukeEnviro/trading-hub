@@ -291,4 +291,6 @@ HERMES_METRICS.json
 # Git cleanup audit 2026-06-15 — generated reports and nested external repos
 docs/reports/*.json
 self_improvement_v2/reports/phase2/**
+# Explicit: per-bot SI v2 shadow runtime logs are generated artifacts and must stay untracked
+self_improvement_v2/reports/phase2/shadow_logs/*.jsonl
 polymarket-fadi/
