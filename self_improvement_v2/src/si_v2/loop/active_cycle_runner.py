@@ -1245,6 +1245,50 @@ def run_active_cycle() -> int:
         _wf_metrics_added += 1
     print(f"  walk_forward_net_metrics injected: {_wf_metrics_added}")
 
+    # ── Profitability Evidence Gate evaluation (#279) ────────────────────
+    # After walk-forward enrichment, evaluate the fleet-level profitability
+    # gate. The gate aggregates per-bot walk_forward_net_metrics and
+    # produces a single fleet verdict (candidate/blocked/inconclusive).
+    # This is purely enrichment — no runtime mutation, no I/O, no side effects.
+    from si_v2.evaluation.profitability_gate import (
+        evaluate_from_walk_forward_dicts,
+    )
+
+    _wf_metrics_by_bot: dict[str, dict[str, object]] = {}
+    for sr in safety_results:
+        if not isinstance(sr, dict):
+            continue
+        bot_id = str(sr.get("bot_id", ""))
+        wf = sr.get("walk_forward_net_metrics", {})
+        if isinstance(wf, dict):
+            _wf_metrics_by_bot[bot_id] = wf
+
+    if _wf_metrics_by_bot:
+        _gate_result = evaluate_from_walk_forward_dicts(_wf_metrics_by_bot)
+        _gate_dict = _gate_result.to_dict()
+        _fs: object = _gate_dict.get("fleet_summary", {})
+        _fs_dict = _fs if isinstance(_fs, dict) else {}
+        print(
+            f"  profitability gate:  {_gate_dict.get('verdict', '?')} "
+            f"(candidate={_fs_dict.get('candidate_count', '?')}, "
+            f"blocked={_fs_dict.get('blocked_count', '?')}, "
+            f"inconclusive={_fs_dict.get('inconclusive_count', '?')})"
+        )
+    else:
+        _gate_dict = {
+            "verdict": "blocked",
+            "reasons": ["no_walk_forward_metrics_available"],
+            "bot_verdicts": {},
+            "fleet_summary": {
+                "bot_count": 0,
+                "total_trades": 0,
+                "total_net_pnl": 0.0,
+                "max_drawdown_pct": 0.0,
+                "fleet_profit_factor": 0.0,
+            },
+        }
+        print("  profitability gate:  skipped (no walk_forward_metrics)")
+
     # ------------------------------------------------------------------
     # Step 5: Persist artifacts
     # ------------------------------------------------------------------
@@ -1351,6 +1395,7 @@ def run_active_cycle() -> int:
             "fleet_freshness": _trend.fleet_freshness if _trend.runs_observed > 0 else "inactive",
             "min_required_runs": MIN_REQUIRED_TELEMETRY_HISTORY_RUNS,
         },
+        "profitability_gate": _gate_dict,
     }
 
     bundle_path = _EVIDENCE_DIR / f"active_cycle_{cycle_id}.json"
