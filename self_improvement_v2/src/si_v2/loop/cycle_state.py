@@ -51,6 +51,8 @@ class PerBotDecisionState(BaseModel):
     hypothesis: str = Field(default="")
     no_proposal_reason: str | None = None
     approval_status: str = Field(default="PENDING_HUMAN")
+    approval_eligible: bool = Field(default=False)
+    approval_reason_codes: list[str] = Field(default_factory=list)
 
 
 class CycleState(BaseModel):
@@ -251,6 +253,15 @@ def load_latest_cycle_state(
 # ------------------------------------------------------------------
 
 
+def _coerce_str_list(value: object) -> list[str]:
+    """Coerce a value to a list of strings safely."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v) for v in value]
+    return [str(value)]
+
+
 def build_cycle_state(
     cycle_id: str,
     branch: str,
@@ -285,6 +296,7 @@ def build_cycle_state(
         candidate_sha256 = raw.get("candidate_sha256", "")
         hypothesis = raw.get("hypothesis", "")
         no_proposal_reason = raw.get("no_proposal_reason")
+        approval_status_raw = raw.get("approval_status", "PENDING_HUMAN")
         per_bot.append(
             PerBotDecisionState(
                 bot_id=bot_id if isinstance(bot_id, str) else str(bot_id),
@@ -300,7 +312,13 @@ def build_cycle_state(
                     else str(no_proposal_reason) if no_proposal_reason is not None
                     else None
                 ),
-                approval_status="PENDING_HUMAN",
+                approval_status=(
+                    approval_status_raw
+                    if isinstance(approval_status_raw, str)
+                    else "PENDING_HUMAN"
+                ),
+                approval_eligible=bool(raw.get("approval_eligible", False)),
+                approval_reason_codes=_coerce_str_list(raw.get("approval_reason_codes")),
             )
         )
 
@@ -372,6 +390,6 @@ def print_cycle_state(state: CycleState) -> str:
     for d in state.per_bot_decisions:
         lines.append(
             f"  - {d.bot_id}: {d.decision_type} (SHA={d.candidate_sha256[:8]}, "
-            f"approval={d.approval_status})"
+            f"approval={d.approval_status}, eligible={d.approval_eligible})"
         )
     return "\n".join(lines) + "\n"
