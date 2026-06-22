@@ -1,13 +1,47 @@
 [run]
 branch = True
-source = .
+source =
+    self_improvement_v2/src
+    orchestrator/scripts
+    orchestrator/control
+    freqtrade/shared
+    primo
+    bridge
+    intelligence
+    tools
 omit =
     */tests/*
-    */.venv/*
+    */test_*.py
     */__pycache__/*
-    */.pytest_cache/*
+    */.venv/*
     */site-packages/*
+    */build/*
+    */dist/*
+    */backups/*
+    */backtests/*
+    */freqforge/*
+    */freqforge-canary/*
+    */freqtrade/bots/*
+    */scripts/*
+    */logs/*
+    */var/*
+    */weatherbot/*
+    */weatherhermes_persistent/*
+    */Agenten_Auto_Trade/*
+    */Polymarket-BTC-15-Minute-Trading-Bot/*
 
 [report]
 show_missing = True
-skip_covered = True
+skip_covered = False
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    raise AssertionError
+
+[xml]
+output = coverage.xml
+
+[json]
+output = coverage.json

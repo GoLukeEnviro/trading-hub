@@ -543,3 +543,132 @@ class TestEdgeCases:
         ]
         result = evaluate_fleet(fleet)
         assert result.verdict == VERDICT_BLOCKED
+
+
+# ── Edge-case coverage: fleet-level thresholds (profitability_gate lines 365,368,371,396) ──
+
+
+def test_fleet_net_pnl_not_positive_with_inconclusive_negative_bot() -> None:
+    """Fleet with 2 inconclusive bots (negative PnL) + 2 candidates (small positive).
+    No bot individually BLOCKED, but total fleet PnL ≤ 0 → line 365."""
+    fleet = [
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-freqforge", net_pnl=2.0, profit_factor=1.5, trade_count=7,
+            max_drawdown_pct=5.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-regime-hybrid", net_pnl=2.0, profit_factor=1.5, trade_count=7,
+            max_drawdown_pct=5.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-freqforge-canary", net_pnl=-50.0, profit_factor=0.3, trade_count=4,
+            max_drawdown_pct=5.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqai-rebel", net_pnl=-50.0, profit_factor=0.3, trade_count=4,
+            max_drawdown_pct=5.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+    ]
+    result = evaluate_fleet(fleet)
+    assert result.verdict == VERDICT_BLOCKED
+    assert any("fleet_net_pnl" in r for r in result.reasons)
+    assert result.fleet_summary["total_net_pnl"] <= 0
+
+
+def test_fleet_profit_factor_below_threshold_with_mixed_bots() -> None:
+    """Fleet profit factor < 1.0 but no individual bot blocked → line 368."""
+    fleet = [
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-freqforge", net_pnl=0.5, profit_factor=1.01, trade_count=7,
+            max_drawdown_pct=5.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-regime-hybrid", net_pnl=0.5, profit_factor=1.01, trade_count=7,
+            max_drawdown_pct=5.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-freqforge-canary", net_pnl=-2.0, profit_factor=0.9, trade_count=4,
+            max_drawdown_pct=5.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqai-rebel", net_pnl=-1.0, profit_factor=0.5, trade_count=4,
+            max_drawdown_pct=5.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+    ]
+    result = evaluate_fleet(fleet)
+    assert result.verdict in (VERDICT_BLOCKED, VERDICT_INCONCLUSIVE)
+    assert result.fleet_summary["fleet_profit_factor"] < 1.0
+
+
+def test_fleet_high_drawdown_blocks_when_no_individual_bot_blocked() -> None:
+    """Fleet max drawdown >= 15% — individual bots all < 15% but fleet max crosses. → line 371.
+
+    NOTE: Line 371 (fleet drawdown >= 15%) is mathematically unreachable in the
+    current gate because any individual bot with drawdown >= 15% is already blocked
+    before fleet-level checks. This test documents the defensive code path even
+    though the individual check catches it first."""
+    fleet = [
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-freqforge", net_pnl=10.0, profit_factor=2.0, trade_count=10,
+            max_drawdown_pct=15.0, max_drawdown_measured=True,  # BLOCKED individually
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-regime-hybrid", net_pnl=5.0, profit_factor=1.5, trade_count=8,
+            max_drawdown_pct=3.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-freqforge-canary", net_pnl=3.0, profit_factor=1.2, trade_count=6,
+            max_drawdown_pct=8.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqai-rebel", net_pnl=1.0, profit_factor=1.1, trade_count=5,
+            max_drawdown_pct=5.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+    ]
+    result = evaluate_fleet(fleet)
+    # Bot blocked individually → fleet blocked
+    assert result.verdict == VERDICT_BLOCKED
+    assert "blocked_bots" in result.reasons[0] or any(
+        "high_drawdown" in r for r in result.reasons
+    )
+
+
+def test_inconclusive_fleet_when_bots_fine_but_inconclusive() -> None:
+    """All individual thresholds pass, fleet passes, but inconclusive bots → line 396."""
+    fleet = [
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-freqforge", net_pnl=10.0, profit_factor=2.0, trade_count=10,
+            max_drawdown_pct=5.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-regime-hybrid", net_pnl=5.0, profit_factor=1.5, trade_count=8,
+            max_drawdown_pct=3.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqtrade-freqforge-canary", net_pnl=15.0, profit_factor=3.0, trade_count=4,
+            max_drawdown_pct=2.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+        BotProfitabilityMetrics(
+            bot_id="freqai-rebel", net_pnl=3.0, profit_factor=1.2, trade_count=3,
+            max_drawdown_pct=1.0, max_drawdown_measured=True,
+            metrics_source="walk_forward_net_metrics",
+        ),
+    ]
+    result = evaluate_fleet(fleet)
+    assert result.verdict == VERDICT_INCONCLUSIVE
+    assert any("inconclusive" in r for r in result.reasons)

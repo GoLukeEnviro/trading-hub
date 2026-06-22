@@ -61,12 +61,12 @@ def isolated_runner(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     expected_state["expected_containers"] = [
         "hermes-green",
         "trading-guardian",
-        "freqtrade-regime-hybrid",
-        "freqtrade-freqforge-canary",
-        "freqtrade-freqforge",
-        "freqtrade-webserver",
-        "ai-hedge-fund-crypto",
-        "freqai-rebel",
+        "trading-freqtrade-regime-hybrid-1",
+        "trading-freqtrade-freqforge-canary-1",
+        "trading-freqtrade-freqforge-1",
+        "trading-freqtrade-webserver-1",
+        "trading-ai-hedge-fund-1",
+        "trading-freqai-rebel-1",
     ]
     oc.write_json_atomic(runner.EXPECTED_STATE_FILE, expected_state)
 
@@ -95,12 +95,12 @@ def fake_subprocess(monkeypatch: pytest.MonkeyPatch):
                 "NAMES\tSTATUS\tHEALTH\n"
                 "hermes-green\tUp 2 hours\thealthy\n"
                 "trading-guardian\tUp 2 hours\thealthy\n"
-                "freqtrade-regime-hybrid\tUp 2 hours\thealthy\n"
-                "freqtrade-freqforge-canary\tUp 2 hours\thealthy\n"
-                "freqtrade-freqforge\tUp 2 hours\thealthy\n"
-                "freqtrade-webserver\tUp 2 hours\thealthy\n"
-                "ai-hedge-fund-crypto\tUp 2 hours\thealthy\n"
-                "freqai-rebel\tUp 2 hours\thealthy\n",
+                "trading-freqtrade-regime-hybrid-1\tUp 2 hours\thealthy\n"
+                "trading-freqtrade-freqforge-canary-1\tUp 2 hours\thealthy\n"
+                "trading-freqtrade-freqforge-1\tUp 2 hours\thealthy\n"
+                "trading-freqtrade-webserver-1\tUp 2 hours\thealthy\n"
+                "trading-ai-hedge-fund-1\tUp 2 hours\thealthy\n"
+                "trading-freqai-rebel-1\tUp 2 hours\thealthy\n",
                 "",
             )
         if cmd and cmd[0] == "curl":
@@ -234,12 +234,12 @@ def test_container_unhealthy_scores_issue_and_escalates(isolated_runner, fake_su
             "NAMES\tSTATUS\tHEALTH\n"
             "hermes-green\tUp 2 hours\thealthy\n"
             "trading-guardian\tUp 2 hours\thealthy\n"
-            "freqtrade-regime-hybrid\tUp 2 hours\thealthy\n"
-            "freqtrade-freqforge-canary\tUp 2 hours\tunhealthy\n"
-            "freqtrade-freqforge\tUp 2 hours\thealthy\n"
-            "freqtrade-webserver\tUp 2 hours\thealthy\n"
-            "ai-hedge-fund-crypto\tUp 2 hours\thealthy\n"
-            "freqai-rebel\tUp 2 hours\thealthy\n",
+            "trading-freqtrade-regime-hybrid-1\tUp 2 hours\thealthy\n"
+            "trading-freqtrade-freqforge-canary-1\tUp 2 hours\tunhealthy\n"
+            "trading-freqtrade-freqforge-1\tUp 2 hours\thealthy\n"
+            "trading-freqtrade-webserver-1\tUp 2 hours\thealthy\n"
+            "trading-ai-hedge-fund-1\tUp 2 hours\thealthy\n"
+            "trading-freqai-rebel-1\tUp 2 hours\thealthy\n",
             "",
         )
 
@@ -309,12 +309,12 @@ def test_webhook_called_on_critical(monkeypatch: pytest.MonkeyPatch, tmp_path: P
                 "NAMES\tSTATUS\tHEALTH\n"
                 "hermes-green\tUp 2 hours\thealthy\n"
                 "trading-guardian\tUp 2 hours\thealthy\n"
-                "freqtrade-regime-hybrid\tUp 2 hours\thealthy\n"
-                "freqtrade-freqforge-canary\tUp 2 hours\thealthy\n"
-                "freqtrade-freqforge\tUp 2 hours\thealthy\n"
-                "freqtrade-webserver\tUp 2 hours\thealthy\n"
-                "ai-hedge-fund-crypto\tUp 2 hours\thealthy\n"
-                "freqai-rebel\tUp 2 hours\thealthy\n",
+                "trading-freqtrade-regime-hybrid-1\tUp 2 hours\thealthy\n"
+                "trading-freqtrade-freqforge-canary-1\tUp 2 hours\thealthy\n"
+                "trading-freqtrade-freqforge-1\tUp 2 hours\thealthy\n"
+                "trading-freqtrade-webserver-1\tUp 2 hours\thealthy\n"
+                "trading-ai-hedge-fund-1\tUp 2 hours\thealthy\n"
+                "trading-freqai-rebel-1\tUp 2 hours\thealthy\n",
                 "",
             )
         if cmd and cmd[0] == "curl":
