@@ -1,0 +1,126 @@
+{
+  "report": {
+    "bot_count": 4,
+    "bot_ids": [
+      "freqtrade-freqforge",
+      "freqtrade-regime-hybrid",
+      "freqtrade-freqforge-canary",
+      "freqai-rebel"
+    ],
+    "expected_bot_count": 4,
+    "expected_bot_ids": [
+      "freqtrade-freqforge",
+      "freqtrade-regime-hybrid",
+      "freqtrade-freqforge-canary",
+      "freqai-rebel"
+    ],
+    "green_bot_count": 4,
+    "missing_expected_bot_ids": [],
+    "per_bot_statuses": [
+      {
+        "bot_id": "freqtrade-freqforge",
+        "dynamic_exit_evidence_gate_verdict": "candidate",
+        "error_flags": [],
+        "heartbeat_age_seconds": 30,
+        "heartbeat_ok": true,
+        "is_expected_bot": true,
+        "profitability_gate_verdict": "candidate",
+        "proposal_generation_ok": true,
+        "reasons": [],
+        "recommendations": [
+          "no_action_recommended"
+        ],
+        "telemetry_age_seconds": 120,
+        "telemetry_fresh": true,
+        "verdict": "green"
+      },
+      {
+        "bot_id": "freqtrade-regime-hybrid",
+        "dynamic_exit_evidence_gate_verdict": "candidate",
+        "error_flags": [],
+        "heartbeat_age_seconds": 45,
+        "heartbeat_ok": true,
+        "is_expected_bot": true,
+        "profitability_gate_verdict": "candidate",
+        "proposal_generation_ok": true,
+        "reasons": [],
+        "recommendations": [
+          "no_action_recommended"
+        ],
+        "telemetry_age_seconds": 180,
+        "telemetry_fresh": true,
+        "verdict": "green"
+      },
+      {
+        "bot_id": "freqtrade-freqforge-canary",
+        "dynamic_exit_evidence_gate_verdict": "candidate",
+        "error_flags": [],
+        "heartbeat_age_seconds": 60,
+        "heartbeat_ok": true,
+        "is_expected_bot": true,
+        "profitability_gate_verdict": "candidate",
+        "proposal_generation_ok": true,
+        "reasons": [],
+        "recommendations": [
+          "no_action_recommended"
+        ],
+        "telemetry_age_seconds": 90,
+        "telemetry_fresh": true,
+        "verdict": "green"
+      },
+      {
+        "bot_id": "freqai-rebel",
+        "dynamic_exit_evidence_gate_verdict": "candidate",
+        "error_flags": [],
+        "heartbeat_age_seconds": 15,
+        "heartbeat_ok": true,
+        "is_expected_bot": true,
+        "profitability_gate_verdict": "candidate",
+        "proposal_generation_ok": true,
+        "reasons": [],
+        "recommendations": [
+          "no_action_recommended"
+        ],
+        "telemetry_age_seconds": 240,
+        "telemetry_fresh": true,
+        "verdict": "green"
+      }
+    ],
+    "reasons": [],
+    "recommendations": [
+      "no_action_recommended"
+    ],
+    "red_bot_count": 0,
+    "unknown_bot_ids": [],
+    "verdict": "green",
+    "yellow_bot_count": 0
+  },
+  "summary": {
+    "action_count": 0,
+    "expected_bot_ids": [
+      "freqtrade-freqforge",
+      "freqtrade-regime-hybrid",
+      "freqtrade-freqforge-canary",
+      "freqai-rebel"
+    ],
+    "fleet_verdict": "green",
+    "module_path": "self_improvement_v2/src/si_v2/monitoring/fleet_monitoring.py",
+    "recommendations": [
+      "no_action_recommended"
+    ],
+    "safety_confirmation": {
+      "no_config_writes": true,
+      "no_docker_compose_cron_changes": true,
+      "no_live_trading": true,
+      "no_runtime_mutation": true,
+      "no_strategy_writes": true
+    },
+    "source_commit": "5d2ded36e0bfdd065f9646122f18274e53074fd2",
+    "used_evidence_artifacts": [
+      "docs/context/2026-06-22-si-v2-report-only-fleet-monitoring-evaluator.md",
+      "docs/context/2026-06-22-si-v2-dynamic-exit-evidence-merge-proof.md",
+      "docs/context/2026-06-22-si-v2-phase-4-monitoring-self-healing-plan.md",
+      "self_improvement_v2/tests/test_fleet_monitoring.py"
+    ]
+  }
+}
