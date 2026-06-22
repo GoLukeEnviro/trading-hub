@@ -115,28 +115,30 @@ def _clear_cache() -> Generator[None, None, None]:
 class TestLoadKillState:
     """Tests for the core load_kill_state() function."""
 
-    def test_missing_file_defaults_to_normal(self, tmp_state_file: Path) -> None:
-        """FileNotFoundError → returns NORMAL default."""
+    def test_missing_file_fail_closed(self, tmp_state_file: Path) -> None:
+        """FileNotFoundError → FAIL-CLOSED (HALT_NEW), not NORMAL."""
         state = ks.load_kill_state(tmp_state_file)
-        assert state["mode"] == ks.MODE_NORMAL
+        assert state["mode"] == ks.MODE_HALT_NEW
+        assert "fail-closed" in state["reason"]
 
-    def test_invalid_json_defaults_to_normal(self, tmp_state_file: Path) -> None:
-        """Corrupt / unparseable JSON → returns NORMAL default."""
+    def test_invalid_json_fail_closed(self, tmp_state_file: Path) -> None:
+        """Corrupt / unparseable JSON → FAIL-CLOSED (HALT_NEW)."""
         tmp_state_file.write_text("this-is-not-json")
         state = ks.load_kill_state(tmp_state_file)
-        assert state["mode"] == ks.MODE_NORMAL
+        assert state["mode"] == ks.MODE_HALT_NEW
+        assert "fail-closed" in state["reason"]
 
     def test_empty_json_object_defaults_to_normal(self, tmp_state_file: Path) -> None:
-        """Empty dict {} → mode defaults to NORMAL."""
+        """Empty dict {} → mode defaults to NORMAL (valid but empty state)."""
         tmp_state_file.write_text("{}")
         state = ks.load_kill_state(tmp_state_file)
         assert state["mode"] == ks.MODE_NORMAL
 
-    def test_non_dict_json_defaults_to_normal(self, tmp_state_file: Path) -> None:
-        """JSON list/string/null → returns NORMAL default."""
+    def test_non_dict_json_fail_closed(self, tmp_state_file: Path) -> None:
+        """JSON list/string/null → FAIL-CLOSED (HALT_NEW)."""
         tmp_state_file.write_text('"just a string"')
         state = ks.load_kill_state(tmp_state_file)
-        assert state["mode"] == ks.MODE_NORMAL
+        assert state["mode"] == ks.MODE_HALT_NEW
 
     def test_loads_halt_new_state(self, halt_state: Path) -> None:
         """Valid HALT_NEW file → returns mode HALT_NEW."""
@@ -251,15 +253,23 @@ class TestSetKillMode:
         assert ks.is_kill_active(tmp_state_file) is False
 
     def test_auto_clear_expiration(self, tmp_state_file: Path) -> None:
-        """auto_clear_at in the past → reverts to NORMAL on load."""
+        """auto_clear_at in the past → returns NORMAL in-memory (no disk write)."""
         past = (datetime.now(tz=timezone.utc) - timedelta(minutes=5)).isoformat()
         state_dict = _make_state(ks.MODE_HALT_NEW, auto_clear_at=past)
         tmp_state_file.write_text(json.dumps(state_dict))
 
-        # load_kill_state should detect expired auto_clear and rewrite to NORMAL
+        # Record original file content to verify no disk write
+        original_content = tmp_state_file.read_text()
+
+        # load_kill_state should detect expired auto_clear and return NORMAL
         state = ks.load_kill_state(tmp_state_file)
         assert state["mode"] == ks.MODE_NORMAL, (
             f"Expected NORMAL after auto_clear, got {state['mode']}"
+        )
+
+        # TOCTOU FIX: read path must NOT write to disk
+        assert tmp_state_file.read_text() == original_content, (
+            "load_kill_state wrote to disk during read — TOCTOU race risk"
         )
 
     def test_auto_clear_future_not_expired(self, tmp_state_file: Path) -> None:
@@ -361,37 +371,52 @@ class TestPrimoSignalKillSwitch:
         # No signal file → load_signal_state returns None → returns True
         assert ps.primo_gate_allows("BTC/USDT", "long") is True
 
-    def test_import_fallback_no_kill_switch(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When _KILL_SWITCH_AVAILABLE is False, pristine signal logic runs."""
-        # Simulate kill_switch import failure by patching the flag and fallbacks
+    def test_import_fallback_no_kill_switch_blocks(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When kill_switch module is unavailable, FAIL-CLOSED blocks all entries."""
         monkeypatch.setattr(ps, "_KILL_SWITCH_AVAILABLE", False)
-        # Also patch the fallback functions to return False (no blocking)
-        # The fallback in primo_signal.py defines is_kill_active() -> False
-        # So this should already work. Let's verify:
-        # Since _KILL_SWITCH_AVAILABLE is False, the import-time fallbacks are active.
-        # But they were already set at import time. We need to make the module
-        # re-import or patch the existing references.
-
-        # Simpler approach: monkeypatch is_kill_active and is_emergency on primo_signal
-        monkeypatch.setattr(ps, "_KILL_SWITCH_AVAILABLE", False)
-        monkeypatch.setattr(ps, "is_kill_active", lambda: False)
+        # Simulate the fail-closed fallback: is_kill_active() returns True
+        monkeypatch.setattr(ps, "is_kill_active", lambda: True)
         monkeypatch.setattr(ps, "is_emergency", lambda: False)
 
-        # Without a signal file, this should return True (fallback to normal logic)
+        # Without a signal file, primo_gate_allows should still BLOCK
         result = ps.primo_gate_allows("BTC/USDT", "long")
-        assert result is True
+        assert result is False
 
-    def test_import_fallback_preserves_behavior(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Without kill_switch module, primo_gate_allows uses fallback
-        is_kill_active (always False) so entry logic is preserved."""
+    def test_import_fallback_blocks_both_sides(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Without kill_switch module, both long and short are blocked (fleet-wide)."""
         monkeypatch.setattr(ps, "_KILL_SWITCH_AVAILABLE", False)
-        monkeypatch.setattr(ps, "is_kill_active", lambda: False)
+        monkeypatch.setattr(ps, "is_kill_active", lambda: True)
         monkeypatch.setattr(ps, "is_emergency", lambda: False)
 
-        # Even with no kill switch, normal signal logic should work
-        # (no signal file → load_signal_state returns None → True)
-        assert ps.primo_gate_allows("BTC/USDT", "long") is True
-        assert ps.primo_gate_allows("BTC/USDT", "short") is True
+        assert ps.primo_gate_allows("BTC/USDT", "long") is False
+        assert ps.primo_gate_allows("BTC/USDT", "short") is False
+        assert ps.primo_gate_allows("ETH/USDT", "long") is False
+        assert ps.primo_gate_allows("ETH/USDT", "short") is False
+
+    def test_corrupt_kill_state_blocks_entries(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_state_file: Path
+    ) -> None:
+        """Corrupt kill_switch.json → load_kill_state returns HALT_NEW → entries blocked."""
+        tmp_state_file.write_text("NOT-JSON-AT-ALL")
+        # Wire primo_signal to use this corrupt file via the kill_switch module
+        monkeypatch.setattr(
+            ks, "KILL_SWITCH_PATH", tmp_state_file
+        )
+        monkeypatch.setattr(ps, "is_kill_active", lambda: ks.is_kill_active(tmp_state_file))
+        monkeypatch.setattr(ps, "is_emergency", lambda: ks.is_emergency(tmp_state_file))
+
+        assert ps.primo_gate_allows("BTC/USDT", "long") is False
+        assert ps.primo_gate_allows("BTC/USDT", "short") is False
+
+    def test_missing_kill_state_file_blocks_entries(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Missing kill_switch.json → load_kill_state returns HALT_NEW → entries blocked."""
+        monkeypatch.setattr(ps, "is_kill_active", lambda: ks.is_kill_active(Path("/nonexistent/ks.json")))
+        monkeypatch.setattr(ps, "is_emergency", lambda: ks.is_emergency(Path("/nonexistent/ks.json")))
+
+        assert ps.primo_gate_allows("BTC/USDT", "long") is False
+        assert ps.primo_gate_allows("BTC/USDT", "short") is False
 
 
 # ============================================================================
@@ -402,20 +427,26 @@ class TestPrimoSignalKillSwitch:
 class TestPrimoSignalNormalLogic:
     """Primo signal logic when kill switch is NORMAL or absent."""
 
-    def test_no_signal_file_allows_entry(self) -> None:
+    def test_no_signal_file_allows_entry(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Missing state file → safe fallback (True)."""
+        monkeypatch.setattr(ps, "is_kill_active", lambda: False)
+        monkeypatch.setattr(ps, "is_emergency", lambda: False)
         result = ps.primo_gate_allows("XRP/USDT", "long", state_file="/nonexistent/file.json")
         assert result is True
 
-    def test_stale_signal_allows_entry(self, tmp_path: Path) -> None:
+    def test_stale_signal_allows_entry(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """Non-fresh signal → safe fallback (True)."""
+        monkeypatch.setattr(ps, "is_kill_active", lambda: False)
+        monkeypatch.setattr(ps, "is_emergency", lambda: False)
         state_file = tmp_path / "signal.json"
         state_file.write_text(json.dumps({"fresh": False, "age_minutes": 0.5, "pairs": {}}))
         result = ps.primo_gate_allows("XRP/USDT", "long", state_file=str(state_file))
         assert result is True
 
-    def test_accept_long_allows_long(self, tmp_path: Path) -> None:
+    def test_accept_long_allows_long(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """ACCEPTED + allow_long_bias=True → long is allowed."""
+        monkeypatch.setattr(ps, "is_kill_active", lambda: False)
+        monkeypatch.setattr(ps, "is_emergency", lambda: False)
         state_file = tmp_path / "signal.json"
         state_file.write_text(json.dumps({
             "fresh": True,
@@ -425,8 +456,10 @@ class TestPrimoSignalNormalLogic:
         assert ps.primo_gate_allows("BTC/USDT", "long", state_file=str(state_file)) is True
         assert ps.primo_gate_allows("BTC/USDT", "short", state_file=str(state_file)) is False
 
-    def test_accept_short_allows_short(self, tmp_path: Path) -> None:
+    def test_accept_short_allows_short(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """ACCEPTED + allow_short_bias=True → short is allowed."""
+        monkeypatch.setattr(ps, "is_kill_active", lambda: False)
+        monkeypatch.setattr(ps, "is_emergency", lambda: False)
         state_file = tmp_path / "signal.json"
         state_file.write_text(json.dumps({
             "fresh": True,

@@ -85,14 +85,25 @@ MODE_HALT_NEW = "HALT_NEW"
 MODE_EMERGENCY = "EMERGENCY"
 VALID_MODES = {MODE_NORMAL, MODE_HALT_NEW, MODE_EMERGENCY}
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- #
 # Default state
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- #
 _DEFAULT_STATE: Dict[str, Any] = {
     "mode": MODE_NORMAL,
     "reason": "",
     "triggered_at": "",
     "triggered_by": "",
+    "auto_clear_at": "",
+}
+
+# Fail-closed state — returned when the kill switch state cannot be reliably
+# read (missing file, corrupt JSON, permission error, etc.).
+# SAFETY INVARIANT: when safety status is unknown, block entries.
+_FAIL_CLOSED_STATE: Dict[str, Any] = {
+    "mode": MODE_HALT_NEW,
+    "reason": "fail-closed: unable to read kill switch state",
+    "triggered_at": "",
+    "triggered_by": "system",
     "auto_clear_at": "",
 }
 
@@ -108,16 +119,20 @@ def load_kill_state(
 ) -> Dict[str, Any]:
     """Load kill switch state from disk with mtime-based cache.
 
-    Guaranteed to never raise — returns NORMAL state on any error.
+    Guaranteed to never raise.
+
+    FAIL-CLOSED: returns HALT_NEW state on any error (missing file,
+    corrupt JSON, permission denied, etc.).  When safety status is
+    unknown, entries are blocked.
     """
     p = path or KILL_SWITCH_PATH
     try:
         mtime = p.stat().st_mtime
     except FileNotFoundError:
-        return dict(_DEFAULT_STATE)
+        return dict(_FAIL_CLOSED_STATE)
     except Exception as exc:
         logger.warning("kill_switch: stat failed: %s", exc)
-        return dict(_DEFAULT_STATE)
+        return dict(_FAIL_CLOSED_STATE)
 
     cached = _cache.get(str(p))
     if cached and cached.get("_mtime") == mtime:
@@ -127,23 +142,27 @@ def load_kill_state(
         raw = json.loads(p.read_text())
     except Exception as exc:
         logger.warning("kill_switch: read/parse failed: %s", exc)
-        return dict(_DEFAULT_STATE)
+        return dict(_FAIL_CLOSED_STATE)
 
     if not isinstance(raw, dict):
-        return dict(_DEFAULT_STATE)
+        return dict(_FAIL_CLOSED_STATE)
 
-    # Auto-clear check
+    # Auto-clear check — READ-ONLY (no disk write).
+    #
+    # Previous versions wrote NORMAL back to disk inside this read function,
+    # creating a TOCTOU race: a concurrent reader could overwrite an
+    # EMERGENCY state set by another process.  We now compute the expired
+    # state in memory only.  The on-disk file is updated lazily by the next
+    # set_kill_mode() / clear_kill_switch() call or by a cron cleanup job.
     auto_clear = raw.get("auto_clear_at", "")
     if auto_clear:
         try:
             clear_dt = datetime.fromisoformat(auto_clear)
             if datetime.now(tz=timezone.utc) >= clear_dt:
-                logger.info("kill_switch: auto_clear_at reached, reverting to NORMAL")
+                logger.info("kill_switch: auto_clear_at reached, reverting to NORMAL (in-memory)")
                 raw["mode"] = MODE_NORMAL
                 raw["reason"] = "auto-cleared at " + auto_clear
                 raw["auto_clear_at"] = ""
-                _atomic_write(raw, p)
-                mtime = p.stat().st_mtime
         except Exception:
             pass
 

@@ -31,19 +31,25 @@ try:
 except ImportError:
     MAX_AGE_MINUTES = 30.0  # fallback — keep in sync with fleet_risk_manager
 
-# Kill switch integration — fail-safe: if module missing, treat as NORMAL (no block)
+# Kill switch integration — FAIL-CLOSED.
+# If the kill_switch module is missing or cannot be imported, we block all
+# entries by returning is_kill_active()=True.  This is the safe default:
+# when the safety layer cannot be verified, trading must not proceed.
 try:
-    from kill_switch import is_kill_active, is_emergency
+    from kill_switch import is_emergency, is_kill_active
     _KILL_SWITCH_AVAILABLE = True
 except ImportError:
-    logger.warning("kill_switch module not found — kill switch protection disabled")
+    logger.warning(
+        "kill_switch module not found — FAIL-CLOSED: all entries blocked "
+        "until kill_switch is available and reports NORMAL"
+    )
     _KILL_SWITCH_AVAILABLE = False
 
     def is_kill_active() -> bool:  # type: ignore[misc]
-        return False
+        return True  # FAIL-CLOSED: block entries when safety module unavailable
 
     def is_emergency() -> bool:  # type: ignore[misc]
-        return False
+        return False  # do NOT force-close positions on module absence
 
 
 def normalize_pair(pair: Optional[str]) -> str:
