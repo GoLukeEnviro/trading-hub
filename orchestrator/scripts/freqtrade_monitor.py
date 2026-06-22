@@ -20,8 +20,8 @@ BOTS_DIR = os.path.join(PROJECT_ROOT, "bots")
 # Docker network
 DOCKER_NETWORK = "ki-fabrik"
 
-# DOCKER_HOST override — docker-proxy blocks exec calls
-_DOCKER_HOST = "unix:///var/run/docker.sock"
+# Docker host is inherited from the environment (DOCKER_HOST).
+# In hermes-green this is tcp://docker-proxy:2375 (EXEC=1, POST=1 enabled).
 
 BOTS = {
     "trading-freqtrade-regime-hybrid-1": {
@@ -62,7 +62,7 @@ def run_cmd(cmd, timeout=15):
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout, shell=True,
-            env={**os.environ, "DOCKER_HOST": _DOCKER_HOST}
+            env=os.environ.copy()
         )
         return result.stdout.strip(), result.stderr.strip()
     except subprocess.TimeoutExpired:
