@@ -2,6 +2,15 @@
 
 Generated at: 2026-06-15T09:04:22.315820+00:00
 
+> Note on LIVE_RISK and drawdown state
+>
+> The LIVE_RISK scope in this report is intentionally marked as STALE and
+> must not be used as the sole source of truth for risk decisions. It reflects
+> a snapshot of the drawdown state that may lag behind the current fleet
+> reality. Until Phase 2.2 "Observability, Hardening & Self-Healing" is
+> completed, prefer the combination of LEDGER_RISK, SI v2 evidence, and
+> canonical state docs when judging live readiness.
+
 Verdict: WARNING
 
 ## Health Scores

@@ -137,3 +137,18 @@ snapshot and `docs/context/` for append-only historical reports.
   `docs/state/current-operational-state.md`.
 - Treat `docs/context/` as historical context, not as the canonical current state.
 - Treat `docs/state/current-operational-state.md` as the current validated snapshot.
+
+### Runtime / Autonomy change checklist
+
+Before changing anything related to runtime behaviour, autonomy (SI v2),
+or Docker/runtime ownership, always:
+
+1. Read docs/state/current-operational-state.md to understand the current
+   validated runtime snapshot.
+2. Read docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md to see
+   which phase is active and which issues are considered blockers.
+3. Check the latest relevant GAP reports under docs/GAP-REPORT-*.md and
+   context docs under docs/context/ for audit history.
+4. Confirm that your planned change does not violate the dry-run-only policy,
+   the kill-switch contract, or the runtime safety contracts described in
+   docs/specs/.
