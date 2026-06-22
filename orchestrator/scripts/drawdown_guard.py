@@ -43,7 +43,7 @@ BOTS = {
         "port": 8080,  # internal container port (Docker network)
         "config_host": "/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json",
         "user": "freqforge",
-        "password": "freqforge-local-only",
+        "password_env": "FREQTRADE_FREQFORGE_PASS",
         "start_capital": 950.0,
         "log_path": "/home/hermes/projects/trading/freqtrade/logs/freqforge.log",
     },
@@ -52,7 +52,7 @@ BOTS = {
         "port": 8080,
         "config_host": "/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json",
         "user": "canary",
-        "password": "I7S6ZNh2T7GE3BYjYUpvnA",
+        "password_env": "FREQTRADE_CANARY_PASS",
         "start_capital": 500.0,
         "log_path": "/home/hermes/projects/trading/freqtrade/logs/freqforge-canary.log",
     },
@@ -61,7 +61,7 @@ BOTS = {
         "port": 8080,
         "config_host": "/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json",
         "user": "research",
-        "password": "RGHx9kLt4wPzNs8vBq2E",
+        "password_env": "FREQTRADE_REGIME_HYBRID_PASS",
         "start_capital": 1000.0,
         "log_path": "/home/hermes/projects/trading/freqtrade/logs/regime-hybrid.log",
     },
@@ -71,7 +71,7 @@ BOTS = {
         "port": 8080,
         "config_container": "/freqtrade/user_data/config.json",
         "user": "rebel",
-        "password": "Vhaaz4y20joaAJQ71v3R7g",
+        "password_env": "FREQTRADE_REBEL_PASS",
         "start_capital": 1000.0,
         "log_path": "/home/hermes/projects/trading/freqtrade/logs/freqai-rebel.log",
     },
@@ -164,12 +164,29 @@ def load_env():
 
 
 def _resolve_bot_auth(bot_id: str, cfg: dict):
-    """Resolve live API credentials from the bot's config file when possible.
+    """Resolve live API credentials using a layered resolution strategy.
 
-    Host-mounted configs are preferred because they are the source of truth for
-    the running dry-run fleet. Rebel uses a container-local config volume, so we
-    read it via docker exec when needed.
+    Resolution order (first non-empty wins):
+    1. Environment variable (``password_env`` key in the bot config)
+    2. Host-mounted config JSON file (``config_host``)
+    3. Container-local config via ``docker exec`` (``config_container``)
+    4. Empty string (will fail API auth — safe by default)
+
+    Host-mounted configs are the source of truth for the running dry-run
+    fleet. Rebel uses a container-local config volume, so we read it via
+    docker exec when needed.
     """
+    # ── 1. Environment variable ────────────────────────────────────
+    password_env = cfg.get("password_env")
+    env_password = os.environ.get(password_env, "") if password_env else ""
+    if env_password:
+        return {
+            "port": int(cfg.get("port", 0)),
+            "user": str(cfg.get("user", "")),
+            "password": env_password,
+        }
+
+    # ── 2. Host-mounted config file ────────────────────────────────
     config_host = cfg.get("config_host")
     if config_host and Path(config_host).exists():
         try:
@@ -179,11 +196,12 @@ def _resolve_bot_auth(bot_id: str, cfg: dict):
             return {
                 "port": int(api.get("listen_port", cfg.get("port", 0))),
                 "user": str(api.get("username", cfg.get("user", ""))),
-                "password": str(api.get("password", cfg.get("password", ""))),
+                "password": str(api.get("password", "")),
             }
         except Exception as e:
             log(f"  {bot_id}: host config auth read failed: {e}")
 
+    # ── 3. Container config via docker exec ────────────────────────
     config_container = cfg.get("config_container")
     if config_container and detect_docker():
         try:
@@ -202,15 +220,18 @@ def _resolve_bot_auth(bot_id: str, cfg: dict):
                 return {
                     "port": int(api.get("port", cfg.get("port", 0))),
                     "user": str(api.get("user", cfg.get("user", ""))),
-                    "password": str(api.get("password", cfg.get("password", ""))),
+                    "password": str(api.get("password", "")),
                 }
         except Exception as e:
             log(f"  {bot_id}: container config auth read failed: {e}")
 
+    # ── 4. Fallback: no password resolved ──────────────────────────
+    log(f"  {bot_id}: WARNING — no API password resolved "
+        f"(env={password_env or 'unset'}, no config accessible)")
     return {
         "port": int(cfg.get("port", 0)),
         "user": str(cfg.get("user", "")),
-        "password": str(cfg.get("password", "")),
+        "password": "",
     }
 
 
