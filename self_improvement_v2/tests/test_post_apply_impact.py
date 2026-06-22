@@ -245,7 +245,8 @@ class TestVerdictComputation:
         assert v.verdict == IMPACT_DEGRADED
         assert any("drawdown" in r for r in v.reason_codes)
 
-    def test_mutation_performed_flagged(self) -> None:
+    def test_mutation_performed_hard_block(self) -> None:
+        """mutation_performed=True hard blocks impact measurement."""
         ap = {"apply_plan_id": "t6", "bot_id": "test", "hypothesis": "h1",
               "mutation_performed": True}
         pre = WindowMetrics(total_net_pnl=10.0, profit_factor=2.0, total_trades=15,
@@ -253,8 +254,9 @@ class TestVerdictComputation:
         post = WindowMetrics(total_net_pnl=15.0, profit_factor=2.5, total_trades=20,
                              max_drawdown_pct=3.0, real_metric_cycles=2, cycle_count=2)
         v = _compute_impact_verdict(ap, pre, post)
-        assert v.verdict == IMPACT_IMPROVED
-        assert any("mutation_performed" in r for r in v.reason_codes)
+        assert v.verdict == IMPACT_INSUFFICIENT_DATA
+        assert "unsafe_apply_plan_mutation_performed" in v.reason_codes
+        assert v.verdict != IMPACT_IMPROVED
 
     def test_metrics_within_tolerance(self) -> None:
         ap = {"apply_plan_id": "t7", "bot_id": "test", "hypothesis": "h1",

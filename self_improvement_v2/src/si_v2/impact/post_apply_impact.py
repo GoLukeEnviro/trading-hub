@@ -328,12 +328,20 @@ def _compute_impact_verdict(
     plan_id = str(apply_plan.get("apply_plan_id", ""))
     bot_id = str(apply_plan.get("bot_id", ""))
     hypothesis = str(apply_plan.get("hypothesis", ""))
-    reasons: list[str] = []
-
-    # Mutation check
+    # Mutation check — hard block
     mutation_performed = apply_plan.get("mutation_performed", False)
     if mutation_performed:
-        reasons.append("mutation_performed=True (apply path executed real change)")
+        return ImpactVerdict(
+            apply_plan_id=plan_id,
+            bot_id=bot_id,
+            hypothesis=hypothesis,
+            verdict=IMPACT_INSUFFICIENT_DATA,
+            reason_codes=("unsafe_apply_plan_mutation_performed",),
+            pre_metrics=pre,
+            post_metrics=post,
+        )
+
+    reasons: list[str] = []
 
     # Check post-apply has sufficient data
     if not post.has_sufficient_real_data:
