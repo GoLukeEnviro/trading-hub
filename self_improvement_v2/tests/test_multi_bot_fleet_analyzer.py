@@ -23,7 +23,9 @@ from si_v2.loop.fleet_analyzer import (
     NO_PROPOSAL_REASON_MISSING_BOT_ID,
     NO_PROPOSAL_REASON_PING_FAILED,
     PROPOSAL_HYPOTHESIS_REACHABILITY,
+    PROPOSAL_HYPOTHESIS_REINFORCE_PROFITABLE,
     PROPOSAL_HYPOTHESIS_STATUS_OBSERVABLE,
+    PROPOSAL_HYPOTHESIS_UNDERPERFORMING_PAIR,
     BotEvidence,
     analyze_fleet,
     fleet_decision_to_dict,
@@ -381,3 +383,147 @@ def test_registry_has_four_enabled_bots() -> None:
         assert auth.get("username_env", "").startswith("SI_V2_")
         assert auth.get("password_env", "").startswith("SI_V2_")
         assert b.get("dry_run_expected") is True
+
+
+# ------------------------------------------------------------------
+# Positive-profit hypothesis tests (#288)
+# ------------------------------------------------------------------
+
+
+def _rich_evidence(
+    bot_id: str = "freqtrade-freqforge",
+    profit_pct: float = 2.5,
+    anomaly_flags: list[str] | None = None,
+    status_open_trades: int = 0,
+    signal_depth: float = 0.8,
+) -> BotEvidence:
+    """Build BotEvidence with rich signal data for testing #288."""
+    now = datetime.now(UTC).isoformat()
+    return BotEvidence(
+        bot_id=bot_id,
+        base_url=f"http://trading-{bot_id}-1:8080",
+        auth_type="env_basic_jwt",
+        username_env=f"SII_V2_{bot_id.upper().replace('-','_')}_USERNAME",
+        password_env=f"SII_V2_{bot_id.upper().replace('-','_')}_PASSWORD",
+        ping_endpoint="/api/v1/ping",
+        ping_status_code=200,
+        ping_ok=True,
+        ping_response_summary='{"status":"pong"}',
+        status_endpoint="/api/v1/status",
+        status_status_code=200,
+        status_ok=True,
+        status_response_summary="[redacted]",
+        status_auth_outcome="AUTHENTICATED",
+        status_open_trades=status_open_trades,
+        missing_env_vars=(),
+        auth_error_summary="",
+        fetched_at_utc=now,
+        signal_depth=signal_depth,
+        proposal_evidence_json={
+            "anomaly_flags": [str(a) for a in (anomaly_flags or [])],
+            "profit_all_percent": profit_pct,
+        },
+    )
+
+
+class TestPositiveProfitHypothesis:
+    """Tests for the #288 positive-profit branch before idle NO_PROPOSAL."""
+
+    def test_positive_flat_bot_emits_reinforce_proposal(self) -> None:
+        """Flat but profitable bot should get SHADOW_PROPOSAL, not NO_PROPOSAL."""
+        decision = analyze_fleet(
+            [_rich_evidence(profit_pct=2.5, status_open_trades=0)],
+            cycle_id="t288",
+        )
+        assert len(decision.per_bot) == 1
+        d = decision.per_bot[0]
+        assert d.decision_type == DECISION_SHADOW_PROPOSAL
+        assert d.hypothesis == PROPOSAL_HYPOTHESIS_REINFORCE_PROFITABLE
+        assert d.requires_human_approval is True
+        assert d.base_mode == "proposal_only"
+        assert d.mutation_policy == "safe_parameter_overlay_only"
+        assert d.parameters == {}
+        assert d.no_proposal_reason is None
+        assert d.metadata_only_candidates.get("positive_profit_hypothesis") == 1
+
+    def test_negative_profit_bot_gets_no_proposal(self) -> None:
+        """Flat bot with negative profit should remain NO_PROPOSAL."""
+        decision = analyze_fleet(
+            [_rich_evidence(profit_pct=-3.0, status_open_trades=0)],
+            cycle_id="t288",
+        )
+        d = decision.per_bot[0]
+        assert d.decision_type == DECISION_NO_PROPOSAL
+        assert d.no_proposal_reason is not None
+        assert d.hypothesis != PROPOSAL_HYPOTHESIS_REINFORCE_PROFITABLE
+
+    def test_profitable_bot_with_negative_anomaly_gets_underperforming_not_reinforce(self) -> None:
+        """Profitable but with negative_closed_profit anomaly: should get UNDERPERFORMING_PAIR, not reinforce."""
+        decision = analyze_fleet(
+            [
+                _rich_evidence(
+                    profit_pct=3.0,
+                    anomaly_flags=["negative_closed_profit"],
+                    status_open_trades=0,
+                )
+            ],
+            cycle_id="t288",
+        )
+        d = decision.per_bot[0]
+        assert d.decision_type == DECISION_SHADOW_PROPOSAL
+        assert d.hypothesis == PROPOSAL_HYPOTHESIS_UNDERPERFORMING_PAIR
+
+    def test_profitable_bot_with_open_trades_gets_dispersion_not_reinforce(self) -> None:
+        """Bot with open trades and high profit should get dispersion, not reinforce."""
+        decision = analyze_fleet(
+            [_rich_evidence(profit_pct=8.0, status_open_trades=3)],
+            cycle_id="t288",
+        )
+        d = decision.per_bot[0]
+        assert d.decision_type == DECISION_SHADOW_PROPOSAL
+        # With open_trades > 0 and profit > 5%, it's the dispersion path, not reinforce
+        assert d.hypothesis != PROPOSAL_HYPOTHESIS_REINFORCE_PROFITABLE
+
+    def test_flat_bot_without_signal_depth_gets_status_observable(self) -> None:
+        """Flat bot without rich signal depth should fall back to status-observable."""
+        evidence = _rich_evidence(
+            profit_pct=2.5,
+            status_open_trades=0,
+            signal_depth=0.0,  # Below the 0.5 threshold — no rich signal path
+        )
+        decision = analyze_fleet([evidence], cycle_id="t288")
+        d = decision.per_bot[0]
+        assert d.decision_type == DECISION_SHADOW_PROPOSAL
+        assert d.hypothesis == PROPOSAL_HYPOTHESIS_STATUS_OBSERVABLE
+
+    def test_multi_bot_isolation(self) -> None:
+        """One profitable flat bot should get proposal; others unaffected."""
+        positive = _rich_evidence(
+            bot_id="freqtrade-freqforge",
+            profit_pct=3.0,
+            status_open_trades=0,
+        )
+        negative = _rich_evidence(
+            bot_id="freqtrade-regime-hybrid",
+            profit_pct=-5.0,
+            status_open_trades=0,
+        )
+        decision = analyze_fleet([positive, negative], cycle_id="t288")
+        proposals = {d.bot_id: d for d in decision.per_bot}
+
+        ff = proposals["freqtrade-freqforge"]
+        assert ff.decision_type == DECISION_SHADOW_PROPOSAL
+        assert ff.hypothesis == PROPOSAL_HYPOTHESIS_REINFORCE_PROFITABLE
+
+        rh = proposals["freqtrade-regime-hybrid"]
+        assert rh.decision_type == DECISION_NO_PROPOSAL
+
+    def test_low_profit_flat_bot_stays_no_proposal(self) -> None:
+        """Flat bot with profit below threshold should stay NO_PROPOSAL."""
+        decision = analyze_fleet(
+            [_rich_evidence(profit_pct=0.3, status_open_trades=0)],  # Below 0.5% threshold
+            cycle_id="t288",
+        )
+        d = decision.per_bot[0]
+        assert d.decision_type == DECISION_NO_PROPOSAL
+        assert d.hypothesis != PROPOSAL_HYPOTHESIS_REINFORCE_PROFITABLE
