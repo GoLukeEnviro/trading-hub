@@ -23,6 +23,19 @@ context trail for Trading Hub.
 - `roadmap/implementation-roadmap.md` — Historical implementation roadmap (superseded by roadmap-v2).
 - `roadmaps/SI_V2_CONTINUOUS_IMPLEMENTATION_ROADMAP.md` — SI v2 Continuous Implementation control plane (separate document about the controller queue).
 
+### Canon vs. historical documents
+
+Treat the following as canonical sources of truth for the current system:
+
+- Root README.md and AGENTS.md for architecture and safety rules.
+- docs/ARCHITECTURE.md for the system architecture.
+- docs/state/current-operational-state.md for the current validated runtime snapshot.
+- docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md for forward-looking phases and priorities.
+
+Everything under docs/context/ and historical GAP reports under docs/archive/
+or older GAP-REPORT-*.md files are audit history and must not override
+the canonical state documents.
+
 ### Additional entry points (outside `docs/`)
 
 - `self_improvement_v2/README.md` — SI v2 subsystem overview, module map, and entry points.

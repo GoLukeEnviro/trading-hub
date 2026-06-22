@@ -5,6 +5,16 @@
 > **Author:** Meta-Orchestrator (Hermes)
 > **Method:** Cross-component audit + PR-body analysis + filesystem evidence
 
+> Historical note (2026-06-16+):
+> This GAP report reflects the Trading Hub state *before* the completion of
+> Phase 2.0 "Runtime Foundation & Docker Ownership" (issue #200, PR #262).
+> For the current canonical view of runtime ownership and SI v2 status, refer to:
+> - docs/state/current-operational-state.md
+> - docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md
+>
+> Use this document as an audit artifact, not as the canonical description
+> of the current system.
+
 ---
 
 ## 1. Executive Summary
