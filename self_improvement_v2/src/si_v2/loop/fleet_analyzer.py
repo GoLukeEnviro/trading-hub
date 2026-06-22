@@ -96,6 +96,12 @@ PROPOSAL_HYPOTHESIS_PROFIT_DISPERSION: Final[str] = "review_fleet_profitability_
 PROPOSAL_HYPOTHESIS_TRADE_DURATION: Final[str] = "review_trade_duration_outlier_v1"
 PROPOSAL_HYPOTHESIS_SIGNAL_QUALITY: Final[str] = "review_entry_signal_quality_v1"
 
+# Positive-profit hypothesis
+PROPOSAL_HYPOTHESIS_REINFORCE_PROFITABLE: Final[str] = "reinforce_profitable_pair_cluster_v1"
+
+# Minimum profit percent to consider a bot profitable
+_MIN_PROFIT_PCT_FOR_POSITIVE_HYPOTHESIS: Final[float] = 0.5
+
 # ------------------------------------------------------------------
 # Data classes
 # ------------------------------------------------------------------
@@ -300,6 +306,37 @@ def _decide_one(evidence: BotEvidence) -> ShadowProposalDecision:
             elif open_trades > 0 and profit_pct > 5.0:
                 hypothesis = PROPOSAL_HYPOTHESIS_PROFIT_DISPERSION
             elif open_trades == 0:
+                # ── Positive-profit hypothesis branch (#288) ──────────────
+                # Before falling through to idle/NO_PROPOSAL, check whether
+                # this bot has positive historical profitability. If yes,
+                # emit a SHADOW_PROPOSAL so the evidence lane can accumulate
+                # walk_forward_net_metrics and the bot can become a pilot
+                # candidate when metrics are sufficient.
+                has_negative_anomaly = "negative_closed_profit" in anomalies
+                is_profitable = profit_pct > _MIN_PROFIT_PCT_FOR_POSITIVE_HYPOTHESIS
+                if is_profitable and not has_negative_anomaly:
+                    hypothesis = PROPOSAL_HYPOTHESIS_REINFORCE_PROFITABLE
+                    sha = _candidate_sha(evidence.bot_id, evidence, hypothesis)
+                    return ShadowProposalDecision(
+                        decision_type=DECISION_SHADOW_PROPOSAL,
+                        bot_id=evidence.bot_id,
+                        candidate_sha256=sha,
+                        base_mode="proposal_only",
+                        mutation_policy="safe_parameter_overlay_only",
+                        requires_human_approval=True,
+                        hypothesis=hypothesis,
+                        parameters={},
+                        metadata_only_candidates={
+                            "signal_depth": int(evidence.signal_depth * 100),
+                            "profit_pct_basis_points": int(profit_pct * 100),
+                            "open_trades_observed": int(open_trades),
+                            "positive_profit_hypothesis": 1,
+                        },
+                        evidence_summary=_evidence_summary(evidence),
+                        no_proposal_reason=None,
+                        fetched_at_utc=evidence.fetched_at_utc,
+                    )
+
                 # Idle — insufficient evidence for actionable proposal
                 hypothesis = PROPOSAL_HYPOTHESIS_INSUFFICIENT_EVIDENCE
                 sha = _candidate_sha(evidence.bot_id, evidence, hypothesis)
