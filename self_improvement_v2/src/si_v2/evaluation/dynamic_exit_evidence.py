@@ -21,7 +21,7 @@ Design:
   - Valid exit evidence enriches the bot's evidence block without side effects.
 
 Safety invariants:
-  - Never enables live trading or sets dry_run to false.
+  - Never activates capital execution. Dry-run mode remains required.
   - Never writes Freqtrade strategy files.
   - Never mutates config, Docker, Compose, or cron state.
   - Never auto-approves or auto-promotes.
@@ -471,7 +471,7 @@ def evaluate_exit_evidence_gate(
             else:
                 hard_blocked.append(e.bot_id)
 
-    # Rule 1: Any hard block → BLOCKED
+    # Rule 1: A hard block means → BLOCKED
     if hard_blocked:
         reasons.append(f"hard_blocked_bots: {', '.join(hard_blocked)}")
         return ExitEvidenceGateResult(
