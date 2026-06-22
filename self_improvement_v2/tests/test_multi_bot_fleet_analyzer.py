@@ -49,8 +49,8 @@ def _ev(
         bot_id=bot_id,
         base_url=f"http://trading-{bot_id}-1:8080",
         auth_type="env_basic_jwt",
-        username_env=f"SII_V2_{bot_id.upper().replace('-','_')}_USERNAME",
-        password_env=f"SII_V2_{bot_id.upper().replace('-','_')}_PASSWORD",
+        username_env=f"SI_V2_{bot_id.upper().replace('-','_')}_USERNAME",
+        password_env=f"SI_V2_{bot_id.upper().replace('-','_')}_PASSWORD",
         ping_endpoint="/api/v1/ping",
         ping_status_code=200 if ping_ok else 0,
         ping_ok=ping_ok,
@@ -324,8 +324,8 @@ def test_analyzer_output_contains_env_var_names_but_not_values(
 ) -> None:
     """The evidence must reference the env-var NAMES (for traceability)
     but never the VALUES (for safety)."""
-    monkeypatch.setenv("SII_V2_FREQTRADE_FREQFORGE_USERNAME", "alice")
-    monkeypatch.setenv("SII_V2_FREQTRADE_FREQFORGE_PASSWORD", "hunter2")
+    monkeypatch.setenv("TEST_SI_V2_FREQTRADE_FREQFORGE_USERNAME", "alice")
+    monkeypatch.setenv("TEST_SI_V2_FREQTRADE_FREQFORGE_PASSWORD", "hunter2")
 
     ev = _ev(
         bot_id="freqtrade-freqforge",
@@ -333,7 +333,7 @@ def test_analyzer_output_contains_env_var_names_but_not_values(
     )
     decision = analyze_fleet([ev], cycle_id="t1")
     payload = json.dumps(fleet_decision_to_dict(decision))
-    assert "SII_V2_FREQTRADE_FREQFORGE_USERNAME" in payload  # name is fine
+    assert "SI_V2_FREQTRADE_FREQFORGE_USERNAME" in payload  # name is fine
     assert "alice" not in payload  # value must never appear
     assert "hunter2" not in payload
 
@@ -403,8 +403,8 @@ def _rich_evidence(
         bot_id=bot_id,
         base_url=f"http://trading-{bot_id}-1:8080",
         auth_type="env_basic_jwt",
-        username_env=f"SII_V2_{bot_id.upper().replace('-','_')}_USERNAME",
-        password_env=f"SII_V2_{bot_id.upper().replace('-','_')}_PASSWORD",
+        username_env=f"SI_V2_{bot_id.upper().replace('-','_')}_USERNAME",
+        password_env=f"SI_V2_{bot_id.upper().replace('-','_')}_PASSWORD",
         ping_endpoint="/api/v1/ping",
         ping_status_code=200,
         ping_ok=True,
