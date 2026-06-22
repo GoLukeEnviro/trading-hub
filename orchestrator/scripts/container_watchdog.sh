@@ -1,17 +1,17 @@
 #!/bin/bash
-# container_watchdog.sh v4 — Container health check with Docker-aware fallback
+# container_watchdog.sh v5 — Container health check with Docker-aware fallback
 # Runs every 30min via Hermes cron. Only outputs when issues found (silent = OK).
-# v4 (2026-06-06): Fixed container names to match actual docker-compose output,
-#   added DOCKER_HOST=unix:///var/run/docker.sock to bypass proxy (EXEC=0).
+# v5 (2026-06-22): Proxy-compatible — respects DOCKER_HOST from environment
+#   (tcp://docker-proxy:2375 in hermes-green). No longer forces unix socket.
+# v4 (2026-06-06): Fixed container names to match actual docker-compose output.
 # v3: removed freqtrade-momentum (intentionally not deployed), reduced from 5min to 30min.
 #
 # Detection strategy:
-#   1. If Docker socket available → docker inspect (authoritative)
-#   2. If no Docker socket → file-based heuristic (signal file freshness)
+#   1. If Docker reachable (via DOCKER_HOST env or default socket) → docker inspect
+#   2. If Docker unavailable → file-based heuristic (signal file freshness)
 #   3. Silent OK = no output = no Telegram delivery
 #
-# Root cause of v1 failure: Hermes container has no Docker socket mounted.
-# v2 gracefully handles this and reports accurate status in both modes.
+# v2 gracefully handles missing Docker and reports accurate status in both modes.
 
 set -euo pipefail
 
@@ -38,10 +38,10 @@ all_status=""
 mode="unknown"
 
 # ── Detect Docker availability ──────────────────────────────────
-# Bypass Docker proxy (EXEC=0) via direct unix socket
-export DOCKER_HOST="unix:///var/run/docker.sock"
+# Respect DOCKER_HOST from environment (e.g. tcp://docker-proxy:2375 in hermes-green).
+# Fall back to Docker CLI default (unix socket) if DOCKER_HOST is not set.
 has_docker=false
-if [ -S /var/run/docker.sock ] && command -v docker &>/dev/null; then
+if command -v docker &>/dev/null; then
     if docker info &>/dev/null; then
         has_docker=true
         mode="docker"

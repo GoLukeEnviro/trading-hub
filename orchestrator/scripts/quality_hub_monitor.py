@@ -22,8 +22,8 @@ CRON_JSON = Path('/opt/data/profiles/orchestrator/cron/jobs.json')
 SIGNAL_PATH = BASE / 'ai-hedge-fund-crypto/output/hermes_signal.json'
 DRAWDOWN_PATH = BASE / 'orchestrator/state/drawdown_state.json'
 
-# DOCKER_HOST override — docker-proxy blocks exec calls
-_DOCKER_HOST = "unix:///var/run/docker.sock"
+# Docker host is inherited from the environment (DOCKER_HOST).
+# In hermes-green this is tcp://docker-proxy:2375 (EXEC=1, POST=1 enabled).
 
 BOTS = {
     'trading-freqtrade-freqforge-1': {
@@ -63,7 +63,7 @@ def load_json(path):
 
 def run(cmd, timeout=20):
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
-                           env={**os.environ, "DOCKER_HOST": _DOCKER_HOST})
+                           env=os.environ.copy())
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
 
