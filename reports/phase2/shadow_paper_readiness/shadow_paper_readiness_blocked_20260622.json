@@ -1,0 +1,290 @@
+{
+  "action_count": 0,
+  "apply": {
+    "action_count": 0,
+    "capital_execution": "disabled",
+    "mode": "artifact_only",
+    "mutation_count": 0,
+    "status": "skipped"
+  },
+  "apply_mode": "artifact_only",
+  "artifact_type": "shadow_paper_readiness_forced_blocked",
+  "bots": [
+    {
+      "bot_id": "freqtrade-freqforge",
+      "exit_reason_codes": [],
+      "exit_status": "valid",
+      "monitoring_recommendations": [
+        "no_action_recommended"
+      ],
+      "monitoring_verdict": "green",
+      "profitability_verdict": "candidate",
+      "strategy_id": "strat_btc_01"
+    },
+    {
+      "bot_id": "freqtrade-regime-hybrid",
+      "exit_reason_codes": [],
+      "exit_status": "valid",
+      "monitoring_recommendations": [
+        "no_action_recommended"
+      ],
+      "monitoring_verdict": "green",
+      "profitability_verdict": "candidate",
+      "strategy_id": "strat_eth_01"
+    },
+    {
+      "bot_id": "freqtrade-freqforge-canary",
+      "exit_reason_codes": [
+        "insufficient_candles"
+      ],
+      "exit_status": "blocked",
+      "monitoring_recommendations": [
+        "pause_promotion_recommended",
+        "mark_bot_blocked_recommended",
+        "manual_review_recommended"
+      ],
+      "monitoring_verdict": "red",
+      "profitability_verdict": "candidate",
+      "strategy_id": "strat_btc_01"
+    },
+    {
+      "bot_id": "freqai-rebel",
+      "exit_reason_codes": [],
+      "exit_status": "valid",
+      "monitoring_recommendations": [
+        "no_action_recommended"
+      ],
+      "monitoring_verdict": "green",
+      "profitability_verdict": "candidate",
+      "strategy_id": "strat_sol_01"
+    }
+  ],
+  "branch": "docs/si-v2-shadow-paper-readiness-proof",
+  "capital_execution": "disabled",
+  "commit_sha": "3f1502b",
+  "controlled_failure": "insufficient_candles",
+  "dynamic_exit_evidence": {
+    "per_bot_evidence": [
+      {
+        "bot_id": "freqtrade-freqforge",
+        "direction": "long",
+        "mode": "atr",
+        "reason_codes": [],
+        "reward_distance": "1000.000000",
+        "risk_distance": "750.000000",
+        "risk_reward_ratio": "1.333333",
+        "status": "valid",
+        "stop_loss": "49250.000000",
+        "strategy_id": "strat_btc_01",
+        "take_profit": "51000.000000"
+      },
+      {
+        "bot_id": "freqtrade-regime-hybrid",
+        "direction": "long",
+        "mode": "atr",
+        "reason_codes": [],
+        "reward_distance": "50.000000",
+        "risk_distance": "37.500000",
+        "risk_reward_ratio": "1.333333",
+        "status": "valid",
+        "stop_loss": "2962.500000",
+        "strategy_id": "strat_eth_01",
+        "take_profit": "3050.000000"
+      },
+      {
+        "bot_id": "freqtrade-freqforge-canary",
+        "direction": "long",
+        "mode": "atr",
+        "reason_codes": [
+          "insufficient_candles"
+        ],
+        "reward_distance": null,
+        "risk_distance": null,
+        "risk_reward_ratio": null,
+        "status": "blocked",
+        "stop_loss": null,
+        "strategy_id": "strat_btc_01",
+        "take_profit": null
+      },
+      {
+        "bot_id": "freqai-rebel",
+        "direction": "long",
+        "mode": "atr",
+        "reason_codes": [],
+        "reward_distance": "10.000000",
+        "risk_distance": "7.500000",
+        "risk_reward_ratio": "1.333333",
+        "status": "valid",
+        "stop_loss": "92.500000",
+        "strategy_id": "strat_sol_01",
+        "take_profit": "110.000000"
+      }
+    ],
+    "reasons": [
+      "hard_blocked_bots: freqtrade-freqforge-canary"
+    ],
+    "verdict": "blocked"
+  },
+  "failure_injected_bot": "freqtrade-freqforge-canary",
+  "generated_at_utc": "2026-06-22T07:36:57.307642+00:00",
+  "monitoring": {
+    "bot_count": 4,
+    "bot_ids": [
+      "freqtrade-freqforge",
+      "freqtrade-regime-hybrid",
+      "freqtrade-freqforge-canary",
+      "freqai-rebel"
+    ],
+    "expected_bot_count": 4,
+    "expected_bot_ids": [
+      "freqtrade-freqforge",
+      "freqtrade-regime-hybrid",
+      "freqtrade-freqforge-canary",
+      "freqai-rebel"
+    ],
+    "green_bot_count": 3,
+    "missing_expected_bot_ids": [],
+    "per_bot_statuses": [
+      {
+        "bot_id": "freqtrade-freqforge",
+        "dynamic_exit_evidence_gate_verdict": "candidate",
+        "error_flags": [],
+        "heartbeat_age_seconds": 45,
+        "heartbeat_ok": true,
+        "is_expected_bot": true,
+        "profitability_gate_verdict": "candidate",
+        "proposal_generation_ok": true,
+        "reasons": [],
+        "recommendations": [
+          "no_action_recommended"
+        ],
+        "telemetry_age_seconds": 120,
+        "telemetry_fresh": true,
+        "verdict": "green"
+      },
+      {
+        "bot_id": "freqtrade-regime-hybrid",
+        "dynamic_exit_evidence_gate_verdict": "candidate",
+        "error_flags": [],
+        "heartbeat_age_seconds": 45,
+        "heartbeat_ok": true,
+        "is_expected_bot": true,
+        "profitability_gate_verdict": "candidate",
+        "proposal_generation_ok": true,
+        "reasons": [],
+        "recommendations": [
+          "no_action_recommended"
+        ],
+        "telemetry_age_seconds": 120,
+        "telemetry_fresh": true,
+        "verdict": "green"
+      },
+      {
+        "bot_id": "freqtrade-freqforge-canary",
+        "dynamic_exit_evidence_gate_verdict": "blocked",
+        "error_flags": [
+          "insufficient_candles"
+        ],
+        "heartbeat_age_seconds": 45,
+        "heartbeat_ok": true,
+        "is_expected_bot": true,
+        "profitability_gate_verdict": "candidate",
+        "proposal_generation_ok": true,
+        "reasons": [
+          "dynamic_exit_evidence_gate_blocked",
+          "error_flags_present:insufficient_candles"
+        ],
+        "recommendations": [
+          "pause_promotion_recommended",
+          "mark_bot_blocked_recommended",
+          "manual_review_recommended"
+        ],
+        "telemetry_age_seconds": 120,
+        "telemetry_fresh": true,
+        "verdict": "red"
+      },
+      {
+        "bot_id": "freqai-rebel",
+        "dynamic_exit_evidence_gate_verdict": "candidate",
+        "error_flags": [],
+        "heartbeat_age_seconds": 45,
+        "heartbeat_ok": true,
+        "is_expected_bot": true,
+        "profitability_gate_verdict": "candidate",
+        "proposal_generation_ok": true,
+        "reasons": [],
+        "recommendations": [
+          "no_action_recommended"
+        ],
+        "telemetry_age_seconds": 120,
+        "telemetry_fresh": true,
+        "verdict": "green"
+      }
+    ],
+    "reasons": [
+      "freqtrade-freqforge-canary:dynamic_exit_evidence_gate_blocked",
+      "freqtrade-freqforge-canary:error_flags_present:insufficient_candles"
+    ],
+    "recommendations": [
+      "pause_promotion_recommended",
+      "mark_bot_blocked_recommended",
+      "manual_review_recommended"
+    ],
+    "red_bot_count": 1,
+    "unknown_bot_ids": [],
+    "verdict": "red",
+    "yellow_bot_count": 0
+  },
+  "mutation_count": 0,
+  "overall_status": "BLOCKED_AS_EXPECTED",
+  "path": "forced_blocked_path",
+  "profitability_gate": {
+    "bot_verdicts": {
+      "freqai-rebel": "candidate",
+      "freqtrade-freqforge": "candidate",
+      "freqtrade-freqforge-canary": "candidate",
+      "freqtrade-regime-hybrid": "candidate"
+    },
+    "fleet_summary": {
+      "blocked_count": 0,
+      "bot_count": 4,
+      "candidate_count": 4,
+      "fleet_profit_factor": 999.0,
+      "inconclusive_count": 0,
+      "max_drawdown_pct": 6.1,
+      "total_net_pnl": 28.9,
+      "total_trades": 35
+    },
+    "reasons": [],
+    "verdict": "candidate"
+  },
+  "proof_notes": [
+    "4 bots represented",
+    "controlled failure injected: insufficient_candles",
+    "Dynamic Exit Gate blocked correctly",
+    "Monitoring reflects unsafe state",
+    "No promotion",
+    "Apply remains artifact-only",
+    "action_count=0",
+    "mutation_count=0"
+  ],
+  "safety": {
+    "auto_healing": false,
+    "capital_execution": false,
+    "compose_changes": false,
+    "config_writes": false,
+    "cron_changes": false,
+    "docker_changes": false,
+    "exchange_io": false,
+    "orders": false,
+    "runtime_mutation": false,
+    "strategy_writes": false
+  },
+  "schema_version": 1,
+  "strategy_codex_mapping": {
+    "freqai-rebel": "strat_sol_01",
+    "freqtrade-freqforge": "strat_btc_01",
+    "freqtrade-freqforge-canary": "strat_btc_01",
+    "freqtrade-regime-hybrid": "strat_eth_01"
+  }
+}
