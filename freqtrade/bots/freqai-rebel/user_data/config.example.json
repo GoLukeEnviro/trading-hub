@@ -7,12 +7,12 @@
     "listen_ip_address": "127.0.0.1",
     "listen_port": 8080,
     "password": "CHANGE_ME_LOCAL_ONLY_PASSWORD",
-    "username": "research",
+    "username": "rebel",
     "verbosity": "info"
   },
-  "bot_name": "regime-hybrid-research-sideaware-v3",
+  "bot_name": "freqai-rebel",
   "cancel_open_orders_on_exit": false,
-  "db_url": "sqlite:////freqtrade/user_data/tradesv3.regime_hybrid.research_v3.sqlite",
+  "db_url": "sqlite:////freqtrade/user_data/tradesv3.rebel.dryrun.sqlite",
   "dry_run": true,
   "dry_run_wallet": 1000,
   "entry_pricing": {
@@ -26,7 +26,10 @@
     "pair_blacklist": [
       "UST/USDT",
       "LUNA/USDT",
-      "LUNC/USDT"
+      "LUNC/USDT",
+      "TUSD/USDT",
+      "USDC/USDT",
+      "DAI/USDT"
     ],
     "pair_whitelist": [
       "BTC/USDT:USDT",
@@ -42,6 +45,19 @@
   },
   "fiat_display_currency": "USD",
   "force_entry_enable": false,
+  "freqai": {
+    "feature_parameters": {
+      "label_period_candles": 1,
+      "label_shift_candles": 1,
+      "include_timeframes": ["15m"],
+      "include_corr_pairlist": ["BTC/USDT:USDT"],
+      "DI_threshold": 50
+    },
+    "model_training_parameters": {
+      "n_estimators": 200
+    },
+    "model_training_parameters_overfit": false
+  },
   "initial_state": "running",
   "internals": {
     "process_throttle_secs": 5
@@ -54,16 +70,15 @@
       "method": "StaticPairList"
     }
   ],
-  "signal_archive_file": "/freqtrade/user_data/signals/historical_signals.jsonl",
-  "stake_amount": 100,
+  "stake_amount": 50,
   "stake_currency": "USDT",
-  "strategy": "ResearchRegimeHybridSideAwareV3",
+  "strategy": "RebelLiquidation",
   "telegram": {
     "chat_id": "REDACTED",
     "enabled": false,
     "token": "CHANGE_ME_LOCAL_ONLY_TOKEN"
   },
-  "tradable_balance_ratio": 0.99,
+  "tradable_balance_ratio": 0.95,
   "trading_mode": "futures",
   "user_data_dir": "/freqtrade/user_data"
 }
