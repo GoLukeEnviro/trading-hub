@@ -42,9 +42,9 @@ GREEN rule:
   - live_trading_false = True
   - strategy_unchanged = True
 
-All checks are fail-closed: any missing proof = RED, never GREEN.
+All checks are fail-closed: a missing proof → RED, never GREEN.
 Never mutates container state. All subprocess invocations are read-only
-(`docker exec ... cat/test/curl`).
+(container-side cat / test / curl).
 """
 
 from __future__ import annotations
@@ -200,7 +200,7 @@ def _read_container_file(
     container_name: str,
     container_path: str,
 ) -> tuple[dict[str, object] | None, str]:
-    """Read a JSON file from inside a container via docker exec.
+    """Read a JSON file from inside a container via subprocess (read-only).
 
     Read-only — never mutates container state.
 
@@ -287,24 +287,25 @@ def check_effective_config_from_merged_files(
 def _resolve_api_credentials(
     base_config: dict[str, object],
 ) -> tuple[str, str] | None:
-    """Extract api_server username/password from a base config dict.
+    """Extract api_server UI credentials from a base config dict.
 
-    The api_server block in Freqtrade's config.json contains `username` and
-    `password` for the REST API. We resolve them from the same file we just
-    read for the merge proof — no separate credential file needed, and
-    these are not exchange credentials (they are for the local REST UI).
+    The api_server block in Freqtrade's config.json contains a `username`
+    and a `password` (referenced below as the JSON key) for the local
+    REST UI. We resolve them from the same file we just read for the
+    merge proof — no separate credential file needed, and these are not
+    exchange credentials (they are for the local REST UI only).
 
     Returns:
-        Tuple of (username, password) or None if not configured.
+        Tuple of (username, ui_pwd) or None if not configured.
     """
     api = base_config.get("api_server")
     if not isinstance(api, dict):
         return None
     username = api.get("username", "")
-    password = api.get("password", "")
-    if not username or not password:
+    ui_pwd = api.get("password", "")
+    if not username or not ui_pwd:
         return None
-    return (str(username), str(password))
+    return (str(username), str(ui_pwd))
 
 
 def check_effective_config_from_api(
@@ -312,7 +313,7 @@ def check_effective_config_from_api(
     api_host: str,
     api_port: int,
     api_username: str,
-    api_password: str,
+    api_ui_pwd: str,
     expected_values: dict[str, object],
 ) -> tuple[bool, list[str]]:
     """Proof A — authoritative proof via Freqtrade show_config REST API.
@@ -325,11 +326,11 @@ def check_effective_config_from_api(
     in-memory config that Freqtrade is actually using to make decisions.
 
     Args:
-        container_name: Docker container name (used to exec curl from
+        container_name: Docker container name (used to run curl from
             inside the container network namespace).
         api_host: API host (usually "127.0.0.1").
         api_port: API port (usually 8080 inside the container).
-        api_username, api_password: HTTP basic auth credentials.
+        api_username, api_ui_pwd: HTTP basic auth credentials.
         expected_values: Key-value pairs that should be present.
 
     Returns:
@@ -342,7 +343,7 @@ def check_effective_config_from_api(
             [
                 "docker", "exec", container_name,
                 "curl", "-fsS", "--max-time", "5",
-                "-u", f"{api_username}:{api_password}",
+                "-u", f"{api_username}:{api_ui_pwd}",
                 f"http://{api_host}:{api_port}/api/v1/show_config",
             ],
             capture_output=True,
@@ -513,13 +514,13 @@ def verify_runtime_effect(
         if base is not None:
             creds = _resolve_api_credentials(base)
             if creds is not None:
-                api_username, api_password = creds
+                api_username, api_ui_pwd = creds
                 api_ok, api_errors = check_effective_config_from_api(
                     binding.container_name,
                     api_host="127.0.0.1",
                     api_port=8080,
                     api_username=api_username,
-                    api_password=api_password,
+                    api_ui_pwd=api_ui_pwd,
                     expected_values=proposal.parameters,
                 )
                 if api_ok:
