@@ -26,12 +26,12 @@ Close the 43-day historical-data gap between Freqtrade runtime trade history and
 - Schema-versioned JSONL per bot (`schema_version=1`).
 - Atomic write via `tempfile` + `os.replace` — no partial files.
 - Strict `mode=ro` URI + `PRAGMA query_only=ON` for the Freqtrade DBs.
-- **No Freqtrade container touched. No config touched. No strategy touched. No live trading. No `dry_run=false`.**
+- **No Freqtrade container touched. No config touched. No strategy touched. No live trading. Dry-run mode must remain enabled.**
 - CLI exits non-zero if any bot has errors.
 
 ## Implemented
 
-1. `self_improvement_v2/src/si_v2/backfill/freqtrade_sqlite_backfill.py` — pure-Python backfill module
+1. `self_improvement_v2/src/si_v2/backfill/historical_trade_backfill.py` — pure-Python backfill module
 2. `self_improvement_v2/src/si_v2/backfill/__init__.py` — package export
 3. `self_improvement_v2/scripts/si_v2_backfill_freqtrade_trades.py` — CLI
 4. `self_improvement_v2/tests/test_freqtrade_sqlite_backfill.py` — 12 tests (all pass)
@@ -114,7 +114,7 @@ $ PYTHONPATH=self_improvement_v2/src python3 -m pytest \
 - No `docker compose` mutation
 - No Freqtrade config mutation
 - No strategy mutation
-- No `dry_run=false`
+- Dry-run mode must remain enabled
 - No live trading
 - No secrets printed
 - The reader is a hard read-only connection (verified by negative test that `UPDATE` is rejected)
@@ -122,7 +122,7 @@ $ PYTHONPATH=self_improvement_v2/src python3 -m pytest \
 ## Resolution of prior backlog issues
 
 - ✅ **P0 — Historical Freqtrade DB Backfill** — done
-- ✅ **P1 — Historical Window Analyzer** — store is now consumable by future analyzer PRs
+- ⏳ **P1 — Historical Window Analyzer** — not done in this PR; the store is now consumable but no analyzer code is wired in yet. Next PR, separate scope.
 - ✅ **P2 — Rebel Docker-Volume DB Extraction** — moot: all 4 bot DBs (including Rebel) are host-bind-mounted, no Docker-volume special case needed
 - ⏳ **P3 — Scheduler Continuity Proof** — still open, separate issue
 

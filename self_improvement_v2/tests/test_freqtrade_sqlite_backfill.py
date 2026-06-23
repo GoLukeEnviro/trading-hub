@@ -31,7 +31,7 @@ import pytest
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "self_improvement_v2" / "src"))
 
-from si_v2.backfill.freqtrade_sqlite_backfill import (  # noqa: E402
+from si_v2.backfill.historical_trade_backfill import (  # noqa: E402
     DEFAULT_BOT_DBS,
     SCHEMA_VERSION,
     TRADE_COLUMNS,
@@ -298,7 +298,7 @@ def test_backfill_bot_does_not_mutate_source(fake_repo: Path, tmp_path: Path) ->
 
 def test_backfill_bot_readonly_via_uri() -> None:
     """The reader uses ``mode=ro``; attempts to write must fail at the SQLite level."""
-    from si_v2.backfill.freqtrade_sqlite_backfill import _connect_ro, _fetch_trades
+    from si_v2.backfill.historical_trade_backfill import _connect_ro, _fetch_trades
 
     # Synthetic in-memory file, then copy to disk for the URI mode.
     src = sqlite3.connect(":memory:")

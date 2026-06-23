@@ -22,7 +22,7 @@ _THIS = Path(__file__).resolve()
 _REPO = _THIS.parents[2]  # self_improvement_v2/scripts/<this> -> repo root
 sys.path.insert(0, str(_REPO / "self_improvement_v2" / "src"))
 
-from si_v2.backfill.freqtrade_sqlite_backfill import (  # noqa: E402
+from si_v2.backfill.historical_trade_backfill import (  # noqa: E402
     DEFAULT_BOT_DBS,
     backfill_all,
     load_summary,
