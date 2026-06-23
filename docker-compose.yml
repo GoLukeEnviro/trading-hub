@@ -179,7 +179,7 @@ services:
     image: freqtradeorg/freqtrade:stable
     ports:
     - 127.0.0.1:8086:8080
-    command: trade --config /freqtrade/user_data/config.json --strategy FreqForge_Override
+    command: trade --config /freqtrade/user_data/config.json --config /freqtrade/user_data/overlay_65502d13.json --strategy FreqForge_Override
     environment:
     - FREQTRADE__TELEGRAM__ENABLED=false
     volumes:

@@ -45,6 +45,18 @@ freqforge*/user_data/config*.json
 !freqforge/config/config*.example.json
 !freqforge*/user_data/config*.example.json
 
+# SI-v2 runtime overlay files (parameter overlays, not source code)
+# These are placed by the Apply Actuator into a bot's user_data/ directory
+# and are mounted into the running Freqtrade container. They are runtime
+# state, not source code, and must NEVER be committed — they reflect the
+# currently active mutation policy and could conflict with future activations.
+# Cleanup of previously-tracked inert overlays is a separate audit step
+# (see PR #336 / candidate 65502d13).
+**/user_data/overlay_*.json
+freqforge/user_data/overlay_*.json
+freqforge-canary/user_data/overlay_*.json
+freqtrade/bots/*/user_data/overlay_*.json
+
 # Backtest lab configs — may contain secrets
 backtests/daily_lab/config*.json
 

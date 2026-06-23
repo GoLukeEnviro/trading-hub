@@ -212,10 +212,25 @@ class RuntimeEffectProof:
     """Whether the overlay/effective config file is visible inside the container."""
 
     effective_config_contains_expected_values: bool = False
-    """Whether the generated config has the expected new values."""
+    """Whether the generated config (base + overlay merge) has the expected new values."""
 
     loaded_config_contains_expected_values: bool = False
-    """Whether the bot's ACTUALLY LOADED config has the expected values."""
+    """Whether the bot's ACTUALLY LOADED config has the expected values.
+
+    Derived from either the Freqtrade API (show_config) or the deterministic
+    in-container merge. NOT from a raw cat of the base config.json — that
+    would conflate the base with the effective runtime state.
+    """
+
+    process_command_uses_overlay: bool = False
+    """Whether the Freqtrade process command line references the overlay config path.
+
+    Authoritative evidence that the bot was started with the overlay file. Without
+    this, the file may be visible in the container but never actually loaded.
+    """
+
+    proof_method: str = ""
+    """Which proof strategy was used: 'api', 'merged_fallback', or 'none'."""
 
     dry_run_true: bool = True
     live_trading_false: bool = True
@@ -233,6 +248,8 @@ class RuntimeEffectProof:
             "file_visible_to_bot": self.file_visible_to_bot,
             "effective_config_contains_expected_values": self.effective_config_contains_expected_values,
             "loaded_config_contains_expected_values": self.loaded_config_contains_expected_values,
+            "process_command_uses_overlay": self.process_command_uses_overlay,
+            "proof_method": self.proof_method,
             "dry_run_true": self.dry_run_true,
             "live_trading_false": self.live_trading_false,
             "strategy_unchanged": self.strategy_unchanged,

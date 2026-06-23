@@ -7,6 +7,15 @@ when the actual Docker bind mount is `freqforge/user_data/`.
 
 All bindings are machine-verified (Docker inspect, read-only container exec).
 No assumptions — every path is backed by evidence.
+
+Multi-config note (added 2026-06-23, candidate 65502d13):
+`loaded_config_args` is the BASE process command line. When an overlay
+candidate is activated, the runtime layer adds a second `--config
+/freqtrade/user_data/overlay_<id>.json` argument. The proof layer
+(`si_v2.apply_actuator.proof.verify_runtime_effect`) derives the expected
+overlay path dynamically from the proposal_id and checks the actual
+process command line — see `check_process_uses_overlay`. We do not
+hardcode the activated overlay path into the static binding.
 """
 
 from __future__ import annotations
@@ -28,6 +37,14 @@ BOT_RUNTIME_BINDINGS: Final[dict[str, BotRuntimeBinding]] = {
         container_user_data_path="/freqtrade/user_data",
         host_config_path="/home/hermes/projects/trading/freqforge/user_data/config.json",
         container_config_path="/freqtrade/user_data/config.json",
+        # Note: `loaded_config_args` reflects the BASE process args only.
+        # When a multi-config overlay is activated, the running process
+        # will include an additional `--config /freqtrade/user_data/overlay_<id>.json`
+        # argument. The proof layer derives the expected overlay path
+        # dynamically from the proposal_id at verification time — we do NOT
+        # hardcode the activated overlay into the static binding here,
+        # because that would make the binding stale the next time a
+        # different candidate is activated.
         loaded_config_args=(
             "--config",
             "/freqtrade/user_data/config.json",
