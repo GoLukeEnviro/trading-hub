@@ -24,15 +24,12 @@ Hard rules:
 
 from __future__ import annotations
 
-from collections import defaultdict
-from collections.abc import Iterable
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from si_v2.backfill.historical_trade_reader import (
-    ReadStats,
     TradeRecord,
     load_store,
 )
@@ -56,6 +53,15 @@ WINDOW_LAST_7D = "last_7d"
 WINDOW_LAST_14D = "last_14d"
 WINDOW_PRE_APPLY = "pre_apply"
 WINDOW_POST_APPLY = "post_apply"
+
+
+def _format_pf(pf: float | None) -> float | str | None:
+    """Format profit factor for JSON output. ``float('inf')`` becomes the string ``"inf"``."""
+    if pf is None:
+        return None
+    if pf == float("inf"):
+        return "inf"
+    return round(pf, 6)
 
 
 @dataclass
@@ -136,7 +142,7 @@ class WindowMetrics:
             "sum_close_profit_ratio": round(self.sum_close_profit_ratio, 6),
             "gross_profit": round(self.gross_profit, 8),
             "gross_loss": round(self.gross_loss, 8),
-            "profit_factor": (round(pf, 6) if pf is not None and pf != float("inf") else (None if pf is None else "inf")),
+            "profit_factor": _format_pf(pf),
             "best_trade_abs": (None if self.best_trade_abs is None else round(self.best_trade_abs, 8)),
             "worst_trade_abs": (None if self.worst_trade_abs is None else round(self.worst_trade_abs, 8)),
             "oldest_open_date": self.oldest_open_date,
@@ -175,7 +181,6 @@ class FleetSummary:
         return self.gross_profit / abs(self.gross_loss)
 
     def to_dict(self) -> dict[str, object]:
-        pf = self.fleet_profit_factor
         return {
             "window_kind": self.window_kind,
             "bots_covered": list(self.bots_covered),
@@ -186,9 +191,7 @@ class FleetSummary:
             "losses": self.losses,
             "winrate": round(self.wins / self.closed_trades, 6) if self.closed_trades else 0.0,
             "sum_close_profit_abs": round(self.sum_close_profit_abs, 8),
-            "fleet_profit_factor": (
-                round(pf, 6) if pf is not None and pf != float("inf") else (None if pf is None else "inf")
-            ),
+            "fleet_profit_factor": _format_pf(self.fleet_profit_factor),
             "strongest_bot": self.strongest_bot,
             "weakest_bot": self.weakest_bot,
             "coverage_start": self.coverage_start,
@@ -198,7 +201,7 @@ class FleetSummary:
 
 
 def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _parse_utc(s: str | None) -> datetime | None:
@@ -210,11 +213,13 @@ def _parse_utc(s: str | None) -> datetime | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
-def _window_bounds(window: str, activation_utc: str | None, now: datetime | None = None) -> tuple[str | None, str | None]:
+def _window_bounds(
+    window: str, activation_utc: str | None, now: datetime | None = None
+) -> tuple[str | None, str | None]:
     """Return ``(start_utc, end_utc)`` for a named window.
 
     ``end_utc`` is inclusive.  An open bound is returned as ``None`` so
@@ -282,12 +287,12 @@ def compute_window_metrics(records: Iterable[TradeRecord], *, bot_id: str, windo
             else:
                 ps.losses += 1
         # Date coverage (open + close)
-        if rec.open_date:
-            if metrics.oldest_open_date is None or rec.open_date < metrics.oldest_open_date:
-                metrics.oldest_open_date = rec.open_date
-        if rec.close_date and rec.is_closed:
-            if metrics.newest_close_date is None or rec.close_date > metrics.newest_close_date:
-                metrics.newest_close_date = rec.close_date
+        if rec.open_date and (metrics.oldest_open_date is None or rec.open_date < metrics.oldest_open_date):
+            metrics.oldest_open_date = rec.open_date
+        if rec.close_date and rec.is_closed and (
+            metrics.newest_close_date is None or rec.close_date > metrics.newest_close_date
+        ):
+            metrics.newest_close_date = rec.close_date
     if pair_map:
         sorted_by_pnl = sorted(pair_map.values(), key=lambda p: p.pnl_abs, reverse=True)
         metrics.top_pairs = sorted_by_pnl[:5]
@@ -460,21 +465,21 @@ def build_historical_evidence_window(
 
 
 __all__ = [
+    "MIN_POST_APPLY_CLOSED_TRADES",
     "VERDICT_GREEN",
-    "VERDICT_YELLOW",
     "VERDICT_RED",
     "VERDICT_WAITING",
+    "VERDICT_YELLOW",
     "WINDOW_FULL",
     "WINDOW_LAST_7D",
     "WINDOW_LAST_14D",
-    "WINDOW_PRE_APPLY",
     "WINDOW_POST_APPLY",
-    "MIN_POST_APPLY_CLOSED_TRADES",
+    "WINDOW_PRE_APPLY",
+    "FleetSummary",
     "PairStats",
     "WindowMetrics",
-    "FleetSummary",
-    "compute_window_metrics",
-    "compute_fleet_summary",
     "analyze_windows",
     "build_historical_evidence_window",
+    "compute_fleet_summary",
+    "compute_window_metrics",
 ]

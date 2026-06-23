@@ -12,7 +12,7 @@ Contract:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -22,12 +22,9 @@ from si_v2.analysis.historical_window_analyzer import (
     VERDICT_WAITING,
     VERDICT_YELLOW,
     WINDOW_FULL,
-    WINDOW_LAST_14D,
     WINDOW_LAST_7D,
     WINDOW_POST_APPLY,
     WINDOW_PRE_APPLY,
-    FleetSummary,
-    PairStats,
     WindowMetrics,
     analyze_windows,
     build_historical_evidence_window,
@@ -38,7 +35,6 @@ from si_v2.backfill.historical_trade_reader import (
     SUPPORTED_SCHEMA_VERSION,
     TradeRecord,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -267,7 +263,7 @@ def test_analyze_windows_post_apply_with_trades(tmp_path: Path) -> None:
 def test_analyze_windows_last_7d_with_now(tmp_path: Path) -> None:
     store = _build_store(tmp_path)
     # Force "now" so the 7d window only contains 06-16T12:00Z..06-23T12:00Z.
-    fixed_now = datetime(2026, 6, 23, 12, 0, 0, tzinfo=timezone.utc)
+    fixed_now = datetime(2026, 6, 23, 12, 0, 0, tzinfo=UTC)
     out = analyze_windows(
         store, activation_utc="2026-06-10T00:00:00+00:00",
         windows=(WINDOW_LAST_7D,),
@@ -333,9 +329,9 @@ def test_build_historical_evidence_window_with_post_apply_data(tmp_path: Path) -
 
 def test_no_runtime_imports_in_analyzer() -> None:
     """Hard rule: no docker / freqtrade / exchange in import lines of the analyzer."""
-    src = Path(
-        "/home/hermes/projects/trading/self_improvement_v2/src/si_v2/analysis/historical_window_analyzer.py"
-    ).read_text()
+    analyzer_path = Path(__file__).parent.parent / "src" / "si_v2" / "analysis" / "historical_window_analyzer.py"
+    assert analyzer_path.is_file(), f"analyzer source not found at {analyzer_path}"
+    src = analyzer_path.read_text()
     for line in src.splitlines():
         stripped = line.strip()
         if not (stripped.startswith("import ") or stripped.startswith("from ")):
@@ -362,7 +358,7 @@ def test_serializable_no_object_leak() -> None:
         s = json.dumps(bundle)
         d = json.loads(s)
         assert "windows" in d
-        for wname, w in d["windows"].items():
+        for _wname, w in d["windows"].items():
             assert "verdict" in w
             assert "per_bot" in w
             assert "fleet" in w

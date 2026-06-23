@@ -12,20 +12,17 @@ Contract:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from si_v2.backfill.historical_trade_reader import (
-    ReadStats,
     SUPPORTED_SCHEMA_VERSION,
     TradeRecord,
     iter_pairs,
     list_bots,
     load_store,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -163,7 +160,7 @@ def test_load_store_corrupt_line_does_not_crash(tmp_path: Path) -> None:
         })
         + "\n"
     )
-    records, stats = load_store(tmp_path)
+    _records, stats = load_store(tmp_path)
     assert stats.lines_skipped_corrupt == 1
     assert stats.lines_kept == 1
 
@@ -172,7 +169,7 @@ def test_load_store_schema_mismatch_is_skipped(tmp_path: Path) -> None:
     p = tmp_path / "historical_trades_bot-d.jsonl"
     _write_record(p, bot_id="bot-d", schema_version=999)
     _write_record(p, bot_id="bot-d", schema_version=SUPPORTED_SCHEMA_VERSION)
-    records, stats = load_store(tmp_path)
+    _records, stats = load_store(tmp_path)
     assert stats.lines_skipped_schema == 1
     assert stats.lines_kept == 1
 
@@ -203,9 +200,9 @@ def test_list_bots_and_iter_pairs(store_dir: Path) -> None:
 
 def test_no_runtime_imports_in_reader() -> None:
     """Hard rule: no docker / freqtrade / exchange in import lines of the reader."""
-    src = Path(
-        "/home/hermes/projects/trading/self_improvement_v2/src/si_v2/backfill/historical_trade_reader.py"
-    ).read_text()
+    reader_path = Path(__file__).parent.parent / "src" / "si_v2" / "backfill" / "historical_trade_reader.py"
+    assert reader_path.is_file(), f"reader source not found at {reader_path}"
+    src = reader_path.read_text()
     for line in src.splitlines():
         stripped = line.strip()
         if not (stripped.startswith("import ") or stripped.startswith("from ")):

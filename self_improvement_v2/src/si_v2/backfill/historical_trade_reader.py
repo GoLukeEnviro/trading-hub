@@ -25,6 +25,7 @@ import json
 import logging
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+from datetime import UTC
 from pathlib import Path
 
 log = logging.getLogger("si_v2.backfill.historical_trade_reader")
@@ -89,8 +90,7 @@ def _iter_store_files(store_dir: Path) -> Iterator[Path]:
     The summary file (``historical_trades_summary.json``) is excluded; it
     is a sidecar and would otherwise be parsed twice.
     """
-    for path in sorted(store_dir.glob("historical_trades_*.jsonl")):
-        yield path
+    yield from sorted(store_dir.glob("historical_trades_*.jsonl"))
 
 
 def _parse_record(
@@ -150,8 +150,7 @@ def _parse_close_timestamp(close_date: str | None) -> float:
     if dt.tzinfo is None:
         # SQLite-derived timestamps are naive UTC.  Treat them as such so that
         # string comparisons remain deterministic.
-        from datetime import timezone
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt.timestamp()
 
 
@@ -286,9 +285,9 @@ def iter_pairs(records: Iterable[TradeRecord]) -> list[str]:
 
 __all__ = [
     "SUPPORTED_SCHEMA_VERSION",
-    "TradeRecord",
     "ReadStats",
-    "load_store",
-    "list_bots",
+    "TradeRecord",
     "iter_pairs",
+    "list_bots",
+    "load_store",
 ]
