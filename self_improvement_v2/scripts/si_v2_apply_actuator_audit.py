@@ -23,20 +23,18 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-# Add src to path for module imports
+# Add src to path for module imports (noqa: E402 — path setup must precede imports)
 _REPO_ROOT = Path(__file__).resolve().parent.parent / "src"
 sys.path.insert(0, str(_REPO_ROOT))
 
-from si_v2.apply_actuator.runtime_binding import (
+from si_v2.apply_actuator.models import OverlayProposal  # noqa: E402
+from si_v2.apply_actuator.policy import compute_apply_result  # noqa: E402
+from si_v2.apply_actuator.runtime_binding import (  # noqa: E402
     BOT_RUNTIME_BINDINGS,
     build_host_overlay_path,
     resolve_binding,
     validate_fleet_bindings,
 )
-from si_v2.apply_actuator.models import (
-    OverlayProposal,
-)
-from si_v2.apply_actuator.policy import compute_apply_result
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
@@ -75,7 +73,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
         if overlay_candidates:
             print(f"   Overlays:   {', '.join(overlay_candidates)}")
         else:
-            print(f"   Overlays:   (none)")
+            print("   Overlays:   (none)")
 
     # Specific proposal check if provided
     if args.proposal_id and args.bot_id:
@@ -89,14 +87,15 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
             # Check if overlay exists at correct path
             if correct_path and Path(correct_path).exists():
-                print(f"   ✅ Overlay exists at correct path")
+                print("   ✅ Overlay exists at correct path")
             else:
-                print(f"   ❌ Overlay NOT at correct path")
+                print("   ❌ Overlay NOT at correct path")
 
             # Check if overlay exists at wrong path (the dead path)
-            wrong_path = Path(
-                f"/home/hermes/projects/trading/freqtrade/bots/{args.bot_id.replace('freqtrade-', '')}/user_data/overlay_{args.proposal_id[:8]}.json"
-            )
+            bot_short = args.bot_id.replace("freqtrade-", "")
+            dead_base = "/home/hermes/projects/trading/freqtrade/bots"
+            dead_name = f"overlay_{args.proposal_id[:8]}.json"
+            wrong_path = Path(f"{dead_base}/{bot_short}/user_data/{dead_name}")
             if wrong_path.exists():
                 print(f"   ⚠️  Overlay exists at WRONG (repo-inert) path: {wrong_path}")
 

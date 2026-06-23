@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import subprocess
-from pathlib import Path
 
 from si_v2.apply_actuator.models import (
     BotRuntimeBinding,

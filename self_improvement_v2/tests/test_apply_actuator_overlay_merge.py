@@ -17,7 +17,6 @@ from pathlib import Path
 
 from si_v2.apply_actuator.models import (
     BotRuntimeBinding,
-    EffectiveConfigDraft,
     OverlayProposal,
 )
 from si_v2.apply_actuator.overlay_merge import (
