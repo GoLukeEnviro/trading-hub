@@ -19,13 +19,12 @@ from si_v2.apply_actuator.models import (
     ProofStatus,
     RuntimeEffectProof,
 )
-from si_v2.apply_actuator.runtime_binding import resolve_binding
 from si_v2.apply_actuator.overlay_merge import (
     generate_effective_config,
     validate_overlay_safety,
 )
 from si_v2.apply_actuator.proof import verify_runtime_effect
-
+from si_v2.apply_actuator.runtime_binding import resolve_binding
 
 # ---------------------------------------------------------------------------
 # Mutation counter rule

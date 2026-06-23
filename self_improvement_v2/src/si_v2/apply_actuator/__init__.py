@@ -48,9 +48,9 @@ from si_v2.apply_actuator.runtime_binding import (
 )
 
 __all__ = [
+    "BOT_RUNTIME_BINDINGS",
     "ApplyActuatorResult",
     "ApplyStatus",
-    "BOT_RUNTIME_BINDINGS",
     "BotRuntimeBinding",
     "EffectiveConfigDraft",
     "OverlayProposal",

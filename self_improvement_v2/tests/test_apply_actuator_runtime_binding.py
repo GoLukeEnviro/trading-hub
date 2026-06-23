@@ -16,7 +16,6 @@ from si_v2.apply_actuator.runtime_binding import (
     validate_fleet_bindings,
 )
 
-
 # ---------------------------------------------------------------------------
 # Test data: the four known bots
 # ---------------------------------------------------------------------------

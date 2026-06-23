@@ -7,14 +7,13 @@ No runtime mutation; pure data representation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
-
+from enum import StrEnum
 
 # ---------------------------------------------------------------------------
 # Status enums
 # ---------------------------------------------------------------------------
 
-class ApplyStatus(str, Enum):
+class ApplyStatus(StrEnum):
     """The final status of an apply attempt."""
     NO_RUNTIME_EFFECT = "NO_RUNTIME_EFFECT"
     """Overlay exists but has zero runtime impact (wrong path, not loaded, etc.)."""
@@ -32,7 +31,7 @@ class ApplyStatus(str, Enum):
     """Apply blocked by safety gate (wrong path, dry_run set to False, strategy change, etc.)."""
 
 
-class ProofStatus(str, Enum):
+class ProofStatus(StrEnum):
     """Status of runtime effect verification."""
     GREEN = "GREEN"
     """Runtime proof confirmed — bot can see and load the change."""

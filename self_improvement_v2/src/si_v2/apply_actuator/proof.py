@@ -20,7 +20,6 @@ from si_v2.apply_actuator.models import (
     RuntimeEffectProof,
 )
 
-
 # ---------------------------------------------------------------------------
 # Container file visibility check
 # ---------------------------------------------------------------------------

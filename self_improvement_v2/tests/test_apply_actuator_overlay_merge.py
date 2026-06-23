@@ -14,7 +14,6 @@ import json
 import tempfile
 from pathlib import Path
 
-
 from si_v2.apply_actuator.models import (
     BotRuntimeBinding,
     OverlayProposal,
@@ -263,7 +262,7 @@ class TestGenerateEffectiveConfig:
             )
 
             overlay_dir = Path(tmp) / "overlays"
-            draft, errors = generate_effective_config(
+            draft, _ = generate_effective_config(
                 SAFE_PROPOSAL, binding,
                 overlay_output_dir=overlay_dir,
             )

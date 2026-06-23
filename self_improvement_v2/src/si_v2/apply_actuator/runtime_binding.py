@@ -16,7 +16,6 @@ from typing import Final
 
 from si_v2.apply_actuator.models import BotRuntimeBinding
 
-
 # ---------------------------------------------------------------------------
 # Fleet binding table — verified via Docker inspect on 2026-06-23
 # ---------------------------------------------------------------------------

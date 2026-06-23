@@ -18,7 +18,6 @@ Covers the complete test matrix:
 
 from __future__ import annotations
 
-
 from si_v2.apply_actuator.models import (
     ApplyActuatorResult,
     ApplyStatus,
