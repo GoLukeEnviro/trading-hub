@@ -76,7 +76,7 @@ def check_effective_config_loaded(
 ) -> tuple[bool, list[str]]:
     """Check whether the bot's actually loaded config contains expected values.
 
-    Uses container read‑only exec to read and parse the loaded config.json inside the container.
+    Uses container read-only exec to read and parse the loaded config.json inside the container.
     This confirms REAL runtime effect, not just file existence.
 
     Args:
