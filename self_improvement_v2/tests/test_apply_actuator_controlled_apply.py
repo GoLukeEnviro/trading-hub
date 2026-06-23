@@ -37,9 +37,6 @@ from si_v2.apply_actuator.controlled_apply import (
 from si_v2.apply_actuator.models import (
     ApplyActuatorResult,
     ApplyStatus,
-    OverlayProposal,
-    ProofStatus,
-    RuntimeEffectProof,
 )
 
 
@@ -455,7 +452,7 @@ class TestActivationToken:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv(ACTIVATION_TOKEN_ENV, "WRONG_VALUE")
-        provided, detail = check_activation_token()
+        provided, _detail = check_activation_token()
         assert provided is False
 
 
