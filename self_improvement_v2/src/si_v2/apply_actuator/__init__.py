@@ -43,11 +43,7 @@ from si_v2.apply_actuator.overlay_merge import (
     generate_effective_config,
     validate_overlay_safety,
 )
-from si_v2.apply_actuator.policy import (
-    compute_apply_result,
-    compute_measurement_rule,
-    compute_mutation_counter_rule,
-)
+from si_v2.apply_actuator.policy import compute_apply_result
 from si_v2.apply_actuator.proof import (
     check_container_visibility,
     check_effective_config_loaded,
@@ -55,7 +51,6 @@ from si_v2.apply_actuator.proof import (
 )
 from si_v2.apply_actuator.runtime_binding import (
     BOT_RUNTIME_BINDINGS,
-    resolve_binding,
     validate_fleet_bindings,
 )
 
@@ -76,11 +71,8 @@ __all__ = [
     "check_container_visibility",
     "check_effective_config_loaded",
     "compute_apply_result",
-    "compute_measurement_rule",
-    "compute_mutation_counter_rule",
     "generate_effective_config",
     "proposal_to_overlay",
-    "resolve_binding",
     "run_controlled_apply",
     "run_controlled_apply_batch",
     "summarize_results",
