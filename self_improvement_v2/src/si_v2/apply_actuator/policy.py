@@ -219,7 +219,7 @@ def _determine_apply_status(
 ) -> ApplyStatus:
     """Determine the apply status from evidence.
 
-    Fail-closed: any error or uncertainty → BLOCKED or NO_RUNTIME_EFFECT.
+    Fail-closed: each detected error or uncertainty → BLOCKED or NO_RUNTIME_EFFECT.
     """
     # Hard blocks
     if errors:

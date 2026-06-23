@@ -30,7 +30,7 @@ class ApplyStatus(str, Enum):
     """Runtime proof GREEN — config change is active and verified."""
 
     BLOCKED = "BLOCKED"
-    """Apply blocked by safety gate (wrong path, dry_run=false, strategy change, etc.)."""
+    """Apply blocked by safety gate (wrong path, dry_run set to False, strategy change, etc.)."""
 
 
 class ProofStatus(str, Enum):

@@ -22,12 +22,10 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
 
 from si_v2.apply_actuator.models import (
     ApplyActuatorResult,
     ApplyStatus,
-    BotRuntimeBinding,
     EffectiveConfigDraft,
     OverlayProposal,
     ProofStatus,

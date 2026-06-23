@@ -115,8 +115,15 @@ def resolve_binding(bot_id: str) -> BotRuntimeBinding | None:
     return BOT_RUNTIME_BINDINGS.get(bot_id)
 
 
-def validate_fleet_bindings() -> tuple[bool, list[str]]:
+def validate_fleet_bindings(
+    *,
+    check_paths: bool = True,
+) -> tuple[bool, list[str]]:
     """Validate that all fleet bindings are consistent and complete.
+
+    Args:
+        check_paths: If True, verify host paths exist on the filesystem.
+                     Set False for CI environments without VPS paths.
 
     Returns:
         Tuple of (valid: bool, issues: list[str]).
@@ -132,13 +139,14 @@ def validate_fleet_bindings() -> tuple[bool, list[str]]:
         if binding.confidence != "VERIFIED":
             issues.append(f"{bot_id}: confidence={binding.confidence} (not VERIFIED)")
 
-        host_path = Path(binding.host_user_data_path)
-        if not host_path.exists():
-            issues.append(f"{bot_id}: host_user_data_path does not exist: {host_path}")
+        if check_paths:
+            host_path = Path(binding.host_user_data_path)
+            if not host_path.exists():
+                issues.append(f"{bot_id}: host_user_data_path does not exist: {host_path}")
 
-        host_config = Path(binding.host_config_path)
-        if not host_config.exists():
-            issues.append(f"{bot_id}: host_config_path does not exist: {host_config}")
+            host_config = Path(binding.host_config_path)
+            if not host_config.exists():
+                issues.append(f"{bot_id}: host_config_path does not exist: {host_config}")
 
         if not binding.runtime_visible:
             issues.append(f"{bot_id}: runtime_visible=False")

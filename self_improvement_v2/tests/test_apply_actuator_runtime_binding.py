@@ -15,7 +15,6 @@ from si_v2.apply_actuator.runtime_binding import (
     resolve_binding,
     validate_fleet_bindings,
 )
-from si_v2.apply_actuator.models import BotRuntimeBinding
 
 
 # ---------------------------------------------------------------------------
@@ -104,8 +103,8 @@ class TestResolveBinding:
 
 class TestValidateFleetBindings:
     def test_all_bindings_valid(self) -> None:
-        """validate_fleet_bindings returns valid when all 4 bots are correct."""
-        valid, issues = validate_fleet_bindings()
+        """validate_fleet_bindings returns valid (structural check, no path existence)."""
+        valid, issues = validate_fleet_bindings(check_paths=False)
         assert valid is True, f"Expected valid, got issues: {issues}"
         assert issues == []
 
@@ -157,5 +156,5 @@ class TestBindingImmutability:
         """BotRuntimeBinding is a frozen dataclass — cannot be mutated."""
         binding = resolve_binding("freqtrade-freqforge")
         assert binding is not None
-        with pytest.raises(Exception):
+        with pytest.raises(AttributeError):
             binding.host_user_data_path = "/bad/path"  # type: ignore[misc]

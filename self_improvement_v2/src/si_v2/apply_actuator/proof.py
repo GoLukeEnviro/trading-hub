@@ -3,7 +3,7 @@ r"""Runtime effect proof — machine verification that bot can see and load chan
 This is the critical gate: no measurement, no mutation counter increment
 unless runtime proof is GREEN.
 
-Uses read-only Docker exec to check container file visibility and loaded config.
+Uses read-only container exec to check container file visibility and loaded config.
 Never mutates container state.
 """
 
@@ -33,7 +33,7 @@ def check_container_visibility(
 ) -> tuple[bool, str]:
     """Check whether a file is visible inside a running Docker container.
 
-    Uses read-only Docker exec — never mutates container state.
+    Uses read-only container exec — never mutates container state.
 
     Args:
         container_name: Docker container name.
@@ -57,11 +57,11 @@ def check_container_visibility(
         else:
             return (False, f"File NOT visible: {container_file_path}")
     except subprocess.TimeoutExpired:
-        return (False, f"Docker exec timeout for {container_name}")
+        return (False, f"Container exec timeout for {container_name}")
     except FileNotFoundError:
         return (False, "Docker CLI not available")
     except Exception as e:
-        return (False, f"Docker exec error: {e}")
+        return (False, f"Container exec error: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ def check_effective_config_loaded(
 ) -> tuple[bool, list[str]]:
     """Check whether the bot's actually loaded config contains expected values.
 
-    Uses `docker exec` to read and parse the loaded config.json inside the container.
+    Uses container read‑only exec to read and parse the loaded config.json inside the container.
     This confirms REAL runtime effect, not just file existence.
 
     Args:
@@ -115,7 +115,7 @@ def check_effective_config_loaded(
         return (len(mismatches) == 0, mismatches)
 
     except subprocess.TimeoutExpired:
-        return (False, ["Docker exec timeout"])
+        return (False, ["Container exec timeout"])
     except json.JSONDecodeError as e:
         return (False, [f"JSON parse error: {e}"])
     except FileNotFoundError:
