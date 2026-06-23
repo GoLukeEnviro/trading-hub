@@ -11,8 +11,12 @@ set -euo pipefail
 SCRIPT_NAME="$(basename "$0")"
 WORKDIR="/opt/data/ai4trade-bot"
 VENV_PYTHON="$WORKDIR/.venv/bin/python3"
-PIDFILE="/tmp/rainbow-producer.pid"
-LOGFILE="/tmp/rainbow-producer.log"
+# Persistent PID/log paths (migrated from /tmp, Phase A — Issue #325)
+# Active only after next approved restart/start.
+# Existing producer may still hold old /tmp paths until restart.
+PIDDIR="/opt/data/rainbow"
+PIDFILE="$PIDDIR/rainbow-producer.pid"
+LOGFILE="$PIDDIR/rainbow-producer.log"
 PORT=8000
 HOST="127.0.0.1"
 
@@ -69,6 +73,7 @@ start() {
 
     info "Starting Rainbow producer..."
     cd "$WORKDIR"
+    mkdir -p "$PIDDIR"
 
     # Use setsid to create a clean process group for reliable kill
     setsid "$VENV_PYTHON" -m uvicorn rainbow.main:create_app \

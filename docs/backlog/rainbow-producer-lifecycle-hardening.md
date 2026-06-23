@@ -1,8 +1,20 @@
 # Rainbow: Harden Producer Lifecycle and Factory-Mode Observability
 
-**Status:** Backlog — not started
+**Status:** In Progress — Phase A completed (2026-06-23)
 **Priority:** M
 **Dependency:** Rainbow Recovery GREEN, SI-v2 Scheduled Cycle GREEN
+**Issue:** [#325](https://github.com/GoLukeEnviro/trading-hub/issues/325)
+
+## Phase A: Repo-only preparation ✅ (PR #326)
+
+- ✅ Persistent PID/log paths prepared in `orchestrator/scripts/rainbow_producer_manager.sh`
+- ✅ Readiness checker added: `orchestrator/scripts/rainbow_producer_readiness_check.py`
+- ✅ Tests: `tests/test_rainbow_producer_readiness_check.py` (26 tests)
+- ✅ No auto-restart enabled
+- ✅ No runtime restart performed
+- ⬜ Phase B: Factory logging fix in ai4trade-bot (separate repo)
+- ⬜ Phase C: L3 Runtime rollout with approved restart (separate PR)
+- ⬜ Phase D: Boot-persistence / auto-restart (requires explicit approval)
 
 ---
 
