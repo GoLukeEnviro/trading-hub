@@ -1,20 +1,34 @@
 # Rainbow: Harden Producer Lifecycle and Factory-Mode Observability
 
-**Status:** In Progress — Phase A completed (2026-06-23)
-**Priority:** M
-**Dependency:** Rainbow Recovery GREEN, SI-v2 Scheduled Cycle GREEN
+**Status:** In Progress — Phase A ✅ (PR #326), Phase B ✅ (ai4trade-bot#62), Phase C 🔒 BLOCKED  
+**Priority:** M  
+**Dependency:** Rainbow Recovery GREEN, SI-v2 Scheduled Cycle GREEN  
 **Issue:** [#325](https://github.com/GoLukeEnviro/trading-hub/issues/325)
 
-## Phase A: Repo-only preparation ✅ (PR #326)
+## Phase A: Repo-only preparation ✅ ([PR #326](https://github.com/GoLukeEnviro/trading-hub/pull/326), `68bb9e9`)
 
 - ✅ Persistent PID/log paths prepared in `orchestrator/scripts/rainbow_producer_manager.sh`
 - ✅ Readiness checker added: `orchestrator/scripts/rainbow_producer_readiness_check.py`
 - ✅ Tests: `tests/test_rainbow_producer_readiness_check.py` (26 tests)
 - ✅ No auto-restart enabled
 - ✅ No runtime restart performed
-- ⬜ Phase B: Factory logging fix in ai4trade-bot (separate repo)
-- ⬜ Phase C: L3 Runtime rollout with approved restart (separate PR)
-- ⬜ Phase D: Boot-persistence / auto-restart (requires explicit approval)
+
+## Phase B: Factory logging fix ✅ ([ai4trade-bot#62](https://github.com/GoLukeEnviro/ai4trade-bot/pull/62), `f6c42c6`)
+
+- ✅ `setup_logging()` called in `create_app()` factory path
+- ✅ 7 tests for factory-mode logging behavior
+- ✅ No collector/scorer/schema/runtime changes
+
+## Phase C: L3 Runtime rollout 🔒 ([Runbook](docs/reports/rainbow-producer-phase-c-runbook-2026-06-23.md))
+
+- ⬜ **BLOCKED** — requires `RAINBOW_PHASE_C_APPROVAL_TOKEN`
+- ⬜ Controlled restart via `rainbow_producer_manager.sh restart`
+- ⬜ Activates new persistent PID/log paths + factory logging
+
+## Phase D: Boot-persistence / auto-restart ⬜
+
+- ⬜ Requires explicit approval
+- ⬜ Only after Phase C + multiple GREEN scheduled cycles
 
 ---
 
