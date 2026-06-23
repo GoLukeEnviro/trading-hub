@@ -14,6 +14,7 @@ Key components:
   - EffectiveConfigDraft: Generated config that WOULD be applied
   - RuntimeEffectProof: Machine-verified proof of runtime effect
   - ApplyActuatorResult: Final verdict with mutation and measurement gates
+  - ControlledApplyRunner: Token-gated wiring into the SI-v2 apply flow (#335)
 
 Safety: fail-closed. Any uncertainty → BLOCKED.
 """
@@ -41,6 +42,17 @@ from si_v2.apply_actuator.proof import (
     check_effective_config_loaded,
     verify_runtime_effect,
 )
+from si_v2.apply_actuator.controlled_apply import (
+    ACTIVATION_TOKEN_ENV,
+    ACTIVATION_TOKEN_VALUE,
+    ControlledApplyMode,
+    ControlledApplyResult,
+    check_activation_token,
+    proposal_to_overlay,
+    run_controlled_apply,
+    run_controlled_apply_batch,
+    summarize_results,
+)
 from si_v2.apply_actuator.runtime_binding import (
     BOT_RUNTIME_BINDINGS,
     resolve_binding,
@@ -48,21 +60,30 @@ from si_v2.apply_actuator.runtime_binding import (
 )
 
 __all__ = [
+    "ACTIVATION_TOKEN_ENV",
+    "ACTIVATION_TOKEN_VALUE",
     "BOT_RUNTIME_BINDINGS",
     "ApplyActuatorResult",
     "ApplyStatus",
     "BotRuntimeBinding",
+    "ControlledApplyMode",
+    "ControlledApplyResult",
     "EffectiveConfigDraft",
     "OverlayProposal",
     "ProofStatus",
     "RuntimeEffectProof",
+    "check_activation_token",
     "check_container_visibility",
     "check_effective_config_loaded",
     "compute_apply_result",
     "compute_measurement_rule",
     "compute_mutation_counter_rule",
     "generate_effective_config",
+    "proposal_to_overlay",
     "resolve_binding",
+    "run_controlled_apply",
+    "run_controlled_apply_batch",
+    "summarize_results",
     "validate_fleet_bindings",
     "validate_overlay_safety",
     "verify_runtime_effect",
