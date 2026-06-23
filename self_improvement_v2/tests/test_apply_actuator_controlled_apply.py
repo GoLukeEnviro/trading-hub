@@ -17,9 +17,6 @@ Covers the complete test matrix:
 
 from __future__ import annotations
 
-import os
-from unittest.mock import patch
-
 import pytest
 
 from si_v2.apply_actuator.controlled_apply import (
