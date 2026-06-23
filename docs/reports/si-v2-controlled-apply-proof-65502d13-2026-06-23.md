@@ -1,10 +1,16 @@
 # SI-v2 Controlled Apply Proof — 65502d13
 
 ## Status
-**APPLIED** 🟢
+**NO_RUNTIME_EFFECT** 🔴
 
 ## Apply Verdict
-**APPLY_GATE_READY → APPLIED** — First Self-Improvement mutation executed.
+**APPLY_GATE_READY → NO_RUNTIME_EFFECT** — Overlay artifact committed but has zero runtime impact on bot.
+
+> **POST-MERGE CORRECTION (2026-06-23T11:00 UTC):**
+> Post-merge audit discovered that the overlay file was written to a path not mounted by the
+> freqforge container, and even if placed correctly, Freqtrade has no mechanism to read
+> `overlay_*.json` files. See `si-v2-apply-correction-no-runtime-effect-65502d13-2026-06-23.md`
+> and **Issue #332** for the full analysis and next steps.
 
 ## Candidate
 
@@ -115,15 +121,12 @@ Snapshot preserved at: `docs/context/snapshots/apply-65502d13-20260623T104927Z`
 | #328 | Phase C Proof | Merged (`f22e81d`) |
 | #329 | Approval Packet | Merged (`ebd178e`) |
 | #330 | Scheduled Cycle Proof | Open |
-| #331 | **Controlled Apply** | Open |
+| #331 | **Controlled Apply** | Merged — **NO_RUNTIME_EFFECT** (see Issue #332) |
 
 ## Post-Apply Measurement Plan
 
-| Cycle | Role | Expected |
-|-------|------|----------|
-| 12:17 UTC (scheduled) | Measurement #1 | Collect freqforge post-apply metrics |
-| Next after 12:17 | Measurement #2 | Compare pre/post |
-| After 2 cycles | Attribution Report | GREEN/YELLOW/RED decision |
+**BLOCKED** — Cannot measure because overlay has no runtime effect.
+Measurement blocked until Issue #332 (fleet-aware overlay activation) is resolved.
 
 ### Pre-Apply Baseline (from 061729Z cycle)
 
@@ -150,7 +153,8 @@ Noted (separate issue). Not blocking.
 
 ## Nächster Schritt
 
-**Merge PR #331 → 12:17 UTC cycle als Measurement #1 → 2 Cycles beobachten → Pre/Post-Vergleich → Attribution Report.**
+**BLOCKED.** Siehe Issue #332: "SI-v2: Implement fleet-aware overlay activation before measurement."
+Kein weiterer SI-v2 Apply oder Measurement bis der Actuator implementiert und verifiziert ist.
 
 ---
 
