@@ -46,6 +46,32 @@ class ProofStatus(StrEnum):
     """Proof has not been attempted yet."""
 
 
+@dataclass(frozen=True)
+class ApiConfigProofResult:
+    """Structured outcome of a Proof A call against the Freqtrade ``show_config`` API.
+
+    Distinguishes three key classes so that ``verify_runtime_effect`` can route them correctly
+    (composite proof semantics, PR #337):
+
+      - ``matched_keys``: present in API response AND value matches proposal.
+      - ``missing_keys``: NOT present in API response (Freqtrade's REST surface does not expose
+        this config key, e.g. ``tradable_balance_ratio`` on Freqtrade 2026.3). NOT a hard failure
+        — Proof B can validate via the in-container merged config.
+      - ``mismatched_keys``: present in API response but value DOES NOT match. This is a real
+        runtime mismatch and forces RED. Proof B is never allowed to override it.
+
+    ``unavailable`` is True when the API call itself failed (curl, auth, JSON). In that case
+    the key lists are empty and Proof B is the only path forward.
+    """
+
+    ok: bool = False
+    matched_keys: tuple[str, ...] = ()
+    missing_keys: tuple[str, ...] = ()
+    mismatched_keys: tuple[str, ...] = ()
+    unavailable: bool = False
+    raw_mismatch_messages: tuple[str, ...] = ()
+
+
 # ---------------------------------------------------------------------------
 # BotRuntimeBinding — fleet-aware host/container path mapping
 # ---------------------------------------------------------------------------
@@ -230,7 +256,36 @@ class RuntimeEffectProof:
     """
 
     proof_method: str = ""
-    """Which proof strategy was used: 'api', 'merged_fallback', or 'none'."""
+    """Which proof strategy was used.
+
+    One of:
+      - ``""``         — no proof executed (pre-condition failure, e.g. file not visible)
+      - ``"api"``      — Freqtrade ``show_config`` REST exposed all expected keys with matching values
+      - ``"api_plus_merged_missing_keys"`` — Proof A covered exposed keys; Proof B covered keys the
+        API does not surface (e.g. ``tradable_balance_ratio`` on Freqtrade 2026.3). Used for the
+        composite proof introduced in PR #337.
+      - ``"merged_fallback"`` — API unavailable; Proof B (deterministic in-container merge) covered
+        all expected keys.
+      - ``"red_api_exposed_key_mismatch"`` — Proof A exposed a key but the value did not match. No
+        fallback is allowed: a real API-surface mismatch is RED regardless of merged values.
+    """
+
+    api_matched_keys: tuple[str, ...] = field(default_factory=tuple)
+    """Keys present in the Freqtrade ``show_config`` response whose value matched the proposal."""
+
+    api_missing_keys: tuple[str, ...] = field(default_factory=tuple)
+    """Keys expected by the proposal that were absent from the Freqtrade ``show_config`` response.
+
+    A missing key is NOT a hard failure: Proof B can validate it via the deterministic merged
+    config. The two failure classes are intentionally distinguished in :attr:`api_mismatched_keys`.
+    """
+
+    api_mismatched_keys: tuple[str, ...] = field(default_factory=tuple)
+    """Keys present in the Freqtrade ``show_config`` response whose value did NOT match the proposal.
+
+    A mismatched key is a real runtime mismatch — RED. Proof B is never allowed to override an
+    API-exposed mismatch.
+    """
 
     dry_run_true: bool = True
     live_trading_false: bool = True
@@ -250,6 +305,9 @@ class RuntimeEffectProof:
             "loaded_config_contains_expected_values": self.loaded_config_contains_expected_values,
             "process_command_uses_overlay": self.process_command_uses_overlay,
             "proof_method": self.proof_method,
+            "api_matched_keys": list(self.api_matched_keys),
+            "api_missing_keys": list(self.api_missing_keys),
+            "api_mismatched_keys": list(self.api_mismatched_keys),
             "dry_run_true": self.dry_run_true,
             "live_trading_false": self.live_trading_false,
             "strategy_unchanged": self.strategy_unchanged,

@@ -33,14 +33,29 @@ The corrected proof uses three complementary checks:
       proves the *effective* config that the running process would
       produce, even without REST auth.
 
-GREEN rule:
+GREEN rule (composite, post #337):
   - file_visible_to_bot = True
   - process_command_uses_overlay = True
-  - effective_config_contains_expected_values = True  (from A or B)
-  - loaded_config_contains_expected_values = True     (from A or B)
+  - effective_config_contains_expected_values = True  (from draft)
+  - loaded_config_contains_expected_values = True     (composite A+B)
   - dry_run_true = True
   - live_trading_false = True
   - strategy_unchanged = True
+
+Composite proof semantics (added in #337):
+  Proof A (Freqtrade REST show_config) classifies each expected key as
+    - matched       → already proven loaded
+    - missing       → API does not surface this key (NOT a hard failure)
+    - mismatched    → real runtime mismatch → RED, no override possible
+
+  When Proof A reports missing keys (no mismatches), Proof B (deterministic
+  in-container merge) is invoked for *only* those missing keys. If Proof B
+  proves them, the overall proof_method is "api_plus_merged_missing_keys".
+  This allows composite GREEN when an API surface gap (e.g. Freqtrade 2026.3
+  not exposing ``tradable_balance_ratio``) would otherwise force a false RED.
+
+  When the API is fully unavailable, Proof B runs for *all* expected keys
+  (proof_method = "merged_fallback"), preserving the original fallback path.
 
 All checks are fail-closed: a missing proof → RED, never GREEN.
 Never mutates container state. All subprocess invocations are read-only
@@ -54,6 +69,7 @@ import subprocess
 from copy import deepcopy
 
 from si_v2.apply_actuator.models import (
+    ApiConfigProofResult,
     BotRuntimeBinding,
     EffectiveConfigDraft,
     OverlayProposal,
@@ -323,7 +339,7 @@ def check_effective_config_from_api(
     response to `expected_values`.
 
     This is the strongest available proof: the response reflects the
-    in-memory config that Freqtrade is actually using to make decisions.
+    in-memory config Freqtrade is actually using to make decisions.
 
     Args:
         container_name: Docker container name (used to run curl from
@@ -335,6 +351,15 @@ def check_effective_config_from_api(
 
     Returns:
         Tuple of (api_ok: bool, mismatches: list[str]).
+
+    .. note::
+        This function predates the composite proof introduced in PR #337
+        and treats any deviation between the proposal and the API response
+        as a hard failure (including keys that the API does not surface).
+        For new code paths prefer
+        :func:`check_effective_config_from_api_surface`, which distinguishes
+        *missing* keys from *mismatched* keys and is what the composite
+        proof in :func:`verify_runtime_effect` uses.
     """
     mismatches: list[str] = []
 
@@ -377,6 +402,130 @@ def check_effective_config_from_api(
         return (False, ["api_proof_unavailable: Docker CLI not available"])
     except Exception as e:
         return (False, [f"api_proof_error: {e}"])
+
+
+def check_effective_config_from_api_surface(
+    container_name: str,
+    api_host: str,
+    api_port: int,
+    api_username: str,
+    api_ui_pwd: str,
+    expected_values: dict[str, object],
+) -> ApiConfigProofResult:
+    """Proof A — API-surface-aware structured variant (PR #337).
+
+    Calls the same ``/api/v1/show_config`` endpoint as
+    :func:`check_effective_config_from_api`, but instead of conflating
+    *missing* and *mismatched* keys into a single ``(ok, mismatches)``
+    tuple, returns a structured :class:`ApiConfigProofResult` that the
+    composite proof in :func:`verify_runtime_effect` can route:
+
+      - **matched_keys**: key present in API response AND value matches.
+      - **missing_keys**: key absent from API response (e.g.
+        ``tradable_balance_ratio`` on Freqtrade 2026.3's REST surface).
+        NOT a hard failure — Proof B can validate via the deterministic
+        merged config.
+      - **mismatched_keys**: key present in API response AND value does
+        NOT match. A real runtime mismatch — forces RED. Proof B is never
+        allowed to override an API-exposed mismatch.
+      - **unavailable=True**: the API call itself failed (curl, auth,
+        JSON parse). All key lists are empty and the caller falls back to
+        Proof B for *all* expected keys.
+
+    Args:
+        container_name: Docker container name.
+        api_host: API host (usually "127.0.0.1").
+        api_port: API port (usually 8080 inside the container).
+        api_username, api_ui_pwd: HTTP basic auth credentials.
+        expected_values: Key-value pairs that should be present.
+
+    Returns:
+        ApiConfigProofResult describing the structural outcome.
+    """
+    matched: list[str] = []
+    missing: list[str] = []
+    mismatched: list[str] = []
+    raw_messages: list[str] = []
+
+    try:
+        result = subprocess.run(
+            [
+                "docker", "exec", container_name,
+                "curl", "-fsS", "--max-time", "5",
+                "-u", f"{api_username}:{api_ui_pwd}",
+                f"http://{api_host}:{api_port}/api/v1/show_config",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode != 0:
+            return ApiConfigProofResult(
+                ok=False,
+                unavailable=True,
+                raw_mismatch_messages=(
+                    f"api_proof_unavailable: curl failed (exit={result.returncode}): "
+                    f"{result.stderr.strip()[:200]}",
+                ),
+            )
+
+        try:
+            response = json.loads(result.stdout)
+        except json.JSONDecodeError as e:
+            return ApiConfigProofResult(
+                ok=False,
+                unavailable=True,
+                raw_mismatch_messages=(
+                    f"api_proof_unavailable: show_config not valid JSON: {e}",
+                ),
+            )
+
+        for key, expected_value in expected_values.items():
+            if key not in response:
+                # Key absent from the API response payload → API does not
+                # surface this config value. Defer to Proof B (merged
+                # config) to validate it. NOT a hard failure.
+                missing.append(key)
+                continue
+
+            actual_value = response[key]
+            if _values_match(actual_value, expected_value):
+                matched.append(key)
+            else:
+                mismatched.append(key)
+                raw_messages.append(
+                    f"api_effective_config_mismatch: "
+                    f"{key}: expected={expected_value!r}, got={actual_value!r}"
+                )
+
+        ok = not mismatched
+        return ApiConfigProofResult(
+            ok=ok,
+            matched_keys=tuple(matched),
+            missing_keys=tuple(missing),
+            mismatched_keys=tuple(mismatched),
+            unavailable=False,
+            raw_mismatch_messages=tuple(raw_messages),
+        )
+
+    except subprocess.TimeoutExpired:
+        return ApiConfigProofResult(
+            ok=False,
+            unavailable=True,
+            raw_mismatch_messages=("api_proof_unavailable: curl timeout",),
+        )
+    except FileNotFoundError:
+        return ApiConfigProofResult(
+            ok=False,
+            unavailable=True,
+            raw_mismatch_messages=("api_proof_unavailable: Docker CLI not available",),
+        )
+    except Exception as e:
+        return ApiConfigProofResult(
+            ok=False,
+            unavailable=True,
+            raw_mismatch_messages=(f"api_proof_error: {e}",),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -433,15 +582,26 @@ def verify_runtime_effect(
     overlay_container_path: str = "",
     docker_available: bool = True,
 ) -> RuntimeEffectProof:
-    """Complete runtime effect verification using C + A/B combined.
+    """Complete runtime effect verification using C + composite (A,B).
 
     Checks (in order, fail-closed):
       1. Safety invariants from draft (dry_run, live_trading_forbidden).
       2. Overlay file visible inside the container (file_visible_to_bot).
       3. Process command references the overlay path (process_command_uses_overlay).
-      4. Effective values match via Freqtrade API (Proof A) OR deterministic
-         in-container merge (Proof B fallback).
-      5. Strategy unchanged (no overlay key may alter strategy).
+      4. Effective values match the draft (effective_config_contains_expected_values).
+      5. Loaded values match (composite A+B, see below).
+      6. Strategy unchanged (no overlay key may alter strategy).
+
+    Composite proof for loaded values (added in PR #337):
+      a) Try Proof A (Freqtrade REST show_config, surface-aware). Classify
+         expected keys into matched / missing / mismatched.
+      b) If mismatched → RED. A real API-exposed mismatch is never
+         overridable by the merged-config proof.
+      c) If missing (and no mismatches) → run Proof B only for the
+         missing keys. If Proof B proves them, proof_method becomes
+         ``api_plus_merged_missing_keys``.
+      d) If API fully unavailable → run Proof B for all expected keys
+         (proof_method = ``merged_fallback``).
 
     Args:
         proposal: The overlay proposal.
@@ -499,23 +659,52 @@ def verify_runtime_effect(
                 f"got={draft.after_values[key]!r}"
             )
 
-    # Step 4: loaded values check (A or B)
+    # Step 4: loaded values check (composite A+B, PR #337).
+    #
+    # Three terminal outcomes for loaded_ok:
+    #   True  — Proof A succeeded, OR Proof A exposed missing keys but Proof B proved them.
+    #   False — API-exposed mismatch, or Proof B mismatch on missing keys, or no proof reachable.
     loaded_ok = False
     proof_method = ""
-    api_unavailable = False
+    api_matched: tuple[str, ...] = ()
+    api_missing: tuple[str, ...] = ()
+    api_mismatched: tuple[str, ...] = ()
 
     if not (docker_available and file_visible):
         errors.append("cannot_check_loaded_config: file not visible to bot")
     else:
-        # Try Proof A (Freqtrade REST show_config) first — authoritative
+        # --- Proof A: surface-aware Freqtrade show_config ----------------------
+        api_surface: ApiConfigProofResult | None = None
         base, read_err = _read_container_file(
             binding.container_name, binding.container_config_path,
         )
-        if base is not None:
+        if base is None:
+            # Cannot read base config → cannot resolve creds. Treat as API
+            # unavailable; defer entirely to Proof B.
+            api_surface = ApiConfigProofResult(
+                ok=False,
+                unavailable=True,
+                raw_mismatch_messages=(f"api_proof_unavailable: {read_err}",),
+            )
+            errors.append(f"api_proof_unavailable: {read_err}")
+        else:
             creds = _resolve_api_credentials(base)
-            if creds is not None:
+            if creds is None:
+                api_surface = ApiConfigProofResult(
+                    ok=False,
+                    unavailable=True,
+                    raw_mismatch_messages=(
+                        "api_proof_unavailable: api_server block missing "
+                        "username/password in base config",
+                    ),
+                )
+                errors.append(
+                    "api_proof_unavailable: api_server block missing "
+                    "username/password in base config"
+                )
+            else:
                 api_username, api_ui_pwd = creds
-                api_ok, api_errors = check_effective_config_from_api(
+                api_surface = check_effective_config_from_api_surface(
                     binding.container_name,
                     api_host="127.0.0.1",
                     api_port=8080,
@@ -523,39 +712,64 @@ def verify_runtime_effect(
                     api_ui_pwd=api_ui_pwd,
                     expected_values=proposal.parameters,
                 )
-                if api_ok:
+
+        api_matched = api_surface.matched_keys
+        api_missing = api_surface.missing_keys
+        api_mismatched = api_surface.mismatched_keys
+
+        # Mismatched keys are real runtime mismatches — RED, no override.
+        if api_mismatched:
+            errors.append(
+                "red_api_exposed_key_mismatch: API-exposed keys did not match "
+                f"proposal: {list(api_mismatched)}"
+            )
+            errors.extend(api_surface.raw_mismatch_messages)
+            proof_method = "red_api_exposed_key_mismatch"
+        elif api_surface.unavailable:
+            # API unreachable. Use Proof B for ALL expected keys (classic fallback).
+            if overlay_container_path:
+                merged_ok, merged_errors = check_effective_config_from_merged_files(
+                    binding.container_name,
+                    base_container_path=binding.container_config_path,
+                    overlay_container_path=overlay_container_path,
+                    expected_values=proposal.parameters,
+                )
+                if merged_ok:
                     loaded_ok = True
-                    proof_method = "api"
+                    proof_method = "merged_fallback"
                 else:
-                    # API failed: classify as "unavailable" if curl/connectivity
-                    # issue, otherwise as a real mismatch.
-                    if any("api_proof_unavailable" in e for e in api_errors):
-                        api_unavailable = True
-                    else:
-                        errors.extend(api_errors)
+                    errors.extend(merged_errors)
+        elif api_missing:
+            # API exposed some keys (all matched) but is missing others.
+            # Run Proof B only for the missing subset.
+            missing_only = {k: proposal.parameters[k] for k in api_missing}
+            if overlay_container_path and missing_only:
+                merged_ok, merged_errors = check_effective_config_from_merged_files(
+                    binding.container_name,
+                    base_container_path=binding.container_config_path,
+                    overlay_container_path=overlay_container_path,
+                    expected_values=missing_only,
+                )
+                if merged_ok:
+                    loaded_ok = True
+                    proof_method = "api_plus_merged_missing_keys"
+                else:
+                    errors.append(
+                        f"composite_proof_failed: Proof B could not validate "
+                        f"missing API keys {list(api_missing)}"
+                    )
+                    errors.extend(merged_errors)
             else:
-                api_unavailable = True
+                # No overlay path or no missing keys to validate — strange,
+                # but conservatively treat as not proven.
                 errors.append(
-                    "api_proof_unavailable: api_server block missing "
-                    "username/password in base config"
+                    f"composite_proof_incomplete: API missing keys "
+                    f"{list(api_missing)} but no overlay path to validate"
                 )
         else:
-            api_unavailable = True
-            errors.append(f"api_proof_unavailable: {read_err}")
-
-        # Fallback: Proof B (deterministic merged-config) if A unavailable
-        if not loaded_ok and api_unavailable and overlay_container_path:
-            merged_ok, merged_errors = check_effective_config_from_merged_files(
-                binding.container_name,
-                base_container_path=binding.container_config_path,
-                overlay_container_path=overlay_container_path,
-                expected_values=proposal.parameters,
-            )
-            if merged_ok:
-                loaded_ok = True
-                proof_method = "merged_fallback"
-            else:
-                errors.extend(merged_errors)
+            # All expected keys matched via API and nothing missing.
+            loaded_ok = True
+            proof_method = "api"
 
     # Step 5: determine proof status
     if errors:
@@ -582,6 +796,9 @@ def verify_runtime_effect(
         loaded_config_contains_expected_values=loaded_ok,
         process_command_uses_overlay=process_uses_overlay,
         proof_method=proof_method,
+        api_matched_keys=api_matched,
+        api_missing_keys=api_missing,
+        api_mismatched_keys=api_mismatched,
         dry_run_true=dry_run_true,
         live_trading_false=live_trading_false,
         strategy_unchanged=strategy_unchanged,

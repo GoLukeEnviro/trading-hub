@@ -31,6 +31,7 @@ from si_v2.apply_actuator.controlled_apply import (
     summarize_results,
 )
 from si_v2.apply_actuator.models import (
+    ApiConfigProofResult,
     ApplyActuatorResult,
     ApplyStatus,
     BotRuntimeBinding,
@@ -47,6 +48,7 @@ from si_v2.apply_actuator.policy import compute_apply_result
 from si_v2.apply_actuator.proof import (
     check_container_visibility,
     check_effective_config_from_api,
+    check_effective_config_from_api_surface,
     check_effective_config_from_merged_files,
     check_effective_config_loaded,  # deprecated backward-compat shim
     check_process_uses_overlay,
@@ -61,6 +63,7 @@ __all__ = [
     "ACTIVATION_TOKEN_ENV",
     "ACTIVATION_TOKEN_VALUE",
     "BOT_RUNTIME_BINDINGS",
+    "ApiConfigProofResult",
     "ApplyActuatorResult",
     "ApplyStatus",
     "BotRuntimeBinding",
@@ -73,6 +76,7 @@ __all__ = [
     "check_activation_token",
     "check_container_visibility",
     "check_effective_config_from_api",
+    "check_effective_config_from_api_surface",
     "check_effective_config_from_merged_files",
     "check_effective_config_loaded",
     "check_process_uses_overlay",
