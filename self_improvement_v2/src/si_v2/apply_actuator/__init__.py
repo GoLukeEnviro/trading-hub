@@ -1,4 +1,4 @@
-r"""SI v2 Apply Actuator — Fleet-Aware Runtime Proof Gate (#332).
+"""SI v2 Apply Actuator — Fleet-Aware Runtime Proof Gate (#332).
 
 Transforms approved ShadowProposals into machine-verified runtime-effective
 configuration changes. The actuator must NOT increment the mutation counter
@@ -19,6 +19,17 @@ Key components:
 Safety: fail-closed. Any uncertainty → BLOCKED.
 """
 
+from si_v2.apply_actuator.controlled_apply import (
+    ACTIVATION_TOKEN_ENV,
+    ACTIVATION_TOKEN_VALUE,
+    ControlledApplyMode,
+    ControlledApplyResult,
+    check_activation_token,
+    proposal_to_overlay,
+    run_controlled_apply,
+    run_controlled_apply_batch,
+    summarize_results,
+)
 from si_v2.apply_actuator.models import (
     ApplyActuatorResult,
     ApplyStatus,
@@ -41,17 +52,6 @@ from si_v2.apply_actuator.proof import (
     check_container_visibility,
     check_effective_config_loaded,
     verify_runtime_effect,
-)
-from si_v2.apply_actuator.controlled_apply import (
-    ACTIVATION_TOKEN_ENV,
-    ACTIVATION_TOKEN_VALUE,
-    ControlledApplyMode,
-    ControlledApplyResult,
-    check_activation_token,
-    proposal_to_overlay,
-    run_controlled_apply,
-    run_controlled_apply_batch,
-    summarize_results,
 )
 from si_v2.apply_actuator.runtime_binding import (
     BOT_RUNTIME_BINDINGS,
