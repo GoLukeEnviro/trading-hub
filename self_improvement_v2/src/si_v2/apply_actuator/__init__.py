@@ -46,7 +46,10 @@ from si_v2.apply_actuator.overlay_merge import (
 from si_v2.apply_actuator.policy import compute_apply_result
 from si_v2.apply_actuator.proof import (
     check_container_visibility,
-    check_effective_config_loaded,
+    check_effective_config_from_api,
+    check_effective_config_from_merged_files,
+    check_effective_config_loaded,  # deprecated backward-compat shim
+    check_process_uses_overlay,
     verify_runtime_effect,
 )
 from si_v2.apply_actuator.runtime_binding import (
@@ -69,7 +72,10 @@ __all__ = [
     "RuntimeEffectProof",
     "check_activation_token",
     "check_container_visibility",
+    "check_effective_config_from_api",
+    "check_effective_config_from_merged_files",
     "check_effective_config_loaded",
+    "check_process_uses_overlay",
     "compute_apply_result",
     "generate_effective_config",
     "proposal_to_overlay",
