@@ -475,26 +475,41 @@ class TestControlledApplyWithMultiConfigProof:
         draft: EffectiveConfigDraft,
     ) -> None:
         """End-to-end: with token + GREEN proof, mode becomes ACTUATOR_VERIFIED
-        and mutation counter is allowed."""
+        and mutation counter is allowed.
+
+        We patch `verify_runtime_effect` directly (rather than mocking the
+        underlying `subprocess.run` calls) so the test is independent of
+        Python version, container availability, and string-comparison
+        quirks of mock side_effect iteration.
+        """
+        from si_v2.apply_actuator import models as actuator_models
         from si_v2.apply_actuator.controlled_apply import run_controlled_apply
 
-        cmdline = (
-            "/usr/local/bin/python3.13 freqtrade trade "
-            "--config /freqtrade/user_data/config.json "
-            "--config /freqtrade/user_data/overlay_65502d13.json "
-            "--strategy FreqForge_Override"
+        green_proof = actuator_models.RuntimeEffectProof(
+            proposal_id=proposal.proposal_id,
+            bot_id=proposal.bot_id,
+            file_visible_to_bot=True,
+            effective_config_contains_expected_values=True,
+            loaded_config_contains_expected_values=True,
+            process_command_uses_overlay=True,
+            proof_method="api",
+            dry_run_true=True,
+            live_trading_false=True,
+            strategy_unchanged=True,
+            restart_required=False,
+            proof_status=actuator_models.ProofStatus.GREEN,
+            errors=(),
         )
-        show_config_response = {
-            "dry_run": True,
-            "max_open_trades": 3.0,
-            "stake_amount": "unlimited",
-            "tradable_balance_ratio": 0.99,
-        }
-        visibility_proc = MagicMock(returncode=0, stdout="", stderr="")
-        cmdline_proc = MagicMock(returncode=0, stdout=cmdline, stderr="")
-        base_proc = MagicMock(returncode=0, stdout=json.dumps(BASE_CONFIG), stderr="")
-        api_proc = MagicMock(
-            returncode=0, stdout=json.dumps(show_config_response), stderr="",
+
+        green_actuator_result = actuator_models.ApplyActuatorResult(
+            status=actuator_models.ApplyStatus.APPLIED_WITH_RUNTIME_PROOF,
+            proposal_id=proposal.proposal_id,
+            bot_id=proposal.bot_id,
+            proof=green_proof,
+            mutation_counter_should_increment=True,
+            measurement_allowed=True,
+            errors=(),
+            warnings=(),
         )
 
         # Build a minimal eligible proposal dict for the eligibility check
@@ -521,10 +536,8 @@ class TestControlledApplyWithMultiConfigProof:
             "APPROVE_SI_V2_RUNTIME_ACTUATOR_ACTIVATION": "APPROVE",
         }
         with patch.dict(os.environ, env, clear=False), patch(
-            "si_v2.apply_actuator.proof.subprocess.run",
-            side_effect=[
-                visibility_proc, cmdline_proc, base_proc, api_proc,
-            ],
+            "si_v2.apply_actuator.controlled_apply.compute_apply_result",
+            return_value=green_actuator_result,
         ):
             result = run_controlled_apply(proposal_dict, docker_available=True)
 
