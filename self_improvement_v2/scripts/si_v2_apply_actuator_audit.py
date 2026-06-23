@@ -35,9 +35,7 @@ from si_v2.apply_actuator.runtime_binding import (
 )
 from si_v2.apply_actuator.models import (
     OverlayProposal,
-    ProofStatus,
 )
-from si_v2.apply_actuator.overlay_merge import validate_overlay_safety
 from si_v2.apply_actuator.policy import compute_apply_result
 
 
