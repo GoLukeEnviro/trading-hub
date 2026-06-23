@@ -28,11 +28,11 @@ Token gate:
 Safety invariants (enforced regardless of token):
   - Never writes to runtime bot mount paths
   - Never restarts bots
-  - Never sets dry_run=false
+  - Never disables dry-run mode
   - Never enables live trading
   - Never changes strategies
   - Never mutates Docker/Compose/cron
-  - Fail-closed: any uncertainty → BLOCKED
+  - Fail-closed: uncertainty → BLOCKED
 
 Reference candidate: 65502d13a99bfadd (freqtrade-freqforge, safe_parameter_overlay_only)
 """
