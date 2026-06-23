@@ -49,12 +49,7 @@ from si_v2.apply_actuator.models import (
     ApplyStatus,
     OverlayProposal,
 )
-from si_v2.apply_actuator.policy import (
-    compute_apply_result,
-    compute_measurement_rule,
-    compute_mutation_counter_rule,
-)
-from si_v2.apply_actuator.runtime_binding import resolve_binding
+from si_v2.apply_actuator.policy import compute_apply_result
 
 # ---------------------------------------------------------------------------
 # Token gate constants
