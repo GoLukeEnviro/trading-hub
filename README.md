@@ -5,9 +5,14 @@ Private control plane for the autonomous crypto trading research system at
 
 ## What Trading Hub is
 
-Trading Hub is the coordination layer, not the execution authority.
-It ties together the signal core, the dry-run Freqtrade fleet, shared fleet
-state, orchestrator automation, and audit documentation.
+Trading Hub is the coordination layer, not the execution authority. It ties
+together the signal core, the dry-run Freqtrade fleet, shared fleet state,
+orchestrator automation, SI-v2 evidence generation, and audit documentation.
+
+Root documentation is stable orientation. Current runtime facts — cycle ids,
+ledger counts, Rainbow/scoring values, bot reachability, evidence hashes, and
+PR-specific proof details — belong in `docs/state/`, `docs/reports/`, and
+`docs/context/`.
 
 ## Current operating mode
 
@@ -17,9 +22,30 @@ state, orchestrator automation, and audit documentation.
 - No `dry_run=false` changes without a separate, explicit go-ahead.
 - No exchange credentials belong in this repository.
 
+For the canonical current operational snapshot, read:
+`docs/state/current-operational-state.md`.
+
 > [📋 Roadmap v2 (current) →](docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md)
 > [📋 Implementation Roadmap (historical) →](docs/roadmap/implementation-roadmap.md)
-> Phase overview, completed issues, next priorities. `roadmap-v2` is canonical.
+> Phase overview, completed issues, next priorities. `roadmap-v2` is the
+> forward-looking roadmap; the state file is the current runtime snapshot.
+
+## Proven SI-v2 loop orientation
+
+The current SI-v2 assumption is a proven four-bot, read-only Active Cycle loop.
+For operational instructions, follow `AGENTS.md` first.
+
+Active SI-v2 bot identities:
+
+- `freqtrade-freqforge`
+- `freqtrade-freqforge-canary`
+- `freqtrade-regime-hybrid`
+- `freqai-rebel`
+
+Momentum and MVS are historical/non-current and are not active SI-v2 loop
+members. Do not start Docker, Guardian, Cron, healthcheck, generic CI, or
+infrastructure work from README context alone; such work needs direct SI-v2-loop
+blocker evidence or explicit approval.
 
 ## Trading dashboard
 
@@ -27,96 +53,91 @@ state, orchestrator automation, and audit documentation.
 
 - Start it with `python3 dashboard.py` (default `PORT=5000`).
 - The page is server-side rendered and re-reads data on every request.
-- The live UI is intentionally lean: KPI row, current Hermes signals, bot table, system status, and a compact RiskGuard line.
-- Keep analysis-heavy or low-value panels out of the main surface; move them into docs or audits instead.
-- Fresh reads cover the bot SQLite databases, the latest Hermes signal JSON, and the current system-status snapshots.
-
-For the current validated snapshot, see:
-`docs/state/current-operational-state.md`.
+- The live UI is intentionally lean: KPI row, current Hermes signals, bot table,
+  system status, and a compact RiskGuard line.
+- Keep analysis-heavy or low-value panels out of the main surface; move them
+  into docs or audits instead.
+- Fresh reads cover the bot SQLite databases, the latest Hermes signal JSON, and
+  the current system-status snapshots.
 
 ## Core components
 
-|| Component | Role | Notes |
-||-----------|------|-------|
-|| `ai-hedge-fund-crypto/` | Signal core | Active signal generator; upstream nested repo, ignored by the parent repo. |
-|| `orchestrator/` | Hermes control plane | Cron, audits, recovery, reports, gateways, and repo housekeeping. |
-|| `self_improvement_v2/` | SI v2 engine | Active cycle runner, measurement ledger, rainbow observation, shadow proposals. |
-|| `freqtrade/` | Dry-run execution fleet | FreqForge, Regime-Hybrid, Canary, FreqAI-Rebel, shared state. |
-|| `freqforge/` | FreqForge bot | Baseline / override bot and supporting config. |
-|| `freqforge-canary/` | Canary bot | Independent FreqForge instance for canary testing. |
-|| `freqtrade/shared/` | FleetRisk + shared state | Shared coordination layer, watcher, fleet-risk artifacts, and **kill switch** (`kill_switch.py`). |
-|| `bridge/` | Bridge code | Hermes/Primo bridge logic. |
-|| `primo/` | Primo agent code | Signal-filter and integration helpers. |
-|| `shadowlock/` | ShadowLock service | Read-only evidence trail and decision logging. |
-|| `intelligence/` | Intelligence layer | Market intelligence and analysis modules. |
-|| `tools/freqforge/` | Shadow evaluator | Passive observer and report generator. |
-|| `orchestrator/scripts/` | Operation scripts | `kill_switch_trigger.sh`, `rainbow_db_stub_server.py`, cycle runners. |
-|| `dashboard.py` | Read-only observability | Single-file Flask dashboard; server-side rendered, no caches or websockets, live request-time reads only. |
-|| `Caddyfile` | Reverse proxy | Caddy configuration for fleet dashboard and service routing. |
-|| `docs/context/` | Historical context | Append-only reports, audits, and migration notes. |
-|| `docs/state/` | Current state | Current operational snapshot and live-readiness notes. |
-|| `docs/runbooks/` | Runbooks | Operational procedures: kill-switch, gateway debug, health audits. |
-|| `scripts/` | Utility scripts | Bootstrap, cleanup, and maintenance helpers. |
-|| `var/` | Runtime state files | Kill-switch state (`var/kill_switch.json`), not tracked in git. |
+| Component | Role | Notes |
+|-----------|------|-------|
+| `ai-hedge-fund-crypto/` | Signal core | Active signal generator; upstream nested repo, ignored by the parent repo. |
+| `orchestrator/` | Hermes control plane | Cron, audits, recovery, reports, gateways, and repo housekeeping. |
+| `self_improvement_v2/` | SI-v2 engine | Active Cycle Runner, Historical Evidence, Measurement Attribution, ShadowProposals, runtime safety gates. |
+| `freqtrade/` | Dry-run execution fleet | Active SI-v2 fleet state, shared safety code, and bot-specific config directories. |
+| `freqforge/` | FreqForge bot | Baseline / override bot and supporting config. |
+| `freqforge-canary/` | Canary bot | Independent FreqForge instance for canary testing. |
+| `freqtrade/shared/` | FleetRisk + shared state | Shared coordination layer, watcher, fleet-risk artifacts, and kill switch (`kill_switch.py`). |
+| `bridge/` | Bridge code | Hermes/Primo bridge logic. |
+| `primo/` | Primo agent code | Signal-filter and integration helpers. |
+| `shadowlock/` | ShadowLock service | Read-only evidence trail and decision logging. |
+| `intelligence/` | Intelligence layer | Market intelligence and analysis modules. |
+| `tools/freqforge/` | Shadow evaluator | Passive observer and report generator. |
+| `orchestrator/scripts/` | Operation scripts | Approved automation entry points and helper scripts. |
+| `dashboard.py` | Read-only observability | Single-file Flask dashboard; server-side rendered, no caches or websockets, live request-time reads only. |
+| `Caddyfile` | Reverse proxy | Caddy configuration for fleet dashboard and service routing. |
+| `docs/context/` | Historical context | Append-only reports, audits, and migration notes. |
+| `docs/reports/` | Proof reports | Validations and proof write-ups. |
+| `docs/state/` | Current state | Canonical operational snapshot and live-readiness notes. |
+| `docs/runbooks/` | Runbooks | Operational procedures: kill-switch, gateway debug, health audits. |
+| `scripts/` | Utility scripts | Bootstrap, cleanup, and maintenance helpers. |
+| `var/` | Runtime state files | Kill-switch state (`var/kill_switch.json`), not tracked in git. |
 
 ## Repository layout
 
 ```text
 trading-hub/
 ├── README.md
-├── CHANGELOG.md               # Keep-a-Changelog (see history)
+├── CHANGELOG.md
 ├── AGENTS.md
 ├── SOUL.md
 ├── ORCHESTRATOR_CHARTER.md
-├── Caddyfile                  # Reverse proxy config
+├── Caddyfile
 ├── docker-compose.yml
 ├── docker-compose.ai-hedge-fund-crypto.yml
 ├── .github/
 ├── .gitignore
-├── dashboard.py               # single-file Flask dashboard
-├── pyproject.toml             # repo-level linting (Ruff)
+├── dashboard.py
+├── pyproject.toml
 ├── uv.lock
 │
 ├── docs/
-│   ├── README.md              # Documentation index
-│   ├── ARCHITECTURE.md             # System architecture (Mermaid diagrams)
+│   ├── README.md
+│   ├── ARCHITECTURE.md
 │   ├── GAP-REPORT-2026-06-15-TRADING-HUB.md
 │   ├── git-hygiene.md
-│   ├── context/               # Append-only historical reports
+│   ├── context/               # append-only historical reports
+│   ├── reports/               # proof and validation reports
 │   ├── decisions/             # ADR decision records
-│   ├── runbooks/              # Operational runbooks
-│   ├── roadmap/               # Roadmap docs (canonical + historical)
-│   ├── roadmaps/              # SI v2 continuous implementation control plane
-│   ├── specs/                 # Safety contracts and specifications
-│   ├── state/                 # Current operational snapshots
-│   └── archive/               # Historical/archived documents
+│   ├── runbooks/              # operational runbooks
+│   ├── roadmap/               # roadmap docs (canonical + historical)
+│   ├── roadmaps/              # SI-v2 continuous implementation control plane
+│   ├── specs/                 # safety contracts and specifications
+│   ├── state/                 # current operational snapshots
+│   └── archive/               # historical/archived documents
 │
 ├── orchestrator/              # Hermes control plane
-│   ├── scripts/               # kill_switch_trigger.sh, rainbow_db_stub_server.py, cycle runners
-│   └── ...
-├── self_improvement_v2/       # SI v2 engine (active)
-│   ├── README.md              # Module overview and entry points
-│   ├── src/si_v2/             # 18 packages, 100+ modules
-│   └── docs/                  # ADR-style per-issue docs
-├── freqtrade/                 # Dry-run execution fleet
-│   ├── shared/                # kill_switch.py, fleet_risk_manager.py, primo_signal.py
-│   └── bots/                  # Per-bot configs and user_data
+├── self_improvement_v2/       # SI-v2 engine
+├── freqtrade/                 # dry-run execution fleet
 ├── freqforge/                 # FreqForge bot
-├── freqforge-canary/          # Canary FreqForge instance
+├── freqforge-canary/          # canary FreqForge instance
 ├── bridge/                    # Hermes/Primo bridge logic
 ├── primo/                     # Primo agent code
 ├── shadowlock/                # ShadowLock evidence service
-├── intelligence/              # Market intelligence modules
-├── tools/freqforge/           # Shadow evaluator (passive)
-├── scripts/                   # Utility scripts
-├── var/                       # Runtime state files (not tracked)
-├── backtests/                 # Backtest results and configs
-├── tests/                     # Integration tests
-├── logs/                      # Runtime logs (not tracked)
-├── events/                    # Event artifacts (not tracked)
-├── proposals/                 # Shadow proposal artifacts (not tracked)
-├── archive/                   # Archived artifacts
-├── local-memory/              # Local memory stack (Ollama + Qdrant)
+├── intelligence/              # market intelligence modules
+├── tools/freqforge/           # shadow evaluator (passive)
+├── scripts/                   # utility scripts
+├── var/                       # runtime state files (not tracked)
+├── backtests/                 # backtest results and configs
+├── tests/                     # integration tests
+├── logs/                      # runtime logs (not tracked)
+├── events/                    # event artifacts (not tracked)
+├── proposals/                 # shadow proposal artifacts (not tracked)
+├── archive/                   # archived artifacts
+├── local-memory/              # local memory stack
 │
 ├── ai-hedge-fund-crypto/      # ignored nested clone
 ├── Agenten_Auto_Trade/        # independent nested repo
@@ -144,7 +165,8 @@ explicitly reviewed and approved for version control:
 - Backups and archives: `backups/`, `orchestrator/backups/`, `**/*.bak`,
   `**/*.bak-*`, `*.backup.*`.
 - Local cleanup / staging folders: `docs/context/git-cleanup-snapshots/`,
-  `docs/context/memory-migration-staging/`, `.hermes/`, `orchestrator/config/cron_jobs_backup.json`.
+  `docs/context/memory-migration-staging/`, `.hermes/`,
+  `orchestrator/config/cron_jobs_backup.json`.
 - Databases and binary artifacts: `*.sqlite`, `*.db`, `*.fthypt`, `*.feather`,
   `*.parquet`, `*.pkl`.
 
@@ -156,7 +178,8 @@ explicitly reviewed and approved for version control:
 - Review `git diff --cached` before committing.
 - Do not rewrite history, force-push, or use destructive cleanup commands such
   as `git reset --hard` or `git clean -fdx`.
-- Keep docs/context updated after meaningful work or incident resolution.
+- Keep docs/context or docs/reports updated after meaningful work, incident
+  resolution, architecture changes, or safety-relevant fixes.
 
 ## Security notes
 
@@ -174,7 +197,10 @@ explicitly reviewed and approved for version control:
 - Some research and cleanup artifacts are intentionally left local until they
   are classified and archived.
 
-## Operational validation commands
+## Repository validation commands
+
+These commands are safe read-only checks for repo hygiene. Runtime checks should
+follow `AGENTS.md` and the current state/proof report, not README assumptions.
 
 ```bash
 git branch --show-current
@@ -185,19 +211,19 @@ git rev-parse origin/main
 git check-ignore -v shared/hermes_signal.json freqtrade/shared/fleet_risk_state.json \
   freqtrade/bots/regime-hybrid/user_data/primo_signal_state.json \
   docs/context/git-cleanup-snapshots/
-python3 /home/hermes/projects/trading/freqtrade/shared/fleet_watcher.py --once --tail-lines 20
 ```
 
 ## Documentation map
 
-- `AGENTS.md` — agent safety and architecture guide.
+- `AGENTS.md` — primary agent safety, SI-v2 priority, scope, and architecture guide.
 - `SOUL.md` — project identity and operating principles.
+- `ORCHESTRATOR_CHARTER.md` — durable orchestration charter.
 - `README.md` — repository overview (this file).
 - `docs/README.md` — documentation index.
 - `docs/context/README.md` — historical context and report conventions.
-- `docs/state/current-operational-state.md` — current operational snapshot.
-- `docs/state/si-v2-capability-matrix.md` — SI v2 capability status.
-- `docs/GAP-REPORT-2026-06-15-TRADING-HUB.md` — current gap register.
+- `docs/state/current-operational-state.md` — canonical current operational snapshot.
+- `docs/state/si-v2-capability-matrix.md` — SI-v2 capability status.
+- `docs/GAP-REPORT-2026-06-15-TRADING-HUB.md` — gap register.
 - `docs/runbooks/kill-switch.md` — kill-switch operational runbook.
 - `docs/git-hygiene.md` — tracked vs ignored file policy.
-- `self_improvement_v2/README.md` — SI v2 subsystem overview and module map.
+- `self_improvement_v2/README.md` — SI-v2 subsystem overview and module map.

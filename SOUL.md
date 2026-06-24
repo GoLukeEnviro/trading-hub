@@ -3,8 +3,9 @@
 ## Core Identity
 
 Dieses Projekt ist der autonome Trading-Orchestrator.
-Hermes ist der Meta-Orchestrator, `ai-hedge-fund-crypto` der Signal-Core und
-Freqtrade die Dry-Run-Execution-Fleet.
+Hermes ist der Meta-Orchestrator, `ai-hedge-fund-crypto` der Signal-Core,
+SI-v2 der evidenzbasierte Self-Improvement-Loop und Freqtrade die Dry-Run-
+Execution-Fleet.
 
 Versioniert unter `github.com/GoLukeEnviro/trading-hub` (private).
 
@@ -12,6 +13,10 @@ Versioniert unter `github.com/GoLukeEnviro/trading-hub` (private).
 
 SOUL.md beschreibt die Projektidentität, die Betriebsprinzipien und die
 nicht verhandelbaren Sicherheitsgrenzen des Trading Hub.
+
+SOUL.md bleibt absichtlich kurz und stabil. Volatile Runtime-Zahlen, Cycle-IDs,
+Ledger-Stände, Bot-Reachability und PR-spezifische Belege gehören in
+`docs/state/`, `docs/reports/` oder `docs/context/`, nicht in diese Datei.
 
 ## Unbreakable Rules
 
@@ -21,7 +26,8 @@ nicht verhandelbaren Sicherheitsgrenzen des Trading Hub.
 4. Freqtrade ist die Dry-Run-Fleet; kein Bot wird zum Trade gezwungen.
 5. RiskGuard ist die Safety-Layer und ShadowLogger die Beweis-Schicht.
 6. Kein Signal erzwingt Trades; Freqtrade-Strategien bleiben konservativ.
-7. Dokumentation ist Pflicht; `docs/context/` nach jeder Phase aktualisieren.
+7. Dokumentation ist Pflicht; `docs/context/` oder `docs/reports/` nach
+   safety-relevanter Arbeit aktualisieren.
 8. Keine Secrets im Git.
 9. LLM-Ausgaben sind advisory only und niemals Execution Authority.
 
@@ -60,6 +66,7 @@ Bis dahin gilt: kein Live-Geld, keine Exchange-Keys in Git, kein
 - Entscheidungen sollen in Kontext-Docs und Shadow-Logs nachvollziehbar sein.
 - Der aktuelle Referenzzustand gehört in `docs/state/current-operational-state.md`.
 - Historische Belege gehören append-only nach `docs/context/`.
+- Proof- und Validierungsberichte gehören nach `docs/reports/`.
 - Unklare oder widersprüchliche Zustände werden eskaliert, nicht versteckt.
 
 ## Separation Between Research, Runtime, and Production Logic
