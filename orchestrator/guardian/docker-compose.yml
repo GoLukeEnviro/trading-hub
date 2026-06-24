@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     volumes:
       - /home/hermes/projects/trading:/guardian/data
-      - /opt/data/profiles/orchestrator/cron:/guardian/cron
+      - /opt/hermes-green/config/profiles/orchestrator/cron:/guardian/cron:ro
       - /opt/data/profiles/orchestrator/scripts:/guardian/scripts
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
