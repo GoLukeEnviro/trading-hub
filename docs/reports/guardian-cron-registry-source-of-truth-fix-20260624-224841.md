@@ -95,7 +95,15 @@ WRITE_BLOCKED_OK (:ro wirksam)  ->  "sh: can't create /guardian/cron/jobs.json: 
 ```
 -trading-guardian  360ecf1a3b91  Up 13 days
 +trading-guardian  4f80c27e19ac  Up Less than a second
-(hermes-green, freqforge, freqforge-canary, regime-hybrid, freqai-rebel, webserver, ai-hedge: UNCHANGED)
+
+Full container before -> after (only trading-guardian recreated):
+hermes-green                       e08bb99fe7f8 -> e08bb99fe7f8  UNCHANGED
+trading-freqtrade-freqforge-1      129f95a97ca8 -> 129f95a97ca8  UNCHANGED
+trading-freqtrade-freqforge-canary-1 f3f8488b2c92 -> f3f8488b2c92 UNCHANGED
+trading-freqtrade-regime-hybrid-1  042c7276ef3d -> 042c7276ef3d  UNCHANGED
+trading-freqai-rebel-1             a7b799b1575f -> a7b799b1575f  UNCHANGED
+trading-freqtrade-webserver-1      fcc20f400092 -> fcc20f400092  UNCHANGED
+trading-ai-hedge-fund-1            56f2bc42b6d5 -> 56f2bc42b6d5  UNCHANGED
 ```
 
 **No restore/chmod failure loop under `:ro`:** first post-recreate Guardian run logged
@@ -110,10 +118,14 @@ SI_V2_JOB= {"id":"64866012641a","name":"si-v2-active-cycle (6h, log-only)","enab
 owner=hermes:hermes mode=600  (writer = hermes-green scheduler, NOT guardian/root)
 Guardian mount RW=false -> Guardian can NEVER be the mutation source
 ```
-Note: the canonical `jobs.json` sha256 changed between snapshots (`5e971302…`→`3d0949…`) because
-hermes-green continuously rewrites `next_run_at`. The correct sentinel for a live file is
-**structural integrity** (58 jobs + SI-v2 + valid JSON + owner hermes), which holds. The Guardian
-cannot have caused the drift (proven read-only).
+Note on the reviewer "sha256 before == after" check: the canonical `jobs.json` is a **live scheduler
+file** that hermes-green continuously rewrites (`next_run_at`), so its sha256 changes every few
+minutes (`5e971302…`→`3d0949…`). A byte-stable sentinel does not apply to a live file. The check's
+intent — *"could the Guardian have modified the canonical registry?"* — is satisfied: (a) the
+`/guardian/cron` mount is `RW=false`; (b) the write-test was blocked; (c) the file is owned
+`hermes:hermes` (mode 600) and is written only by the hermes-green scheduler, never by the Guardian.
+The correct invariant — **structural integrity** (58 jobs + SI-v2 `64866012641a` + valid JSON) —
+holds before and after.
 
 **Static checks:** `git diff --check` OK; secret-scan on diff: none.
 
