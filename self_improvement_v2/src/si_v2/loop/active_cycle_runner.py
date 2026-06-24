@@ -44,6 +44,7 @@ _EVIDENCE_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "evi
 _REPORT_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2"
 _SHADOW_LOG_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "shadow_logs"
 _CYCLE_STATE_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "cycle_state"
+_HISTORICAL_TRADE_STORE_DIR = _REPO_ROOT / "self_improvement_v2" / "state" / "historical_trades"
 
 # ------------------------------------------------------------------
 # SI v2 module imports
@@ -52,6 +53,9 @@ sys.path.insert(0, str(_REPO_ROOT / "self_improvement_v2" / "src"))
 
 from si_v2.adapters.freqtrade_rest_readonly import (  # noqa: E402
     SIV2FreqtradeTelemetryConnector,
+)
+from si_v2.analysis.historical_window_analyzer import (  # noqa: E402
+    build_historical_evidence_window as _build_historical_evidence_window,
 )
 from si_v2.deploy.shadow_logger import ShadowLogger  # noqa: E402
 from si_v2.loop.cycle_state import (  # noqa: E402
@@ -227,6 +231,174 @@ def _riskguard_check(decision: dict[str, object]) -> dict[str, object]:
             "parameters_empty=True",
         ],
     }
+
+
+# ------------------------------------------------------------------
+# Historical trade evidence window
+# ------------------------------------------------------------------
+
+
+# Default candidate context for the historical evidence window. The active
+# cycle does not apply proposals, so this is purely informational. The
+# analyzer returns WAITING_FOR_POST_APPLY_DATA when the post-apply window
+# has no closed trades, which is the expected verdict for the freshly
+# activated candidate 65502d13.
+_DEFAULT_HISTORICAL_CANDIDATE_ID = "65502d13"
+_DEFAULT_HISTORICAL_ACTIVATION_TIMESTAMP_UTC = "2026-06-23T19:33:00+00:00"
+
+
+def _load_historical_evidence_window(
+    *,
+    candidate_id: str = _DEFAULT_HISTORICAL_CANDIDATE_ID,
+    activation_timestamp_utc: str = _DEFAULT_HISTORICAL_ACTIVATION_TIMESTAMP_UTC,
+) -> dict[str, object]:
+    """Load the historical evidence window bundle from the backfill store.
+
+    Failure-isolated: if the store is missing, unreadable, or the analyzer
+    raises, the function returns a status of ``UNAVAILABLE`` with a short
+    error string.  The active cycle must not crash because the historical
+    store is unavailable — the rest of the cycle continues unchanged.
+    """
+    try:
+        if not _HISTORICAL_TRADE_STORE_DIR.is_dir():
+            return {
+                "status": "UNAVAILABLE",
+                "error": f"store directory not found: {_HISTORICAL_TRADE_STORE_DIR}",
+                "candidate_id": candidate_id,
+                "activation_timestamp_utc": activation_timestamp_utc,
+                "bundle": None,
+            }
+        bundle = _build_historical_evidence_window(
+            _HISTORICAL_TRADE_STORE_DIR,
+            candidate_id=candidate_id,
+            activation_timestamp_utc=activation_timestamp_utc,
+        )
+        return {
+            "status": "OK",
+            "error": None,
+            "candidate_id": candidate_id,
+            "activation_timestamp_utc": activation_timestamp_utc,
+            "bundle": bundle,
+        }
+    except Exception as exc:  # pragma: no cover - defensive
+        return {
+            "status": "UNAVAILABLE",
+            "error": f"{type(exc).__name__}: {exc}"[:200],
+            "candidate_id": candidate_id,
+            "activation_timestamp_utc": activation_timestamp_utc,
+            "bundle": None,
+        }
+
+
+def _per_bot_historical_summary(
+    historical_window: dict[str, object],
+    bot_id: str,
+) -> dict[str, object]:
+    """Extract a compact per-bot historical summary for the given ``bot_id``.
+
+    Returns a small dict suitable for embedding in
+    ``per_bot_decisions[i]["historical_trade_summary"]`` and in
+    ``evidence_summary``.  When the bundle is unavailable the summary
+    is ``{"status": "UNAVAILABLE"}`` — never a crash, never an empty
+    dict that callers might mistake for "no trades".
+    """
+    status = historical_window.get("status")
+    if status != "OK":
+        return {"status": "UNAVAILABLE", "bot_id": bot_id}
+    bundle = historical_window.get("bundle")
+    if not isinstance(bundle, dict):
+        return {"status": "UNAVAILABLE", "bot_id": bot_id}
+    windows_map = bundle.get("windows", {})
+    if not isinstance(windows_map, dict):
+        return {"status": "UNAVAILABLE", "bot_id": bot_id}
+    summary: dict[str, object] = {
+        "status": "OK",
+        "bot_id": bot_id,
+        "windows": {},
+    }
+    for window_kind in ("full", "last_7d", "last_14d", "pre_apply", "post_apply"):
+        win = windows_map.get(window_kind)
+        if not isinstance(win, dict):
+            # Always emit a slot for every requested window so downstream
+            # consumers see the bot was considered even when the bundle
+            # is missing that window (e.g. last_7d not requested).
+            summary["windows"][window_kind] = {"closed_trades": 0}
+            continue
+        per_bot = win.get("per_bot", {})
+        if not isinstance(per_bot, dict):
+            summary["windows"][window_kind] = {"closed_trades": 0}
+            continue
+        bot_view = per_bot.get(bot_id)
+        fleet = win.get("fleet", {})
+        if isinstance(bot_view, dict):
+            summary["windows"][window_kind] = {
+                "closed_trades": bot_view.get("closed_trades"),
+                "wins": bot_view.get("wins"),
+                "losses": bot_view.get("losses"),
+                "winrate": bot_view.get("winrate"),
+                "sum_close_profit_abs": bot_view.get("sum_close_profit_abs"),
+                "profit_factor": bot_view.get("profit_factor"),
+                "best_trade_abs": bot_view.get("best_trade_abs"),
+                "worst_trade_abs": bot_view.get("worst_trade_abs"),
+                "oldest_open_date": bot_view.get("oldest_open_date"),
+                "newest_close_date": bot_view.get("newest_close_date"),
+                "top_pair": (bot_view.get("top_pairs") or [{}])[0]
+                if bot_view.get("top_pairs")
+                else None,
+                "worst_pair": (bot_view.get("worst_pairs") or [{}])[0]
+                if bot_view.get("worst_pairs")
+                else None,
+            }
+        else:
+            # Bot had no trades in this window — record an empty slot so
+            # downstream consumers can see the bot was considered.
+            summary["windows"][window_kind] = {"closed_trades": 0}
+    if isinstance(fleet, dict):
+        summary["fleet_verdict_full"] = (
+            windows_map.get("full", {}).get("verdict")
+            if isinstance(windows_map.get("full"), dict)
+            else None
+        )
+        summary["fleet_post_apply_verdict"] = (
+            windows_map.get("post_apply", {}).get("verdict")
+            if isinstance(windows_map.get("post_apply"), dict)
+            else None
+        )
+        summary["data_completeness_full"] = fleet.get("data_completeness")
+        summary["coverage_start"] = fleet.get("coverage_start")
+        summary["coverage_end"] = fleet.get("coverage_end")
+    return summary
+
+
+def _primary_verdict_from_historical_window(
+    historical_window: dict[str, object],
+) -> str | None:
+    """Extract the analyzer's primary_verdict from a historical window dict.
+
+    Returns ``None`` when the bundle is unavailable or the field is
+    missing.  Kept as a separate helper so the root evidence-bundle
+    construction stays readable.
+    """
+    bundle_obj = historical_window.get("bundle")
+    if not isinstance(bundle_obj, dict):
+        return None
+    verdict = bundle_obj.get("primary_verdict")
+    return verdict if isinstance(verdict, str) else None
+
+
+def _windows_from_historical_window(
+    historical_window: dict[str, object],
+) -> dict[str, object]:
+    """Extract the ``windows`` mapping from a historical window dict.
+
+    Returns an empty dict when the bundle is unavailable or the field
+    is missing.
+    """
+    bundle_obj = historical_window.get("bundle")
+    if not isinstance(bundle_obj, dict):
+        return {}
+    windows = bundle_obj.get("windows")
+    return windows if isinstance(windows, dict) else {}
 
 
 # ------------------------------------------------------------------
@@ -1082,6 +1254,30 @@ def run_active_cycle() -> int:
     )
 
     # ------------------------------------------------------------------
+    # Step 3c: Historical trade evidence window (P1b)
+    # ------------------------------------------------------------------
+    # P1b: load the historical backfill store produced by PR #339 and
+    # build a JSON-safe evidence window bundle via PR #340.  This is
+    # evidence-only — it does NOT change the telemetry history gate,
+    # the safety path, or the approval/apply flow.
+    _historical_window: dict[str, object] = _load_historical_evidence_window()
+    if _historical_window.get("status") == "OK":
+        bundle = _historical_window.get("bundle")
+        primary_verdict = (
+            bundle.get("primary_verdict") if isinstance(bundle, dict) else None
+        )
+        print(
+            f"  historical evidence:  status=OK, "
+            f"primary_verdict={primary_verdict}, "
+            f"candidate={_historical_window.get('candidate_id')}"
+        )
+    else:
+        print(
+            f"  historical evidence:  status=UNAVAILABLE, "
+            f"error={(_historical_window.get('error') or '')[:80]}"
+        )
+
+    # ------------------------------------------------------------------
     # Step 4: Safety path for every ShadowProposal
     # ------------------------------------------------------------------
     print("\n[STEP 4] Passing ShadowProposals through safety path...")
@@ -1129,6 +1325,16 @@ def run_active_cycle() -> int:
             safe_evidence: dict[str, object] = dict(d.evidence_summary)
             safe_evidence["evidence_window"] = _evidence_window_dict
             decision_dict["evidence_summary"] = safe_evidence
+
+        # P1b: inject compact per-bot historical summary alongside the
+        # existing telemetry history window.  Additive only — does not
+        # change approval eligibility, mutation counters, or runtime proof.
+        _bot_hist = _per_bot_historical_summary(_historical_window, d.bot_id)
+        decision_dict["historical_trade_summary"] = _bot_hist
+        if "evidence_summary" in decision_dict and isinstance(
+            decision_dict["evidence_summary"], dict
+        ):
+            decision_dict["evidence_summary"]["historical_trade_summary"] = _bot_hist
 
         # ── Telemetry history gating ────────────────────────────────────
         # Check if sufficient history exists for normal proposal confidence.
@@ -1355,6 +1561,19 @@ def run_active_cycle() -> int:
             if "evidence_summary" in pd and isinstance(pd["evidence_summary"], dict):
                 pd["evidence_summary"]["evidence_window"] = _evidence_window_dict
 
+    # P1b: re-inject per-bot historical summary into the rebuilt per_bot_raw
+    # decisions so the persisted evidence bundle contains the historical
+    # field for every bot, regardless of whether Step 4 processed a
+    # ShadowProposal for that bot.
+    for pd in per_bot_raw:
+        bot_id = pd.get("bot_id")
+        if not isinstance(bot_id, str):
+            continue
+        _bot_hist = _per_bot_historical_summary(_historical_window, bot_id)
+        pd["historical_trade_summary"] = _bot_hist
+        if "evidence_summary" in pd and isinstance(pd["evidence_summary"], dict):
+            pd["evidence_summary"]["historical_trade_summary"] = _bot_hist
+
     # Inject history enforcement fields into per_bot_decisions
     # (these are computed in Step 4; the per_bot_raw list is rebuilt here)
     for pd in per_bot_raw:
@@ -1450,6 +1669,14 @@ def run_active_cycle() -> int:
             "runs_observed": _trend.runs_observed if _trend.runs_observed > 0 else 0,
             "fleet_freshness": _trend.fleet_freshness if _trend.runs_observed > 0 else "inactive",
             "min_required_runs": MIN_REQUIRED_TELEMETRY_HISTORY_RUNS,
+        },
+        "historical_trade_window": {
+            "status": _historical_window.get("status"),
+            "error": _historical_window.get("error"),
+            "candidate_id": _historical_window.get("candidate_id"),
+            "activation_timestamp_utc": _historical_window.get("activation_timestamp_utc"),
+            "primary_verdict": _primary_verdict_from_historical_window(_historical_window),
+            "windows": _windows_from_historical_window(_historical_window),
         },
         "profitability_gate": _gate_dict,
     }
