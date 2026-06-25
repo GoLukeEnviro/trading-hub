@@ -25,9 +25,17 @@ Environment overrides (defaults match the runtime layout inside hermes-green):
     CRON_JOBS_BACKUP  default <repo>/orchestrator/config/cron_jobs_backup.json
     CRON_RESTORE_LOG  default <repo>/orchestrator/logs/cron_restore.log
 
-Exit codes: ``0`` for all safe outcomes (no-op, refuse, dry-run, successful
-restore); ``1`` only for hard errors (unreadable files, write failure). A refuse
-is logged loudly but does not flap the cron job.
+Exit codes — the scheduler/observers can tell a *safety refusal* (live registry
+left intact, but the restore could not proceed safely) apart from a *hard
+technical failure*:
+
+* ``0``  success — no-op/skip, ``--dry-run``, or a completed restore.
+* ``2``  restore-safety refusal — backup invalid (no protected/SI-v2 job) or a
+  defensive guard tripped. No write happened; the live registry is untouched.
+  This is a degraded restore-safety state and must surface as a job error, not
+  a clean run (otherwise a stale backup would look operationally OK).
+* ``1``  hard technical error — unreadable/unparseable files, write failure, or
+  post-write verification failure.
 """
 from __future__ import annotations
 
@@ -47,6 +55,12 @@ REPO = "/home/hermes/projects/trading"
 DEFAULT_DB = "/opt/data/profiles/orchestrator/cron/jobs.json"
 DEFAULT_BACKUP = f"{REPO}/orchestrator/config/cron_jobs_backup.json"
 DEFAULT_LOG = f"{REPO}/orchestrator/logs/cron_restore.log"
+
+# Exit codes — let the scheduler/observers distinguish a restore-safety refusal
+# (live registry left intact, restore deliberately skipped) from a hard failure.
+EXIT_OK = 0  # success: no-op/skip, --dry-run, or completed restore
+EXIT_HARD_ERROR = 1  # technical failure: unreadable/unparseable file, write/verify failure
+EXIT_REFUSE = 2  # restore-safety refusal: invalid backup (no SI-v2) or a guard tripped
 
 
 # ── small self-contained JSON helpers (no external runtime import) ──────────
@@ -177,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         backup_raw = read_json(backup_path)
     except (OSError, ValueError) as exc:
         _log(log_path, f"FATAL: cannot read db/backup: {exc}")
-        return 1
+        return EXIT_HARD_ERROR
 
     live_jobs = extract_jobs(live_raw)
     backup_jobs = extract_jobs(backup_raw)
@@ -193,23 +207,23 @@ def main(argv: list[str] | None = None) -> int:
             f"{'/'.join(PROTECTED_IDS)}) — refusing restore, no write",
         )
         print("REFUSE: invalid backup (no protected job); no write")
-        return 0
+        return EXIT_REFUSE
 
     if plan["refuse_reason"]:
         _log(log_path, f"REFUSE: {plan['refuse_reason']} — no write")
         print(f"REFUSE: {plan['refuse_reason']}; no write")
-        return 0
+        return EXIT_REFUSE
 
     add_ids = [j.get("id") for j in plan["add"]]
     if not add_ids:
         _log(log_path, f"Already {len(live_jobs)} jobs registered. Skip.")
         print(f"OK: already complete ({len(live_jobs)} jobs); skip")
-        return 0
+        return EXIT_OK
 
     if dry_run:
         _log(log_path, f"DRY-RUN: would add {len(add_ids)} job(s): {add_ids}")
         print(f"DRY-RUN: would add {len(add_ids)} job(s): {add_ids}")
-        return 0
+        return EXIT_OK
 
     # Apply: preserve the live container shape, replace only the jobs list.
     new_raw = plan["planned"] if live_is_list else {**live_raw, "jobs": plan["planned"]}
@@ -217,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         write_json_atomic(db_path, new_raw)
     except OSError as exc:
         _log(log_path, f"FATAL: write failed: {exc}")
-        return 1
+        return EXIT_HARD_ERROR
 
     # Re-assert the SI-v2 invariant on the freshly written file.
     try:
@@ -225,10 +239,10 @@ def main(argv: list[str] | None = None) -> int:
         after_ids = job_ids(extract_jobs(after))
     except (OSError, ValueError) as exc:
         _log(log_path, f"FATAL: post-write verify failed: {exc}")
-        return 1
+        return EXIT_HARD_ERROR
     if not all(pid in after_ids for pid in PROTECTED_IDS):
         _log(log_path, "CRITICAL: protected job missing after write — manual review required")
-        return 1
+        return EXIT_HARD_ERROR
 
     _log(
         log_path,
@@ -236,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
         f"registry now {len(extract_jobs(after))} jobs; protected job present",
     )
     print(f"OK: restored {len(add_ids)} job(s); protected job present")
-    return 0
+    return EXIT_OK
 
 
 if __name__ == "__main__":

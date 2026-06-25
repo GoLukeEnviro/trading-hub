@@ -9,6 +9,10 @@
   shrink the live registry or delete SI-v2; a stale backup without SI-v2 is refused.
 - **Overall scheduler/restore safety: GREEN** (was YELLOW after PR #344) — the last open P1/P0 vector
   is eliminated with proof. Guardian already read-only (#344).
+- **Exit-code correction (review #2):** a refused/invalid backup now exits **non-zero (2)** so the
+  scheduler/observers see degraded restore-safety instead of a silent "OK". Safety itself is unchanged
+  (the refuse + no-write already happened); only the operational signal improved. The exit-2 build lands
+  in the canonical dir at deploy/merge; until then the deployed script still refuses-but-exits-0.
 
 ## Summary
 
@@ -26,7 +30,7 @@ impossible by construction.
 
 | File | Change |
 |---|---|
-| `orchestrator/scripts/restore_cron_jobs.py` (new) | Self-contained merge-safe restore: `plan_merge()` with backup-validity gate (refuse without `64866012641a`), add-only merge, no-shrink guard, SI-v2 invariant; `main()` with env-overridable paths + `--dry-run` + atomic write + post-write re-assert. |
+| `orchestrator/scripts/restore_cron_jobs.py` (new) | Self-contained merge-safe restore: `plan_merge()` with backup-validity gate (refuse without `64866012641a`), add-only merge, no-shrink guard, SI-v2 invariant; `main()` with env-overridable paths + `--dry-run` + atomic write + post-write re-assert. **Exit codes:** `0` ok (no-op/dry-run/restore), `2` safety-refuse (invalid backup or guard), `1` hard error (unreadable/write/verify). |
 | `orchestrator/scripts/restore_cron_jobs.sh` | Rewritten to a thin wrapper (`exec python3 …/restore_cron_jobs.py "$@"`). Scheduler job reference unchanged → **no cron-registry mutation**. |
 | `orchestrator/tests/test_restore_cron_jobs.py` (new) | 12 unit + integration tests covering all mandatory cases via `tmp_path`/env overrides (no live paths). |
 | `orchestrator/config/cron_jobs_backup.json` (runtime, **gitignored**) | Regenerated from the canonical 58-job registry; old 11-job backup kept as `.bak-20260624T234224Z`. **Not committed.** |
@@ -62,22 +66,24 @@ hermes-green). Verified content-identical to repo, owner `hermes:hermes`, mode 7
 
 ## Test results
 
-`orchestrator/tests/test_restore_cron_jobs.py` — **12 passed** (pytest 9.1.1, py3.12). Cases:
+`orchestrator/tests/test_restore_cron_jobs.py` — **15 passed** (pytest 9.1.1, py3.12). Cases:
 invalid-backup refuse (healthy + broken live), no stale-job add, valid-backup merge no-shrink,
-SI-v2 restore-when-missing, both-missing refuse, dry-run never writes, healthy no-op, plus `main()`
-integration tests via env/tmp_path.
+SI-v2 restore-when-missing, both-missing refuse, dry-run never writes, healthy no-op, `main()`
+integration tests via env/tmp_path, **plus exit-code tests:** invalid backup → `EXIT_REFUSE` (2),
+corrupt backup → `EXIT_HARD_ERROR` (1), missing db → `EXIT_HARD_ERROR` (1), constants distinct.
 
 (`bash -n restore_cron_jobs.sh` OK; module `ast` parse OK; diff secret-scan clean.)
 
 ## Runtime evidence (deployed script, no live mutation)
 
 ```
-(1) Real-state dry-run (live 58 + regenerated backup 58):
-    "OK: already complete (58 jobs); skip"   -> live copy unchanged (58)
-(2) Deployed script vs. live + OLD stale 11-job backup:
-    "REFUSE: invalid backup (no protected job); no write"
-    -> live copy unchanged: 58 jobs, si_v2_present=True, 0 stale jobs added
-(3) Canonical LIVE registry structurally unchanged after deploy+regen:
+Exit-code matrix (temp files, CRON_JOBS_DB/BACKUP/RESTORE_LOG -> /tmp; real cron_restore.log untouched):
+(1) dry-run (valid backup, live missing jobs):    exit=0  "DRY-RUN: would add N"   -> NO-WRITE
+(2) stale backup WITHOUT SI-v2:                   exit=2  "REFUSE: invalid backup" -> NO-WRITE, 0 stale added
+(3) corrupt backup (invalid JSON):                exit=1  (FATAL logged)           -> NO-WRITE
+(4) valid backup + healthy live:                  exit=0  "already complete"       -> NO-WRITE
+(5) valid backup + live missing SI-v2:            exit=0  "restored N"             -> WRITE (correct: restoring)
+(6) Canonical LIVE registry structurally unchanged after deploy+regen:
     valid_json=True job_count=58 si_v2_id=True si_v2_name=True (owner hermes:hermes mode 600)
 ```
 

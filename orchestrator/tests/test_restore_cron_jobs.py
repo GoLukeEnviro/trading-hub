@@ -120,7 +120,7 @@ def test_main_dry_run_never_writes(tmp_path: Path, monkeypatch) -> None:
     _write_registry(backup, [_si_v2()] + [_job(i) for i in range(57)])   # valid backup
     _set_env(monkeypatch, db, backup, log)
 
-    assert rc.main(["--dry-run"]) == 0
+    assert rc.main(["--dry-run"]) == rc.EXIT_OK
     assert db.read_text() == before                                      # untouched
 
 
@@ -132,7 +132,8 @@ def test_main_no_write_on_invalid_backup(tmp_path: Path, monkeypatch) -> None:
     _write_registry(backup, [_job(i) for i in range(11)])                    # stale, no SI-v2
     _set_env(monkeypatch, db, backup, log)
 
-    assert rc.main([]) == 0
+    assert rc.main([]) == rc.EXIT_REFUSE                                    # invalid backup -> non-zero
+    assert rc.EXIT_REFUSE != 0
     assert db.read_text() == before                                         # invalid -> no write
 
 
@@ -144,7 +145,7 @@ def test_main_merge_writes_and_asserts_si_v2(tmp_path: Path, monkeypatch) -> Non
     _write_registry(backup, [_si_v2()] + [_job(i) for i in range(57)])       # valid backup
     _set_env(monkeypatch, db, backup, log)
 
-    assert rc.main([]) == 0
+    assert rc.main([]) == rc.EXIT_OK
     after = json.loads(db.read_text())
     jobs = after["jobs"]
     assert any(j["id"] == PROTECTED for j in jobs)                           # SI-v2 present after write
@@ -162,5 +163,39 @@ def test_main_healthy_live_is_noop(tmp_path: Path, monkeypatch) -> None:
     _write_registry(backup, list(live))                                      # identical valid backup
     _set_env(monkeypatch, db, backup, log)
 
-    assert rc.main([]) == 0
+    assert rc.main([]) == rc.EXIT_OK
     assert db.read_text() == before                                          # nothing to add -> no write
+
+
+# ── exit-code semantics ─────────────────────────────────────────────────────
+
+def test_exit_code_constants_distinct() -> None:
+    assert rc.EXIT_OK == 0
+    assert rc.EXIT_HARD_ERROR == 1
+    assert rc.EXIT_REFUSE == 2
+    assert len({rc.EXIT_OK, rc.EXIT_HARD_ERROR, rc.EXIT_REFUSE}) == 3
+
+
+def test_main_corrupt_backup_returns_hard_error(tmp_path: Path, monkeypatch) -> None:
+    db = tmp_path / "live.json"
+    backup = tmp_path / "backup.json"
+    log = tmp_path / "restore.log"
+    _write_registry(db, [_si_v2()] + [_job(i) for i in range(57)])   # healthy live
+    before = db.read_text()
+    backup.write_text("{ not valid json ")                          # corrupt backup -> unreadable
+    _set_env(monkeypatch, db, backup, log)
+
+    assert rc.main([]) == rc.EXIT_HARD_ERROR                        # corrupt file -> hard error
+    assert rc.EXIT_HARD_ERROR != 0
+    assert db.read_text() == before                                  # no write on read failure
+
+
+def test_main_missing_db_returns_hard_error(tmp_path: Path, monkeypatch) -> None:
+    db = tmp_path / "does-not-exist.json"                           # never created -> unreadable
+    backup = tmp_path / "backup.json"
+    log = tmp_path / "restore.log"
+    _write_registry(backup, [_si_v2()] + [_job(i) for i in range(57)])
+    _set_env(monkeypatch, db, backup, log)
+
+    assert rc.main([]) == rc.EXIT_HARD_ERROR                        # unreadable db -> hard error
+    assert rc.EXIT_HARD_ERROR != 0
