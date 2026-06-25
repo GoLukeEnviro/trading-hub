@@ -1,49 +1,15 @@
-#!/bin/bash
-# restore_cron_jobs.sh — Restore all trading cron jobs from backup
-# Usage: bash restore_cron_jobs.sh
-# Runs after scheduler reset / container restart to re-register all jobs.
+#!/usr/bin/env bash
+# restore_cron_jobs.sh — thin wrapper around the merge-safe Python restore.
 #
-# Persistence: /opt/data/profiles/orchestrator/cron/jobs.json
-# Backup:      /home/hermes/projects/trading/orchestrator/config/cron_jobs_backup.json
-
+# This file remains the scheduler entrypoint (cron job 607f1890215d,
+# "cron-guardian", runs every 6h) so the cron registry needs NO change.
+# All restore logic lives in restore_cron_jobs.py (self-contained, unit-tested).
+#
+# Safety properties (see restore_cron_jobs.py):
+#   * a backup without SI-v2 job 64866012641a is INVALID and never used
+#   * restore is add-only / merge-safe (never removes or shrinks live registry)
+#   * --dry-run never writes
 set -euo pipefail
 
-JOBS_DB="/opt/data/profiles/orchestrator/cron/jobs.json"
-BACKUP="/home/hermes/projects/trading/orchestrator/config/cron_jobs_backup.json"
-LOG="/home/hermes/projects/trading/orchestrator/logs/cron_restore.log"
-
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] restore_cron_jobs.sh started" >> "$LOG"
-
-# Check if jobs already exist (more than just Fleet Report)
-CURRENT_COUNT=$(python3 -c "
-import json
-try:
-    with open('$JOBS_DB') as f:
-        d = json.load(f)
-    print(len(d.get('jobs',[])))
-except:
-    print(0)
-" 2>/dev/null || echo "0")
-
-if [ "$CURRENT_COUNT" -ge 10 ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Already $CURRENT_COUNT jobs registered. Skip." >> "$LOG"
-    echo "OK: $CURRENT_COUNT jobs already present"
-    exit 0
-fi
-
-# Restore from backup
-if [ -f "$BACKUP" ]; then
-    cp "$BACKUP" "$JOBS_DB"
-    NEW_COUNT=$(python3 -c "
-import json
-with open('$JOBS_DB') as f:
-    d = json.load(f)
-print(len(d.get('jobs',[])))
-" 2>/dev/null)
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Restored $NEW_COUNT jobs from backup" >> "$LOG"
-    echo "OK: Restored $NEW_COUNT jobs"
-else
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] ERROR: Backup not found at $BACKUP" >> "$LOG"
-    echo "ERROR: No backup file"
-    exit 1
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 "$SCRIPT_DIR/restore_cron_jobs.py" "$@"
