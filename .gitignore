@@ -12,6 +12,15 @@
 !*api_key*
 secret-handling-policy.md
 
+# Local GitHub auth secrets — never commit tokens or repo metadata
+github.env
+.env.github
+.env.github.*
+**/github.env
+**/.env.github
+**/.env.github.*
+**/github-repositories.local.json
+
 # ---- Python / Environments ----
 .venv/
 venv/
