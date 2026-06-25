@@ -16,6 +16,9 @@ JOBS_JSON="/guardian/cron/jobs.json"
 BACKUP_JSON="/guardian/data/orchestrator/config/cron_jobs_backup.json"
 LOGFILE="$WORKDIR/orchestrator/logs/external_cron_guardian.log"
 SIGNAL_FILE="$WORKDIR/ai-hedge-fund-crypto/output/hermes_signal.json"
+# Runtime container name (compose service ai-hedge-fund → trading-ai-hedge-fund-1).
+# Do not confuse with SIGNAL_FILE repo dir ai-hedge-fund-crypto/.
+AI_HEDGE_CONTAINER="trading-ai-hedge-fund-1"
 SCRIPTS_DIR="/guardian/scripts"
 PROJECT_SCRIPTS_DIR="$WORKDIR/orchestrator/scripts"
 MAX_SIGNAL_AGE_MIN=30
@@ -90,9 +93,9 @@ print(f'{age:.1f}')
             log "ACTION: Signal stale (${signal_age_min}min >= ${MAX_SIGNAL_AGE_MIN}min) — triggering heartbeat via docker exec"
 
             # Trigger heartbeat via Docker API (container has docker socket)
-            if docker exec ai-hedge-fund-crypto python3 -c \
+            if docker exec "$AI_HEDGE_CONTAINER" python3 -c \
                "import urllib.request; urllib.request.urlopen('http://localhost:8080/trigger')" 2>/dev/null; then
-                log "OK: ai-hedge-fund-crypto /trigger called"
+                log "OK: $AI_HEDGE_CONTAINER /trigger called"
                 sleep 15
                 # Run pipeline via hermes-green container
                 if docker exec hermes-green bash -c \
@@ -102,7 +105,7 @@ print(f'{age:.1f}')
                     log "WARN: Could not trigger pipeline via hermes-green"
                 fi
             else
-                log "ERROR: Could not trigger ai-hedge-fund-crypto heartbeat"
+                log "ERROR: Could not trigger $AI_HEDGE_CONTAINER heartbeat"
             fi
             alert_count=$((alert_count + 1))
         else
@@ -111,13 +114,13 @@ print(f'{age:.1f}')
     fi
 else
     log "WARNING: Signal file not found — attempting heartbeat trigger"
-    docker exec ai-hedge-fund-crypto python3 -c \
+    docker exec "$AI_HEDGE_CONTAINER" python3 -c \
         "import urllib.request; urllib.request.urlopen('http://localhost:8080/trigger')" 2>/dev/null || true
     alert_count=$((alert_count + 1))
 fi
 
 # ── 3b. Check critical containers are running, restart if not ────
-CRITICAL_CONTAINERS=("ai-hedge-fund-crypto" "hermes-green" "trading-guardian")
+CRITICAL_CONTAINERS=("$AI_HEDGE_CONTAINER" "hermes-green" "trading-guardian")
 for cname in "${CRITICAL_CONTAINERS[@]}"; do
     if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${cname}$"; then
         log "CONTAINER_DOWN: $cname — attempting docker start"
