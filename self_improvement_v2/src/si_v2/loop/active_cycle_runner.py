@@ -83,6 +83,10 @@ from si_v2.observe.telemetry_history import (  # noqa: E402
     TelemetryHistoryStore,
     build_record_from_snapshots,
 )
+from si_v2.proposals.candidate_builder import (  # noqa: E402
+    build_candidate_proposals,
+    build_fleet_metrics_from_cycle,
+)
 from si_v2.signals.freqtrade_signals import (  # noqa: E402
     collect_bot_signals,
 )
@@ -1613,6 +1617,17 @@ def run_active_cycle() -> int:
             {},
         )
 
+    fleet_metrics = build_fleet_metrics_from_cycle(
+        cycle_id=cycle_id,
+        fleet_decision=decision,
+        safety_results=safety_results,
+    )
+    proposal_candidates = build_candidate_proposals(
+        cycle_id=cycle_id,
+        fleet_decision=decision,
+        fleet_metrics=fleet_metrics,
+    )
+
     evidence_bundle: dict[str, object] = {
         "schema_version": 1,
         "artifact_type": "active_cycle_runner_v1",
@@ -1679,6 +1694,7 @@ def run_active_cycle() -> int:
             "windows": _windows_from_historical_window(_historical_window),
         },
         "profitability_gate": _gate_dict,
+        "proposal_candidates": [candidate.to_json_safe() for candidate in proposal_candidates],
     }
 
     bundle_path = _EVIDENCE_DIR / f"active_cycle_{cycle_id}.json"
