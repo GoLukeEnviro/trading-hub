@@ -11,7 +11,6 @@ Coverage:
     - Validator error captured as FAILED
     - Sidecar naming convention
 """
-
 from __future__ import annotations
 
 import json
