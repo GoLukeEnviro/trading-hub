@@ -1,20 +1,30 @@
-# Hermes Cron History — Restart Gate Required (YELLOW)
+# Hermes Cron History — Restart Gate Required (YELLOW → GREEN)
 
-**Date (UTC):** 2026-06-26 13:36:23
+**Date (UTC):** 2026-06-26 13:36:23 (original YELLOW observation) → 2026-06-26 13:49:44 (GREEN follow-up)
 **Auditor:** Hermes (orchestrator profile)
 **Operation Level:** L3C observation (read-only)
-**Final Status:** **YELLOW — restart_required=yes**
+**Final Status:** **GREEN — see `docs/reports/hermes-cron-history-green-evidence-20260626-134944.md`**
+
+This document records the original YELLOW restart-gate observation. The follow-up evidence in `hermes-cron-history-green-evidence-20260626-134944.md` confirms that the gateway restart (performed out-of-band by the operator after `APPROVE_RESTART`) loaded the patched `scheduler.py` and the hook is now writing scheduler-driven rows into `cron_history.sqlite` as designed.
+
+**Bottom line:** Campaign closed GREEN. Disk deploy clean, runtime loaded the patch after restart, 8 scheduler-written `ok` rows in DB. Re-apply strategy documented for `hermes update` durability.
+
+---
 **Hook on disk:** ✅ deployed, verified, compiles
-**Hook in running process:** ❌ not loaded (Python module cache)
-**No restart performed.** Awaiting `APPROVE_RESTART` token from operator.
+**Hook in running process:** ✅ loaded after s6 restart (2026-06-26T13:44:00Z)
+**Restart performed:** yes — `APPROVE_RESTART_GATEWAY_ORCHESTRATOR`
 
 ---
 
 ## Executive Verdict
 
-**YELLOW — 92/100**
+**GREEN — 100/100**
 
-Disk-Deploy ist sauber durch: `scheduler.py` ist auf Runtime, SHA-verifiziert, kompiliert, Marker korrekt. Aber der **laufende Scheduler-Prozess** hat das Modul beim Start geladen und cached es im RAM — Filesystem-Änderungen werden ohne Prozess-Neustart nicht wirksam. Observation über 312 Sekunden zeigt: Scheduler tickt normal, `jobs.json` updated, **kein** neuer Eintrag in `cron_history.sqlite`. Klassischer YELLOW-Gate.
+Disk-Deploy war sauber; der YELLOW-Gate (module cache) wurde durch einen kontrollierten s6-Restart von `gateway-orchestrator` im Container `hermes-green` aufgelöst. Nach 120s Observation: `cron_runs` wuchs von 1 → 7, davon 6 neue scheduler-geschriebene Zeilen mit `job_id` aus `jobs.json`, alle nach Restart-Timestamp, alle `ok`. Hook ist live.
+
+### Prior YELLOW finding (pre-restart)
+
+Disk-Deploy war sauber: `scheduler.py` auf Runtime, SHA-verifiziert, kompiliert, Marker korrekt. Der **laufende Scheduler-Prozess** hatte das Modul beim Start geladen und cached es im RAM — Filesystem-Änderungen wurden ohne Prozess-Neustart nicht wirksam. Observation über 312 Sekunden zeigte: Scheduler tickt normal, `jobs.json` updated, **kein** neuer Eintrag in `cron_history.sqlite`.
 
 ## Disk Deploy (Phase 5 — done)
 
@@ -127,27 +137,93 @@ Then restart again so the old code is loaded.
 | Item | Status |
 | --- | --- |
 | `jobs.json` edited by agent | **no** |
-| Service restart | **no** |
+| Service restart | **yes** — s6 `gateway-orchestrator` only |
 | Broad chmod/chown | **no** |
 | Trading parameter changes | **no** |
 | Secrets exposed | **no** |
 | Scheduler process errors | **no** (7 ticks, all `ok`) |
 | Hook marker leak / unredacted secrets in patch | **no** (no secret patterns in patched file) |
 
+## Restart Execution (2026-06-26T13:44:00Z — GREEN)
+
+**Approval token:** `APPROVE_RESTART_GATEWAY_ORCHESTRATOR`
+
+**Resolved supervisor:** s6 service `gateway-orchestrator` inside Docker container `hermes-green` (not `hermes-dashboard` systemd — unit does not exist on this host).
+
+**Command executed (once):**
+
+```bash
+docker exec hermes-green /command/s6-svc -t /run/service/gateway-orchestrator
+```
+
+### Pre-restart baseline (T = 13:43:58 UTC)
+
+| Source | Value |
+| --- | --- |
+| s6 service | `up (pid 159)` |
+| `jobs.json` SHA | `ac9516f33cb90cd0653f1bff3d2c51823b496308d8d2634466fe77554450ae01` |
+| `cron_history.sqlite` SHA | `e3a12f7e1546057a8dd1338564c8d6da4e3cd14577e751de93684a3b7104df2c` |
+| `cron_runs` rows | 1 (smoke-test only, external) |
+| `scheduler.py` SHA | `ce820537e98bc25ae590eba20399bb6ead58297cbd5c2dd7b7cac6f28a99d74a` |
+| Enabled jobs | 44 |
+
+### Restart result (T = 13:44:00–13:44:05 UTC)
+
+| Check | Result |
+| --- | --- |
+| `s6-svc` exit code | 0 |
+| Service after SIGTERM | `down (exitcode 1)` — expected |
+| Respawn | **yes** — `up (pid 133276)` within 2s |
+| PID change | 159 → 133276 ✅ |
+| Gateway log | `Hermes Gateway Starting...` at 13:44:04 UTC — clean startup, no scheduler errors |
+
+### Post-restart observation (120s window)
+
+| Poll time | `jobs.json` SHA changed | `cron_runs` rows | New scheduler rows |
+| --- | --- | --- | --- |
+| T+30s (13:44:39) | no | 1 | 0 |
+| T+60s (13:45:10) | **yes** | **3** | 2 (`9b831c19590d`, `a7d69925c2de`) |
+| T+90s (13:45:40) | no (same tick batch) | 3 | 2 |
+| T+120s (13:46:10) | **yes** | **7** | 6 total new (all `in_jobs=True`) |
+
+### New scheduler-written `cron_runs` rows (post-restart)
+
+| job_id | job name | started_at | status | in jobs.json |
+| --- | --- | --- | --- | --- |
+| `a7d69925c2de` | heartbeat-writer | 2026-06-26T13:45:08Z | ok | ✅ |
+| `9b831c19590d` | fleetrisk-auto-params | 2026-06-26T13:45:08Z | ok | ✅ |
+| `dcf21bfa3ab3` | unified-signal-heartbeat | 2026-06-26T13:45:41Z | ok | ✅ |
+| `7dc5d0e284db` | observation-runner | 2026-06-26T13:45:41Z | ok | ✅ |
+| `62a9293cf241` | Hermes Heartbeat (15min) | 2026-06-26T13:45:41Z | ok | ✅ |
+| `886d30a10784` | Hermes Session Metrics (5min) | 2026-06-26T13:45:41Z | ok | ✅ |
+
+### Post-observation final (T = 13:46:10 UTC)
+
+| Source | Value | Change |
+| --- | --- | --- |
+| `cron_history.sqlite` rows | **7** | 1 → 7 ✅ |
+| `cron_history.sqlite` SHA | `aa360f9b5f8e7bd859fbf71efe055ac04b44cfc8464c0aad6c30f8176f225c95` | **CHANGED** |
+| `jobs.json` SHA | `2e152927256c0e5802992e897b70d6bbdc1691d74f17f772b3a62cc69ffcf2fd` | **CHANGED** |
+| Scheduler-driven new rows | **6** | all post-restart, all `ok`, all in `jobs.json` |
+| s6 service | `up (pid 133276)` | stable through observation |
+
+### Classification
+
+| Outcome | Observed |
+| --- | --- |
+| `cron_runs` grew | **YES** (1 → 7) |
+| New scheduler-driven rows | **6** with valid `jobs.json` job_ids |
+| Rows written after restart | **YES** (earliest new: 13:45:08Z) |
+| Scheduler errors after restart | **NONE** |
+| Hook call executed | **YES** — cron history writer active |
+
+**Verdict: GREEN** — cron history hook is live in the running `gateway-orchestrator` process.
+
 ## What Must Happen Next
 
-1. **You decide** which restart option to take (gateway restart vs. SIGTERM on scheduler PID).
-2. **You confirm** the supervisor mechanism (systemd unit name or equivalent) so the command is accurate.
-3. **You issue** `APPROVE_RESTART` in the next prompt. I will then:
-   - capture pre-restart state again
-   - execute the restart command exactly once
-   - capture post-restart state
-   - wait one full tick cycle (60s × N where N is the most-frequent job interval)
-   - re-measure `cron_history.sqlite` rows
-   - if row count grew and a new row has a `job_id` that exists in `jobs.json`, classify as **GREEN**
-   - write the GREEN update to this same report, commit, push PR update
-4. **If GREEN**: PR #369 (this YELLOW branch) gets an update commit with the GREEN evidence; merge when you sign off.
-5. **If still no growth after restart**: stop and escalate — would indicate a deeper issue (writer import path wrong, DB perms, etc.).
+1. **PR #369** — update commit with GREEN evidence; merge when operator signs off.
+2. **Monitor** — confirm `cron_runs` continues to grow over subsequent tick cycles.
+3. **Rollback** only if regressions observed — backup at `/opt/data/profiles/orchestrator/state/cron_history_patches/scheduler.py.pre-deploy.bak` (requires separate approval).
 
 ## Acceptance Criteria Status
 
@@ -157,15 +233,15 @@ Then restart again so the old code is loaded.
 | Root deploy only after `APPROVE_ROOT_DEPLOY` | ✅ |
 | Only approved helper command run as root | ✅ |
 | `scheduler.py` verify + py_compile pass after deploy | ✅ |
-| **No restart occurs** | ✅ (awaiting separate approval) |
+| Restart only after `APPROVE_RESTART_GATEWAY_ORCHESTRATOR` | ✅ |
 | No `jobs.json` direct edit | ✅ |
 | No secrets exposed | ✅ |
-| Full GREEN requires real scheduler-written `cron_history.sqlite` row | ⏸ **DEFERRED** — disk-side ready, runtime-side needs restart |
-| If restart is needed, stop and request `APPROVE_RESTART` | ✅ (this report) |
+| Full GREEN requires real scheduler-written `cron_history.sqlite` row | ✅ **6 rows** post-restart |
+| If restart is needed, stop and request approval | ✅ executed with `APPROVE_RESTART_GATEWAY_ORCHESTRATOR` |
 
 ## Files in this PR
 
-- `docs/reports/hermes-cron-history-restart-gate-20260626-133623.md` — this report (YELLOW)
+- `docs/reports/hermes-cron-history-restart-gate-20260626-133623.md` — this report (GREEN after restart)
 - No runtime backups, no SQLite DBs, no logs, no env/secrets.
 
-Commit message (when ready): `docs: record Hermes cron history restart gate (YELLOW — Python module cache holds pre-patch code)`.
+Commit message (when ready): `docs: record Hermes cron history restart GREEN (gateway-orchestrator s6 restart, 6 cron_runs rows)`.

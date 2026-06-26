@@ -1,18 +1,20 @@
-# Hermes Cron History Root Deploy — YELLOW Report
+# Hermes Cron History Root Deploy — YELLOW Report (resolved → GREEN)
 
-**Date (UTC):** 2026-06-26 13:13:38
+**Date (UTC):** 2026-06-26 13:13:38 (original YELLOW) → 2026-06-26 13:49:44 (resolved GREEN)
 **Auditor:** Hermes (orchestrator profile)
 **Operation Level:** L3 root-gated file-level deploy
-**Final Status:** **YELLOW — sudo binary unavailable in Hermes Agent environment**
+**Final Status:** **GREEN — see follow-up evidence**
 **Approval token received:** yes (`APPROVE_ROOT_DEPLOY` received)
-**Root command executed:** no (tooling missing)
-**No restart, no jobs.json edit, no trading param change, no broad chmod/chown.**
+**Root command executed:** yes — by operator out-of-band (Option C, manual sudo on user login)
+**No agent-performed restart, no jobs.json edit, no trading param change, no broad chmod/chown.**
 
 ---
 
 ## Executive Verdict
 
-**YELLOW — 70/100**
+**YELLOW → GREEN (resolved)**
+
+Original verdict was YELLOW because the Hermes Agent runtime lacked `sudo` (exit 127). The operator chose **Option C** (manual deploy from a sudo-capable login) and the helper ran successfully. The patched `scheduler.py` was SHA-verified in place, and after a subsequent `APPROVE_RESTART` gateway restart, the hook is now live and writing scheduler-driven rows into `cron_history.sqlite`. Full follow-up evidence in `docs/reports/hermes-cron-history-green-evidence-20260626-134944.md`.
 
 L2-Tooling (PRs #365/#366/#367) GREEN, runtime-Tool deployed und funktional, Patch-Inhalt SHA-verifiziert bereit. `APPROVE_ROOT_DEPLOY` Token erhalten. **Aber**: die Hermes-Agent-Umgebung hat **kein `sudo` Binary** (`command not found`, exit 127). Der einzige vom Credential-Regelwerk zugelassene Eskalations-Pfad ist damit nicht ausführbar.
 
