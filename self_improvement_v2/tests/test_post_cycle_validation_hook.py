@@ -17,8 +17,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest  # noqa: TC002
-
 from si_v2.loop.active_cycle_runner import _run_post_cycle_validation
 
 
