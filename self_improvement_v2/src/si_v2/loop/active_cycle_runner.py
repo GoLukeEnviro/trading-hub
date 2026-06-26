@@ -69,10 +69,6 @@ from si_v2.loop.fleet_analyzer import (  # noqa: E402
     JsonObject,
     analyze_fleet,
 )
-from si_v2.proposals.candidate_builder import (  # noqa: E402
-    build_candidate_proposals,
-    build_fleet_metrics_from_cycle,
-)
 from si_v2.loop.telemetry_normalizer import (  # noqa: E402
     NormalizedTelemetry,
     normalize_raw_evidence,
@@ -86,6 +82,10 @@ from si_v2.observe.telemetry_history import (  # noqa: E402
     TelemetryHistoryAnalyzer,
     TelemetryHistoryStore,
     build_record_from_snapshots,
+)
+from si_v2.proposals.candidate_builder import (  # noqa: E402
+    build_candidate_proposals,
+    build_fleet_metrics_from_cycle,
 )
 from si_v2.signals.freqtrade_signals import (  # noqa: E402
     collect_bot_signals,
