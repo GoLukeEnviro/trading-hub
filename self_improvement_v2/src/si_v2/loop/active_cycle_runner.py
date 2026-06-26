@@ -103,6 +103,7 @@ from si_v2.signals.models import (  # noqa: E402
 # ------------------------------------------------------------------
 _MEASUREMENT_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "measurement"
 _VALIDATION_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "validation"
+_WALK_FORWARD_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "walk_forward"
 
 LEDGER_STATUS_SUCCESS: str = "SUCCESS"
 LEDGER_STATUS_WARNING: str = "WARNING"
@@ -1127,6 +1128,68 @@ def _run_post_cycle_validation(
 
 
 # ------------------------------------------------------------------
+# Walk-Forward Evidence Materializer post-step
+# ------------------------------------------------------------------
+
+
+def _run_walk_forward_materializer(
+    walk_forward_dir: Path,
+    cycle_id: str,
+) -> dict[str, object]:
+    """Run the walk-forward evidence materializer and persist results.
+
+    This is a read-only, non-blocking post-step. It loads available
+    telemetry history, historical trades, and past evidence bundles,
+    computes per-bot walk-forward metrics for all four bots, and
+    persists the result as a JSON artifact.
+
+    Never raises — failures are captured and returned as status WARNING
+    or FAILED so the cycle itself can complete.
+
+    Returns a dict with:
+        - status: SUCCESS | WARNING | SKIPPED | FAILED
+        - error: str or empty
+        - bots: list of bot_ids processed
+        - artifact_path: str or empty
+    """
+    result: dict[str, object] = {
+        "status": "SKIPPED",
+        "error": "",
+        "bots": [],
+        "artifact_path": "",
+    }
+
+    try:
+        from si_v2.evaluation.walk_forward_materializer import (
+            materialize_walk_forward_metrics,
+        )
+
+        mat_result = materialize_walk_forward_metrics(
+            cycle_id=cycle_id,
+            persist=True,
+        )
+    except Exception as exc:
+        result["status"] = "FAILED"
+        result["error"] = f"materializer error: {str(exc)[:300]}"
+        return result
+
+    bot_ids = [b.bot_id for b in mat_result.bots]
+    result["bots"] = bot_ids
+
+    # Find the artifact path
+    try:
+        artifact_name = f"walk_forward_metrics_{cycle_id}.json"
+        artifact_path = walk_forward_dir / artifact_name
+        if artifact_path.exists():
+            result["artifact_path"] = str(artifact_path)
+    except OSError:
+        pass
+
+    result["status"] = "SUCCESS"
+    return result
+
+
+# ------------------------------------------------------------------
 # Main cycle
 # ------------------------------------------------------------------
 
@@ -1888,6 +1951,32 @@ def run_active_cycle() -> int:
         err = str(validation_result.get("error", ""))
         if err:
             print(f"  error:                {err}")
+
+    # ------------------------------------------------------------------
+    # Step 8: Walk-Forward Evidence Materializer
+    # ------------------------------------------------------------------
+    print("\n[STEP 8] Running walk-forward evidence materializer...")
+    materializer_result = _run_walk_forward_materializer(
+        walk_forward_dir=_WALK_FORWARD_DIR,
+        cycle_id=cycle_id,
+    )
+    wf_status = str(materializer_result.get("status", "UNKNOWN"))
+    if wf_status == "SUCCESS":
+        print(f"  status:               {wf_status}")
+        wf_bots_raw = materializer_result.get("bots", [])
+        wf_bots_list: list[str] = list(wf_bots_raw) if isinstance(wf_bots_raw, list) else []
+        print(f"  bots processed:       {len(wf_bots_list)}")
+        wf_path = str(materializer_result.get("artifact_path", ""))
+        if wf_path:
+            try:
+                print(f"  artifact:             {Path(wf_path).relative_to(_REPO_ROOT)}")
+            except ValueError:
+                print(f"  artifact:             {wf_path}")
+    else:
+        print(f"  status:               {wf_status}")
+        wf_err = str(materializer_result.get("error", ""))
+        if wf_err:
+            print(f"  error:                {wf_err}")
 
     # ------------------------------------------------------------------
     # Summary
