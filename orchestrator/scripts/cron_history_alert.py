@@ -36,9 +36,7 @@ Design notes:
 
 For safety:
 
-* ``--dry-run`` is the default for any manual invocation.
-* ``--commit-state`` is **off** by default. The state file is only
-  written when explicitly enabled (future runtime use).
+* No state is written unless ``--commit-state`` is explicitly set. ``--dry-run`` is an explicit no-write marker and is **mutually exclusive** with ``--commit-state`` (the combination exits with code 2).
 * Exit codes: ``0`` OK / no alerts, ``2`` DB or state error, ``1``
   unexpected error.
 """

@@ -191,19 +191,22 @@ The old script remains a fallback during this transition. **Do not delete `herme
 python3 -m pytest orchestrator/tests/test_cron_history_alert.py -v
 ```
 
-51 unit tests covering:
+68 unit tests covering:
 
 - Status classification (ok, error, failed, timeout, unknown, empty)
-- Dedup key (with and without error_excerpt)
+- Dedup key (with and without error_excerpt, fallback bucketing)
 - Schema discovery (column presence, missing table)
 - Fetch after-id filtering
-- State load/save (missing, valid, partial, corrupted)
+- State load/save (missing, valid, partial, corrupted, atomic write)
 - Cooldown filtering (within, expired, disabled)
 - Max-alerts cap
 - Intra-run dedup
+- Lookback filtering (recent vs old rows, fresh state only, cursor skips lookback, malformed timestamps include conservatively, sqlite3.Row compatibility)
+- Dry-run / commit-state mutual exclusion (rejects `--dry-run --commit-state` with exit 2, dry-run alone never writes, no flags never writes, commit-state alone writes)
+- `--now-utc` flag (deterministic time injection, invalid value rejected)
 - Render (text, JSON)
-- End-to-end pipeline (empty DB, ok-only, mixed, commit-state)
-- CLI main() (dry-run, JSON format, missing DB)
+- End-to-end pipeline (empty DB, ok-only, mixed, commit-state, corrupted state, fresh vs cursor-present)
+- CLI main() (dry-run, JSON format, missing DB, mutual-exclusion error)
 
 ## See also
 
