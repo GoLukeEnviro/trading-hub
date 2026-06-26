@@ -1,0 +1,167 @@
+{
+  "cases": {
+    "blocked": {
+      "decision": {
+        "action_count": 0,
+        "capital_execution": false,
+        "mutation_count": 0,
+        "notification_sent": false,
+        "reason_codes": [
+          "go_no_go_blocker_present",
+          "runtime_drift_detected",
+          "unclear_credential_path",
+          "fleet_monitoring_red",
+          "dynamic_exit_gate_blocked",
+          "profitability_gate_blocked",
+          "stale_telemetry_hard",
+          "heartbeat_failed"
+        ],
+        "routes": [
+          "promotion_pause_recommended",
+          "operator_review_recommended",
+          "runtime_drift_review_recommended",
+          "credential_review_recommended",
+          "risk_review_recommended"
+        ],
+        "runtime_mutation": false,
+        "severity": "blocked"
+      },
+      "description": "All hard blockers active"
+    },
+    "healthy": {
+      "decision": {
+        "action_count": 0,
+        "capital_execution": false,
+        "mutation_count": 0,
+        "notification_sent": false,
+        "reason_codes": [
+          "all_checks_clean"
+        ],
+        "routes": [
+          "no_alert_recommended"
+        ],
+        "runtime_mutation": false,
+        "severity": "info"
+      },
+      "description": "All evidence green, no blockers"
+    },
+    "warning": {
+      "decision": {
+        "action_count": 0,
+        "capital_execution": false,
+        "mutation_count": 0,
+        "notification_sent": false,
+        "reason_codes": [
+          "fleet_monitoring_yellow",
+          "stale_telemetry_warning"
+        ],
+        "routes": [
+          "operator_review_recommended"
+        ],
+        "runtime_mutation": false,
+        "severity": "warning"
+      },
+      "description": "Monitoring yellow, stale telemetry (warning threshold)"
+    }
+  },
+  "date": "2026-06-22",
+  "proof_name": "si_v2_alert_routing_readiness",
+  "report": {
+    "decisions": [
+      {
+        "action_count": 0,
+        "capital_execution": false,
+        "mutation_count": 0,
+        "notification_sent": false,
+        "reason_codes": [
+          "all_checks_clean"
+        ],
+        "routes": [
+          "no_alert_recommended"
+        ],
+        "runtime_mutation": false,
+        "severity": "info"
+      },
+      {
+        "action_count": 0,
+        "capital_execution": false,
+        "mutation_count": 0,
+        "notification_sent": false,
+        "reason_codes": [
+          "fleet_monitoring_yellow",
+          "stale_telemetry_warning"
+        ],
+        "routes": [
+          "operator_review_recommended"
+        ],
+        "runtime_mutation": false,
+        "severity": "warning"
+      },
+      {
+        "action_count": 0,
+        "capital_execution": false,
+        "mutation_count": 0,
+        "notification_sent": false,
+        "reason_codes": [
+          "go_no_go_blocker_present",
+          "runtime_drift_detected",
+          "unclear_credential_path",
+          "fleet_monitoring_red",
+          "dynamic_exit_gate_blocked",
+          "profitability_gate_blocked",
+          "stale_telemetry_hard",
+          "heartbeat_failed"
+        ],
+        "routes": [
+          "promotion_pause_recommended",
+          "operator_review_recommended",
+          "runtime_drift_review_recommended",
+          "credential_review_recommended",
+          "risk_review_recommended"
+        ],
+        "runtime_mutation": false,
+        "severity": "blocked"
+      }
+    ],
+    "overall_severity": "blocked",
+    "safety": {
+      "auto_healing": false,
+      "capital_execution": false,
+      "compose_changes": false,
+      "config_writes": false,
+      "cron_changes": false,
+      "docker_changes": false,
+      "exchange_io": false,
+      "orders": false,
+      "runtime_mutation": false,
+      "strategy_writes": false
+    },
+    "schema_version": 1,
+    "summary": {
+      "action_count": 0,
+      "capital_execution": false,
+      "decision_count": 3,
+      "mutation_count": 0,
+      "notification_sent_count": 0,
+      "unique_reason_codes": [
+        "all_checks_clean",
+        "dynamic_exit_gate_blocked",
+        "fleet_monitoring_red",
+        "fleet_monitoring_yellow",
+        "go_no_go_blocker_present",
+        "heartbeat_failed",
+        "profitability_gate_blocked",
+        "runtime_drift_detected",
+        "stale_telemetry_hard",
+        "stale_telemetry_warning",
+        "unclear_credential_path"
+      ]
+    }
+  },
+  "safety_verification": {
+    "action_count": 0,
+    "capital_execution": false,
+    "mutation_count": 0,
+    "notification_sent_count": 0
+  }
+}
