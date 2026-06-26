@@ -1,8 +1,8 @@
 # Hermes Final Cron Drift Resolution — L3B Git→Runtime Deploy
 
-**Date:** 2026-06-26T08:53:23Z  
-**Operation Level:** L3 file-level Git-to-runtime deploy  
-**Merge Base:** `6e4bc91` (PR #357)  
+**Date:** 2026-06-26T08:53:23Z
+**Operation Level:** L3 file-level Git-to-runtime deploy
+**Merge Base:** `6e4bc91` (PR #357)
 **Classification:** GREEN — 100/100
 
 ---
@@ -174,7 +174,7 @@ OK=30  DRIFT=0  CRON_ONLY=6  MISSING_RUNTIME=0
 ```
 
 **Residual observations (non-blocking):**
-1. **CRON_ONLY count discrepancy:** 6 actual vs 7 expected in task spec. The 6 are correctly documented runtime-only scripts. The 8 `(no script)` entries in jobs.json are Hermes built-in jobs, not custom scripts.
+1. **CRON_ONLY count: 6 (not 7).** There are 7 scripts in runtime without Git source, but only 6 are referenced by active cron jobs. The 7th — `hermes_error_alert.py` — exists in runtime but is NOT referenced by any cron job (verified: grep of jobs.json shows zero hits). It is a STALE runtime artifact from a previous deployment that was not archived during the L3B cleanup. The CRON_ONLY=6 metric correctly counts only actively-referenced runtime-only scripts.
 2. **drawdown_guard.py env vars not exported:** The 4 `FREQTRADE_*_PASS` vars are not set in the shell. Credential resolution relies on fallback mechanisms (host config files and docker exec). If env var support is desired, the scheduler's environment configuration should be updated — but this is optional since the fallbacks work.
 3. **Env var naming divergence:** `.env.freqtrade-webui.local` uses different naming than `drawdown_guard.py` expects (e.g., `FREQTRADE_REGIME_PASS` vs `FREQTRADE_REGIME_HYBRID_PASS`). Harmonizing these names would enable env-var-first resolution for all four bots.
 
