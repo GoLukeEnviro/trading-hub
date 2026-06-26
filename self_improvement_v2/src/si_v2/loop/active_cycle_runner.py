@@ -51,6 +51,9 @@ _HISTORICAL_TRADE_STORE_DIR = _REPO_ROOT / "self_improvement_v2" / "state" / "hi
 # ------------------------------------------------------------------
 sys.path.insert(0, str(_REPO_ROOT / "self_improvement_v2" / "src"))
 
+from si_v2.adapters.freqtrade_auth_resolver import (  # noqa: E402
+    resolve_all as _resolve_auth_all,
+)
 from si_v2.adapters.freqtrade_rest_readonly import (  # noqa: E402
     SIV2FreqtradeTelemetryConnector,
 )
@@ -1230,6 +1233,27 @@ def run_active_cycle() -> int:
     if not bots:
         print("  ERROR: no enabled bots in registry")
         return 1
+
+    # ── Step 1b: Resolve SI v2 auth credentials ──────────────────────
+    # Read JWT credentials from allowlisted local config files when env
+    # vars are not already set. No secret values are printed or persisted.
+    print("\n  --- Auth Resolver ---")
+    try:
+        _auth_results = _resolve_auth_all(_CONFIG_PATH)
+        _auth_resolved = 0
+        _auth_missing = 0
+        for _ar in _auth_results:
+            _s = getattr(_ar, "status", "?")
+            _bid = getattr(_ar, "bot_id", "?")
+            if _s in ("RESOLVED_FROM_ENV", "RESOLVED_FROM_FILE"):
+                _auth_resolved += 1
+            else:
+                _auth_missing += 1
+            print(f"  {_bid}: {_s}")
+        print(f"  resolved: {_auth_resolved}, missing: {_auth_missing}")
+    except Exception as exc:
+        print(f"  ERROR: auth resolver failed — {str(exc)[:200]}")
+        print("  continuing without auth (env vars may be missing)")
 
     # ------------------------------------------------------------------
     # Step 2: Collect per-bot evidence
