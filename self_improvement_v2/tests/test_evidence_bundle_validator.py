@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
+import pytest  # noqa: TC002
 
 from si_v2.validation.evidence_bundle_validator import (
     VALIDATOR_VERSION,
