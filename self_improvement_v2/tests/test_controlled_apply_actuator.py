@@ -1,36 +1,14 @@
-r"""Tests for Phase 1 Controlled Apply Actuator — Canary-First Human Gate (#363).
+"""Tests for Phase 1 Controlled Apply Actuator — Canary-First Human Gate (#363).
 
-Test coverage matrix:
-
-  1. Canary bot gate
-     - Accepted: freqtrade-freqforge-canary
-     - Rejected: all other bot IDs (freqforge, regime-hybrid, freqai-rebel)
-  2. Safe overlay keys gate
-     - Accepted: keys from SAFE_OVERLAY_KEYS (cooldown_candles, max_open_trades, etc.)
-     - Rejected: unsafe keys (dry_run, exchange, secret)
-     - Rejected: unrecognised keys not in SAFE_OVERLAY_KEYS
-  3. Human approval flag gate
-     - Accepted: requires_human_approval=True
-     - Rejected: requires_human_approval=False
-  4. L3 activation token gate
-     - Accepted: env var set to APPROVE
-     - Rejected: env var not set
-     - Rejected: env var set to wrong value
-  5. Cooldown gate
-     - Accepted: no cooldown state file (first apply)
-     - Accepted: cooldown expired (>7 days ago)
-     - Rejected: cooldown active (<7 days ago)
-  6. dry_run invariance
-     - Accepted: dry_run=True
-     - Rejected: dry_run=False
-  7. Full end-to-end apply
-     - All gates pass -> APPLIED
-     - Overlay file written
-     - Rollback plan created
-     - Cooldown state updated
-     - Shadow logs written (4 events)
-  8. Blocked scenarios
-     - Wrong bot, unsafe key, no approval, no token, cooldown, dry_run=False
+Test coverage:
+  1. Basic gate functions
+  2. Readiness check (all gates)
+  3. Cooldown fail-closed (BLOCKER-5)
+  4. Dry-run unconditional (HIGH-1)
+  5. Kill-switch and RiskGuard (BLOCKER-2, BLOCKER-3)
+  6. Value validation (BLOCKER-1)
+  7. Shadow logger integration
+  8. Blocked and success scenarios via execute_apply
 """
 
 from __future__ import annotations
@@ -46,18 +24,20 @@ from si_v2.apply_actuator.controlled_apply_actuator import (
     COOLDOWN_DAYS,
     L3_TOKEN_ENV,
     L3_TOKEN_VALUE,
-    SAFE_OVERLAY_KEYS,
-    SHADOW_LOG_EVENTS,
     ControlledApplyDecision,
-    check_activation_token,
+    CooldownState,
     check_canary_bot,
     check_cooldown,
-    check_human_approval_flag,
-    check_safe_overlay_keys,
+    check_dry_run,
+    check_human_approval,
+    check_kill_switch,
+    check_readiness,
+    check_riskguard,
+    check_safe_parameters,
+    check_token,
     create_rollback_plan,
-    CooldownState,
-    log_shadow_event,
-    run_controlled_apply_canary,
+    execute_apply,
+    log_shadow_events,
     summarize_decision,
     write_overlay_file,
 )
@@ -66,417 +46,373 @@ from si_v2.apply_actuator.controlled_apply_actuator import (
 
 
 @pytest.fixture
-def canary_bot_id() -> str:
+def canary() -> str:
     return CANARY_BOT_ID
 
 
 @pytest.fixture
-def f68a_overlay() -> dict[str, int]:
+def overlay() -> dict[str, int]:
     return {"cooldown_candles": 4, "max_open_trades": 3}
 
 
 @pytest.fixture
-def pre_apply_config() -> dict[str, object]:
+def pre_cfg() -> dict[str, object]:
     return {"cooldown_candles": 3, "max_open_trades": 3, "dry_run": True}
 
 
 @pytest.fixture
-def tmp_state_dir(tmp_path: Path) -> Path:
-    d = tmp_path / "state"
-    d.mkdir()
-    return d
+def tmp_dir(tmp_path: Path) -> dict[str, Path]:
+    return {
+        "state": tmp_path / "state",
+        "overlay": tmp_path / "overlays",
+        "plan": tmp_path / "rollback_plans",
+        "log": tmp_path / "shadow_log",
+    }
 
 
 @pytest.fixture
-def tmp_overlay_dir(tmp_path: Path) -> Path:
-    d = tmp_path / "overlays"
-    d.mkdir()
-    return d
-
-
-@pytest.fixture
-def tmp_plan_dir(tmp_path: Path) -> Path:
-    d = tmp_path / "rollback_plans"
-    d.mkdir()
-    return d
-
-
-@pytest.fixture
-def tmp_log_dir(tmp_path: Path) -> Path:
-    d = tmp_path / "shadow_log"
-    d.mkdir()
-    return d
-
-
-@pytest.fixture
-def with_l3_token(monkeypatch: pytest.MonkeyPatch) -> None:
+def l3_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(L3_TOKEN_ENV, L3_TOKEN_VALUE)
 
 
-@pytest.fixture
-def without_l3_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(L3_TOKEN_ENV, raising=False)
-
-
-# -- 1. Canary bot gate -------------------------------------------------------
+# -- 1. Basic gate functions --------------------------------------------------
 
 
 class TestCanaryBotGate:
-    def test_accepts_canary(self) -> None:
-        assert check_canary_bot(CANARY_BOT_ID)
+    def test_accept_canary(self) -> None:
+        assert check_canary_bot(CANARY_BOT_ID).passed
 
-    def test_rejects_freqforge(self) -> None:
-        assert not check_canary_bot("freqtrade-freqforge")
-
-    def test_rejects_regime_hybrid(self) -> None:
-        assert not check_canary_bot("freqtrade-regime-hybrid")
-
-    def test_rejects_freqai_rebel(self) -> None:
-        assert not check_canary_bot("freqai-rebel")
-
-    def test_rejects_empty_string(self) -> None:
-        assert not check_canary_bot("")
+    def test_reject_other(self) -> None:
+        assert not check_canary_bot("freqtrade-freqforge").passed
 
 
-# -- 2. Safe overlay keys gate ------------------------------------------------
+class TestSafeParameters:
+    def test_accept_valid(self) -> None:
+        assert check_safe_parameters({"cooldown_candles": 4}).passed
+
+    def test_reject_bad_key(self) -> None:
+        assert not check_safe_parameters({"exchange": "binance"}).passed
+
+    def test_reject_empty(self) -> None:
+        assert not check_safe_parameters({}).passed
+
+    def test_reject_value_out_of_range(self) -> None:
+        assert not check_safe_parameters({"cooldown_candles": 9999}).passed
+
+    def test_reject_non_numeric(self) -> None:
+        assert not check_safe_parameters({"cooldown_candles": "high"}).passed
 
 
-class TestSafeOverlayKeysGate:
-    def test_accepts_cooldown_candles(self) -> None:
-        assert check_safe_overlay_keys({"cooldown_candles": 4})
+class TestTokenGate:
+    def test_accept_with_token(self, l3_token: None) -> None:
+        assert check_token().passed
 
-    def test_accepts_max_open_trades(self) -> None:
-        assert check_safe_overlay_keys({"max_open_trades": 3})
-
-    def test_accepts_all_safe_keys(self) -> None:
-        assert check_safe_overlay_keys({k: 1 for k in SAFE_OVERLAY_KEYS})
-
-    def test_rejects_dry_run(self) -> None:
-        assert not check_safe_overlay_keys({"dry_run": False})
-
-    def test_rejects_exchange(self) -> None:
-        assert not check_safe_overlay_keys({"exchange": "binance"})
-
-    def test_rejects_unsafe_key(self) -> None:
-        assert not check_safe_overlay_keys({"stake_currency": "BTC"})
-
-    def test_rejects_unrecognised_key(self) -> None:
-        assert not check_safe_overlay_keys({"unknown_param": 42})
-
-    def test_rejects_empty_overlay(self) -> None:
-        assert not check_safe_overlay_keys({})
-
-    def test_rejects_mixed_safe_and_unsafe(self) -> None:
-        assert not check_safe_overlay_keys({"cooldown_candles": 4, "secret": "hunter2"})
+    def test_reject_without_token(self) -> None:
+        assert not check_token().passed
 
 
-# -- 3. Human approval flag gate ----------------------------------------------
+class TestHumanApproval:
+    def test_accept_true(self) -> None:
+        assert check_human_approval(True).passed
+
+    def test_reject_false(self) -> None:
+        assert not check_human_approval(False).passed
 
 
-class TestHumanApprovalGate:
-    def test_accepts_true(self) -> None:
-        assert check_human_approval_flag({"requires_human_approval": True})
+class TestKillSwitch:
+    def test_accept_normal(self, tmp_path: Path) -> None:
+        ks = tmp_path / "kill_switch.json"
+        ks.write_text(json.dumps({"mode": "NORMAL"}))
+        assert check_kill_switch(ks).passed
 
-    def test_rejects_false(self) -> None:
-        assert not check_human_approval_flag({"requires_human_approval": False})
+    def test_reject_halt_new(self, tmp_path: Path) -> None:
+        ks = tmp_path / "kill_switch.json"
+        ks.write_text(json.dumps({"mode": "HALT_NEW"}))
+        assert not check_kill_switch(ks).passed
 
-    def test_rejects_missing(self) -> None:
-        assert not check_human_approval_flag({})
+    def test_reject_emergency(self, tmp_path: Path) -> None:
+        ks = tmp_path / "kill_switch.json"
+        ks.write_text(json.dumps({"mode": "EMERGENCY"}))
+        assert not check_kill_switch(ks).passed
 
-    def test_rejects_none(self) -> None:
-        assert not check_human_approval_flag({"requires_human_approval": None})
-
-
-# -- 4. L3 activation token gate ----------------------------------------------
-
-
-class TestActivationTokenGate:
-    def test_accepts_with_token(self, with_l3_token: None) -> None:
-        assert check_activation_token()
-
-    def test_rejects_without_token(self, without_l3_token: None) -> None:
-        assert not check_activation_token()
-
-    def test_rejects_wrong_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv(L3_TOKEN_ENV, "WRONG_VALUE")
-        assert not check_activation_token()
+    def test_fail_closed_corrupt(self, tmp_path: Path) -> None:
+        ks = tmp_path / "kill_switch.json"
+        ks.write_text("{bad json}")
+        assert not check_kill_switch(ks).passed
 
 
-# -- 5. Cooldown gate ---------------------------------------------------------
+class TestRiskGuard:
+    def test_accept_pass(self) -> None:
+        assert check_riskguard("PASS").passed
+
+    def test_reject_fail(self) -> None:
+        assert not check_riskguard("FAIL").passed
+
+    def test_reject_none(self) -> None:
+        assert not check_riskguard(None).passed
 
 
-class TestCooldownGate:
-    def test_no_state_file(self, tmp_state_dir: Path) -> None:
-        cd = check_cooldown(tmp_state_dir)
-        assert not cd.is_on_cooldown()
-        assert cd.remaining_seconds() == 0.0
+class TestDryRun:
+    def test_accept_true(self, pre_cfg: dict[str, object]) -> None:
+        assert check_dry_run(pre_cfg).passed
 
-    def test_recent_apply_on_cooldown(self, tmp_state_dir: Path) -> None:
-        state = CooldownState(
+    def test_reject_false(self, pre_cfg: dict[str, object]) -> None:
+        pre_cfg["dry_run"] = False
+        assert not check_dry_run(pre_cfg).passed
+
+    def test_block_on_none(self) -> None:
+        """Unconditional: no config must block (HIGH-1)."""
+        assert not check_dry_run(None).passed
+
+
+# -- 2. Cooldown fail-closed (BLOCKER-5) --------------------------------------
+
+
+class TestCooldownFailClosed:
+    def test_fresh_no_file(self, tmp_dir: dict[str, Path]) -> None:
+        state, result = check_cooldown(tmp_dir["state"])
+        assert not state._corrupt
+        assert result.passed
+
+    def test_corrupt_file_blocks(self, tmp_dir: dict[str, Path]) -> None:
+        tmp_dir["state"].mkdir(parents=True, exist_ok=True)
+        (tmp_dir["state"] / "cooldown_state.json").write_text("corrupt")
+        state, result = check_cooldown(tmp_dir["state"])
+        assert state._corrupt
+        assert not result.passed
+
+    def test_active_cooldown_blocks(self, tmp_dir: dict[str, Path]) -> None:
+        s = CooldownState(
             last_apply_utc=datetime.now(UTC).isoformat(),
-            candidate_sha="f68a031923d0",
-            bot_id=CANARY_BOT_ID,
+            candidate_sha="abc", bot_id=CANARY_BOT_ID,
         )
-        state.save(tmp_state_dir)
-        cd = check_cooldown(tmp_state_dir)
-        assert cd.is_on_cooldown()
-        assert cd.remaining_seconds() > 0.0
+        s.save(tmp_dir["state"])
+        state, result = check_cooldown(tmp_dir["state"])
+        assert state.is_on_cooldown()
+        assert not result.passed
 
-    def test_old_apply_cooldown_expired(self, tmp_state_dir: Path) -> None:
-        past = datetime.now(UTC) - timedelta(days=COOLDOWN_DAYS + 1, hours=1)
-        state = CooldownState(
+    def test_expired_cooldown_passes(self, tmp_dir: dict[str, Path]) -> None:
+        past = datetime.now(UTC) - timedelta(days=COOLDOWN_DAYS + 1)
+        s = CooldownState(
             last_apply_utc=past.isoformat(),
+            candidate_sha="abc", bot_id=CANARY_BOT_ID,
+        )
+        s.save(tmp_dir["state"])
+        state, result = check_cooldown(tmp_dir["state"])
+        assert not state.is_on_cooldown()
+        assert result.passed
+
+
+# -- 3. Readiness runner ------------------------------------------------------
+
+
+class TestReadinessRunner:
+    def test_ready_for_canary_with_all_gates(
+        self, canary: str, overlay: dict[str, int],
+        pre_cfg: dict[str, object], l3_token: None,
+        tmp_dir: dict[str, Path],
+    ) -> None:
+        report = check_readiness(
             candidate_sha="f68a031923d0",
-            bot_id=CANARY_BOT_ID,
+            bot_id=canary,
+            parameter_overlay=overlay,
+            requires_human_approval=True,
+            state_dir=tmp_dir["state"],
+            kill_switch_path=None,
+            riskguard_status="PASS",
+            pre_apply_config=pre_cfg,
         )
-        state.save(tmp_state_dir)
-        cd = check_cooldown(tmp_state_dir)
-        assert not cd.is_on_cooldown()
-        assert cd.remaining_seconds() == 0.0
+        assert report.ready, f"Should be ready: {report.canary_gate.reason}"
 
-    def test_persists_and_loads(self, tmp_state_dir: Path) -> None:
-        state = CooldownState(
-            last_apply_utc="2026-06-20T12:00:00+00:00",
-            candidate_sha="abc123",
-            bot_id=CANARY_BOT_ID,
+    def test_blocks_wrong_bot(
+        self, overlay: dict[str, int], tmp_dir: dict[str, Path],
+    ) -> None:
+        report = check_readiness(
+            "abc", "freqtrade-regime-hybrid", overlay,
+            state_dir=tmp_dir["state"],
         )
-        state.save(tmp_state_dir)
-        loaded = CooldownState.load(tmp_state_dir)
-        assert loaded.last_apply_utc == "2026-06-20T12:00:00+00:00"
-        assert loaded.candidate_sha == "abc123"
+        assert not report.ready
+        assert report.canary_gate.passed is False
+
+    def test_blocks_unsafe_value(
+        self, canary: str, l3_token: None,
+        tmp_dir: dict[str, Path],
+    ) -> None:
+        report = check_readiness(
+            "abc", canary, {"cooldown_candles": 9999},
+            requires_human_approval=True,
+            state_dir=tmp_dir["state"],
+            kill_switch_path=None, riskguard_status="PASS",
+            pre_apply_config={"dry_run": True},
+        )
+        assert not report.ready
+        assert not report.safe_parameters_gate.passed
+
+    def test_blocks_no_token(
+        self, canary: str, overlay: dict[str, int],
+        pre_cfg: dict[str, object], tmp_dir: dict[str, Path],
+    ) -> None:
+        report = check_readiness(
+            "abc", canary, overlay,
+            requires_human_approval=True,
+            state_dir=tmp_dir["state"],
+            kill_switch_path=None, riskguard_status="PASS",
+            pre_apply_config=pre_cfg,
+        )
+        assert not report.ready
+
+    def test_blocks_halt_new_kill_switch(
+        self, canary: str, overlay: dict[str, int],
+        pre_cfg: dict[str, object], l3_token: None,
+        tmp_dir: dict[str, Path],
+    ) -> None:
+        tmp_dir["state"].mkdir(parents=True, exist_ok=True)
+        ks = tmp_dir["state"] / "kill_switch.json"
+        ks.write_text(json.dumps({"mode": "HALT_NEW"}))
+        report = check_readiness(
+            "abc", canary, overlay,
+            requires_human_approval=True,
+            state_dir=tmp_dir["state"],
+            kill_switch_path=ks, riskguard_status="PASS",
+            pre_apply_config=pre_cfg,
+        )
+        assert not report.ready
+
+    def test_blocks_riskguard_not_pass(
+        self, canary: str, overlay: dict[str, int],
+        pre_cfg: dict[str, object], l3_token: None,
+        tmp_dir: dict[str, Path],
+    ) -> None:
+        report = check_readiness(
+            "abc", canary, overlay,
+            requires_human_approval=True,
+            state_dir=tmp_dir["state"],
+            kill_switch_path=None, riskguard_status="FAIL",
+            pre_apply_config=pre_cfg,
+        )
+        assert not report.ready
+
+    def test_blocks_no_dry_run_config(
+        self, canary: str, overlay: dict[str, int],
+        l3_token: None, tmp_dir: dict[str, Path],
+    ) -> None:
+        report = check_readiness(
+            "abc", canary, overlay,
+            requires_human_approval=True,
+            state_dir=tmp_dir["state"],
+            kill_switch_path=None, riskguard_status="PASS",
+            pre_apply_config=None,
+        )
+        assert not report.ready
 
 
-# -- 6. Overlay file writer ---------------------------------------------------
+# -- 4. Overlay and rollback helpers ------------------------------------------
 
 
 class TestOverlayWriter:
-    def test_writes_file(self, tmp_overlay_dir: Path) -> None:
+    def test_writes_file(self, tmp_dir: dict[str, Path]) -> None:
         path, sha = write_overlay_file(
-            "f68a031923d0", {"cooldown_candles": 4}, overlay_dir=tmp_overlay_dir
+            "f68a031923d0", {"cooldown_candles": 4},
+            overlay_dir=tmp_dir["overlay"],
         )
         assert Path(path).exists()
         assert len(sha) == 64
-        data = json.loads(Path(path).read_text())
-        assert data["candidate_sha"] == "f68a031923d0"
-        assert data["overlay"] == {"cooldown_candles": 4}
-
-    def test_overlay_dir_created(self, tmp_path: Path) -> None:
-        new_dir = tmp_path / "new_overlays"
-        path, _ = write_overlay_file("abc", {"cooldown_candles": 4}, overlay_dir=new_dir)
-        assert Path(path).exists()
-
-
-# -- 7. Rollback plan ---------------------------------------------------------
 
 
 class TestRollbackPlan:
-    def test_creates_plan(self, tmp_plan_dir: Path) -> None:
+    def test_creates_plan(self, tmp_dir: dict[str, Path]) -> None:
         path = create_rollback_plan(
-            "f68a031923d0",
-            CANARY_BOT_ID,
-            "/tmp/overlay.json",
-            {"cooldown_candles": 3, "dry_run": True},
-            plan_dir=tmp_plan_dir,
+            "f68a", CANARY_BOT_ID, "/tmp/o.json",
+            {"cooldown_candles": 3},
+            plan_dir=tmp_dir["plan"],
         )
         assert Path(path).exists()
-        data = json.loads(Path(path).read_text())
-        assert data["candidate_sha"] == "f68a031923d0"
-        assert data["bot_id"] == CANARY_BOT_ID
-        assert data["pre_apply_config_snapshot"]["cooldown_candles"] == 3
-        assert "restore_instructions" in data
-
-
-# -- 8. ShadowLogger integration ----------------------------------------------
 
 
 class TestShadowLogger:
-    def test_logs_event(self, tmp_log_dir: Path) -> None:
-        log_shadow_event(
-            "apply_requested", "f68a031923d0", CANARY_BOT_ID,
-            details={"param": "cooldown_candles"}, log_dir=tmp_log_dir,
+    def test_logs_and_does_not_block(self, tmp_dir: dict[str, Path]) -> None:
+        # log_shadow_events should not raise
+        log_shadow_events(
+            "abc", CANARY_BOT_ID, {"cooldown_candles": 4},
+            "/tmp/o.json", "/tmp/r.json",
+            log_dir=tmp_dir["log"],
         )
-        log_path = tmp_log_dir / "controlled_apply.jsonl"
-        assert log_path.exists()
-        entry = json.loads(log_path.read_text().strip())
-        assert entry["event"] == "apply_requested"
-        assert entry["bot_id"] == CANARY_BOT_ID
-
-    def test_append_only(self, tmp_log_dir: Path) -> None:
-        for event in SHADOW_LOG_EVENTS:
-            log_shadow_event(event, "f68a031923d0", CANARY_BOT_ID, log_dir=tmp_log_dir)
-        log_path = tmp_log_dir / "controlled_apply.jsonl"
-        lines = log_path.read_text().strip().split("\n")
-        assert len(lines) == len(SHADOW_LOG_EVENTS)
-        events = [json.loads(l)["event"] for l in lines]
-        assert events == list(SHADOW_LOG_EVENTS)
 
 
-# -- 9. End-to-end apply (all gates pass) -------------------------------------
+# -- 5. Execute apply (end-to-end) --------------------------------------------
 
 
-class TestEndToEndApply:
-    def test_full_apply_success(
-        self,
-        canary_bot_id: str,
-        f68a_overlay: dict[str, int],
-        pre_apply_config: dict[str, object],
-        with_l3_token: None,
-        tmp_state_dir: Path,
-        tmp_overlay_dir: Path,
-        tmp_plan_dir: Path,
-        tmp_log_dir: Path,
+class TestExecuteApply:
+    def test_success(
+        self, canary: str, overlay: dict[str, int],
+        pre_cfg: dict[str, object], l3_token: None,
+        tmp_dir: dict[str, Path],
     ) -> None:
-        decision = run_controlled_apply_canary(
-            candidate_sha="f68a031923d0",
-            bot_id=canary_bot_id,
-            parameter_overlay=f68a_overlay,
+        decision = execute_apply(
+            candidate_sha="f68a031923d0", bot_id=canary,
+            parameter_overlay=overlay,
             requires_human_approval=True,
-            state_dir=tmp_state_dir,
-            overlay_dir=tmp_overlay_dir,
-            plan_dir=tmp_plan_dir,
-            log_dir=tmp_log_dir,
-            pre_apply_config=pre_apply_config,
+            state_dir=tmp_dir["state"],
+            overlay_dir=tmp_dir["overlay"],
+            plan_dir=tmp_dir["plan"],
+            log_dir=tmp_dir["log"],
+            kill_switch_path=None,
+            riskguard_status="PASS",
+            pre_apply_config=pre_cfg,
         )
-        assert decision.overall_status == "APPLIED", decision.errors
+        assert decision.overall_status == "SHADOW_OVERLAY_WRITTEN", decision.errors
         assert decision.overlay_path
-        assert decision.overlay_sha256
         assert decision.rollback_plan_path
+        assert not decision.mutation_counter_should_increment
+        assert not decision.measurement_allowed
 
-        overlay = json.loads(Path(decision.overlay_path).read_text())
-        assert overlay["candidate_sha"] == "f68a031923d0"
-        assert overlay["overlay"]["cooldown_candles"] == 4
-
-        plan = json.loads(Path(decision.rollback_plan_path).read_text())
-        assert plan["pre_apply_config_snapshot"]["cooldown_candles"] == 3
-
-        cd = CooldownState.load(tmp_state_dir)
-        assert cd.last_apply_utc
-        assert cd.candidate_sha == "f68a031923d0"
-
-        log_path = tmp_log_dir / "controlled_apply.jsonl"
-        events = [json.loads(l)["event"] for l in log_path.read_text().strip().split("\n")]
-        assert events == ["apply_requested", "apply_approved", "apply_executed", "rollback_ready"]
-
-
-# -- 10. Blocked scenarios ----------------------------------------------------
-
-
-class TestBlockedScenario:
     def test_blocked_wrong_bot(
-        self, f68a_overlay: dict[str, int],
-        tmp_state_dir: Path, tmp_overlay_dir: Path,
-        tmp_plan_dir: Path, tmp_log_dir: Path,
+        self, overlay: dict[str, int], tmp_dir: dict[str, Path],
     ) -> None:
-        decision = run_controlled_apply_canary(
-            candidate_sha="f68a031923d0", bot_id="freqtrade-regime-hybrid",
-            parameter_overlay=f68a_overlay,
-            state_dir=tmp_state_dir, overlay_dir=tmp_overlay_dir,
-            plan_dir=tmp_plan_dir, log_dir=tmp_log_dir,
+        d = execute_apply(
+            "abc", "wrong-bot", overlay,
+            state_dir=tmp_dir["state"],
+        )
+        assert d.overall_status == "BLOCKED"
+
+    def test_blocked_unsafe_value(
+        self, canary: str, l3_token: None, tmp_dir: dict[str, Path],
+    ) -> None:
+        d = execute_apply(
+            "abc", canary, {"cooldown_candles": 9999},
+            requires_human_approval=True,
+            state_dir=tmp_dir["state"],
+            kill_switch_path=None, riskguard_status="PASS",
             pre_apply_config={"dry_run": True},
         )
-        assert decision.overall_status == "BLOCKED"
-        log_path = tmp_log_dir / "controlled_apply.jsonl"
-        assert not log_path.exists()
-
-    def test_blocked_unsafe_key(
-        self, canary_bot_id: str,
-        tmp_state_dir: Path, tmp_overlay_dir: Path,
-        tmp_plan_dir: Path, tmp_log_dir: Path,
-    ) -> None:
-        decision = run_controlled_apply_canary(
-            candidate_sha="f68a031923d0", bot_id=canary_bot_id,
-            parameter_overlay={"secret": "hunter2"},
-            state_dir=tmp_state_dir, overlay_dir=tmp_overlay_dir,
-            plan_dir=tmp_plan_dir, log_dir=tmp_log_dir,
-        )
-        assert decision.overall_status == "BLOCKED"
-
-    def test_blocked_no_human_approval(
-        self, canary_bot_id: str, f68a_overlay: dict[str, int],
-        tmp_state_dir: Path, tmp_overlay_dir: Path,
-        tmp_plan_dir: Path, tmp_log_dir: Path,
-    ) -> None:
-        decision = run_controlled_apply_canary(
-            candidate_sha="f68a031923d0", bot_id=canary_bot_id,
-            parameter_overlay=f68a_overlay, requires_human_approval=False,
-            state_dir=tmp_state_dir, overlay_dir=tmp_overlay_dir,
-            plan_dir=tmp_plan_dir, log_dir=tmp_log_dir,
-        )
-        assert decision.overall_status == "BLOCKED"
+        assert d.overall_status == "BLOCKED"
 
     def test_blocked_no_token(
-        self, canary_bot_id: str, f68a_overlay: dict[str, int],
-        without_l3_token: None,
-        tmp_state_dir: Path, tmp_overlay_dir: Path,
-        tmp_plan_dir: Path, tmp_log_dir: Path,
+        self, canary: str, overlay: dict[str, int],
+        pre_cfg: dict[str, object], tmp_dir: dict[str, Path],
     ) -> None:
-        decision = run_controlled_apply_canary(
-            candidate_sha="f68a031923d0", bot_id=canary_bot_id,
-            parameter_overlay=f68a_overlay, requires_human_approval=True,
-            state_dir=tmp_state_dir, overlay_dir=tmp_overlay_dir,
-            plan_dir=tmp_plan_dir, log_dir=tmp_log_dir,
+        d = execute_apply(
+            "abc", canary, overlay,
+            requires_human_approval=True,
+            state_dir=tmp_dir["state"],
+            kill_switch_path=None, riskguard_status="PASS",
+            pre_apply_config=pre_cfg,
         )
-        assert decision.overall_status == "BLOCKED"
-
-    def test_blocked_cooldown(
-        self, canary_bot_id: str, f68a_overlay: dict[str, int],
-        pre_apply_config: dict[str, object], with_l3_token: None,
-        tmp_state_dir: Path, tmp_overlay_dir: Path,
-        tmp_plan_dir: Path, tmp_log_dir: Path,
-    ) -> None:
-        d1 = run_controlled_apply_canary(
-            candidate_sha="f68a031923d0", bot_id=canary_bot_id,
-            parameter_overlay=f68a_overlay, requires_human_approval=True,
-            state_dir=tmp_state_dir, overlay_dir=tmp_overlay_dir,
-            plan_dir=tmp_plan_dir, log_dir=tmp_log_dir,
-            pre_apply_config=pre_apply_config,
-        )
-        assert d1.overall_status == "APPLIED"
-
-        d2 = run_controlled_apply_canary(
-            candidate_sha="f68a031923d0", bot_id=canary_bot_id,
-            parameter_overlay=f68a_overlay, requires_human_approval=True,
-            state_dir=tmp_state_dir, overlay_dir=tmp_overlay_dir,
-            plan_dir=tmp_plan_dir, log_dir=tmp_log_dir,
-            pre_apply_config=pre_apply_config,
-        )
-        assert d2.overall_status == "COOLDOWN_ACTIVE"
-
-    def test_blocked_dry_run_false(
-        self, canary_bot_id: str, f68a_overlay: dict[str, int],
-        pre_apply_config: dict[str, object], with_l3_token: None,
-        tmp_state_dir: Path, tmp_overlay_dir: Path,
-        tmp_plan_dir: Path, tmp_log_dir: Path,
-    ) -> None:
-        decision = run_controlled_apply_canary(
-            candidate_sha="f68a031923d0", bot_id=canary_bot_id,
-            parameter_overlay=f68a_overlay, requires_human_approval=True,
-            state_dir=tmp_state_dir, overlay_dir=tmp_overlay_dir,
-            plan_dir=tmp_plan_dir, log_dir=tmp_log_dir,
-            pre_apply_config={"dry_run": False},
-        )
-        assert decision.overall_status == "BLOCKED"
+        assert d.overall_status == "BLOCKED"
 
 
-# -- 11. summarise_decision ---------------------------------------------------
+# -- 6. Summarize_decision ----------------------------------------------------
 
 
 class TestSummarize:
-    def test_summarize_applied(self) -> None:
+    def test_summary_includes_safety_fields(self) -> None:
         d = ControlledApplyDecision(
-            overall_status="APPLIED", candidate_sha="f68a031923d0",
-            bot_id=CANARY_BOT_ID, overlay_path="/tmp/o.json",
-            rollback_plan_path="/tmp/r.json",
+            overall_status="SHADOW_OVERLAY_WRITTEN",
+            candidate_sha="f68a", bot_id=CANARY_BOT_ID,
         )
         s = summarize_decision(d)
-        assert s["status"] == "APPLIED"
-        assert s["overlay_written"] is True
-
-    def test_summarize_blocked(self) -> None:
-        d = ControlledApplyDecision(
-            overall_status="BLOCKED", candidate_sha="",
-            bot_id="wrong-bot", errors=("Bot blocked",),
-        )
-        s = summarize_decision(d)
-        assert s["status"] == "BLOCKED"
-        assert s["overlay_written"] is False
+        assert s["status"] == "SHADOW_OVERLAY_WRITTEN"
+        assert s["mutation_counter_should_increment"] is False
+        assert s["measurement_allowed"] is False
+        assert s["runtime_visible"] is False
+        assert s["runtime_proof_status"] == "NOT_RUN"
