@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from si_v2.loop.cycle_state import (
     build_cycle_state,
@@ -31,9 +30,6 @@ from si_v2.loop.fleet_analyzer import (
     analyze_fleet,
     fleet_decision_to_dict,
 )
-
-if TYPE_CHECKING:
-    pass
 
 # ======================================================================
 # Helpers: build synthetic evidence for tests
