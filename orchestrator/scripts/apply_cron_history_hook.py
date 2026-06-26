@@ -649,8 +649,21 @@ def rollback(target: Path, backup_path: Path, backup_dir: Path) -> dict:
 
 def _safe_py_compile(target: Path) -> tuple[bool, str]:
     """Run python3 -m py_compile on target. Return (ok, message).
-    Falls back to a no-op message if the python version isn't usable.
+
+    On success, the cache-file is written to a tempdir (NOT next to target)
+    so we never trigger a permission error on the target's __pycache__ dir
+    — a common situation in /opt/hermes/cron/ where the runtime user may
+    not own __pycache__. We then discard the cache file: we only care
+    whether the source parses without SyntaxError.
+
+    Strategy:
+      1. Try `python -m py_compile` first (the public, well-tested path).
+      2. If it fails due to a permission error writing __pycache__/ (rc=1
+         with PermissionError in stderr), fall back to in-process
+         py_compile.compile() with an explicit `cfile` in tempfile.
+      3. Any other failure: report it (do NOT mask real syntax errors).
     """
+    # 1) Public CLI path.
     try:
         proc = subprocess.run(
             [sys.executable, "-m", "py_compile", str(target)],
@@ -660,9 +673,41 @@ def _safe_py_compile(target: Path) -> tuple[bool, str]:
         )
         if proc.returncode == 0:
             return True, "py_compile ok"
-        return False, (proc.stderr or proc.stdout or "py_compile failed").strip()
+        # Detect permission-on-__pycache__ failure: rc=1 + permission
+        # error referencing __pycache__ in stderr. The exact format is
+        # `[Errno 13] Permission denied: '<path>/__pycache__'` but we also
+        # accept "PermissionError" for robustness against Python versions
+        # that word the error differently.
+        err_text = (proc.stderr or proc.stdout or "").strip()
+        permission_on_cache = (
+            "__pycache__" in err_text
+            and (
+                "Permission denied" in err_text
+                or "PermissionError" in err_text
+                or "[Errno 13]" in err_text
+                or "[Errno 30]" in err_text  # read-only filesystem
+            )
+        )
+        if permission_on_cache:
+            # Fall through to in-process compile below
+            pass
+        else:
+            return False, err_text or "py_compile failed"
     except Exception as e:  # pragma: no cover - best-effort
         return False, f"py_compile could not run: {e}"
+
+    # 2) In-process fallback that writes cache file to a tempfile dir.
+    try:
+        import py_compile as _pc
+        import tempfile as _tf
+        with _tf.TemporaryDirectory(prefix="hermes_pycompile_") as tmpd:
+            cfile = str(Path(tmpd) / "out.pyc")
+            ok = _pc.compile(str(target), cfile=cfile, doraise=False)
+            if ok:
+                return True, "py_compile ok (in-process, target __pycache__ unwritable)"
+            return False, "py_compile: in-process compile returned None"
+    except Exception as e:  # pragma: no cover - best-effort
+        return False, f"py_compile in-process fallback failed: {e}"
 
 
 # ---------------------------------------------------------------------------

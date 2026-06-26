@@ -514,3 +514,46 @@ def test_real_call_site_filter_unit():
 
     # Mention without call parens — must be False
     assert not _is_real_call_site("# We use mark_job_run extensively.")
+
+
+def test_py_compile_handles_unwritable_pycache_dir(tmp_path: Path):
+    """Regression test: on /opt/hermes/cron/ the runtime user may not own
+    __pycache__/. The tool must still confirm the source parses by falling
+    back to in-process py_compile.compile() with an explicit cfile."""
+    from orchestrator.scripts.apply_cron_history_hook import _safe_py_compile
+
+    # Create a fixture file in a sub-dir, then make the dir read-only so
+    # py_compile cannot write __pycache__/ next to the file.
+    target_dir = tmp_path / "ro_dir"
+    target_dir.mkdir()
+    target = target_dir / "module.py"
+    target.write_text("x = 1\n")
+
+    # Make target_dir read-only — this prevents __pycache__ from being
+    # created inside it. We chmod AFTER writing.
+    import os
+    import stat as _stat
+    os.chmod(target_dir, 0o555)
+
+    try:
+        ok, msg = _safe_py_compile(target)
+        # Even with read-only target_dir, the tool must report compile-ok
+        # by using the in-process fallback.
+        assert ok is True, f"expected compile_ok=True, got ok={ok}, msg={msg}"
+        assert "py_compile" in msg.lower()
+    finally:
+        # Restore so pytest cleanup works.
+        os.chmod(target_dir, 0o755)
+
+
+def test_py_compile_reports_real_syntax_errors(tmp_env):
+    """The py_compile fallback must NOT mask real syntax errors."""
+    from orchestrator.scripts.apply_cron_history_hook import _safe_py_compile
+
+    # Write a file with an obvious syntax error
+    bad = tmp_env["tmp_path"] / "bad.py"
+    bad.write_text("def f(:\n    pass\n")
+
+    ok, msg = _safe_py_compile(bad)
+    assert ok is False
+    assert "SyntaxError" in msg or "syntax" in msg.lower()
