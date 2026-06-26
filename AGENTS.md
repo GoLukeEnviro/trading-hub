@@ -111,10 +111,13 @@ context only. Do not count them as active SI-v2 loop members.
 - Active Cycle Runner is the loop entry point.
 - Historical Evidence, Measurement Attribution, ShadowProposal rendering, and
   Runtime Safety are the current loop-relevant concerns.
-- The controller remains paused/repository-only unless an explicitly approved
-  activation scope says otherwise.
-- Apply-actuator work is separate from read-only loop proof and requires the
-  applicable approval token and runtime proof gates.
+- The controller operates in `HUMAN_GATED_CANARY_APPLY_PHASE_1` mode: canary-only,
+  human-gated, token-gated. No autonomous apply. See `docs/state/current-operational-state.md`.
+- Phase 1 actuator (`controlled_apply_actuator.py`) provides `check_readiness()`
+  (read-only gate evaluation) and `execute_apply()` (human-gated overlay write).
+  Runtime apply requires separate L3 approval with token and rollback plan.
+- Apply-actuator work remains gated by the applicable approval token and runtime
+  proof gates. No autonomous apply is in scope.
 
 ### Freqtrade — Dry-run execution fleet
 

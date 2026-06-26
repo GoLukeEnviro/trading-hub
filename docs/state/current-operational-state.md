@@ -3,10 +3,9 @@
 > **Canonical current-state snapshot** — validated against merged `main` at
 > commit `f14b286a2d1cf501a1aff552d3449c5ceae4a10d`.
 >
-> **Last updated:** 2026-06-24 as part of Issue #342 docs-only
-> root-instruction alignment after the post-PR341 SI-v2 Active Cycle proof
-> passed GREEN.
-> **Branch for this alignment:** `docs/align-root-agent-instructions-si-v2-342`
+> **Last updated:** 2026-06-27 as part of PR #371
+> Controlled Apply Phase 1 harden-and-merge.
+> **Branch for this alignment:** `issue-363-controlled-apply-actuator` (merged as `45be0d4`)
 > **Companion roadmap:** `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md`
 
 ---
@@ -19,9 +18,9 @@
 | Execution mode | Dry-run only |
 | Signal source | `ai-hedge-fund-crypto` plus read-only Rainbow observation |
 | Meta-orchestrator | `hermes-agent` in the `orchestrator` profile |
-| SI-v2 controller | `PAUSED / L3_REPOSITORY_ONLY` |
-| Current loop proof | GREEN for evidence/wiring only, not approval-to-apply |
-| Profitability gate | Blocked; do not discuss Controlled Apply until the next required proofs are complete |
+| SI-v2 controller | `HUMAN_GATED_CANARY_APPLY_PHASE_1` — canary-only, human-gated, token-gated. No autonomous apply. No runtime apply without separate L3 approval. |
+| Current loop proof | GREEN for evidence/wiring and Phase 1 actuator hardening (PR #371). Not an approval-to-apply for runtime. |
+| Profitability gate | Blocked; candidate evaluation requires gates to be reassessed before any runtime apply |
 
 No root instruction may be treated as proof of runtime safety. For runtime
 claims, use this state file plus the referenced proof report/evidence bundle.
@@ -50,11 +49,13 @@ only and must not be counted as active SI-v2 loop members.
 
 | Artifact | Path / Value |
 |----------|--------------|
-| Proof report | `docs/reports/si-v2-active-cycle-proof-post-pr341-2026-06-24.md` |
+| Active Cycle proof | `docs/reports/si-v2-active-cycle-proof-post-pr341-2026-06-24.md` |
 | Evidence bundle | `self_improvement_v2/reports/phase2/evidence/active_cycle_20260624T055059Z.json` |
 | Evidence SHA-256 | `694641dea7025f49de82a378a6a4d0ce3ad8ecf5ab0214dc70af5eb4252a9aa0` |
 | Cycle state | `self_improvement_v2/reports/phase2/cycle_state/active_cycle_20260624T055059Z.state.json` |
 | Runner log | `/opt/data/logs/si-v2-active-cycle/cycle-20260624T055058Z.log` |
+| Phase 1 actuator (PR #371) | `self_improvement_v2/src/si_v2/apply_actuator/controlled_apply_actuator.py` |
+| Phase 1 tests | `self_improvement_v2/tests/test_controlled_apply_actuator.py` |
 
 ### Proof result summary
 
@@ -112,14 +113,12 @@ remaining drift.
 
 ## 5. Next sequence
 
-1. Merge/review Issue #342 docs-only alignment PR.
-2. Review PR #330 and decide whether to update, supersede, or close it against
-   the post-PR341 evidence shape.
-3. Run the P3 Scheduler Continuity Proof.
-4. Only after scheduler continuity and required gates are GREEN should Controlled
-   Apply be discussed again.
+1. Run the P3 Scheduler Continuity Proof (read-only audit of scheduled cycle artifacts).
+2. After scheduler continuity GREEN, run the Remaining Gates Reassessment (profitability gate, per-bot apply-readiness).
+3. For any candidate classified as `APPLY_CANDIDATE_REQUIRES_HUMAN_APPROVAL`, use `check_readiness()` from the Phase 1 actuator to produce a read-only readiness report.
+4. Runtime apply remains L3-gated and requires separate explicit approval with token, pre-apply config snapshot, and rollback plan.
 
-No apply token is in scope for this state update.
+No autonomous apply is in scope. No dry_run=false is allowed.
 
 ---
 
@@ -132,7 +131,7 @@ No apply token is in scope for this state update.
 | RiskGuard | Required for trading-affecting decisions |
 | ShadowLogger / evidence artifacts | Required for decisions and safety-relevant changes |
 | Kill switch | Must be respected; `HALT_NEW` and `EMERGENCY` block new entries |
-| Apply actuator | Not in scope unless separately approved with the required proof and token gates |
+| Apply actuator | Phase 1 available (PR #371): `check_readiness()` and `execute_apply()` via human-gated, canary-first path. Runtime apply requires separate L3 approval with token, snapshot, and rollback plan. |
 
 ---
 

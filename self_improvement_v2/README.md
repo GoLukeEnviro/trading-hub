@@ -20,10 +20,17 @@ Freqtrade REST  →  ActiveCycleRunner  →  CycleState  →  Measurement Ledger
      └─────────────────────────── apply ────────────────────────────────────────────┘
 ```
 
-The loop is currently operating in **observation-only mode** (controller PAUSED,
-all mutation counters zero). It reads Freqtrade telemetry + Rainbow data, builds
-a Measurement Ledger, analyzes fleet health, and produces proposals — but never
-applies them autonomously.
+The loop operates in **observation-first** mode with a **human-gated Phase 1 controlled apply**
+path available for the canary bot (`freqtrade-freqforge-canary`). All mutation counters
+remain zero unless a human-gated, token-gated apply is explicitly approved.
+
+The core loop remains read-only (ActiveCycleRunner → CycleState → ShadowProposal).
+The Phase 1 actuator (`controlled_apply_actuator.py`) adds:
+- `check_readiness()` — read-only gate evaluation (all 8 gates, no side effects)
+- `execute_apply()` — human-gated overlay write (canary-only, safe parameters only)
+
+Autonomous apply is **not** in scope. Runtime apply (Docker-visible overlay) is
+**L3-gated** and requires separate explicit approval.
 
 ---
 
@@ -151,7 +158,8 @@ flowchart TD
     style LOG fill:#533483,color:#fff
 ```
 
-Dashed lines represent paths that are **not yet operational** (controller PAUSED).
+Dashed lines represent paths that are **available in Phase 1** (human-gated apply, not
+autonomous). Solid lines represent fully operational read-only paths.
 
 ---
 
@@ -203,7 +211,8 @@ ruff check src/
 
 ## 6. Safety Constraints
 
-1. **Controller is PAUSED** — no autonomous mutations are applied.
+1. **Controller is HUMAN_GATED_CANARY_APPLY_PHASE_1** — human-gated apply available
+   for canary via `check_readiness()` / `execute_apply()`; no autonomous mutations.
 2. **All mutation counters are zero** — verified every cycle.
 3. **Rainbow is read_only** — scored but never applied, never executed.
 4. **Ledger is append-only JSONL** — no modification, no deletion.
