@@ -1,0 +1,25 @@
+{
+  "default_repository": "GoLukeEnviro/trading-hub",
+  "repositories": [
+    {
+      "name": "GoLukeEnviro/trading-hub",
+      "role": "main_trading_hub",
+      "required": true
+    },
+    {
+      "name": "GoLukeEnviro/ai4trade-bot",
+      "role": "ai_for_trade_bot",
+      "required": true
+    },
+    {
+      "name": "GoLukeEnviro/TradeAgentsView_Control_Center",
+      "role": "control_center",
+      "required": false
+    },
+    {
+      "name": "GoLukeEnviro/Algorithmisches_Trading",
+      "role": "algorithmic_trading_archive_or_side_repo",
+      "required": false
+    }
+  ]
+}
