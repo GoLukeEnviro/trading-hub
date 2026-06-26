@@ -18,7 +18,6 @@ from pathlib import Path
 
 from si_v2.loop.active_cycle_runner import _run_post_cycle_validation
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
