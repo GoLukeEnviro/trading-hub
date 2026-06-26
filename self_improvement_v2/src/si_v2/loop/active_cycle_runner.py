@@ -103,6 +103,7 @@ from si_v2.signals.models import (  # noqa: E402
 # ------------------------------------------------------------------
 _MEASUREMENT_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "measurement"
 _VALIDATION_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "validation"
+_WALK_FORWARD_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "walk_forward"
 
 LEDGER_STATUS_SUCCESS: str = "SUCCESS"
 LEDGER_STATUS_WARNING: str = "WARNING"
@@ -1127,6 +1128,68 @@ def _run_post_cycle_validation(
 
 
 # ------------------------------------------------------------------
+# Walk-Forward Evidence Materializer post-step
+# ------------------------------------------------------------------
+
+
+def _run_walk_forward_materializer(
+    walk_forward_dir: Path,
+    cycle_id: str,
+) -> dict[str, object]:
+    """Run the walk-forward evidence materializer and persist results.
+
+    This is a read-only, non-blocking post-step. It loads available
+    telemetry history, historical trades, and past evidence bundles,
+    computes per-bot walk-forward metrics for all four bots, and
+    persists the result as a JSON artifact.
+
+    Never raises — failures are captured and returned as status WARNING
+    or FAILED so the cycle itself can complete.
+
+    Returns a dict with:
+        - status: SUCCESS | WARNING | SKIPPED | FAILED
+        - error: str or empty
+        - bots: list of bot_ids processed
+        - artifact_path: str or empty
+    """
+    result: dict[str, object] = {
+        "status": "SKIPPED",
+        "error": "",
+        "bots": [],
+        "artifact_path": "",
+    }
+
+    try:
+        from si_v2.evaluation.walk_forward_materializer import (
+            materialize_walk_forward_metrics,
+        )
+
+        mat_result = materialize_walk_forward_metrics(
+            cycle_id=cycle_id,
+            persist=True,
+        )
+    except Exception as exc:
+        result["status"] = "FAILED"
+        result["error"] = f"materializer error: {str(exc)[:300]}"
+        return result
+
+    bot_ids = [b.bot_id for b in mat_result.bots]
+    result["bots"] = bot_ids
+
+    # Find the artifact path
+    try:
+        artifact_name = f"walk_forward_metrics_{cycle_id}.json"
+        artifact_path = walk_forward_dir / artifact_name
+        if artifact_path.exists():
+            result["artifact_path"] = str(artifact_path)
+    except OSError:
+        pass
+
+    result["status"] = "SUCCESS"
+    return result
+
+
+# ------------------------------------------------------------------
 # Main cycle
 # ------------------------------------------------------------------
 
@@ -1498,6 +1561,31 @@ def run_active_cycle() -> int:
 
     print(f"  safety evaluations:   {len(safety_results)}")
 
+    # ── Walk-Forward Materializer ────────────────────────────────────
+    # Run the walk-forward evidence materializer BEFORE the profitability
+    # gate to provide gate-fähige metrics derived from telemetry history,
+    # historical trades, and past evidence bundles.
+    # The materializer is read-only and failure-isolated.
+    print("\n  --- Walk-Forward Materializer ---")
+    try:
+        from si_v2.evaluation.walk_forward_materializer import (
+            materialize_walk_forward_metrics,
+        )
+        _mat_result = materialize_walk_forward_metrics(
+            cycle_id=cycle_id,
+            persist=True,
+        )
+        _materializer_wf_by_bot: dict[str, dict[str, object]] = (
+            _mat_result.to_walk_forward_by_bot()
+            if _mat_result is not None
+            else {}
+        )
+        print(f"  materializer:         {len(_mat_result.bots)} bots, "
+              f"artifact=walk_forward_metrics_{cycle_id}.json")
+    except Exception as exc:
+        print(f"  materializer:         FAILED — {str(exc)[:200]}")
+        _materializer_wf_by_bot = {}
+
     # ── Walk-Forward Net Metrics enrichment ────────────────────────────
     # Inject walk_forward_net_metrics into each safety result for
     # downstream persistence. Uses real per-bot signal snapshots when
@@ -1521,7 +1609,16 @@ def run_active_cycle() -> int:
             sr[wf_key] = default_no_proposal_evaluation().to_dict()
             sr[wf_key]["metrics_source"] = METRICS_SOURCE_NOT_APPLICABLE
         else:
-            # SHADOW_PROPOSAL — attempt real aggregate metrics from signals
+            # SHADOW_PROPOSAL — prefer materializer metrics, fall back to
+            # signal-derived aggregate metrics when materializer has no data.
+            materializer_data = _materializer_wf_by_bot.get(bot_id)
+            if materializer_data is not None and isinstance(materializer_data, dict):
+                # Use materializer output directly — it has real trade-level data
+                sr[wf_key] = dict(materializer_data)
+                _wf_metrics_added += 1
+                continue
+
+            # Fallback: attempt real aggregate metrics from signals
             snap = signal_snapshots_by_bot.get(bot_id)
             agg_metrics, source_tag = derive_aggregate_metrics(snap)
             if agg_metrics is not None:
@@ -1888,6 +1985,26 @@ def run_active_cycle() -> int:
         err = str(validation_result.get("error", ""))
         if err:
             print(f"  error:                {err}")
+
+    # ------------------------------------------------------------------
+    # Step 8: Walk-Forward Materializer artifact report
+    # ------------------------------------------------------------------
+    print("\n[STEP 8] Walk-forward materializer artifact check...")
+    _wf_artifact = _WALK_FORWARD_DIR / f"walk_forward_metrics_{cycle_id}.json"
+    if _wf_artifact.exists():
+        print(f"  artifact:             {_wf_artifact.relative_to(_REPO_ROOT)}")
+        try:
+            _wf_data = json.loads(_wf_artifact.read_text())
+            _wf_bots = _wf_data.get("bots", [])
+            print(f"  bots:                 {len(_wf_bots)}")
+            for _b in _wf_bots:
+                _bid = _b.get("bot_id", "?")
+                _eval = _b.get("evaluation_status", "?")
+                print(f"    {_bid}: status={_eval}")
+        except Exception:
+            print("  (unable to read artifact content)")
+    else:
+        print("  artifact:             not found (materializer ran but artifact missing?)")
 
     # ------------------------------------------------------------------
     # Summary
