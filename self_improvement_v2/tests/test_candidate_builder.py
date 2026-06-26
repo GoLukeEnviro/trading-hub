@@ -270,7 +270,11 @@ class TestCandidateBuilder:
         )
         fm = _make_fleet_metrics(
             bots=(
-                _make_bot_metrics("freqtrade-regime-hybrid", profit_pct=-8.0, anomaly_flags=("negative_closed_profit",)),
+                _make_bot_metrics(
+                    "freqtrade-regime-hybrid",
+                    profit_pct=-8.0,
+                    anomaly_flags=("negative_closed_profit",),
+                ),
             ),
         )
         result = build_candidate_proposals(cycle_id="t1", fleet_decision=fd, fleet_metrics=fm)
@@ -466,7 +470,13 @@ class TestCandidateStructure:
             ],
         )
         fm = _make_fleet_metrics(
-            bots=(_make_bot_metrics("freqtrade-regime-hybrid", profit_pct=-8.0, anomaly_flags=("negative_closed_profit",)),),
+            bots=(
+                _make_bot_metrics(
+                    "freqtrade-regime-hybrid",
+                    profit_pct=-8.0,
+                    anomaly_flags=("negative_closed_profit",),
+                ),
+            ),
         )
         result = build_candidate_proposals(cycle_id="t1", fleet_decision=fd, fleet_metrics=fm)
         assert len(result) == 1
@@ -698,7 +708,8 @@ class TestFleetMetricsBuilder:
         )
         safety_results = [
             {"bot_id": "freqtrade-freqforge", "approval_status": "APPROVAL_ELIGIBLE", "approval_eligible": True},
-            {"bot_id": "freqtrade-regime-hybrid", "approval_status": "BLOCKED_INSUFFICIENT_HISTORY", "approval_eligible": False},
+            {"bot_id": "freqtrade-regime-hybrid", "approval_status": "BLOCKED_INSUFFICIENT_HISTORY",
+             "approval_eligible": False},
             {"bot_id": "freqtrade-freqforge-canary", "approval_status": "APPROVAL_ELIGIBLE", "approval_eligible": True},
             {"bot_id": "freqai-rebel", "approval_status": "BLOCKED_INSUFFICIENT_HISTORY", "approval_eligible": False},
         ]
@@ -759,7 +770,10 @@ class TestFleetMetricsBuilder:
         fm = build_fleet_metrics_from_cycle(
             cycle_id="t1",
             fleet_decision=fd,
-            safety_results=[{"bot_id": "freqtrade-freqforge", "approval_status": "UNKNOWN", "approval_eligible": False}],
+            safety_results=[
+                {"bot_id": "freqtrade-freqforge", "approval_status": "UNKNOWN",
+                 "approval_eligible": False},
+            ],
         )
         assert fm.bots[0].profit_pct == 0.0
         assert fm.bots[0].anomaly_flags == ()
@@ -780,7 +794,10 @@ class TestFleetMetricsBuilder:
         fm = build_fleet_metrics_from_cycle(
             cycle_id="t1",
             fleet_decision=fd,
-            safety_results=[{"bot_id": "freqtrade-freqforge", "approval_status": "APPROVAL_ELIGIBLE", "approval_eligible": True}],
+            safety_results=[
+                {"bot_id": "freqtrade-freqforge", "approval_status": "APPROVAL_ELIGIBLE",
+                 "approval_eligible": True},
+            ],
         )
         assert fm.fleet_median_profit_pct == 5.0
         assert fm.fleet_profit_range_pct == 0.0
@@ -966,7 +983,13 @@ class TestNegativeProfitability:
             ],
         )
         fm = _make_fleet_metrics(
-            bots=(_make_bot_metrics("freqtrade-regime-hybrid", profit_pct=-20.0, anomaly_flags=("negative_closed_profit",)),),
+            bots=(
+                _make_bot_metrics(
+                    "freqtrade-regime-hybrid",
+                    profit_pct=-20.0,
+                    anomaly_flags=("negative_closed_profit",),
+                ),
+            ),
         )
         result = build_candidate_proposals(cycle_id="t1", fleet_decision=fd, fleet_metrics=fm)
         assert len(result) == 1
