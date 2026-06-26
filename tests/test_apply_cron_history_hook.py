@@ -426,3 +426,91 @@ def test_dry_run_after_apply_reports_no_change(tmp_env):
     assert r.returncode == 0
     assert "would_apply         : False" in r.stdout
     assert "already patched" in r.stdout
+
+
+# =========================================================================
+# Bug regression tests — caught during L3 preflight on the real scheduler
+# =========================================================================
+
+COMMENT_NOISE_FIXTURE = '''"""Fixture with many mark_job_run mentions but only 2 real calls."""
+from cron.jobs import get_due_jobs, mark_job_run, save_job_output, advance_next_run
+# Note: this is a comment about mark_job_run( — NOT a real call site.
+# mark_job_run() updates next_run_at on completion.
+from hermes_time import now as _hermes_now
+
+
+def _process_job(job):
+    delivery_error = None
+    try:
+        success, output, final_response, error = run_job(job)
+        # The line below IS a real call site.
+        mark_job_run(job["id"], success, error, delivery_error=delivery_error)
+        return True
+    except Exception as e:
+        # This line is also a real call site, but in the exception branch.
+        mark_job_run(job["id"], False, str(e))
+        return False
+'''
+
+
+def test_real_call_site_filter_rejects_comments_and_imports(tmp_env):
+    """The mark_job_run anchor count must count only real Python statement
+    calls, NOT comment lines or import lines. The runtime scheduler has 4
+    textual mentions but only 2 real statement calls; a hook tool that
+    counts all 4 would inject 4 call blocks and break the file.
+
+    Regression test for the L3 preflight bug found on
+    /opt/hermes/cron/scheduler.py.
+    """
+    fixture = tmp_env["fixture"]
+    fixture.write_text(COMMENT_NOISE_FIXTURE)
+
+    r = _run_hook(["--dry-run"], tmp_env)
+    assert r.returncode == 0
+    # Must report 2 real call sites, NOT 5 (2 calls + 2 comments + 1 import)
+    assert "mark_job_run anchors: 2" in r.stdout, (
+        f"expected exactly 2 real call sites, got: {r.stdout}"
+    )
+
+    # And --apply must insert exactly 2 call blocks, not 5
+    r = _run_hook(["--apply"], tmp_env)
+    assert r.returncode == 0, f"apply failed: {r.stdout}\nstderr: {r.stderr}"
+    assert "call_blocks_inserted: 2" in r.stdout
+    text = fixture.read_text()
+    assert text.count("# HERMES_CRON_HISTORY_HOOK_CALL_BEGIN") == 2
+    assert text.count("# HERMES_CRON_HISTORY_HOOK_CALL_END") == 2
+
+    # File still compiles
+    proc = subprocess.run(
+        [sys.executable, "-m", "py_compile", str(fixture)],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 0, f"py_compile failed: {proc.stderr}"
+
+
+def test_real_call_site_filter_unit():
+    """Unit test for _is_real_call_site — must classify each line correctly."""
+    from orchestrator.scripts.apply_cron_history_hook import _is_real_call_site
+
+    # Real call sites (must be True)
+    assert _is_real_call_site("    mark_job_run(job[\"id\"], success, error, delivery_error=delivery_error)")
+    assert _is_real_call_site("        mark_job_run(job[\"id\"], False, str(e))")
+    assert _is_real_call_site("mark_job_run(x)")  # minimal call
+
+    # Comments — must be False
+    assert not _is_real_call_site("# mark_job_run() updates next_run_at on completion.")
+    assert not _is_real_call_site("        # mark_job_run() updates next_run_at on completion.")
+    assert not _is_real_call_site("# nothing")
+
+    # Imports — must be False (no `(` after mark_job_run)
+    assert not _is_real_call_site("from cron.jobs import get_due_jobs, mark_job_run, save_job_output")
+
+    # Empty / blank lines — must be False
+    assert not _is_real_call_site("")
+    assert not _is_real_call_site("    ")
+
+    # Docstring — must be False
+    assert not _is_real_call_site('    """mark_job_run() is called here."""')
+
+    # Mention without call parens — must be False
+    assert not _is_real_call_site("# We use mark_job_run extensively.")

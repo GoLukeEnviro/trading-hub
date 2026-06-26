@@ -318,6 +318,41 @@ def _join(lines: list[str]) -> str:
     return "".join(lines)
 
 
+def _is_real_call_site(line: str) -> bool:
+    """Return True if `line` is a real Python statement calling
+    `mark_job_run(...)`, not a comment, docstring, or import line.
+
+    Heuristic:
+      - Strip leading whitespace.
+      - Reject if the stripped line starts with '#' (comment).
+      - Require 'mark_job_run(' as a substring AND a balanced '(' ... ')'
+        on the same line so we don't match import statements like
+          from cron.jobs import get_due_jobs, mark_job_run, save_job_output
+        (no '(' after mark_job_run on that line).
+      - Reject if the call is inside a docstring triple-quote fence. We
+        don't track docstring state here — for scheduler.py we already know
+        no docstring contains mark_job_run(, and a comment-only match would
+        not have '(' on the same line in practice. Still: be defensive.
+    """
+    stripped = line.lstrip()
+    if not stripped:
+        return False
+    if stripped.startswith("#"):
+        return False
+    if "mark_job_run(" not in line:
+        return False
+    # Reject `from X import mark_job_run` lines: they have no `(` after.
+    after = line.split("mark_job_run(", 1)[1]
+    if ")" not in after:
+        return False
+    # Reject `mark_job_run` mentioned inside a docstring opener/closer
+    # (we'd see `"""` on the line). Scheduler.py doesn't have this but
+    # be defensive.
+    if '"""' in line or "'''" in line:
+        return False
+    return True
+
+
 def _line_indent(line: str) -> str:
     """Return the leading whitespace of `line`."""
     return line[: len(line) - len(line.lstrip())]
@@ -410,8 +445,12 @@ def plan_patch(target: Path) -> dict:
             "status": status,
         }
 
-    # Count mark_job_run occurrences (both happy and exception paths)
-    mark_count = text.count("mark_job_run(")
+    # Count mark_job_run occurrences (both happy and exception paths).
+    # Use the strict real-call filter so comment-only mentions and imports
+    # are NOT counted as patch anchors (this was a bug caught by the L3
+    # preflight on /opt/hermes/cron/scheduler.py where 4 mentions exist
+    # but only 2 are real statement calls).
+    mark_count = sum(1 for ln in text.splitlines() if _is_real_call_site(ln))
     has_hermes_time_import = "from hermes_time import now as _hermes_now" in text
 
     return {
@@ -483,12 +522,13 @@ def apply_patch(target: Path, backup_dir: Path) -> dict:
         build_import_block(),
     )
 
-    # 6. Insert call block after each mark_job_run(. The FIRST occurrence
-    # is the happy-path (line ~2129 in scheduler.py) — success/error/output
-    # are in scope. Subsequent occurrences (typically just the exception
-    # path at ~2134) only have `job` and `e` in scope.
+    # 6. Insert call block after each REAL mark_job_run( call (not comments,
+    # not import lines). The FIRST occurrence is the happy-path (line ~2129
+    # in scheduler.py) — success/error/output are in scope. Subsequent
+    # occurrences (typically just the exception path at ~2134) only have
+    # `job` and `e` in scope.
     mark_occurrences: list[int] = [
-        i for i, ln in enumerate(lines) if "mark_job_run(" in ln
+        i for i, ln in enumerate(lines) if _is_real_call_site(ln)
     ]
 
     def _factory_for_occurrence(occ_idx_in_mark_list: int):
@@ -501,7 +541,7 @@ def apply_patch(target: Path, backup_dir: Path) -> dict:
     call_count = 0
     for line in lines:
         out_lines.append(line)
-        if "mark_job_run(" in line:
+        if _is_real_call_site(line):
             indent = _line_indent(line)
             block = _factory_for_occurrence(mark_seen)(indent)
             out_lines.extend(block.splitlines(keepends=True))
