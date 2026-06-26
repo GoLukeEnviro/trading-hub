@@ -102,11 +102,20 @@ from si_v2.signals.models import (  # noqa: E402
 # Measurement Ledger post-step constants
 # ------------------------------------------------------------------
 _MEASUREMENT_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "measurement"
+_VALIDATION_DIR = _REPO_ROOT / "self_improvement_v2" / "reports" / "phase2" / "validation"
 
 LEDGER_STATUS_SUCCESS: str = "SUCCESS"
 LEDGER_STATUS_WARNING: str = "WARNING"
 LEDGER_STATUS_SKIPPED: str = "SKIPPED"
 LEDGER_STATUS_FAILED: str = "FAILED"
+
+# ------------------------------------------------------------------
+# Post-cycle validation constants
+# ------------------------------------------------------------------
+
+VALIDATION_STATUS_SUCCESS: str = "SUCCESS"
+VALIDATION_STATUS_WARNING: str = "WARNING"
+VALIDATION_STATUS_FAILED: str = "FAILED"
 
 # ------------------------------------------------------------------
 # Telemetry history enforcement constants
@@ -1038,6 +1047,86 @@ def _adjusted_fleet_verdict(
 
 
 # ------------------------------------------------------------------
+# Post-cycle evidence bundle validation
+# ------------------------------------------------------------------
+
+
+def _run_post_cycle_validation(
+    bundle_path: Path,
+    validation_dir: Path,
+) -> dict[str, object]:
+    """Validate the just-persisted evidence bundle and persist a sidecar artifact.
+
+    This is a read-only, non-blocking post-step. It validates the concrete
+    ``bundle_path`` that the current cycle just produced (not ``--latest``),
+    persists the validation result as a sidecar JSON artifact, and never
+    raises — failures are captured and returned as status ``WARNING`` or
+    ``FAILED`` so the cycle itself can complete.
+
+    Returns a dict with:
+        - status: SUCCESS | WARNING | FAILED
+        - error: str or empty
+        - verdict: GREEN | YELLOW | RED
+        - cycle_id: str
+        - sidecar_path: str or empty
+    """
+    result: dict[str, object] = {
+        "status": VALIDATION_STATUS_WARNING,
+        "error": "",
+        "verdict": "UNKNOWN",
+        "cycle_id": "unknown",
+        "sidecar_path": "",
+    }
+
+    if not bundle_path.exists():
+        result["status"] = VALIDATION_STATUS_FAILED
+        result["error"] = f"bundle_path not found: {bundle_path}"
+        return result
+
+    # Import the validator directly — no subprocess, no shell
+    try:
+        from si_v2.validation.evidence_bundle_validator import (
+            EvidenceBundleValidator,
+        )
+
+        validator = EvidenceBundleValidator()
+        validation_result = validator.validate_from_file(str(bundle_path))
+    except Exception as exc:
+        result["status"] = VALIDATION_STATUS_FAILED
+        result["error"] = f"validator import/run error: {str(exc)[:300]}"
+        return result
+
+    verdict = str(validation_result.get("verdict", "RED"))
+    cycle_id = str(validation_result.get("cycle_id", "unknown"))
+    result["verdict"] = verdict
+    result["cycle_id"] = cycle_id
+
+    # Persist sidecar artifact
+    try:
+        validation_dir.mkdir(parents=True, exist_ok=True)
+        sidecar_name = f"evidence_validation_{cycle_id}.json"
+        sidecar_path = validation_dir / sidecar_name
+        sidecar_path.write_text(json.dumps(validation_result, indent=2, sort_keys=True))
+        result["sidecar_path"] = str(sidecar_path)
+    except OSError as exc:
+        result["status"] = VALIDATION_STATUS_FAILED
+        result["error"] = f"sidecar write failure: {str(exc)[:300]}"
+        return result
+
+    # YELLOW is expected (INSUFFICIENT_EVIDENCE) — do not treat as failure
+    if verdict in ("GREEN", "YELLOW"):
+        result["status"] = VALIDATION_STATUS_SUCCESS
+    else:
+        result["status"] = VALIDATION_STATUS_WARNING
+        result["error"] = (
+            f"validation verdict={verdict!r} — "
+            f"see sidecar for details"
+        )
+
+    return result
+
+
+# ------------------------------------------------------------------
 # Main cycle
 # ------------------------------------------------------------------
 
@@ -1772,6 +1861,33 @@ def run_active_cycle() -> int:
         print(f"  error:                {ledger_result['error']}")
 
     print(f"  adjusted verdict:     {adjusted_verdict}")
+
+    # ------------------------------------------------------------------
+    # Step 7: Post-cycle evidence bundle validation
+    # ------------------------------------------------------------------
+    print("\n[STEP 7] Validating evidence bundle (post-cycle)...")
+    validation_result = _run_post_cycle_validation(
+        bundle_path=bundle_path,
+        validation_dir=_VALIDATION_DIR,
+    )
+    validation_status = str(validation_result["status"])
+    validation_verdict = str(validation_result["verdict"])
+
+    if validation_status == VALIDATION_STATUS_SUCCESS:
+        print(f"  status:               {validation_status}")
+        print(f"  verdict:              {validation_verdict}")
+        sidecar = str(validation_result.get("sidecar_path", ""))
+        if sidecar:
+            try:
+                print(f"  sidecar:              {Path(sidecar).relative_to(_REPO_ROOT)}")
+            except ValueError:
+                print(f"  sidecar:              {sidecar}")
+    else:
+        print(f"  status:               {validation_status}")
+        print(f"  verdict:              {validation_verdict}")
+        err = str(validation_result.get("error", ""))
+        if err:
+            print(f"  error:                {err}")
 
     # ------------------------------------------------------------------
     # Summary

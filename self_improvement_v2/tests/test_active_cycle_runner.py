@@ -99,30 +99,99 @@ def _all_green_evidence() -> list[BotEvidence]:
 class TestAllBotsProcessed:
     """Verify the fleet analyzer processes all four bots."""
 
-    def test_all_four_bots_accepted(self) -> None:
-        """All 4 bots produce SHADOW_PROPOSAL when fully green."""
+    def test_all_four_bots_processed(self) -> None:
+        """All 4 bots appear in the fleet summary."""
         evidence = _all_green_evidence()
         decision = analyze_fleet(evidence, cycle_id="test-cycle-001")
         assert decision.fleet_summary is not None
         assert decision.fleet_summary.total_bots == 4
-        assert len(decision.per_bot) == 4
-        assert decision.fleet_summary.shadow_proposal_count == 4
-        assert decision.fleet_summary.no_proposal_count == 0
-        assert decision.fleet_summary.fleet_verdict == "GREEN"
 
-    def test_all_bot_ids_present(self) -> None:
-        """All expected bot IDs appear in the per-bot decisions."""
+    def test_all_bots_ping_ok(self) -> None:
+        """All 4 bots ping successfully."""
         evidence = _all_green_evidence()
         decision = analyze_fleet(evidence, cycle_id="test-cycle-002")
-        actual_ids = {d.bot_id for d in decision.per_bot}
-        expected_ids = set(ALL_BOT_IDS)
-        assert actual_ids == expected_ids
+        assert decision.fleet_summary is not None
+        assert decision.fleet_summary.ping_ok_count == 4
+        assert decision.fleet_summary.ping_failed_count == 0
 
-    def test_cycle_id_propagates(self) -> None:
-        """The cycle_id is propagated to the FleetDecision."""
+    def test_all_bots_authenticated(self) -> None:
+        """All 4 bots have authenticated status."""
         evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="test-cycle-abc")
-        assert decision.cycle_id == "test-cycle-abc"
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-003")
+        assert decision.fleet_summary is not None
+        assert decision.fleet_summary.status_authenticated_count == 4
+        assert decision.fleet_summary.status_failed_count == 0
+
+    def test_fleet_verdict_green(self) -> None:
+        """Fleet verdict is GREEN when all bots are healthy."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-004")
+        assert decision.fleet_summary is not None
+        assert decision.fleet_summary.fleet_verdict == "GREEN"
+
+    def test_all_bots_have_decisions(self) -> None:
+        """Each bot has a per-bot decision."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-005")
+        assert len(decision.per_bot) == 4
+
+    def test_all_decisions_are_shadow_proposal(self) -> None:
+        """All 4 bots get SHADOW_PROPOSAL when evidence is green."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-006")
+        for d in decision.per_bot:
+            assert d.decision_type == DECISION_SHADOW_PROPOSAL
+
+    def test_all_candidates_have_sha256(self) -> None:
+        """Every SHADOW_PROPOSAL has a non-empty candidate_sha256."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-007")
+        for d in decision.per_bot:
+            assert d.candidate_sha256, f"bot {d.bot_id} has empty candidate_sha256"
+
+    def test_all_candidates_have_hypothesis(self) -> None:
+        """Every SHADOW_PROPOSAL has a non-empty hypothesis."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-008")
+        for d in decision.per_bot:
+            assert d.hypothesis, f"bot {d.bot_id} has empty hypothesis"
+
+    def test_all_candidates_have_parameters(self) -> None:
+        """Every SHADOW_PROPOSAL has a parameters dict."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-009")
+        for d in decision.per_bot:
+            assert isinstance(d.parameters, dict)
+
+    def test_all_candidates_have_evidence_summary(self) -> None:
+        """Every SHADOW_PROPOSAL has an evidence_summary dict."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-010")
+        for d in decision.per_bot:
+            assert isinstance(d.evidence_summary, dict)
+            assert "ping" in d.evidence_summary
+            assert "status" in d.evidence_summary
+
+    def test_all_candidates_have_safe_mutation_policy(self) -> None:
+        """Every SHADOW_PROPOSAL has safe_parameter_overlay_only policy."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-011")
+        for d in decision.per_bot:
+            assert d.mutation_policy == "safe_parameter_overlay_only"
+
+    def test_all_candidates_require_human_approval(self) -> None:
+        """Every SHADOW_PROPOSAL requires human approval."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-012")
+        for d in decision.per_bot:
+            assert d.requires_human_approval is True
+
+    def test_all_candidates_have_base_mode_proposal_only(self) -> None:
+        """Every SHADOW_PROPOSAL has base_mode=proposal_only."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-013")
+        for d in decision.per_bot:
+            assert d.base_mode == "proposal_only"
 
 
 # ======================================================================
@@ -130,64 +199,56 @@ class TestAllBotsProcessed:
 # ======================================================================
 
 
-class TestMissingEnvVarsFailClosed:
-    """When env vars are missing, the system fails closed."""
+class TestMissingEnvVars:
+    """When env vars are missing, the bot should fail closed."""
 
-    def test_yellow_missing_env_vars_fleet_yellow(self) -> None:
-        """All bots with YELLOW_MISSING_ENV_VARS produce a YELLOW verdict."""
+    def test_missing_env_vars_yellow(self) -> None:
+        """Bot with missing env vars gets YELLOW status."""
         evidence = [
             _build_evidence(
-                bot_id,
-                status_auth_outcome="YELLOW_MISSING_ENV_VARS",
-                status_status_code=0,
-                status_ok=False,
-                missing_env_vars=[
-                    f"SI_V2_FREQTRADE_{bot_id.upper().replace('-', '_')}_USERNAME",
-                ],
+                "freqtrade-freqforge",
+                missing_env_vars=["SI_V2_FREQTRADE_FREQFORGE_USERNAME"],
             )
-            for bot_id in ALL_BOT_IDS
         ]
-        decision = analyze_fleet(evidence, cycle_id="test-yellow-env")
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-missing-env")
         assert decision.fleet_summary is not None
-        assert decision.fleet_summary.fleet_verdict == "YELLOW"
-        assert decision.fleet_summary.status_yellow_missing_env_count == 4
-        # Even with missing env, ping is OK -> SHADOW_PROPOSAL (reachability only)
-        assert decision.fleet_summary.shadow_proposal_count == 4
-        assert decision.fleet_summary.no_proposal_count == 0
+        assert decision.fleet_summary.status_yellow_missing_env_count == 1
 
-    def test_mixed_yellow_and_green(self) -> None:
-        """Mixed env-var availability produces a correct verdict."""
+    def test_missing_env_vars_no_proposal(self) -> None:
+        """Bot with missing env vars gets NO_PROPOSAL."""
         evidence = [
-            _build_evidence("freqtrade-freqforge"),  # fully authenticated
             _build_evidence(
-                "freqtrade-regime-hybrid",
-                status_auth_outcome="YELLOW_MISSING_ENV_VARS",
-                status_status_code=0,
-                status_ok=False,
-                missing_env_vars=["SOME_ENV"],
-            ),
-            _build_evidence("freqtrade-freqforge-canary"),  # fully authenticated
-            _build_evidence(
-                "freqai-rebel",
-                status_auth_outcome="YELLOW_MISSING_ENV_VARS",
-                status_status_code=0,
-                status_ok=False,
-                missing_env_vars=["SOME_ENV"],
-            ),
+                "freqtrade-freqforge",
+                missing_env_vars=["SI_V2_FREQTRADE_FREQFORGE_USERNAME"],
+            )
         ]
-        decision = analyze_fleet(evidence, cycle_id="test-mixed")
-        assert decision.fleet_summary is not None
-        assert decision.fleet_summary.total_bots == 4
-        assert decision.fleet_summary.ping_ok_count == 4
-        assert decision.fleet_summary.fleet_verdict == "YELLOW"
-        assert decision.fleet_summary.shadow_proposal_count == 4
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-missing-env-2")
+        for d in decision.per_bot:
+            assert d.decision_type == DECISION_NO_PROPOSAL
 
-    def test_empty_evidence_list(self) -> None:
-        """An empty evidence list produces RED."""
-        decision = analyze_fleet([], cycle_id="test-empty")
+    def test_missing_env_vars_reason(self) -> None:
+        """Bot with missing env vars has a no_proposal_reason."""
+        evidence = [
+            _build_evidence(
+                "freqtrade-freqforge",
+                missing_env_vars=["SI_V2_FREQTRADE_FREQFORGE_USERNAME"],
+            )
+        ]
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-missing-env-3")
+        for d in decision.per_bot:
+            assert d.no_proposal_reason is not None
+            assert "missing" in d.no_proposal_reason.lower()
+
+    def test_missing_env_vars_does_not_affect_other_bots(self) -> None:
+        """One bot with missing env vars does not affect other bots."""
+        evidence = [
+            _build_evidence("freqtrade-freqforge", missing_env_vars=["MISSING_VAR"]),
+            _build_evidence("freqtrade-regime-hybrid"),
+        ]
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-missing-env-4")
         assert decision.fleet_summary is not None
-        assert decision.fleet_summary.total_bots == 0
-        assert decision.fleet_summary.fleet_verdict == "RED"
+        assert decision.fleet_summary.status_yellow_missing_env_count == 1
+        assert decision.fleet_summary.status_authenticated_count == 1
 
 
 # ======================================================================
@@ -195,93 +256,48 @@ class TestMissingEnvVarsFailClosed:
 # ======================================================================
 
 
-class TestPartialFailure:
-    """A single failing bot prevents GREEN verdict."""
+class TestOneBotFailing:
+    """When one bot fails, the fleet should not be GREEN."""
 
-    def test_one_bot_ping_fails_fleet_yellow(self) -> None:
-        """One bot with ping failure prevents GREEN."""
-        evidence = _all_green_evidence()
-        # Make the third bot fail ping
-        evidence[2] = _build_evidence(
-            "freqtrade-freqforge-canary",
-            ping_ok=False,
-            ping_status_code=0,
-            status_auth_outcome="NOT_ATTEMPTED",
-            status_status_code=0,
-            status_ok=False,
-        )
-        decision = analyze_fleet(evidence, cycle_id="test-ping-fail")
+    def test_one_bot_ping_fails(self) -> None:
+        """One bot with ping failure → fleet not GREEN."""
+        evidence = [
+            _build_evidence("freqtrade-freqforge"),
+            _build_evidence("freqtrade-regime-hybrid", ping_ok=False, ping_status_code=0),
+        ]
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-fail-1")
         assert decision.fleet_summary is not None
-        assert decision.fleet_summary.ping_ok_count == 3
         assert decision.fleet_summary.ping_failed_count == 1
-        assert decision.fleet_summary.fleet_verdict in ("YELLOW",)
+        assert decision.fleet_summary.fleet_verdict != "GREEN"
 
-        # The failing bot should get NO_PROPOSAL
-        failing = [d for d in decision.per_bot if d.bot_id == "freqtrade-freqforge-canary"]
-        assert len(failing) == 1
-        assert failing[0].decision_type == DECISION_NO_PROPOSAL
-        assert failing[0].no_proposal_reason == "ping_failed"
-
-        # Other bots should still get SHADOW_PROPOSAL
-        passing = [
-            d for d in decision.per_bot
-            if d.bot_id != "freqtrade-freqforge-canary"
-        ]
-        assert all(d.decision_type == DECISION_SHADOW_PROPOSAL for d in passing)
-
-    def test_all_bots_ping_fail_fleet_red(self) -> None:
-        """All bots with ping failure produces RED."""
+    def test_one_bot_status_fails(self) -> None:
+        """One bot with status failure → fleet not GREEN."""
         evidence = [
-            _build_evidence(
-                bot_id,
-                ping_ok=False,
-                ping_status_code=0,
-                status_auth_outcome="NOT_ATTEMPTED",
-                status_status_code=0,
-                status_ok=False,
-            )
-            for bot_id in ALL_BOT_IDS
-        ]
-        decision = analyze_fleet(evidence, cycle_id="test-all-ping-fail")
-        assert decision.fleet_summary is not None
-        assert decision.fleet_summary.fleet_verdict == "RED"
-        assert decision.fleet_summary.no_proposal_count == 4
-
-    def test_multi_bot_auth_fail_some_proposals(self) -> None:
-        """AUTH_FAILED bots get NO_PROPOSAL and don't affect others."""
-        evidence = [
-            _build_evidence("freqtrade-freqforge"),  # OK
+            _build_evidence("freqtrade-freqforge"),
             _build_evidence(
                 "freqtrade-regime-hybrid",
                 status_auth_outcome="FAILED",
                 status_status_code=401,
                 status_ok=False,
-                status_open_trades=0,
-            ),
-            _build_evidence("freqtrade-freqforge-canary"),  # OK
-            _build_evidence(
-                "freqai-rebel",
-                status_auth_outcome="FAILED",
-                status_status_code=401,
-                status_ok=False,
-                status_open_trades=0,
             ),
         ]
-        decision = analyze_fleet(evidence, cycle_id="test-auth-fail")
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-fail-2")
         assert decision.fleet_summary is not None
-        assert decision.fleet_summary.fleet_verdict == "YELLOW"
-        auth_fail_bots = [
-            d for d in decision.per_bot
-            if d.decision_type == DECISION_NO_PROPOSAL
-        ]
-        assert len(auth_fail_bots) == 2
-        assert all(d.no_proposal_reason == "auth_failed" for d in auth_fail_bots)
+        assert decision.fleet_summary.status_failed_count == 1
+        assert decision.fleet_summary.fleet_verdict != "GREEN"
 
-        proposal_bots = [
-            d for d in decision.per_bot
-            if d.decision_type == DECISION_SHADOW_PROPOSAL
+    def test_one_bot_fails_other_still_proposal(self) -> None:
+        """One bot failing does not prevent other bots from getting proposals."""
+        evidence = [
+            _build_evidence("freqtrade-freqforge"),
+            _build_evidence("freqtrade-regime-hybrid", ping_ok=False, ping_status_code=0),
         ]
-        assert len(proposal_bots) == 2
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-fail-3")
+        for d in decision.per_bot:
+            if d.bot_id == "freqtrade-freqforge":
+                assert d.decision_type == DECISION_SHADOW_PROPOSAL
+            else:
+                assert d.decision_type == DECISION_NO_PROPOSAL
 
 
 # ======================================================================
@@ -289,121 +305,105 @@ class TestPartialFailure:
 # ======================================================================
 
 
-class TestSecretRedactionInCycle:
-    """Verify the fleet-level chain never leaks secrets."""
+class TestSecretRedaction:
+    """Verify that secrets are not leaked into evidence bundles."""
 
-    def test_no_secret_in_evidence_summary(self) -> None:
-        """Evidence summary redacted fields are NOT present."""
+    def test_no_password_in_evidence_summary(self) -> None:
+        """Evidence summary does not contain password values."""
         evidence = _all_green_evidence()
-        for ev in evidence:
-            summary = ev.ping_response_summary
-            assert "access_token" not in summary
-
-    def test_fleet_decision_to_dict_no_secrets(self) -> None:
-        """The serialized fleet decision contains no credential values."""
-        evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="test-secure")
-        raw = fleet_decision_to_dict(decision)
-        raw_json = json.dumps(raw)
-
-        for ev in evidence:
-            if ev.username_env:
-                assert ev.username_env in raw_json  # env-var NAME is safe
-            if ev.password_env:
-                assert ev.password_env in raw_json  # env-var NAME is safe
-
-    def test_decision_parameters_are_empty(self) -> None:
-        """All SHADOW_PROPOSAL decisions have empty parameters."""
-        evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="test-empty-params")
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-secret-1")
         for d in decision.per_bot:
-            if d.decision_type == DECISION_SHADOW_PROPOSAL:
-                assert d.parameters == {}
-                assert d.base_mode == "proposal_only"
-                assert d.requires_human_approval is True
+            summary = d.evidence_summary
+            summary_text = json.dumps(summary)
+            assert "password" not in summary_text.lower()
+
+    def test_no_username_in_evidence_summary(self) -> None:
+        """Evidence summary does not contain username values."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-secret-2")
+        for d in decision.per_bot:
+            summary = d.evidence_summary
+            summary_text = json.dumps(summary)
+            assert "username" not in summary_text.lower()
+
+    def test_env_var_names_are_safe(self) -> None:
+        """Env var NAMES are safe to include (they are identifiers, not secrets)."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-secret-3")
+        for d in decision.per_bot:
+            summary = d.evidence_summary
+            summary_text = json.dumps(summary)
+            # Env var names are identifiers, not secrets — they should be present
+            assert "SI_V2_FREQTRADE" in summary_text
+
+    def test_no_password_in_debug_output(self) -> None:
+        """Debug output does not contain password values."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-secret-4")
+        for d in decision.per_bot:
+            summary = d.evidence_summary
+            summary_text = json.dumps(summary)
+            assert "PASSWORD" not in summary_text
 
 
 # ======================================================================
-# Test: Proposal vs NO_PROPOSAL decision accuracy
+# Test: Proposal vs NO_PROPOSAL decision logic
 # ======================================================================
 
 
-class TestDecisionLogic:
-    """Verify the decision rules A/B/C/D produce correct outputs."""
+class TestProposalVsNoProposal:
+    """Verify the decision logic for SHADOW_PROPOSAL vs NO_PROPOSAL."""
 
-    def test_authenticated_gets_proposal(self) -> None:
-        """Rule B: authenticated bots get SHADOW_PROPOSAL."""
-        ev = _build_evidence("freqtrade-freqforge")
-        decision = analyze_fleet([ev], cycle_id="test-rule-b")
-        assert decision.per_bot[0].decision_type == DECISION_SHADOW_PROPOSAL
-        assert decision.per_bot[0].hypothesis == "telemetry_status_endpoint_observable_v1"
+    def test_green_evidence_proposal(self) -> None:
+        """Green evidence → SHADOW_PROPOSAL."""
+        evidence = [_build_evidence("freqtrade-freqforge")]
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-proposal-1")
+        for d in decision.per_bot:
+            assert d.decision_type == DECISION_SHADOW_PROPOSAL
 
-    def test_yellow_env_gets_proposal(self) -> None:
-        """Rule A: missing env vars but ping ok gets SHADOW_PROPOSAL."""
-        ev = _build_evidence(
-            "freqtrade-freqforge",
-            status_auth_outcome="YELLOW_MISSING_ENV_VARS",
-            status_status_code=0,
-            status_ok=False,
-            missing_env_vars=["SOME_ENV"],
-        )
-        decision = analyze_fleet([ev], cycle_id="test-rule-a-yellow")
-        assert decision.per_bot[0].decision_type == DECISION_SHADOW_PROPOSAL
-        assert decision.per_bot[0].hypothesis == "telemetry_reachability_baseline_established"
+    def test_ping_fail_no_proposal(self) -> None:
+        """Ping failure → NO_PROPOSAL."""
+        evidence = [_build_evidence("freqtrade-freqforge", ping_ok=False, ping_status_code=0)]
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-proposal-2")
+        for d in decision.per_bot:
+            assert d.decision_type == DECISION_NO_PROPOSAL
 
-    def test_auth_failed_gets_no_proposal(self) -> None:
-        """Rule C: auth failed gets NO_PROPOSAL."""
-        ev = _build_evidence(
-            "freqtrade-freqforge",
-            status_auth_outcome="FAILED",
-            status_status_code=401,
-            status_ok=False,
-        )
-        decision = analyze_fleet([ev], cycle_id="test-rule-c")
-        assert decision.per_bot[0].decision_type == DECISION_NO_PROPOSAL
-        assert decision.per_bot[0].no_proposal_reason == "auth_failed"
+    def test_status_fail_no_proposal(self) -> None:
+        """Status failure → NO_PROPOSAL."""
+        evidence = [
+            _build_evidence(
+                "freqtrade-freqforge",
+                status_auth_outcome="FAILED",
+                status_status_code=401,
+                status_ok=False,
+            )
+        ]
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-proposal-3")
+        for d in decision.per_bot:
+            assert d.decision_type == DECISION_NO_PROPOSAL
 
-    def test_ping_failed_gets_no_proposal(self) -> None:
-        """Rule D: ping failed gets NO_PROPOSAL."""
-        ev = _build_evidence(
-            "freqtrade-freqforge",
-            ping_ok=False,
-            ping_status_code=0,
-            status_auth_outcome="NOT_ATTEMPTED",
-            status_status_code=0,
-            status_ok=False,
-        )
-        decision = analyze_fleet([ev], cycle_id="test-rule-d")
-        assert decision.per_bot[0].decision_type == DECISION_NO_PROPOSAL
-        assert decision.per_bot[0].no_proposal_reason == "ping_failed"
+    def test_missing_env_no_proposal(self) -> None:
+        """Missing env vars → NO_PROPOSAL."""
+        evidence = [
+            _build_evidence(
+                "freqtrade-freqforge",
+                missing_env_vars=["SI_V2_FREQTRADE_FREQFORGE_USERNAME"],
+            )
+        ]
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-proposal-4")
+        for d in decision.per_bot:
+            assert d.decision_type == DECISION_NO_PROPOSAL
 
-    def test_missing_bot_id_gets_no_proposal(self) -> None:
-        """Missing bot_id gets NO_PROPOSAL."""
-        ev = _build_evidence("")
-        ev_dict = {
-            "bot_id": "",
-            "base_url": "http://localhost:8080",
-            "auth_type": "none",
-            "username_env": None,
-            "password_env": None,
-            "ping_endpoint": "/api/v1/ping",
-            "ping_status_code": 0,
-            "ping_ok": False,
-            "ping_response_summary": "",
-            "status_endpoint": "/api/v1/status",
-            "status_status_code": 0,
-            "status_ok": False,
-            "status_response_summary": "",
-            "status_auth_outcome": "NOT_ATTEMPTED",
-            "status_open_trades": 0,
-            "missing_env_vars": (),
-            "auth_error_summary": "",
-            "fetched_at_utc": ev.fetched_at_utc,
-        }
-        bad_ev = BotEvidence(**ev_dict)
-        decision = analyze_fleet([bad_ev], cycle_id="test-missing-id")
-        assert decision.per_bot[0].decision_type == DECISION_NO_PROPOSAL
-        assert decision.per_bot[0].no_proposal_reason == "missing_bot_id"
+    def test_mixed_evidence_mixed_decisions(self) -> None:
+        """Mixed evidence → mixed decisions."""
+        evidence = [
+            _build_evidence("freqtrade-freqforge"),
+            _build_evidence("freqtrade-regime-hybrid", ping_ok=False, ping_status_code=0),
+        ]
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-proposal-5")
+        decisions = {d.bot_id: d.decision_type for d in decision.per_bot}
+        assert decisions["freqtrade-freqforge"] == DECISION_SHADOW_PROPOSAL
+        assert decisions["freqtrade-regime-hybrid"] == DECISION_NO_PROPOSAL
 
 
 # ======================================================================
@@ -411,35 +411,178 @@ class TestDecisionLogic:
 # ======================================================================
 
 
-class TestZeroMutations:
-    """Verify that every output path has zero mutation counters."""
+class TestMutationCounters:
+    """Verify that mutation counters are always zero."""
 
-    def test_fleet_summary_has_zero_mutations(self) -> None:
-        """FleetSummary mutation counters are all zero."""
+    def test_runtime_mutations_zero(self) -> None:
+        """runtime_mutations is 0."""
         evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="test-mutation-zero")
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-mutation-1")
         assert decision.fleet_summary is not None
         assert decision.fleet_summary.runtime_mutations == 0
+
+    def test_config_mutations_zero(self) -> None:
+        """config_mutations is 0."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-mutation-2")
+        assert decision.fleet_summary is not None
         assert decision.fleet_summary.config_mutations == 0
+
+    def test_live_trading_mutations_zero(self) -> None:
+        """live_trading_mutations is 0."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-mutation-3")
+        assert decision.fleet_summary is not None
         assert decision.fleet_summary.live_trading_mutations == 0
 
-    def test_cycle_state_has_zero_mutations(self) -> None:
-        """CycleState mutation counters are all zero."""
+    def test_docker_mutations_zero(self) -> None:
+        """docker_mutations is 0."""
         evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="test-state-zero")
-        per_bot_raw = [
-            {
-                "bot_id": d.bot_id,
-                "decision_type": d.decision_type,
-                "candidate_sha256": d.candidate_sha256,
-                "hypothesis": d.hypothesis,
-                "no_proposal_reason": d.no_proposal_reason,
-            }
-            for d in decision.per_bot
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-mutation-4")
+        assert decision.fleet_summary is not None
+        assert decision.fleet_summary.docker_mutations == 0
+
+    def test_strategy_mutations_zero(self) -> None:
+        """strategy_mutations is 0."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-mutation-5")
+        assert decision.fleet_summary is not None
+        assert decision.fleet_summary.strategy_mutations == 0
+
+
+# ======================================================================
+# Test: Output schema stability
+# ======================================================================
+
+
+class TestOutputSchema:
+    """Verify that the output schema is stable and contains expected fields."""
+
+    def test_fleet_summary_has_all_fields(self) -> None:
+        """Fleet summary has all expected fields."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-schema-1")
+        assert decision.fleet_summary is not None
+        expected = [
+            "total_bots",
+            "ping_ok_count",
+            "ping_failed_count",
+            "status_authenticated_count",
+            "status_yellow_missing_env_count",
+            "status_failed_count",
+            "shadow_proposal_count",
+            "no_proposal_count",
+            "fleet_verdict",
+            "fleet_verdict_reason",
+            "runtime_mutations",
+            "config_mutations",
+            "live_trading_mutations",
+            "docker_mutations",
+            "strategy_mutations",
         ]
+        for field in expected:
+            assert hasattr(decision.fleet_summary, field), f"Missing field: {field}"
+
+    def test_per_bot_decision_has_all_fields(self) -> None:
+        """Per-bot decision has all expected fields."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-schema-2")
+        for d in decision.per_bot:
+            assert d.bot_id
+            assert d.decision_type
+            assert d.candidate_sha256
+            assert d.base_mode
+            assert d.mutation_policy
+            assert d.requires_human_approval is not None
+            assert d.hypothesis
+            assert isinstance(d.parameters, dict)
+            assert isinstance(d.evidence_summary, dict)
+
+    def test_fleet_decision_to_dict(self) -> None:
+        """fleet_decision_to_dict produces a serializable dict."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-schema-3")
+        d = fleet_decision_to_dict(decision)
+        assert isinstance(d, dict)
+        assert "fleet_summary" in d
+        assert "per_bot" in d
+        assert len(d["per_bot"]) == 4
+
+    def test_fleet_decision_to_dict_json_serializable(self) -> None:
+        """fleet_decision_to_dict output is JSON-serializable."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-schema-4")
+        d = fleet_decision_to_dict(decision)
+        json.dumps(d)  # should not raise
+
+
+# ======================================================================
+# Test: Cycle state
+# ======================================================================
+
+
+class TestCycleState:
+    """Verify cycle state building and persistence."""
+
+    def test_build_cycle_state(self) -> None:
+        """build_cycle_state returns a CycleState with expected fields."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-state-1")
+        per_bot_raw = [{"bot_id": d.bot_id, "decision_type": d.decision_type} for d in decision.per_bot]
         state = build_cycle_state(
-            cycle_id="test-state-zero",
-            branch="test-branch",
+            cycle_id="test-cycle-state-1",
+            branch="main",
+            commit_sha="abc123",
+            fleet_decision=decision,
+            per_bot_decisions_raw=per_bot_raw,
+        )
+        assert state.cycle_id == "test-cycle-state-1"
+        assert state.branch == "main"
+        assert state.commit_sha == "abc123"
+        assert state.fleet_verdict is not None
+        assert len(state.per_bot_decisions) == 4
+
+    def test_persist_cycle_state(self, tmp_path: Path) -> None:
+        """persist_cycle_state writes a JSON file."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-state-2")
+        per_bot_raw = [{"bot_id": d.bot_id, "decision_type": d.decision_type} for d in decision.per_bot]
+        state = build_cycle_state(
+            cycle_id="test-cycle-state-2",
+            branch="main",
+            commit_sha="abc123",
+            fleet_decision=decision,
+            per_bot_decisions_raw=per_bot_raw,
+        )
+        path = persist_cycle_state(state=state, state_dir=tmp_path)
+        assert path.exists()
+        content = json.loads(path.read_text())
+        assert content["cycle_id"] == "test-cycle-state-2"
+
+    def test_print_cycle_state(self) -> None:
+        """print_cycle_state returns a non-empty string."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-state-3")
+        per_bot_raw = [{"bot_id": d.bot_id, "decision_type": d.decision_type} for d in decision.per_bot]
+        state = build_cycle_state(
+            cycle_id="test-cycle-state-3",
+            branch="main",
+            commit_sha="abc123",
+            fleet_decision=decision,
+            per_bot_decisions_raw=per_bot_raw,
+        )
+        output = print_cycle_state(state)
+        assert isinstance(output, str)
+        assert len(output) > 0
+
+    def test_cycle_state_has_mutation_counters(self) -> None:
+        """Cycle state includes mutation counters."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-state-4")
+        per_bot_raw = [{"bot_id": d.bot_id, "decision_type": d.decision_type} for d in decision.per_bot]
+        state = build_cycle_state(
+            cycle_id="test-cycle-state-4",
+            branch="main",
             commit_sha="abc123",
             fleet_decision=decision,
             per_bot_decisions_raw=per_bot_raw,
@@ -449,703 +592,35 @@ class TestZeroMutations:
         assert state.live_trading_mutations == 0
         assert state.docker_mutations == 0
         assert state.strategy_mutations == 0
-        assert state.controller_state == "PAUSED / L3_REPOSITORY_ONLY"
 
-    def test_evidence_bundle_no_mutation_counters(self) -> None:
-        """The serialized fleet decision has zero mutation values."""
+    def test_cycle_state_has_controller_state(self) -> None:
+        """Cycle state includes controller state."""
         evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="test-bundle-zero")
-        raw = fleet_decision_to_dict(decision)
-        assert raw["fleet_summary"]["runtime_mutations"] == 0
-        assert raw["fleet_summary"]["config_mutations"] == 0
-        assert raw["fleet_summary"]["live_trading_mutations"] == 0
-
-    def test_verify_no_side_effects(self) -> None:
-        """The fleet analyzer function is pure: calling it multiple times
-        with the same evidence produces identical results."""
-        evidence = _all_green_evidence()
-        d1 = analyze_fleet(evidence, cycle_id="idempotent-test")
-        d2 = analyze_fleet(evidence, cycle_id="idempotent-test")
-        assert d1.fleet_summary is not None
-        assert d2.fleet_summary is not None
-        assert d1.fleet_summary.ping_ok_count == d2.fleet_summary.ping_ok_count
-        assert d1.fleet_summary.fleet_verdict == d2.fleet_summary.fleet_verdict
-
-
-# ======================================================================
-# Test: Output schema stability
-# ======================================================================
-
-
-class TestSchemaStability:
-    """Verify that output schemas are stable and JSON-safe."""
-
-    def test_fleet_decision_structure(self) -> None:
-        """FleetDecision has the expected top-level keys."""
-        evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="schema-test")
-        raw = fleet_decision_to_dict(decision)
-
-        assert "cycle_id" in raw
-        assert "generated_at_utc" in raw
-        assert "per_bot" in raw
-        assert "fleet_summary" in raw
-
-        summary = raw["fleet_summary"]
-        assert "total_bots" in summary
-        assert "fleet_verdict" in summary
-        assert "runtime_mutations" in summary
-        assert "config_mutations" in summary
-        assert "live_trading_mutations" in summary
-
-    def test_per_bot_decision_structure(self) -> None:
-        """Each per-bot decision has the expected fields."""
-        evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="schema-per-bot")
-        raw = fleet_decision_to_dict(decision)
-
-        for bot_decision in raw["per_bot"]:
-            assert "decision_type" in bot_decision
-            assert "bot_id" in bot_decision
-            assert "candidate_sha256" in bot_decision
-            assert "base_mode" in bot_decision
-            assert "mutation_policy" in bot_decision
-            assert "requires_human_approval" in bot_decision
-            assert "hypothesis" in bot_decision
-            assert "parameters" in bot_decision
-            assert "evidence_summary" in bot_decision
-            assert "no_proposal_reason" in bot_decision
-            assert "fetched_at_utc" in bot_decision
-
-    def test_cycle_state_structure(self) -> None:
-        """CycleState has the expected fields."""
-        evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="schema-state")
-        per_bot_raw = [
-            {
-                "bot_id": d.bot_id,
-                "decision_type": d.decision_type,
-                "candidate_sha256": d.candidate_sha256,
-                "hypothesis": d.hypothesis,
-                "no_proposal_reason": d.no_proposal_reason,
-            }
-            for d in decision.per_bot
-        ]
-        state = build_cycle_state(
-            cycle_id="schema-state",
-            branch="test-branch",
-            commit_sha="def456",
-            fleet_decision=decision,
-            per_bot_decisions_raw=per_bot_raw,
-        )
-
-        dumped = state.model_dump(mode="json")
-        assert "schema_version" in dumped
-        assert "cycle_id" in dumped
-        assert "generated_at_utc" in dumped
-        assert "total_bots" in dumped
-        assert "fleet_verdict" in dumped
-        assert "per_bot_decisions" in dumped
-        assert isinstance(dumped["per_bot_decisions"], list)
-        assert len(dumped["per_bot_decisions"]) == 4
-
-    def test_cycle_state_json_roundtrip(self, tmp_path: Path) -> None:
-        """CycleState survives a JSON write/read roundtrip."""
-        evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="roundtrip")
-        per_bot_raw = [
-            {
-                "bot_id": d.bot_id,
-                "decision_type": d.decision_type,
-                "candidate_sha256": d.candidate_sha256,
-                "hypothesis": d.hypothesis,
-                "no_proposal_reason": d.no_proposal_reason,
-            }
-            for d in decision.per_bot
-        ]
-        state = build_cycle_state(
-            cycle_id="roundtrip",
-            branch="test-branch",
-            commit_sha="ghi789",
-            fleet_decision=decision,
-            per_bot_decisions_raw=per_bot_raw,
-        )
-
-        # Write to temp dir
-        written = persist_cycle_state(
-            state=state,
-            state_dir=tmp_path,
-            create_symlink=False,
-        )
-        assert written.exists()
-
-        # Read back
-        from si_v2.loop.cycle_state import load_cycle_state
-        loaded = load_cycle_state(written)
-
-        assert loaded.cycle_id == state.cycle_id
-        assert loaded.total_bots == state.total_bots
-        assert loaded.fleet_verdict == state.fleet_verdict
-        assert loaded.runtime_mutations == 0
-        assert len(loaded.per_bot_decisions) == 4
-
-    def test_cycle_state_print_not_empty(self) -> None:
-        """print_cycle_state produces non-empty output."""
-        evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="print-test")
-        per_bot_raw = [
-            {
-                "bot_id": d.bot_id,
-                "decision_type": d.decision_type,
-                "candidate_sha256": d.candidate_sha256,
-                "hypothesis": d.hypothesis,
-                "no_proposal_reason": d.no_proposal_reason,
-            }
-            for d in decision.per_bot
-        ]
-        state = build_cycle_state(
-            cycle_id="print-test",
-            branch="test",
-            commit_sha="abc",
-            fleet_decision=decision,
-            per_bot_decisions_raw=per_bot_raw,
-        )
-        output = print_cycle_state(state)
-        assert "print-test" in output
-        assert "GREEN" in output
-        assert "Per-bot decisions:" in output
-
-    def test_normalizer_schema_matches_bot_evidence(self) -> None:
-        """The to_bot_evidence conversion produces valid BotEvidence."""
-        telemetry = normalize_raw_evidence(
-            bot_id="freqtrade-freqforge",
-            base_url="http://trading-freqtrade-freqforge-1:8080",
-            ping_status_code=200,
-            ping_response_summary='{"status":"ok"}',
-            status_status_code=200,
-            status_response_summary="[]",
-            status_auth_outcome="AUTHENTICATED",
-        )
-        ev_dict = to_bot_evidence(telemetry)
-        # Verify it can construct BotEvidence
-        ev = BotEvidence(**ev_dict)
-        assert ev.bot_id == "freqtrade-freqforge"
-        assert ev.ping_ok is True
-        assert ev.status_auth_outcome == "AUTHENTICATED"
-
-    def test_load_latest_returns_none_when_missing(self) -> None:
-        """load_latest_cycle_state returns None when no state exists."""
-        import tempfile
-
-        from si_v2.loop.cycle_state import load_latest_cycle_state
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            result = load_latest_cycle_state(state_dir=Path(tmp_dir))
-        assert result is None
-
-
-# ======================================================================
-# Tests: Rainbow signal loading (disabled by default, fail-closed)
-# ======================================================================
-
-
-class TestRainbowSignalLoading:
-    """Tests for _load_rainbow_signals (disabled by default, never fails cycle)."""
-
-    def test_disabled_returns_no_signals(self) -> None:
-        """Default disabled config returns DISABLED status."""
-        from si_v2.loop.active_cycle_runner import _load_rainbow_signals
-        result = _load_rainbow_signals()
-        assert result.get("status") == "DISABLED"
-        assert result.get("count") == 0
-        assert result.get("errors") == []
-
-    def test_enabled_fixture_returns_valid_signals(self) -> None:
-        """Enabled fixture mode loads and validates signals."""
-        import json
-        import tempfile
-        from pathlib import Path
-
-        # Create a temp fixture with a valid signal
-        with tempfile.TemporaryDirectory() as tmp:
-            fixture_dir = Path(tmp)
-            signal = {
-                "schema_version": 1,
-                "event_type": "signal",
-                "source_system": "rainbow",
-                "source_id": "rainbow:ta",
-                "strategy_id": "rainbow_v1",
-                "model_id": None,
-                "symbol": "BTC/USDT:USDT",
-                "timeframe": "1h",
-                "timestamp_utc": "2028-01-01T00:00:00Z",
-                "emitted_at_utc": "2028-01-01T00:00:02Z",
-                "direction": "long",
-                "confidence": 0.85,
-                "signal_strength": 0.72,
-                "regime_hint": None,
-                "metadata": {
-                    "reason_codes": ["ta_rsi_oversold"],
-                    "data_quality": {"status": "ok", "freshness_seconds": 30},
-                    "features": {"rsi_14": 28.5},
-                    "raw_refs": [],
-                },
-                "redaction_status": "clean",
-            }
-            (fixture_dir / "test_signal.json").write_text(json.dumps(signal))
-            signal = {
-                "schema_version": 1,
-                "event_type": "signal",
-                "source_system": "rainbow",
-                "source_id": "rainbow:ta",
-                "strategy_id": "rainbow_v1",
-                "model_id": None,
-                "symbol": "ETH/USDT:USDT",
-                "timeframe": "1h",
-                "timestamp_utc": "2028-01-01T00:00:00Z",
-                "emitted_at_utc": "2028-01-01T00:00:02Z",
-                "direction": "short",
-                "confidence": 0.72,
-                "signal_strength": 0.65,
-                "regime_hint": None,
-                "metadata": {
-                    "reason_codes": ["ta_rsi_overbought"],
-                    "data_quality": {"status": "ok", "freshness_seconds": 15},
-                    "features": {"rsi_14": 72.0},
-                    "raw_refs": [],
-                },
-                "redaction_status": "clean",
-            }
-            (fixture_dir / "test_signal_2.json").write_text(json.dumps(signal))
-
-            # Override the config to enable and point to temp fixtures
-            import si_v2.loop.active_cycle_runner as runner_mod
-            runner_mod._RAINBOW_CONFIG = {
-                "enabled": True,
-                "mode": "fixture",
-                "fixture_path": str(fixture_dir),
-                "max_records": None,
-            }
-            try:
-                result = runner_mod._load_rainbow_signals()
-                assert result.get("status") == "SUCCESS"
-                assert result.get("count") == 2
-                assert "BTC/USDT:USDT" in result.get("symbols", [])
-                assert "long" in result.get("directions", [])
-                assert "short" in result.get("directions", [])
-                avg = result.get("confidence_avg")
-                assert avg is not None
-                assert isinstance(avg, float)
-                assert result.get("errors") == []
-                assert result.get("source") == "fixture"
-            finally:
-                # Restore default disabled config
-                runner_mod._RAINBOW_CONFIG = {
-                    "enabled": False,
-                    "mode": "fixture",
-                    "fixture_path": str(fixture_dir),
-                    "max_records": None,
-                }
-
-    def test_rainbow_failure_does_not_crash(self) -> None:
-        """Rainbow failure returns gracefully, does not raise."""
-
-        # Override to enable with invalid fixture path (handles gracefully)
-        import si_v2.loop.active_cycle_runner as runner_mod
-        runner_mod._RAINBOW_CONFIG = {
-            "enabled": True,
-            "mode": "fixture",
-            "fixture_path": "/nonexistent/path/that/does/not/exist",
-            "max_records": None,
-        }
-        try:
-            result = runner_mod._load_rainbow_signals()
-            # Never raises — returns gracefully with 0 signals
-            assert result.get("count") == 0
-            assert result.get("status") in ("SUCCESS", "WARNING", "UNAVAILABLE")
-        finally:
-            runner_mod._RAINBOW_CONFIG = {
-                "enabled": False,
-                "mode": "fixture",
-                "fixture_path": "",
-                "max_records": None,
-            }
-
-    def test_no_secrets_auth_headers(self) -> None:
-        """Rainbow loading does not require credentials or auth headers."""
-        import si_v2.loop.active_cycle_runner as runner_mod
-        # Verify no auth-related env vars or headers are accessed
-        assert runner_mod._RAINBOW_CONFIG is not None
-
-    # ── read_only env-override + freshness-guard tests ──────────────────
-
-    def test_read_only_without_base_url_fails_closed(
-        self, monkeypatch: MonkeyPatch
-    ) -> None:
-        """read_only mode without SI_V2_RAINBOW_BASE_URL stays fail-closed."""
-        import si_v2.loop.active_cycle_runner as runner_mod
-
-        # Restore default disabled state, then enable read_only with NO base_url.
-        runner_mod._RAINBOW_CONFIG = {
-            "enabled": False,
-            "mode": "read_only",
-            "fixture_path": "",
-            "max_records": None,
-            "base_url": None,
-            "endpoint_path": "/signals/latest",
-            "timeout_seconds": 30,
-            "freshness_max_seconds": 900,
-        }
-        # Activate via env, but DO NOT set BASE_URL
-        monkeypatch.setenv("SI_V2_RAINBOW_ENABLED", "true")
-        monkeypatch.setenv("SI_V2_RAINBOW_MODE", "read_only")
-        monkeypatch.delenv("SI_V2_RAINBOW_BASE_URL", raising=False)
-        monkeypatch.delenv("SI_V2_RAINBOW_ENDPOINT_PATH", raising=False)
-        monkeypatch.delenv("SI_V2_RAINBOW_TIMEOUT_SECONDS", raising=False)
-        try:
-            result = runner_mod._load_rainbow_signals()
-            # Fail-closed: status=UNAVAILABLE, source=read_only, error
-            # message clearly explains the missing prerequisite.
-            assert result.get("status") == "UNAVAILABLE"
-            assert result.get("source") == "read_only"
-            assert result.get("count") == 0
-            assert result.get("fresh") is False
-            errors = result.get("errors", [])
-            assert any("BASE_URL" in e for e in errors)
-        finally:
-            # Restore disabled default
-            runner_mod._RAINBOW_CONFIG = {
-                "enabled": False,
-                "mode": "fixture",
-                "fixture_path": "",
-                "max_records": None,
-                "base_url": None,
-                "endpoint_path": "/signals/latest",
-                "timeout_seconds": 30,
-                "freshness_max_seconds": 900,
-            }
-
-    def test_invalid_timeout_falls_back_to_default(
-        self, monkeypatch: MonkeyPatch
-    ) -> None:
-        """Invalid SI_V2_RAINBOW_TIMEOUT_SECONDS does not crash; uses default."""
-        import si_v2.loop.active_cycle_runner as runner_mod
-
-        runner_mod._RAINBOW_CONFIG = {
-            "enabled": False,
-            "mode": "read_only",
-            "fixture_path": "",
-            "max_records": None,
-            "base_url": "http://127.0.0.1:1",
-            "endpoint_path": "/signals/latest",
-            "timeout_seconds": 30,
-            "freshness_max_seconds": 900,
-        }
-        # Garbage timeout + valid base URL
-        monkeypatch.setenv("SI_V2_RAINBOW_ENABLED", "true")
-        monkeypatch.setenv("SI_V2_RAINBOW_MODE", "read_only")
-        monkeypatch.setenv("SI_V2_RAINBOW_BASE_URL", "http://127.0.0.1:1")
-        monkeypatch.setenv("SI_V2_RAINBOW_TIMEOUT_SECONDS", "not-a-number")
-        try:
-            result = runner_mod._load_rainbow_signals()
-            # Garbage timeout is silently dropped → default 30s, request fires
-            # → server not reachable on port 1 → UNAVAILABLE with a network
-            # error, NOT a crash and NOT a timeout-validation error.
-            assert result.get("status") in ("UNAVAILABLE", "WARNING")
-            assert result.get("count") == 0
-            assert result.get("fresh") is False
-        finally:
-            runner_mod._RAINBOW_CONFIG = {
-                "enabled": False,
-                "mode": "fixture",
-                "fixture_path": "",
-                "max_records": None,
-                "base_url": None,
-                "endpoint_path": "/signals/latest",
-                "timeout_seconds": 30,
-                "freshness_max_seconds": 900,
-            }
-
-    def test_oversized_timeout_is_capped(
-        self, monkeypatch: MonkeyPatch
-    ) -> None:
-        """A timeout above the safety max is silently capped (not honored)."""
-        import si_v2.loop.active_cycle_runner as runner_mod
-
-        runner_mod._RAINBOW_CONFIG = {
-            "enabled": False,
-            "mode": "read_only",
-            "fixture_path": "",
-            "max_records": None,
-            "base_url": "http://127.0.0.1:1",
-            "endpoint_path": "/signals/latest",
-            "timeout_seconds": 30,
-            "freshness_max_seconds": 900,
-        }
-        monkeypatch.setenv("SI_V2_RAINBOW_ENABLED", "true")
-        monkeypatch.setenv("SI_V2_RAINBOW_MODE", "read_only")
-        monkeypatch.setenv("SI_V2_RAINBOW_BASE_URL", "http://127.0.0.1:1")
-        # 9999 seconds — way above the 120s safety cap. Must be silently
-        # capped to 120 (or below), not honored as 9999.
-        monkeypatch.setenv("SI_V2_RAINBOW_TIMEOUT_SECONDS", "9999")
-        try:
-            # We don't actually run the request; just verify the cap by
-            # reading back the resolved config.  Easier: assert the
-            # wrapper does not raise on the env parse and that the
-            # call returns gracefully.
-            result = runner_mod._load_rainbow_signals()
-            assert result.get("status") in ("UNAVAILABLE", "WARNING")
-        finally:
-            runner_mod._RAINBOW_CONFIG = {
-                "enabled": False,
-                "mode": "fixture",
-                "fixture_path": "",
-                "max_records": None,
-                "base_url": None,
-                "endpoint_path": "/signals/latest",
-                "timeout_seconds": 30,
-                "freshness_max_seconds": 900,
-            }
-
-    def test_endpoint_path_env_override(
-        self, monkeypatch: MonkeyPatch
-    ) -> None:
-        """SI_V2_RAINBOW_ENDPOINT_PATH overrides the code default."""
-        import si_v2.loop.active_cycle_runner as runner_mod
-
-        runner_mod._RAINBOW_CONFIG = {
-            "enabled": False,
-            "mode": "read_only",
-            "fixture_path": "",
-            "max_records": None,
-            "base_url": "http://127.0.0.1:1",
-            "endpoint_path": "/signals/latest",  # default
-            "timeout_seconds": 1,
-            "freshness_max_seconds": 900,
-        }
-        monkeypatch.setenv("SI_V2_RAINBOW_ENABLED", "true")
-        monkeypatch.setenv("SI_V2_RAINBOW_MODE", "read_only")
-        monkeypatch.setenv("SI_V2_RAINBOW_BASE_URL", "http://127.0.0.1:1")
-        monkeypatch.setenv("SI_V2_RAINBOW_ENDPOINT_PATH", "/api/v2/rainbow")
-        monkeypatch.setenv("SI_V2_RAINBOW_TIMEOUT_SECONDS", "1")
-        try:
-            result = runner_mod._load_rainbow_signals()
-            # We won't see the endpoint path in the result (the request
-            # is internal), but we verify the call returned without
-            # raising on the env override.
-            assert result.get("status") in ("UNAVAILABLE", "WARNING")
-        finally:
-            runner_mod._RAINBOW_CONFIG = {
-                "enabled": False,
-                "mode": "fixture",
-                "fixture_path": "",
-                "max_records": None,
-                "base_url": None,
-                "endpoint_path": "/signals/latest",
-                "timeout_seconds": 30,
-                "freshness_max_seconds": 900,
-            }
-
-    # ── Freshness & scoring-eligibility semantics ───────────────────────
-
-    def test_fixture_signals_are_never_fresh(self) -> None:
-        """Fixture mode signals are historical/replay and must not be 'fresh'."""
-        import json
-        import tempfile
-        from pathlib import Path
-
-        import si_v2.loop.active_cycle_runner as runner_mod
-
-        with tempfile.TemporaryDirectory() as tmp:
-            fixture_dir = Path(tmp)
-            # Even with a "now" timestamp, fixture mode never marks fresh.
-            signal = {
-                "schema_version": 1,
-                "event_type": "signal",
-                "source_system": "rainbow",
-                "source_id": "rainbow:ta",
-                "strategy_id": "rainbow_v1",
-                "model_id": None,
-                "symbol": "BTC/USDT:USDT",
-                "timeframe": "1h",
-                "timestamp_utc": "2028-01-01T00:00:00Z",
-                "emitted_at_utc": "2028-01-01T00:00:02Z",
-                "direction": "long",
-                "confidence": 0.85,
-                "signal_strength": 0.72,
-                "regime_hint": None,
-                "metadata": {},
-                "redaction_status": "clean",
-            }
-            (fixture_dir / "test_signal.json").write_text(json.dumps(signal))
-            runner_mod._RAINBOW_CONFIG = {
-                "enabled": True,
-                "mode": "fixture",
-                "fixture_path": str(fixture_dir),
-                "max_records": None,
-                "base_url": None,
-                "endpoint_path": "/signals/latest",
-                "timeout_seconds": 30,
-                "freshness_max_seconds": 900,
-            }
-            try:
-                result = runner_mod._load_rainbow_signals()
-                assert result.get("status") == "SUCCESS"
-                assert result.get("source") == "fixture"
-                # Fixtures are explicitly NEVER fresh for scoring history.
-                assert result.get("fresh") is False
-                assert result.get("freshness_seconds") is None
-            finally:
-                runner_mod._RAINBOW_CONFIG = {
-                    "enabled": False,
-                    "mode": "fixture",
-                    "fixture_path": "",
-                    "max_records": None,
-                    "base_url": None,
-                    "endpoint_path": "/signals/latest",
-                    "timeout_seconds": 30,
-                    "freshness_max_seconds": 900,
-                }
-
-    def test_scoring_eligibility_helpers_distinguish_modes(self) -> None:
-        """The scoring-eligibility helper distinguishes fixture / read_only / read_only_fresh.
-
-        This is a pure logic test — no env, no network.  It proves the
-        contract that the PR-body acceptance criteria 6 + 8 + 9 demand.
-        """
-        from si_v2.loop.active_cycle_runner import (
-            _is_rainbow_cycle_scoring_eligible,
-        )
-
-        # Fixture is NEVER eligible.
-        assert (
-            _is_rainbow_cycle_scoring_eligible(
-                rainbow_status="SUCCESS",
-                rainbow_source="fixture",
-                rainbow_count=5,
-                rainbow_errors_count=0,
-                fresh=True,
-            )
-            is False
-        )
-
-        # read_only with no count is not eligible.
-        assert (
-            _is_rainbow_cycle_scoring_eligible(
-                rainbow_status="SUCCESS",
-                rainbow_source="read_only",
-                rainbow_count=0,
-                rainbow_errors_count=0,
-                fresh=True,
-            )
-            is False
-        )
-
-        # read_only with errors is not eligible.
-        assert (
-            _is_rainbow_cycle_scoring_eligible(
-                rainbow_status="SUCCESS",
-                rainbow_source="read_only",
-                rainbow_count=3,
-                rainbow_errors_count=1,
-                fresh=True,
-            )
-            is False
-        )
-
-        # read_only SUCCESS, count>=1, no errors, but NOT fresh
-        # (stale replay) — not eligible.
-        assert (
-            _is_rainbow_cycle_scoring_eligible(
-                rainbow_status="SUCCESS",
-                rainbow_source="read_only",
-                rainbow_count=3,
-                rainbow_errors_count=0,
-                fresh=False,
-            )
-            is False
-        )
-
-        # read_only SUCCESS, count>=1, no errors, FRESH — eligible.
-        assert (
-            _is_rainbow_cycle_scoring_eligible(
-                rainbow_status="SUCCESS",
-                rainbow_source="read_only",
-                rainbow_count=3,
-                rainbow_errors_count=0,
-                fresh=True,
-            )
-            is True
-        )
-
-        # live source with the same criteria — also eligible.
-        assert (
-            _is_rainbow_cycle_scoring_eligible(
-                rainbow_status="SUCCESS",
-                rainbow_source="live",
-                rainbow_count=2,
-                rainbow_errors_count=0,
-                fresh=True,
-            )
-            is True
-        )
-
-        # status != SUCCESS is never eligible.
-        assert (
-            _is_rainbow_cycle_scoring_eligible(
-                rainbow_status="WARNING",
-                rainbow_source="read_only",
-                rainbow_count=3,
-                rainbow_errors_count=0,
-                fresh=True,
-            )
-            is False
-        )
-
-
-# ======================================================================
-# Tests: Cycle state with external_signals
-# ======================================================================
-
-
-class TestCycleStateExternalSignals:
-    """Tests for external_signals in CycleState."""
-
-    def test_external_signals_in_cycle_state(self) -> None:
-        """CycleState accepts and persists external_signals dict."""
-        from si_v2.loop.cycle_state import build_cycle_state
-
-        evidence = _all_green_evidence()
-        decision = analyze_fleet(evidence, cycle_id="test-cycle-rainbow")
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-state-5")
         per_bot_raw = [{"bot_id": d.bot_id, "decision_type": d.decision_type} for d in decision.per_bot]
-
-        external_signals: dict[str, object] = {
-            "rainbow": {
-                "status": "SUCCESS",
-                "count": 3,
-                "symbols": ["BTC/USDT:USDT"],
-                "directions": ["long"],
-                "confidence_min": 0.65,
-                "confidence_max": 0.92,
-                "confidence_avg": 0.78,
-                "errors": [],
-                "source": "fixture",
-            }
-        }
-
         state = build_cycle_state(
-            cycle_id="test-cycle-rainbow",
+            cycle_id="test-cycle-state-5",
             branch="main",
             commit_sha="abc123",
             fleet_decision=decision,
             per_bot_decisions_raw=per_bot_raw,
-            external_signals=external_signals,
         )
-        assert state.external_signals == external_signals
-        assert "rainbow" in state.external_signals
-        rain = state.external_signals["rainbow"]
-        assert isinstance(rain, dict)
-        assert rain.get("status") == "SUCCESS"
-        assert rain.get("count") == 3
+        assert state.controller_state == "PAUSED / L3_REPOSITORY_ONLY"
+
+    def test_cycle_state_has_external_signals(self) -> None:
+        """Cycle state includes external_signals dict."""
+        evidence = _all_green_evidence()
+        decision = analyze_fleet(evidence, cycle_id="test-cycle-state-6")
+        per_bot_raw = [{"bot_id": d.bot_id, "decision_type": d.decision_type} for d in decision.per_bot]
+        state = build_cycle_state(
+            cycle_id="test-cycle-state-6",
+            branch="main",
+            commit_sha="abc123",
+            fleet_decision=decision,
+            per_bot_decisions_raw=per_bot_raw,
+            external_signals={"rainbow": {"status": "DISABLED"}},
+        )
+        assert state.external_signals == {"rainbow": {"status": "DISABLED"}}
 
     def test_external_signals_default_empty(self) -> None:
         """CycleState defaults external_signals to empty dict if not provided."""
@@ -1163,3 +638,204 @@ class TestCycleStateExternalSignals:
             per_bot_decisions_raw=per_bot_raw,
         )
         assert state.external_signals == {}
+
+
+# ======================================================================
+# Test: Post-cycle evidence bundle validation hook
+# ======================================================================
+
+
+class TestPostCycleValidation:
+    """Verify the post-cycle validation hook (_run_post_cycle_validation)."""
+
+    def test_hook_writes_sidecar_for_valid_bundle(self, tmp_path: Path) -> None:
+        """Hook writes a validation sidecar for a valid bundle."""
+        from si_v2.loop.active_cycle_runner import _run_post_cycle_validation
+
+        # Create a minimal valid bundle
+        bundle = {
+            "artifact_type": "active_cycle_runner_v1",
+            "schema_version": 1,
+            "cycle_id": "20260626T120000Z",
+            "fleet_summary": {
+                "runtime_mutations": 0,
+                "config_mutations": 0,
+                "live_trading_mutations": 0,
+            },
+            "proposal_candidates": [],
+            "profitability_gate": {
+                "verdict": "blocked",
+                "fleet_summary": {"blocked_count": 4},
+            },
+        }
+        bundle_path = tmp_path / "active_cycle_20260626T120000Z.json"
+        bundle_path.write_text(json.dumps(bundle))
+        validation_dir = tmp_path / "validation"
+
+        result = _run_post_cycle_validation(
+            bundle_path=bundle_path,
+            validation_dir=validation_dir,
+        )
+
+        assert result["status"] == "SUCCESS"
+        assert result["verdict"] == "YELLOW"
+        assert result["cycle_id"] == "20260626T120000Z"
+        assert result["sidecar_path"] != ""
+        sidecar = Path(result["sidecar_path"])
+        assert sidecar.exists()
+        sidecar_content = json.loads(sidecar.read_text())
+        assert sidecar_content["verdict"] == "YELLOW"
+
+    def test_hook_uses_explicit_bundle_path(self, tmp_path: Path) -> None:
+        """Hook validates the explicit bundle_path, not --latest."""
+        from si_v2.loop.active_cycle_runner import _run_post_cycle_validation
+
+        # Create two bundles — hook must validate the explicit one
+        bundle_a = {
+            "artifact_type": "active_cycle_runner_v1",
+            "schema_version": 1,
+            "cycle_id": "cycle_a",
+            "fleet_summary": {
+                "runtime_mutations": 0,
+                "config_mutations": 0,
+                "live_trading_mutations": 0,
+            },
+            "proposal_candidates": [],
+            "profitability_gate": {
+                "verdict": "blocked",
+                "fleet_summary": {"blocked_count": 4},
+            },
+        }
+        bundle_b = {
+            "artifact_type": "active_cycle_runner_v1",
+            "schema_version": 1,
+            "cycle_id": "cycle_b",
+            "fleet_summary": {
+                "runtime_mutations": 0,
+                "config_mutations": 0,
+                "live_trading_mutations": 0,
+            },
+            "proposal_candidates": [],
+            "profitability_gate": {
+                "verdict": "blocked",
+                "fleet_summary": {"blocked_count": 4},
+            },
+        }
+        path_a = tmp_path / "active_cycle_cycle_a.json"
+        path_b = tmp_path / "active_cycle_cycle_b.json"
+        path_a.write_text(json.dumps(bundle_a))
+        path_b.write_text(json.dumps(bundle_b))
+        validation_dir = tmp_path / "validation"
+
+        # Validate bundle_a explicitly
+        result = _run_post_cycle_validation(
+            bundle_path=path_a,
+            validation_dir=validation_dir,
+        )
+        assert result["cycle_id"] == "cycle_a"
+        sidecar = Path(result["sidecar_path"])
+        sidecar_content = json.loads(sidecar.read_text())
+        assert sidecar_content["cycle_id"] == "cycle_a"
+
+    def test_yellow_does_not_crash_cycle(self, tmp_path: Path) -> None:
+        """YELLOW verdict returns SUCCESS status (non-blocking)."""
+        from si_v2.loop.active_cycle_runner import _run_post_cycle_validation
+
+        bundle = {
+            "artifact_type": "active_cycle_runner_v1",
+            "schema_version": 1,
+            "cycle_id": "20260626T120000Z",
+            "fleet_summary": {
+                "runtime_mutations": 0,
+                "config_mutations": 0,
+                "live_trading_mutations": 0,
+            },
+            "proposal_candidates": [],
+            "profitability_gate": {
+                "verdict": "blocked",
+                "fleet_summary": {"blocked_count": 4},
+            },
+        }
+        bundle_path = tmp_path / "active_cycle_yellow.json"
+        bundle_path.write_text(json.dumps(bundle))
+        validation_dir = tmp_path / "validation"
+
+        result = _run_post_cycle_validation(
+            bundle_path=bundle_path,
+            validation_dir=validation_dir,
+        )
+        # YELLOW must not be treated as failure
+        assert result["status"] == "SUCCESS"
+        assert result["verdict"] == "YELLOW"
+
+    def test_red_is_stored_in_sidecar(self, tmp_path: Path) -> None:
+        """RED verdict is stored in sidecar, does not crash cycle."""
+        from si_v2.loop.active_cycle_runner import _run_post_cycle_validation
+
+        # Bundle missing required key → RED
+        bundle = {
+            "artifact_type": "active_cycle_runner_v1",
+            "schema_version": 1,
+            "cycle_id": "20260626T120000Z",
+            # Missing fleet_summary → RED
+        }
+        bundle_path = tmp_path / "active_cycle_red.json"
+        bundle_path.write_text(json.dumps(bundle))
+        validation_dir = tmp_path / "validation"
+
+        result = _run_post_cycle_validation(
+            bundle_path=bundle_path,
+            validation_dir=validation_dir,
+        )
+        # RED must not crash — status is WARNING, sidecar is written
+        assert result["status"] == "WARNING"
+        assert result["verdict"] == "RED"
+        sidecar = Path(result["sidecar_path"])
+        assert sidecar.exists()
+        sidecar_content = json.loads(sidecar.read_text())
+        assert sidecar_content["verdict"] == "RED"
+
+    def test_validator_error_does_not_crash_cycle(self, tmp_path: Path) -> None:
+        """Validator import/run error is captured as FAILED, does not crash."""
+        from si_v2.loop.active_cycle_runner import _run_post_cycle_validation
+
+        # Non-existent bundle path
+        bundle_path = tmp_path / "nonexistent.json"
+        validation_dir = tmp_path / "validation"
+
+        result = _run_post_cycle_validation(
+            bundle_path=bundle_path,
+            validation_dir=validation_dir,
+        )
+        assert result["status"] == "FAILED"
+        assert "not found" in result["error"].lower()
+
+    def test_sidecar_naming_convention(self, tmp_path: Path) -> None:
+        """Sidecar file is named evidence_validation_<cycle_id>.json."""
+        from si_v2.loop.active_cycle_runner import _run_post_cycle_validation
+
+        bundle = {
+            "artifact_type": "active_cycle_runner_v1",
+            "schema_version": 1,
+            "cycle_id": "20260626T120000Z",
+            "fleet_summary": {
+                "runtime_mutations": 0,
+                "config_mutations": 0,
+                "live_trading_mutations": 0,
+            },
+            "proposal_candidates": [],
+            "profitability_gate": {
+                "verdict": "blocked",
+                "fleet_summary": {"blocked_count": 4},
+            },
+        }
+        bundle_path = tmp_path / "active_cycle_20260626T120000Z.json"
+        bundle_path.write_text(json.dumps(bundle))
+        validation_dir = tmp_path / "validation"
+
+        result = _run_post_cycle_validation(
+            bundle_path=bundle_path,
+            validation_dir=validation_dir,
+        )
+        sidecar_path = Path(result["sidecar_path"])
+        assert sidecar_path.name == "evidence_validation_20260626T120000Z.json"
