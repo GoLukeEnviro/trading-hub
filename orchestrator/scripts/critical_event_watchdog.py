@@ -16,7 +16,7 @@ Usage: run as no_agent cron with deliver=telegram
   Silent when OK → only speaks when critical
 """
 
-import json, os, subprocess, sys
+import json, os, subprocess, sys, hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -192,8 +192,31 @@ def main() -> int:
         "System ist autonom — manuelles Eingreifen erforderlich.",
         "Full logs: orchestrator/state/",
     ]
-    
-    print("\n".join(lines))
+
+    alert_text = "\n".join(lines)
+
+    # Deduplication: suppress identical alerts within 2h
+    LAST_ALERT_FILE = STATE_DIR / ".critical_watchdog_last_alert.json"
+    alert_hash = hashlib.md5(alert_text.encode()).hexdigest()[:16]
+    now_ts = datetime.now(timezone.utc).timestamp()
+    should_send = True
+    if LAST_ALERT_FILE.exists():
+        try:
+            with open(LAST_ALERT_FILE) as f:
+                last = json.load(f)
+            if last.get("hash") == alert_hash:
+                age_min = (now_ts - last.get("ts", 0)) / 60
+                if age_min < 120:  # 2h cooldown
+                    should_send = False
+        except Exception:
+            pass
+    if should_send:
+        print(alert_text)
+        try:
+            with open(LAST_ALERT_FILE, "w") as f:
+                json.dump({"hash": alert_hash, "ts": now_ts}, f)
+        except Exception:
+            pass
     return 0
 
 
