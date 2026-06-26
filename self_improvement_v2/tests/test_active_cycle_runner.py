@@ -31,13 +31,9 @@ from si_v2.loop.fleet_analyzer import (
     analyze_fleet,
     fleet_decision_to_dict,
 )
-from si_v2.loop.telemetry_normalizer import (
-    normalize_raw_evidence,
-    to_bot_evidence,
-)
 
 if TYPE_CHECKING:
-    from _pytest.monkeypatch import MonkeyPatch
+    pass
 
 # ======================================================================
 # Helpers: build synthetic evidence for tests
