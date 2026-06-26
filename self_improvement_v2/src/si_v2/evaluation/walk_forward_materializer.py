@@ -26,7 +26,7 @@ Data sources consulted (read-only):
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
@@ -438,7 +438,6 @@ def _compute_from_trades(
 
     for t in closed_trades:
         pnl = _safe_float(t.get("close_profit_abs"))
-        profit_pct = _safe_float(t.get("close_profit"))
 
         total_pnl += pnl
 
@@ -480,7 +479,6 @@ def _determine_evaluation_status(
 
     Returns a tuple of (evaluation_status, promotion_blocked, reason_codes).
     """
-    reason_codes: list[str] = []
 
     # Check if we have ANY data at all
     has_tel = bool(tel_data)
@@ -699,7 +697,6 @@ def _resolve_repo_root() -> Path:
 
 def main() -> int:
     """Entry point for ``python -m si_v2.evaluation.walk_forward_materializer``."""
-    import sys
 
     result = materialize_walk_forward_metrics(persist=True)
     print(json.dumps(result.to_dict(), indent=2, sort_keys=True))

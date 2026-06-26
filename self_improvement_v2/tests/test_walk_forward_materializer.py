@@ -12,13 +12,11 @@ Covers:
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 from si_v2.evaluation.walk_forward_materializer import (
     EXPECTED_BOT_IDS,
     METRICS_SOURCE,
-    STATUS_INSUFFICIENT_EVIDENCE,
     STATUS_INSUFFICIENT_TRADES,
     STATUS_INVALID_METRICS,
     STATUS_MISSING_HISTORY,
@@ -580,7 +578,7 @@ class TestJsonOutput:
         wf_dir = repo_root / "self_improvement_v2" / "reports" / "phase2" / "walk_forward"
 
         # Persist
-        result = materialize_walk_forward_metrics(
+        materialize_walk_forward_metrics(
             cycle_id="test-persist",
             repo_root=repo_root,
             walk_forward_dir=wf_dir,
@@ -716,46 +714,46 @@ class TestDetermineEvaluationStatus:
     """Tests for _determine_evaluation_status logic."""
 
     def test_no_data_missing_history(self) -> None:
-        status, blocked, reasons = _determine_evaluation_status({}, {}, {})
+        status, blocked, _ = _determine_evaluation_status({}, {}, {})
         assert status == STATUS_MISSING_HISTORY
         assert blocked is True
 
     def test_zero_trades(self) -> None:
         tel_data = {"trade_count": 0, "net_profit_abs": 0.0}
-        status, blocked, reasons = _determine_evaluation_status(tel_data, {}, {})
+        status, blocked, _ = _determine_evaluation_status(tel_data, {}, {})
         assert status == STATUS_NO_TRADES
         assert blocked is True
 
     def test_insufficient_trades(self) -> None:
         tel_data = {"trade_count": 3, "net_profit_abs": 5.0}
-        status, blocked, reasons = _determine_evaluation_status(tel_data, {}, {})
+        status, blocked, _ = _determine_evaluation_status(tel_data, {}, {})
         assert status == STATUS_INSUFFICIENT_TRADES
         assert blocked is True
 
     def test_sufficient_trades(self) -> None:
         tel_data = {"trade_count": 10, "net_profit_abs": 50.0}
-        status, blocked, reasons = _determine_evaluation_status(tel_data, {}, {})
+        status, blocked, _ = _determine_evaluation_status(tel_data, {}, {})
         assert status == STATUS_PASS_REVIEW
         assert blocked is False
 
     def test_invalid_nan_in_trade_data(self) -> None:
         tel_data = {"trade_count": 10, "net_profit_abs": 50.0}
         trade_data = {"total_net_pnl": float("nan"), "profit_factor": 1.5, "win_rate": 50.0, "trade_count": 10}
-        status, blocked, reasons = _determine_evaluation_status(tel_data, trade_data, {})
+        status, blocked, _ = _determine_evaluation_status(tel_data, trade_data, {})
         assert status == STATUS_INVALID_METRICS
         assert blocked is True
 
     def test_invalid_inf_in_trade_data(self) -> None:
         tel_data = {"trade_count": 10, "net_profit_abs": 50.0}
         trade_data = {"total_net_pnl": 10.0, "profit_factor": float("inf"), "win_rate": 50.0, "trade_count": 10}
-        status, blocked, reasons = _determine_evaluation_status(tel_data, trade_data, {})
+        status, blocked, _ = _determine_evaluation_status(tel_data, trade_data, {})
         assert status == STATUS_INVALID_METRICS
         assert blocked is True
 
     def test_only_trade_data_sufficient(self) -> None:
         """Trade data alone (without telemetry) can produce PASS_REVIEW."""
         trade_data = {"trade_count": 15, "total_net_pnl": 100.0, "profit_factor": 2.0, "win_rate": 60.0}
-        status, blocked, reasons = _determine_evaluation_status({}, trade_data, {})
+        status, blocked, _ = _determine_evaluation_status({}, trade_data, {})
         assert status == STATUS_PASS_REVIEW
         assert blocked is False
 
@@ -764,7 +762,7 @@ class TestDetermineEvaluationStatus:
         tel_data = {}
         trade_data = {}
         prev = {"total_trades": 20, "max_drawdown_pct": 5.0}
-        status, blocked, reasons = _determine_evaluation_status(tel_data, trade_data, prev)
+        status, blocked, _ = _determine_evaluation_status(tel_data, trade_data, prev)
         assert status == STATUS_PASS_REVIEW
         assert blocked is False
 
@@ -782,8 +780,14 @@ class TestComputeFromTelemetry:
     def test_multiple_records(self) -> None:
         """Latest profit_abs is used when multiple records exist."""
         records = [
-            _make_tel_history([_make_tel_record("test-bot", profit_abs=5.0, trade_count=3, timestamp="2026-06-25T00:00:00Z")]),
-            _make_tel_history([_make_tel_record("test-bot", profit_abs=10.0, trade_count=8, timestamp="2026-06-26T00:00:00Z")]),
+            _make_tel_history([
+                _make_tel_record("test-bot", profit_abs=5.0, trade_count=3,
+                                timestamp="2026-06-25T00:00:00Z")
+            ]),
+            _make_tel_history([
+                _make_tel_record("test-bot", profit_abs=10.0, trade_count=8,
+                                timestamp="2026-06-26T00:00:00Z")
+            ]),
         ]
         result = _compute_from_telemetry("test-bot", records)
         assert result["net_profit_abs"] == 10.0  # latest
