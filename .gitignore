@@ -315,3 +315,17 @@ self_improvement_v2/reports/phase2/**
 # Explicit: per-bot SI v2 shadow runtime logs are generated artifacts and must stay untracked
 self_improvement_v2/reports/phase2/shadow_logs/*.jsonl
 polymarket-fadi/
+
+# ── Local Claude Code artifacts (plans, prompts, agent-local) ──
+# Agent-generated scratch files, never shared with the team.
+.claude/
+
+# ── pytest-cov outputs (regenerable, local-only) ──────────────
+.coverage
+coverage.json
+coverage.xml
+htmlcov/
+
+# ── SI-v2 runtime telemetry (real bot metrics, never commit) ──
+# Contains per-cycle profit/trade data for the four active SI-v2 bots.
+self_improvement_v2/state/
