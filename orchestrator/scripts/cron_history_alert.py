@@ -116,6 +116,7 @@ class RunResult:
     suppressed_by_cooldown: int
     suppressed_by_max_alerts: int
     rows_scanned: int
+    rows_filtered_by_lookback: int
     last_seen_id: int
 
 
@@ -179,6 +180,7 @@ def fetch_new_rows(
         "duration_ms",
         "script_path",
         "no_agent",
+        "created_at",  # used by lookback-window filter on first run
     ]
     if known_columns is None:
         known_columns = discover_columns(conn, table)
@@ -373,6 +375,39 @@ def cap_alerts(alerts: list[Alert], max_alerts: int) -> tuple[list[Alert], int]:
     return list(alerts[:max_alerts]), len(alerts) - max_alerts
 
 
+def is_within_lookback(
+    row: sqlite3.Row | dict,
+    *,
+    now_utc: _dt.datetime,
+    lookback_minutes: int,
+) -> bool:
+    """Return True if the row's timestamp is within the lookback window.
+
+    Prefers ``created_at`` (writer-set, monotonically the run completion
+    time) and falls back to ``started_at``. If both fail to parse, the
+    row is **included** conservatively — we never want to silently drop
+    an alert because of a malformed timestamp; the operator should
+    investigate the writer instead.
+
+    Returns True when ``lookback_minutes <= 0`` (no lookback = no filter).
+    """
+    if lookback_minutes <= 0:
+        return True
+    keys = row.keys() if hasattr(row, "keys") else row
+    cutoff = now_utc - _dt.timedelta(minutes=lookback_minutes)
+    for col in ("created_at", "started_at"):
+        ts = row[col] if col in keys else None
+        if not ts:
+            continue
+        try:
+            dt = _dt.datetime.fromisoformat(ts)
+        except ValueError:
+            continue
+        return dt >= cutoff
+    # Conservative fallback: include. Documented in the runbook.
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Render
 # ---------------------------------------------------------------------------
@@ -429,6 +464,19 @@ def run_alert_pipeline(
 
     Returns ``RunResult``. Does not write to stdout. Does not modify
     ``state_path`` unless ``commit_state=True``.
+
+    Lookback semantics:
+
+    * When the state file is fresh (``last_seen_id == 0``) AND
+      ``lookback_minutes > 0``, only rows whose ``created_at`` (or
+      ``started_at`` fallback) is within the lookback window are
+      considered. This prevents a fresh-state first run from alerting
+      on historical failures from days/weeks ago.
+    * When the state file already has a cursor (``last_seen_id > 0``),
+      the lookback is irrelevant — only ``id > last_seen_id`` rows
+      are considered, which by definition are recent.
+    * When ``lookback_minutes <= 0``, no time filter is applied even
+      on a fresh state (legacy behaviour; not recommended).
     """
     if now_utc is None:
         now_utc = _dt.datetime.now(_dt.timezone.utc)
@@ -436,16 +484,15 @@ def run_alert_pipeline(
     state = load_state(state_path)
     last_seen_id_before = int(state.get("last_seen_id", 0))
 
-    # If the cursor is fresh, start from a lookback window
-    if last_seen_id_before == 0 and lookback_minutes > 0:
-        # Use a synthetic cursor by computing min id; simpler: just
-        # fetch all rows and let dedup-by-cooldown handle noise on
-        # the first run. The cooldown will suppress back-log.
-        after_id = 0
-    else:
-        after_id = last_seen_id_before
+    # Cursor strategy:
+    # - Fresh state (no cursor): scan from row id 0 but apply time filter
+    #   via is_within_lookback() below.
+    # - Existing cursor: only consider rows past the cursor (no time
+    #   filter — by construction those rows are recent).
+    after_id = last_seen_id_before
 
     rows_scanned = 0
+    rows_filtered_by_lookback = 0
     new_alerts: list[Alert] = []
     last_seen_id_after = after_id
 
@@ -454,8 +501,14 @@ def run_alert_pipeline(
         rows = fetch_new_rows(conn, after_id, known_columns=known_cols)
 
     rows_scanned = len(rows)
+    apply_lookback = (last_seen_id_before == 0 and lookback_minutes > 0)
     for row in rows:
         last_seen_id_after = max(last_seen_id_after, row["id"])
+        if apply_lookback and not is_within_lookback(
+            row, now_utc=now_utc, lookback_minutes=lookback_minutes
+        ):
+            rows_filtered_by_lookback += 1
+            continue
         severity, _normalised = classify_status(row["status"])
         if severity == "ok":
             continue
@@ -507,6 +560,7 @@ def run_alert_pipeline(
         suppressed_by_cooldown=suppressed_by_cooldown,
         suppressed_by_max_alerts=suppressed_by_max,
         rows_scanned=rows_scanned,
+        rows_filtered_by_lookback=rows_filtered_by_lookback,
         last_seen_id=last_seen_id_after,
     )
 
@@ -549,19 +603,28 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--dry-run",
         action="store_true",
-        default=True,
-        help="Do not write state file (DEFAULT).",
+        default=False,
+        help="Alias for omitting --commit-state. State is never written. "
+        "Mutually exclusive with --commit-state.",
     )
     p.add_argument(
         "--commit-state",
         action="store_true",
-        help="Persist state changes after this run (opt-in, future runtime use).",
+        help="Persist state changes after this run. Mutually exclusive with --dry-run.",
     )
     p.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
         help="Output format.",
+    )
+    p.add_argument(
+        "--now-utc",
+        type=str,
+        default=None,
+        help="Override now_utc for deterministic runs (ISO 8601 UTC). "
+        "Defaults to current system time. Used by tests and by operators "
+        "who want reproducible alert runs against historical data.",
     )
     p.add_argument(
         "--print-summary",
@@ -571,8 +634,34 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _parse_now_utc_arg(value: str | None) -> _dt.datetime | None:
+    """Parse --now-utc value. Returns None if value is None."""
+    if value is None:
+        return None
+    try:
+        dt = _dt.datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise SystemExit(f"error: --now-utc value {value!r} is not a valid ISO 8601 timestamp: {exc}")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_dt.timezone.utc)
+    return dt
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    # Mutual exclusion: --dry-run and --commit-state are opposites.
+    if args.dry_run and args.commit_state:
+        print(
+            "error: --dry-run and --commit-state are mutually exclusive. "
+            "Use --commit-state only when you intend to write the state "
+            "file (e.g. inside a scheduled cron job).",
+            file=sys.stderr,
+        )
+        return EXIT_STATE_ERROR
+
+    now_utc = _parse_now_utc_arg(args.now_utc)
+
     try:
         result = run_alert_pipeline(
             args.db,
@@ -581,6 +670,7 @@ def main(argv: list[str] | None = None) -> int:
             lookback_minutes=args.lookback_minutes,
             max_alerts=args.max_alerts,
             commit_state=args.commit_state,
+            now_utc=now_utc,
         )
     except FileNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -603,6 +693,7 @@ def main(argv: list[str] | None = None) -> int:
             f"cooldown_suppressed={result.suppressed_by_cooldown} "
             f"max_alerts_suppressed={result.suppressed_by_max_alerts} "
             f"rows_scanned={result.rows_scanned} "
+            f"rows_filtered_by_lookback={result.rows_filtered_by_lookback} "
             f"last_seen_id={result.last_seen_id}",
             file=sys.stderr,
         )

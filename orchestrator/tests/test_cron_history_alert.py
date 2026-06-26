@@ -28,6 +28,7 @@ from orchestrator.scripts.cron_history_alert import (
     empty_state,
     fetch_new_rows,
     filter_by_cooldown,
+    is_within_lookback,
     load_state,
     render_json,
     render_text,
@@ -143,15 +144,33 @@ def ok_db(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def mixed_db(tmp_path: Path) -> Path:
+    """DB with a mix of ok / error / failed / timeout / weird rows.
+
+    Each row has a distinct ``created_at`` that is 5 seconds AFTER its
+    ``started_at`` (mimicking real writer behaviour where the row is
+    written just after the run starts). This avoids the lookback filter
+    accidentally dropping the row when ``created_at`` is a fixed
+    sentinel that happens to fall outside the test window.
+    """
     db = tmp_path / "cron_history.sqlite"
     rows = [
-        {"id": 1, "job_id": "ok1", "started_at": "2026-06-26T13:00:00+00:00", "status": "ok", "created_at": "2026-06-26T13:00:00+00:00"},
-        {"id": 2, "job_id": "err1", "started_at": "2026-06-26T13:01:00+00:00", "status": "error", "error_excerpt": "boom", "created_at": "2026-06-26T13:01:00+00:00"},
-        {"id": 3, "job_id": "err1", "started_at": "2026-06-26T13:02:00+00:00", "status": "error", "error_excerpt": "boom", "created_at": "2026-06-26T13:02:00+00:00"},
-        {"id": 4, "job_id": "err2", "started_at": "2026-06-26T13:03:00+00:00", "status": "failed", "error_excerpt": "different", "created_at": "2026-06-26T13:03:00+00:00"},
-        {"id": 5, "job_id": "err3", "started_at": "2026-06-26T13:04:00+00:00", "status": "timeout", "created_at": "2026-06-26T13:04:00+00:00"},
-        {"id": 6, "job_id": "warn1", "started_at": "2026-06-26T13:05:00+00:00", "status": "weird_status", "created_at": "2026-06-26T13:05:00+00:00"},
-        {"id": 7, "job_id": "ok2", "started_at": "2026-06-26T13:06:00+00:00", "status": "ok", "created_at": "2026-06-26T13:06:00+00:00"},
+        {"id": 1, "job_id": "ok1", "started_at": "2026-06-26T13:00:00+00:00",
+         "status": "ok", "created_at": "2026-06-26T13:00:05+00:00"},
+        {"id": 2, "job_id": "err1", "started_at": "2026-06-26T13:01:00+00:00",
+         "status": "error", "error_excerpt": "boom",
+         "created_at": "2026-06-26T13:01:05+00:00"},
+        {"id": 3, "job_id": "err1", "started_at": "2026-06-26T13:02:00+00:00",
+         "status": "error", "error_excerpt": "boom",
+         "created_at": "2026-06-26T13:02:05+00:00"},
+        {"id": 4, "job_id": "err2", "started_at": "2026-06-26T13:03:00+00:00",
+         "status": "failed", "error_excerpt": "different",
+         "created_at": "2026-06-26T13:03:05+00:00"},
+        {"id": 5, "job_id": "err3", "started_at": "2026-06-26T13:04:00+00:00",
+         "status": "timeout", "created_at": "2026-06-26T13:04:05+00:00"},
+        {"id": 6, "job_id": "warn1", "started_at": "2026-06-26T13:05:00+00:00",
+         "status": "weird_status", "created_at": "2026-06-26T13:05:05+00:00"},
+        {"id": 7, "job_id": "ok2", "started_at": "2026-06-26T13:06:00+00:00",
+         "status": "ok", "created_at": "2026-06-26T13:06:05+00:00"},
     ]
     _make_db(db, rows)
     return db
@@ -160,6 +179,34 @@ def mixed_db(tmp_path: Path) -> Path:
 @pytest.fixture
 def fixed_now() -> _dt.datetime:
     return _dt.datetime(2026, 6, 26, 14, 0, 0, tzinfo=_dt.timezone.utc)
+
+
+@pytest.fixture
+def date_spaced_db(tmp_path: Path) -> Path:
+    """DB with one row each from: 14 hours ago, 90 minutes ago, 30 minutes
+    ago, and 5 minutes ago. Fixed_now is 2026-06-26T14:00 UTC.
+    """
+    db = tmp_path / "cron_history.sqlite"
+    rows = [
+        # OLD: 14 hours ago -> outside any reasonable lookback window
+        {"id": 1, "job_id": "old_err", "started_at": "2026-06-26T00:00:00+00:00",
+         "created_at": "2026-06-26T00:00:00+00:00", "status": "error",
+         "error_excerpt": "old", "job_name": "old_err"},
+        # 90 minutes ago -> outside 60-min lookback
+        {"id": 2, "job_id": "med_err", "started_at": "2026-06-26T12:30:00+00:00",
+         "created_at": "2026-06-26T12:30:00+00:00", "status": "error",
+         "error_excerpt": "medium", "job_name": "med_err"},
+        # 30 minutes ago -> inside 60-min lookback
+        {"id": 3, "job_id": "fresh_err", "started_at": "2026-06-26T13:30:00+00:00",
+         "created_at": "2026-06-26T13:30:00+00:00", "status": "error",
+         "error_excerpt": "fresh", "job_name": "fresh_err"},
+        # 5 minutes ago -> inside lookback
+        {"id": 4, "job_id": "latest_err", "started_at": "2026-06-26T13:55:00+00:00",
+         "created_at": "2026-06-26T13:55:00+00:00", "status": "failed",
+         "error_excerpt": "latest", "job_name": "latest_err"},
+    ]
+    _make_db(db, rows)
+    return db
 
 
 # ---------------------------------------------------------------------------
@@ -493,7 +540,58 @@ class TestRenderJson:
 
 
 # ---------------------------------------------------------------------------
-# End-to-end pipeline (run_alert_pipeline)
+# is_within_lookback (Fix 1)
+# ---------------------------------------------------------------------------
+
+
+class TestIsWithinLookback:
+    def test_zero_lookback_includes_everything(self, fixed_now):
+        row = {"created_at": "2000-01-01T00:00:00+00:00", "started_at": "2000-01-01T00:00:00+00:00"}
+        assert is_within_lookback(row, now_utc=fixed_now, lookback_minutes=0) is True
+
+    def test_negative_lookback_includes_everything(self, fixed_now):
+        row = {"created_at": "2000-01-01T00:00:00+00:00"}
+        assert is_within_lookback(row, now_utc=fixed_now, lookback_minutes=-1) is True
+
+    def test_recent_created_at_is_within_window(self, fixed_now):
+        # fixed_now = 2026-06-26T14:00 UTC. created_at 13:30 -> 30 min ago.
+        row = {"created_at": "2026-06-26T13:30:00+00:00", "started_at": "2026-06-26T13:30:00+00:00"}
+        assert is_within_lookback(row, now_utc=fixed_now, lookback_minutes=60) is True
+
+    def test_old_created_at_is_outside_window(self, fixed_now):
+        row = {"created_at": "2026-06-25T14:00:00+00:00", "started_at": "2026-06-25T14:00:00+00:00"}
+        assert is_within_lookback(row, now_utc=fixed_now, lookback_minutes=60) is False
+
+    def test_falls_back_to_started_at_when_created_at_missing(self, fixed_now):
+        row = {"started_at": "2026-06-26T13:30:00+00:00"}
+        assert is_within_lookback(row, now_utc=fixed_now, lookback_minutes=60) is True
+
+    def test_malformed_timestamps_include_conservatively(self, fixed_now):
+        # If we cannot parse, we INCLUDE rather than silently drop the row.
+        # This protects against the writer producing bad data; the operator
+        # must investigate.
+        row = {"created_at": "not a date", "started_at": "also not a date"}
+        assert is_within_lookback(row, now_utc=fixed_now, lookback_minutes=60) is True
+
+    def test_empty_timestamps_include_conservatively(self, fixed_now):
+        row = {"created_at": "", "started_at": ""}
+        assert is_within_lookback(row, now_utc=fixed_now, lookback_minutes=60) is True
+
+    def test_works_with_sqlite_row(self, fixed_now):
+        # Real sqlite3.Row from fetch_new_rows has .keys() and __getitem__.
+        import sqlite3 as _sq
+        conn = _sq.connect(":memory:")
+        conn.execute("CREATE TABLE t (id INTEGER, created_at TEXT, started_at TEXT)")
+        conn.execute("INSERT INTO t VALUES (1, '2026-06-26T13:30:00+00:00', '2026-06-26T13:25:00+00:00')")
+        conn.row_factory = _sq.Row
+        row = conn.execute("SELECT * FROM t WHERE id=1").fetchone()
+        conn.close()
+        # created_at is within 60 min of fixed_now (14:00)
+        assert is_within_lookback(row, now_utc=fixed_now, lookback_minutes=60) is True
+
+
+# ---------------------------------------------------------------------------
+# End-to-end pipeline (run_alert_pipeline) — Fix 1 (lookback) + Fix 2 (commit/dry-run)
 # ---------------------------------------------------------------------------
 
 
@@ -537,10 +635,12 @@ class TestRunAlertPipeline:
 
     def test_cooldown_suppresses_duplicates(self, mixed_db, tmp_path, fixed_now):
         # Pre-warm: run once with commit to populate state at fixed_now.
+        # lookback_minutes=0 so this test isolates the cooldown behaviour
+        # from the time-window filter (which is tested separately above).
         state_path = tmp_path / "state.json"
         run_alert_pipeline(
             mixed_db, state_path,
-            cooldown_seconds=1800, lookback_minutes=60, max_alerts=10,
+            cooldown_seconds=1800, lookback_minutes=0, max_alerts=10,
             now_utc=fixed_now, commit_state=True,
         )
         # Now simulate a later run by deleting the cursor but keeping the
@@ -550,14 +650,14 @@ class TestRunAlertPipeline:
         data["last_seen_id"] = 0  # re-scan everything
         state_path.write_text(json.dumps(data))
 
-        # Run at fixed_now + 5 minutes -> all dedup keys still in cooldown.
-        later = fixed_now + _dt.timedelta(minutes=5)
+        # Run at fixed_now (same wall-clock) -> all dedup keys still in cooldown.
         result = run_alert_pipeline(
             mixed_db, state_path,
-            cooldown_seconds=1800, lookback_minutes=60, max_alerts=10,
-            now_utc=later, commit_state=True,
+            cooldown_seconds=1800, lookback_minutes=0, max_alerts=10,
+            now_utc=fixed_now, commit_state=True,
         )
         assert result.rows_scanned == 7  # re-scanned
+        assert result.rows_filtered_by_lookback == 0  # lookback disabled for this test
         assert result.new_alerts == []
         # 5 alert-worthy rows in mixed_db all hit the cooldown (err1
         # contributes two rows with the same dedup_key but each row is
@@ -624,6 +724,96 @@ class TestRunAlertPipeline:
         # 4 unique alert-worthy rows after dedup
         assert result.rows_scanned == 7
 
+    # ---- Fix 1: real --lookback-minutes behaviour on fresh state ----
+
+    def test_lookback_excludes_old_rows_on_fresh_state(self, date_spaced_db, tmp_path, fixed_now):
+        """Old rows (14h ago) must NOT be alerted when state is fresh and
+        lookback is 60 minutes."""
+        state_path = tmp_path / "does_not_exist.json"
+        result = run_alert_pipeline(
+            date_spaced_db, state_path,
+            cooldown_seconds=0, lookback_minutes=60, max_alerts=100,
+            now_utc=fixed_now,
+        )
+        assert result.rows_scanned == 4
+        assert result.rows_filtered_by_lookback == 2  # old_err + med_err
+        # Only the two recent rows should produce alerts
+        assert len(result.new_alerts) == 2
+        alerted_ids = {a.job_id for a in result.new_alerts}
+        assert alerted_ids == {"fresh_err", "latest_err"}
+
+    def test_lookback_zero_includes_all_rows(self, date_spaced_db, tmp_path, fixed_now):
+        """lookback_minutes=0 means 'no time filter' — all rows are considered
+        even on fresh state."""
+        state_path = tmp_path / "does_not_exist.json"
+        result = run_alert_pipeline(
+            date_spaced_db, state_path,
+            cooldown_seconds=0, lookback_minutes=0, max_alerts=100,
+            now_utc=fixed_now,
+        )
+        assert result.rows_scanned == 4
+        assert result.rows_filtered_by_lookback == 0
+        assert len(result.new_alerts) == 4
+
+    def test_lookback_long_enough_includes_all(self, date_spaced_db, tmp_path, fixed_now):
+        """lookback_minutes=1440 (24h) covers everything in the fixture."""
+        state_path = tmp_path / "does_not_exist.json"
+        result = run_alert_pipeline(
+            date_spaced_db, state_path,
+            cooldown_seconds=0, lookback_minutes=1440, max_alerts=100,
+            now_utc=fixed_now,
+        )
+        assert result.rows_filtered_by_lookback == 0
+        assert len(result.new_alerts) == 4
+
+    def test_lookback_skipped_when_cursor_present(self, date_spaced_db, tmp_path, fixed_now):
+        """If state already has a cursor, lookback_minutes is ignored and
+        all rows past the cursor are considered (by construction they are
+        recent)."""
+        state_path = tmp_path / "state.json"
+        # Pre-warm with commit so a cursor exists.
+        run_alert_pipeline(
+            date_spaced_db, state_path,
+            cooldown_seconds=0, lookback_minutes=60, max_alerts=100,
+            now_utc=fixed_now, commit_state=True,
+        )
+        # Force a re-scan of everything by clearing the cursor in the state
+        # file. Wait — that makes it "fresh state" again. To test "cursor
+        # present", we need to NOT reset the cursor.
+        # Instead: simulate "history already seen, lookback must not apply"
+        # by adding an OLD row past the cursor.
+        import sqlite3 as _sq
+        conn = _sq.connect(str(date_spaced_db))
+        try:
+            conn.execute(
+                """
+                INSERT INTO cron_runs
+                  (id, job_id, job_name, no_agent, script_path, delivery_mode,
+                   started_at, finished_at, duration_ms, status, exit_code,
+                   timeout, stdout_excerpt, stderr_excerpt, error_excerpt,
+                   created_at)
+                VALUES (?, ?, ?, 0, '', '', '2025-01-01T00:00:00+00:00', NULL,
+                        NULL, 'error', NULL, 0, NULL, NULL, 'very_old', '2025-01-01T00:00:00+00:00')
+                """,
+                (99, "very_old_err", "very_old_err"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Now run with state cursor present, lookback=60. The new old row
+        # has id=99 > last_seen_id=4, so it should be alerted despite being
+        # ancient in wall-clock time. This proves the lookback does NOT
+        # apply once a cursor is present.
+        result = run_alert_pipeline(
+            date_spaced_db, state_path,
+            cooldown_seconds=0, lookback_minutes=60, max_alerts=100,
+            now_utc=fixed_now,
+        )
+        assert result.rows_scanned == 1  # only id=99 (id > last_seen_id=4)
+        assert result.rows_filtered_by_lookback == 0  # cursor present -> no time filter
+        assert {a.job_id for a in result.new_alerts} == {"very_old_err"}
+
 
 # ---------------------------------------------------------------------------
 # main() CLI smoke test
@@ -650,6 +840,8 @@ class TestMainCLI:
 
     def test_mixed_db_text_format(self, mixed_db, tmp_path, capsys, monkeypatch):
         state_path = tmp_path / "state.json"
+        # --now-utc pins time to 14:00 UTC so the lookback window
+        # (default 60 min, cutoff 13:00) reliably includes all rows.
         monkeypatch.setattr("sys.argv", [
             "cron_history_alert.py",
             "--db", str(mixed_db),
@@ -657,6 +849,7 @@ class TestMainCLI:
             "--cooldown-seconds", "0",
             "--max-alerts", "10",
             "--dry-run",
+            "--now-utc", "2026-06-26T14:00:00+00:00",
         ])
         from orchestrator.scripts import cron_history_alert
         rc = cron_history_alert.main()
@@ -682,6 +875,7 @@ class TestMainCLI:
 
     def test_json_format(self, mixed_db, tmp_path, capsys, monkeypatch):
         state_path = tmp_path / "state.json"
+        # --now-utc pins time so lookback window is deterministic.
         monkeypatch.setattr("sys.argv", [
             "cron_history_alert.py",
             "--db", str(mixed_db),
@@ -690,6 +884,7 @@ class TestMainCLI:
             "--max-alerts", "10",
             "--format", "json",
             "--dry-run",
+            "--now-utc", "2026-06-26T14:00:00+00:00",
         ])
         from orchestrator.scripts import cron_history_alert
         rc = cron_history_alert.main()
@@ -699,6 +894,19 @@ class TestMainCLI:
         assert isinstance(data, list)
         assert len(data) >= 1
         assert "dedup_key" in data[0]
+
+
+    def test_now_utc_invalid_value_exits(self, mixed_db, tmp_path, capsys, monkeypatch):
+        state_path = tmp_path / "state.json"
+        monkeypatch.setattr("sys.argv", [
+            "cron_history_alert.py",
+            "--db", str(mixed_db),
+            "--state", str(state_path),
+            "--now-utc", "not-a-date",
+        ])
+        from orchestrator.scripts import cron_history_alert
+        with pytest.raises(SystemExit):
+            cron_history_alert.main()
 
     def test_missing_db_exits_2(self, tmp_path, capsys, monkeypatch):
         state_path = tmp_path / "state.json"
@@ -710,3 +918,84 @@ class TestMainCLI:
         from orchestrator.scripts import cron_history_alert
         rc = cron_history_alert.main()
         assert rc == 2
+
+    # ---- Fix 2: --dry-run / --commit-state mutual exclusion ----
+
+    def test_dry_run_commit_state_mutually_exclusive(
+        self, mixed_db, tmp_path, capsys, monkeypatch
+    ):
+        """--dry-run and --commit-state together must exit 2 and write
+        nothing. This protects an operator who reads "--dry-run" as
+        "do not persist" from accidentally writing state."""
+        state_path = tmp_path / "state.json"
+        monkeypatch.setattr("sys.argv", [
+            "cron_history_alert.py",
+            "--db", str(mixed_db),
+            "--state", str(state_path),
+            "--cooldown-seconds", "0",
+            "--dry-run",
+            "--commit-state",
+        ])
+        from orchestrator.scripts import cron_history_alert
+        rc = cron_history_alert.main()
+        assert rc == 2
+        assert not state_path.exists()
+        captured = capsys.readouterr()
+        assert "mutually exclusive" in captured.err
+
+    def test_dry_run_alone_never_writes_state(
+        self, mixed_db, tmp_path, capsys, monkeypatch
+    ):
+        """--dry-run alone (default in many invocations) must not write
+        the state file even if alerts are present."""
+        state_path = tmp_path / "state.json"
+        monkeypatch.setattr("sys.argv", [
+            "cron_history_alert.py",
+            "--db", str(mixed_db),
+            "--state", str(state_path),
+            "--cooldown-seconds", "0",
+            "--max-alerts", "10",
+            "--dry-run",
+        ])
+        from orchestrator.scripts import cron_history_alert
+        rc = cron_history_alert.main()
+        assert rc == 0
+        # State file MUST NOT be created by a dry-run.
+        assert not state_path.exists()
+
+    def test_no_flags_means_no_state_write(
+        self, mixed_db, tmp_path, capsys, monkeypatch
+    ):
+        """With neither --dry-run nor --commit-state, the tool must NOT
+        write the state file. State writes require explicit --commit-state."""
+        state_path = tmp_path / "state.json"
+        monkeypatch.setattr("sys.argv", [
+            "cron_history_alert.py",
+            "--db", str(mixed_db),
+            "--state", str(state_path),
+            "--cooldown-seconds", "0",
+            "--max-alerts", "10",
+        ])
+        from orchestrator.scripts import cron_history_alert
+        rc = cron_history_alert.main()
+        assert rc == 0
+        assert not state_path.exists()
+
+    def test_commit_state_alone_writes_state(
+        self, mixed_db, tmp_path, capsys, monkeypatch
+    ):
+        """--commit-state alone must persist state. This is the only path
+        that writes the state file."""
+        state_path = tmp_path / "state.json"
+        monkeypatch.setattr("sys.argv", [
+            "cron_history_alert.py",
+            "--db", str(mixed_db),
+            "--state", str(state_path),
+            "--cooldown-seconds", "0",
+            "--max-alerts", "10",
+            "--commit-state",
+        ])
+        from orchestrator.scripts import cron_history_alert
+        rc = cron_history_alert.main()
+        assert rc == 0
+        assert state_path.exists()
