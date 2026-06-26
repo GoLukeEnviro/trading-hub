@@ -10,6 +10,11 @@ v2 Changes (2026-05-22 Cron Wiring Repair):
   - Docker exec as fallback (when Docker socket available)
   - Graceful degradation: no false "unreachable" when Docker absent
 
+v2.1 Changes (2026-06-26 Cron History Repair):
+  - DB_PATH moved from read-only Git mount to canonical state directory
+  - Added HERMES_HEARTBEAT_DB_PATH env var override
+  - Clear PermissionError on unwritable path
+
 Usage: python3 heartbeat_writer.py
   - stderr: log messages
   - stdout: silent when all OK
@@ -17,6 +22,7 @@ Usage: python3 heartbeat_writer.py
 """
 
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -25,7 +31,12 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
-DB_PATH = Path("/home/hermes/projects/trading/orchestrator/state/hermes_heartbeat.sqlite")
+# Canonical DB path in writable state directory
+# Override via HERMES_HEARTBEAT_DB_PATH env var for testing
+DB_PATH = Path(os.environ.get(
+    "HERMES_HEARTBEAT_DB_PATH",
+    "/opt/data/profiles/orchestrator/state/hermes_heartbeat.sqlite"
+))
 
 BOTS = [
     {
