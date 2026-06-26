@@ -22,6 +22,7 @@ import json
 import os
 import subprocess
 import sys
+import hashlib
 from datetime import datetime, timezone
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -281,7 +282,32 @@ def main():
     )
 
     if has_issues:
-        print(report)
+        # Deduplication: suppress identical reports within 4h
+        LAST_ALERT_FILE = os.path.join(os.path.dirname(__file__), "..", "state", "fleet_auto_repair_last_alert.json")
+        LAST_ALERT_FILE = os.path.normpath(LAST_ALERT_FILE)
+        # Strip timestamp line from hash for stable dedup
+        report_body = report.split('\n', 1)[1] if '\n' in report else report
+        alert_hash = hashlib.md5(report_body.encode()).hexdigest()[:16]
+        now_ts = datetime.now(timezone.utc).timestamp()
+        should_send = True
+        if os.path.exists(LAST_ALERT_FILE):
+            try:
+                with open(LAST_ALERT_FILE) as f:
+                    last = json.load(f)
+                if last.get("hash") == alert_hash:
+                    age_min = (now_ts - last.get("ts", 0)) / 60
+                    if age_min < 240:  # 4h cooldown
+                        should_send = False
+            except Exception:
+                pass
+        if should_send:
+            print(report)
+            try:
+                os.makedirs(os.path.dirname(LAST_ALERT_FILE), exist_ok=True)
+                with open(LAST_ALERT_FILE, "w") as f:
+                    json.dump({"hash": alert_hash, "ts": now_ts}, f)
+            except Exception:
+                pass
     # Silent exit if healthy (no stdout = no delivery via cron)
 
 
