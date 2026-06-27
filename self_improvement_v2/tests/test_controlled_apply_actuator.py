@@ -27,6 +27,7 @@ from si_v2.apply_actuator.controlled_apply_actuator import (
     ControlledApplyDecision,
     CooldownState,
     check_canary_bot,
+    check_candidate_compatibility,
     check_cooldown,
     check_dry_run,
     check_human_approval,
@@ -533,3 +534,160 @@ class TestSummarize:
         assert s["measurement_allowed"] is False
         assert s["runtime_visible"] is False
         assert s["runtime_proof_status"] == "NOT_RUN"
+
+
+# -- 7. Candidate Compatibility Gate ------------------------------------------
+
+
+class TestCandidateCompatibilityGate:
+    """Tests for Gate 9: candidate compatibility with runtime config."""
+
+    def test_pass_when_key_exists_and_baseline_matches(self) -> None:
+        """PASS when overlay key exists in pre_apply_config and current
+        value matches expected baseline."""
+        result = check_candidate_compatibility(
+            {"max_open_trades": 4},
+            pre_apply_config={"max_open_trades": 3, "dry_run": True},
+            expected_baselines={"max_open_trades": 3},
+        )
+        assert result.passed
+        assert "proven baselines" in result.reason.lower()
+
+    def test_pass_when_key_exists_no_baseline_required(self) -> None:
+        """PASS when overlay key exists and no expected baseline is required."""
+        result = check_candidate_compatibility(
+            {"max_open_trades": 4},
+            pre_apply_config={"max_open_trades": 3, "dry_run": True},
+        )
+        assert result.passed
+
+    def test_block_when_key_absent_from_pre_apply_config(self) -> None:
+        """BLOCK when overlay key is absent from pre_apply_config."""
+        result = check_candidate_compatibility(
+            {"cooldown_candles": 4},
+            pre_apply_config={"max_open_trades": 3, "dry_run": True},
+        )
+        assert not result.passed
+        assert "absent" in result.reason.lower()
+
+    def test_block_when_key_value_is_none(self) -> None:
+        """BLOCK when overlay key exists but value is None."""
+        result = check_candidate_compatibility(
+            {"cooldown_candles": 4},
+            pre_apply_config={"cooldown_candles": None, "dry_run": True},
+        )
+        assert not result.passed
+        assert "none" in result.reason.lower()
+
+    def test_block_when_expected_baseline_differs(self) -> None:
+        """BLOCK when expected current value differs from runtime value."""
+        result = check_candidate_compatibility(
+            {"max_open_trades": 4},
+            pre_apply_config={"max_open_trades": 5, "dry_run": True},
+            expected_baselines={"max_open_trades": 3},
+        )
+        assert not result.passed
+        assert "baseline mismatch" in result.reason.lower()
+
+    def test_block_f68a_candidate_when_runtime_value_is_none(self) -> None:
+        """BLOCK f68a031923d0-like cooldown_candles candidate when runtime
+        value is None or absent — the core regression test."""
+        result = check_candidate_compatibility(
+            {"cooldown_candles": 4},
+            pre_apply_config={
+                "dry_run": True,
+                "max_open_trades": 3,
+                "cooldown_candles": None,
+            },
+            expected_baselines={"cooldown_candles": 3},
+        )
+        assert not result.passed
+        assert "none" in result.reason.lower() or "baseline mismatch" in result.reason.lower()
+
+    def test_block_when_pre_apply_config_is_none(self) -> None:
+        """BLOCK when pre_apply_config is not provided."""
+        result = check_candidate_compatibility(
+            {"max_open_trades": 4},
+            pre_apply_config=None,
+        )
+        assert not result.passed
+        assert "not provided" in result.reason.lower()
+
+    def test_multiple_failures_reported(self) -> None:
+        """All failures are reported, not just the first."""
+        result = check_candidate_compatibility(
+            {"cooldown_candles": 4, "rsi_period": 20},
+            pre_apply_config={"rsi_period": None, "dry_run": True},
+        )
+        assert not result.passed
+        assert "cooldown_candles" in result.reason
+        assert "rsi_period" in result.reason
+
+
+class TestCompatibilityGateInReadiness:
+    """Verify compatibility gate appears in readiness report and
+    prevents ready status even if safe_parameters passes."""
+
+    def test_compatibility_gate_appears_in_report(self) -> None:
+        """Verify compatibility_gate field exists in readiness report."""
+        report = check_readiness(
+            "abc", CANARY_BOT_ID, {"max_open_trades": 4},
+            state_dir=Path("/tmp/test_compat_gate"),
+            kill_switch_path=None,
+            riskguard_status="PASS",
+            pre_apply_config={"max_open_trades": 3, "dry_run": True},
+        )
+        d = report.to_dict()
+        assert "compatibility_gate" in d
+        assert isinstance(d["compatibility_gate"], dict)
+        assert "passed" in d["compatibility_gate"]
+        assert "reason" in d["compatibility_gate"]
+
+    def test_compatibility_failure_prevents_ready_even_if_safe_params_pass(
+        self, canary: str, l3_token: None, tmp_dir: dict[str, Path],
+    ) -> None:
+        """Compatibility failure prevents ready status even if
+        safe_parameters passes."""
+        tmp_dir["state"].mkdir(parents=True, exist_ok=True)
+        ks = tmp_dir["state"] / "kill_switch.json"
+        ks.write_text(json.dumps({"mode": "NORMAL"}))
+        report = check_readiness(
+            "f68a031923d0", canary,
+            {"cooldown_candles": 4},
+            requires_human_approval=True,
+            state_dir=tmp_dir["state"],
+            kill_switch_path=ks,
+            riskguard_status="PASS",
+            pre_apply_config={
+                "dry_run": True,
+                "max_open_trades": 3,
+                "cooldown_candles": None,
+            },
+        )
+        # safe_parameters should pass (cooldown_candles=4 is in SAFE_PARAMETERS)
+        assert report.safe_parameters_gate.passed
+        # compatibility gate should block
+        assert not report.compatibility_gate.passed
+        # overall should not be ready
+        assert not report.ready
+
+    def test_ready_when_compatibility_passes(
+        self, canary: str, overlay: dict[str, int],
+        pre_cfg: dict[str, object], l3_token: None,
+        tmp_dir: dict[str, Path],
+    ) -> None:
+        """Full readiness passes when compatibility gate passes."""
+        tmp_dir["state"].mkdir(parents=True, exist_ok=True)
+        ks = tmp_dir["state"] / "kill_switch.json"
+        ks.write_text(json.dumps({"mode": "NORMAL"}))
+        report = check_readiness(
+            "f68a031923d0", canary, overlay,
+            requires_human_approval=True,
+            state_dir=tmp_dir["state"],
+            kill_switch_path=ks,
+            riskguard_status="PASS",
+            pre_apply_config=pre_cfg,
+        )
+        assert report.ready, (
+            f"Should be ready. Compatibility: {report.compatibility_gate.reason}"
+        )

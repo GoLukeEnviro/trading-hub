@@ -118,6 +118,9 @@ class ReadinessReport:
     dry_run_gate: GateResult = field(
         default_factory=lambda: GateResult(False, "not checked")
     )
+    compatibility_gate: GateResult = field(
+        default_factory=lambda: GateResult(False, "not checked")
+    )
     planned_overlay_path: str = ""
     ready: bool = False
 
@@ -126,7 +129,7 @@ class ReadinessReport:
         for name in (
             "canary_gate", "safe_parameters_gate", "kill_switch_gate",
             "riskguard_gate", "human_approval_gate", "token_gate",
-            "cooldown_gate", "dry_run_gate",
+            "cooldown_gate", "dry_run_gate", "compatibility_gate",
         ):
             gate: GateResult = getattr(self, name)
             gates[name] = {"passed": gate.passed, "reason": gate.reason}
@@ -470,6 +473,69 @@ def check_dry_run(
     )
 
 
+def check_candidate_compatibility(
+    parameter_overlay: Mapping[str, object],
+    pre_apply_config: dict[str, object] | None,
+    expected_baselines: Mapping[str, object] | None = None,
+) -> GateResult:
+    """Gate 9: Candidate compatibility with runtime config.
+
+    Blocks candidates whose overlay keys are:
+      - absent from pre_apply_config (no runtime consumer), OR
+      - present but value is None (no proven baseline), OR
+      - expected_baselines supplied and the runtime value differs.
+
+    This gate prevents applying a candidate whose claimed baseline
+    does not match what the runtime actually exposes.  For example,
+    cooldown_candles=3 -> 4 is blocked when the runtime config has
+    cooldown_candles=None or no cooldown_candles key at all.
+
+    Does NOT infer mappings (e.g. cooldown_candles to
+    protections[].CooldownPeriod.stop_duration_candles).  If an
+    explicit tested mapping is needed, it must be implemented and
+    tested separately — this gate only checks direct key presence.
+    """
+    if pre_apply_config is None:
+        return GateResult(
+            False,
+            "pre_apply_config not provided - cannot verify "
+            "candidate compatibility. Supply pre_apply_config.",
+        )
+
+    failures: list[str] = []
+    for key in parameter_overlay:
+        if key not in pre_apply_config:
+            failures.append(
+                f"{key!r} absent from pre_apply_config "
+                f"(no direct runtime consumer)"
+            )
+            continue
+        current_val = pre_apply_config.get(key)
+        if current_val is None:
+            failures.append(
+                f"{key!r} present in pre_apply_config but value is None "
+                f"(no proven baseline)"
+            )
+            continue
+        if expected_baselines is not None and key in expected_baselines:
+            expected = expected_baselines[key]
+            if current_val != expected:
+                failures.append(
+                    f"{key!r} expected baseline {expected!r} but runtime "
+                    f"value is {current_val!r} (baseline mismatch)"
+                )
+
+    if failures:
+        return GateResult(
+            False,
+            "Candidate compatibility check failed: " + "; ".join(failures),
+        )
+    return GateResult(
+        True,
+        "All overlay keys present in pre_apply_config with proven baselines",
+    )
+
+
 def check_readiness(
     candidate_sha: str,
     bot_id: str,
@@ -480,6 +546,7 @@ def check_readiness(
     kill_switch_path: Path | None = None,
     riskguard_status: str | None = None,
     pre_apply_config: dict[str, object] | None = None,
+    expected_baselines: Mapping[str, object] | None = None,
 ) -> ReadinessReport:
     """Evaluate all gates and return a read-only readiness report."""
     resolved_state_dir = state_dir or DEFAULT_STATE_DIR
@@ -491,13 +558,16 @@ def check_readiness(
     g6 = check_token()
     _, g7 = check_cooldown(resolved_state_dir)
     g8 = check_dry_run(pre_apply_config)
+    g9 = check_candidate_compatibility(
+        parameter_overlay, pre_apply_config, expected_baselines
+    )
     planned_path = ""
     binding = resolve_binding(bot_id)
     if binding is not None:
         planned_path = build_host_overlay_path(
             bot_id, candidate_sha
         ) or ""
-    all_pass = all(g for g in [g1, g2, g3, g4, g5, g6, g7, g8])
+    all_pass = all(g for g in [g1, g2, g3, g4, g5, g6, g7, g8, g9])
     return ReadinessReport(
         candidate_sha=candidate_sha,
         bot_id=bot_id,
@@ -510,6 +580,7 @@ def check_readiness(
         token_gate=g6,
         cooldown_gate=g7,
         dry_run_gate=g8,
+        compatibility_gate=g9,
         planned_overlay_path=planned_path,
         ready=all_pass,
     )
@@ -639,6 +710,7 @@ def execute_apply(
     pre_apply_config: dict[str, object] | None = None,
     kill_switch_path: Path | None = None,
     riskguard_status: str | None = None,
+    expected_baselines: Mapping[str, object] | None = None,
 ) -> ControlledApplyDecision:
     """Execute the controlled apply after all gates pass."""
     resolved_state_dir = state_dir or DEFAULT_STATE_DIR
@@ -651,6 +723,7 @@ def execute_apply(
         kill_switch_path=kill_switch_path,
         riskguard_status=riskguard_status,
         pre_apply_config=pre_apply_config,
+        expected_baselines=expected_baselines,
     )
     if not report.ready:
         all_gates = [
@@ -662,6 +735,7 @@ def execute_apply(
             report.token_gate,
             report.cooldown_gate,
             report.dry_run_gate,
+            report.compatibility_gate,
         ]
         errors = [g.reason for g in all_gates if not g.passed]
         return ControlledApplyDecision(
@@ -741,6 +815,7 @@ def run_controlled_apply_canary(
     pre_apply_config: dict[str, object] | None = None,
     kill_switch_path: Path | None = None,
     riskguard_status: str | None = None,
+    expected_baselines: Mapping[str, object] | None = None,
 ) -> ControlledApplyDecision:
     """Run the full controlled apply pipeline for the canary bot."""
     return execute_apply(
@@ -755,6 +830,7 @@ def run_controlled_apply_canary(
         pre_apply_config=pre_apply_config,
         kill_switch_path=kill_switch_path,
         riskguard_status=riskguard_status,
+        expected_baselines=expected_baselines,
     )
 
 
