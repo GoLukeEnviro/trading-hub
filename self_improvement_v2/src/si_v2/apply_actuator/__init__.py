@@ -54,6 +54,17 @@ from si_v2.apply_actuator.proof import (
     check_process_uses_overlay,
     verify_runtime_effect,
 )
+from si_v2.apply_actuator.restart_with_overlay import (
+    CANARY_BOT_ID as RESTART_CANARY_BOT_ID,
+    CANARY_CONTAINER_NAME,
+    CANARY_SERVICE_NAME,
+    RESTART_FORBIDDEN_KEYS,
+    RestartPlan,
+    RestartPlanResult,
+    RestartExecutionResult,
+    execute_canary_restart_with_overlay,
+    plan_canary_restart_with_overlay,
+)
 from si_v2.apply_actuator.runtime_binding import (
     BOT_RUNTIME_BINDINGS,
     validate_fleet_bindings,
@@ -81,8 +92,15 @@ __all__ = [
     "check_effective_config_loaded",
     "check_process_uses_overlay",
     "compute_apply_result",
+    "execute_canary_restart_with_overlay",
     "generate_effective_config",
+    "plan_canary_restart_with_overlay",
     "proposal_to_overlay",
+    "RESTART_CANARY_BOT_ID",
+    "RESTART_FORBIDDEN_KEYS",
+    "RestartExecutionResult",
+    "RestartPlan",
+    "RestartPlanResult",
     "run_controlled_apply",
     "run_controlled_apply_batch",
     "summarize_results",
