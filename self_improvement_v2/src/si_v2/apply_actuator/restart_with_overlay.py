@@ -40,10 +40,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final, Literal, Mapping, Sequence
+from typing import Final, Literal
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -225,16 +226,17 @@ def _build_proposed_command(
     config_indices = _find_config_args(current_command)
     if not config_indices:
         # No --config found; append at the end
-        return current_command + ("--config", container_overlay_path)
+        return (*current_command, "--config", container_overlay_path)
 
     # Insert after the last --config <value> pair
     last_config_idx = config_indices[-1]
     # The value follows the --config flag
     insert_after = last_config_idx + 1
     return (
-        current_command[: insert_after + 1]
-        + ("--config", container_overlay_path)
-        + current_command[insert_after + 1 :]
+        *current_command[: insert_after + 1],
+        "--config",
+        container_overlay_path,
+        *current_command[insert_after + 1 :],
     )
 
 

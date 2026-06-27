@@ -56,12 +56,14 @@ from si_v2.apply_actuator.proof import (
 )
 from si_v2.apply_actuator.restart_with_overlay import (
     CANARY_BOT_ID as RESTART_CANARY_BOT_ID,
+)
+from si_v2.apply_actuator.restart_with_overlay import (
     CANARY_CONTAINER_NAME,
     CANARY_SERVICE_NAME,
     RESTART_FORBIDDEN_KEYS,
+    RestartExecutionResult,
     RestartPlan,
     RestartPlanResult,
-    RestartExecutionResult,
     execute_canary_restart_with_overlay,
     plan_canary_restart_with_overlay,
 )
@@ -74,6 +76,10 @@ __all__ = [
     "ACTIVATION_TOKEN_ENV",
     "ACTIVATION_TOKEN_VALUE",
     "BOT_RUNTIME_BINDINGS",
+    "CANARY_CONTAINER_NAME",
+    "CANARY_SERVICE_NAME",
+    "RESTART_CANARY_BOT_ID",
+    "RESTART_FORBIDDEN_KEYS",
     "ApiConfigProofResult",
     "ApplyActuatorResult",
     "ApplyStatus",
@@ -83,6 +89,9 @@ __all__ = [
     "EffectiveConfigDraft",
     "OverlayProposal",
     "ProofStatus",
+    "RestartExecutionResult",
+    "RestartPlan",
+    "RestartPlanResult",
     "RuntimeEffectProof",
     "check_activation_token",
     "check_container_visibility",
@@ -96,11 +105,6 @@ __all__ = [
     "generate_effective_config",
     "plan_canary_restart_with_overlay",
     "proposal_to_overlay",
-    "RESTART_CANARY_BOT_ID",
-    "RESTART_FORBIDDEN_KEYS",
-    "RestartExecutionResult",
-    "RestartPlan",
-    "RestartPlanResult",
     "run_controlled_apply",
     "run_controlled_apply_batch",
     "summarize_results",
