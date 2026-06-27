@@ -298,3 +298,36 @@ The enforcement status is visible in:
 - `safety_results[].history_status` and `.history_reason_codes` (Step 4 output)
 - `per_bot_decisions[].history_status` and `.min_required_runs` (evidence bundle)
 - `telemetry_history.min_required_runs` (fleet-level evidence bundle)
+
+---
+
+## 9. Controlled Apply Chain
+
+The controlled SI-v2 apply path now consists of the following modules on `main`:
+
+| Step | Module | Phase | File |
+|------|--------|-------|------|
+| 1 | Candidate Pipeline | 6A | `pipeline/candidate_to_apply.py` |
+| 2 | Readiness / Human Gate | 1 | `controlled_apply_actuator.py` |
+| 3 | Overlay Apply | 1 | `controlled_apply_actuator.py` |
+| 4 | Restart Plan | 3B-A | `restart_with_overlay.py` |
+| 5 | Restart Gate | 3B-B | `restart_gate.py` |
+| 6 | Runtime Executor | 3C-A | `runtime_executor.py` |
+| 7 | RuntimeEffectProof | 3C-B | `proof.py` |
+| 8 | Measurement Decision | 4A | `measurement/decision_engine.py` |
+| 9 | Rollback Rehearsal | 5A | `rollback_rehearsal.py` |
+
+All mutating operations remain:
+- **Canary-only** — only `freqtrade-freqforge-canary`
+- **Dry-run-only** — `dry_run=true` invariant
+- **Human-gated** — requires explicit approval
+- **L3-token-gated** — requires activation environment variable
+
+The current measurement status:
+- T0 (2026-06-27T18:27Z): GREEN
+- T1 (2026-06-27T19:27Z): YELLOW / CONTINUE
+- T2 (2026-06-28T00:27Z): PENDING
+- T3 (2026-06-28T18:27Z): PENDING
+- Final Decision: PENDING after T3
+
+See `docs/state/current-operational-state.md` for the full current snapshot.
