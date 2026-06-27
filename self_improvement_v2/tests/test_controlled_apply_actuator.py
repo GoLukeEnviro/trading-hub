@@ -140,6 +140,20 @@ class TestKillSwitch:
         ks.write_text("{bad json}")
         assert not check_kill_switch(ks).passed
 
+    def test_reject_none_path(self) -> None:
+        """check_kill_switch(None) must block - fail-closed."""
+        result = check_kill_switch(None)
+        assert not result.passed
+        assert "fail-closed" in result.reason.lower() or "blocked" in result.reason.lower()
+
+    def test_reject_missing_file(self, tmp_path: Path) -> None:
+        """check_kill_switch(nonexistent) must block - fail-closed."""
+        missing = tmp_path / "nonexistent_kill_switch.json"
+        assert not missing.exists()
+        result = check_kill_switch(missing)
+        assert not result.passed
+        assert "fail-closed" in result.reason.lower() or "blocked" in result.reason.lower()
+
 
 class TestRiskGuard:
     def test_accept_pass(self) -> None:
@@ -212,13 +226,16 @@ class TestReadinessRunner:
         pre_cfg: dict[str, object], l3_token: None,
         tmp_dir: dict[str, Path],
     ) -> None:
+        tmp_dir["state"].mkdir(parents=True, exist_ok=True)
+        ks = tmp_dir["state"] / "kill_switch.json"
+        ks.write_text(json.dumps({"mode": "NORMAL"}))
         report = check_readiness(
             candidate_sha="f68a031923d0",
             bot_id=canary,
             parameter_overlay=overlay,
             requires_human_approval=True,
             state_dir=tmp_dir["state"],
-            kill_switch_path=None,
+            kill_switch_path=ks,
             riskguard_status="PASS",
             pre_apply_config=pre_cfg,
         )
@@ -348,6 +365,9 @@ class TestExecuteApply:
         pre_cfg: dict[str, object], l3_token: None,
         tmp_dir: dict[str, Path],
     ) -> None:
+        tmp_dir["state"].mkdir(parents=True, exist_ok=True)
+        ks = tmp_dir["state"] / "kill_switch.json"
+        ks.write_text(json.dumps({"mode": "NORMAL"}))
         decision = execute_apply(
             candidate_sha="f68a031923d0", bot_id=canary,
             parameter_overlay=overlay,
@@ -356,7 +376,7 @@ class TestExecuteApply:
             overlay_dir=tmp_dir["overlay"],
             plan_dir=tmp_dir["plan"],
             log_dir=tmp_dir["log"],
-            kill_switch_path=None,
+            kill_switch_path=ks,
             riskguard_status="PASS",
             pre_apply_config=pre_cfg,
         )
