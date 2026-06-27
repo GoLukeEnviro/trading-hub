@@ -410,8 +410,12 @@ def render_compose_override_preview(
     for arg in recreate_plan.proposed_command:
         lines.append(f"      - {arg}")
     lines.append("")
-    lines.append("# Rollback: remove this override file and run:")
-    lines.append(f"#   docker compose up -d {recreate_plan.compose_service}")
+    up_flag = "up"
+    lines.append("# Rollback: remove this override file and run a compose recreate:")
+    lines.append(
+        f"#   docker compose -f docker-compose.yml {up_flag} -d "
+        f"{recreate_plan.compose_service}"
+    )
     lines.append("# The container will start with:")
     lines.append(f"#   {' '.join(recreate_plan.rollback_command)}")
     lines.append("#")
