@@ -33,7 +33,7 @@ logger = logging.getLogger("riskguard.pair_universe")
 
 # ── Paths ──────────────────────────────────────────
 
-PROJECT_DIR = Path("/home/hermes/projects/trading")
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_DIR = PROJECT_DIR / "orchestrator/config"
 CONFIG_FILE = CONFIG_DIR / "riskguard-pair-universe.json"
 EXAMPLE_CONFIG_FILE = CONFIG_DIR / "riskguard-pair-universe.example.json"
