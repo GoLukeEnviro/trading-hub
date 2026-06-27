@@ -237,9 +237,9 @@ def check_kill_switch(kill_switch_path: Path | None = None) -> GateResult:
                 kill_switch_path = p
                 break
     if kill_switch_path is None:
-        return GateResult(True, "No kill-switch file - assuming NORMAL")
+        return GateResult(False, "No kill-switch path provided - fail-closed BLOCKED")
     if not kill_switch_path.exists():
-        return GateResult(True, "Kill-switch file not found - assuming NORMAL")
+        return GateResult(False, "Kill-switch file not found - fail-closed BLOCKED")
     try:
         data = json.loads(kill_switch_path.read_text())
     except (json.JSONDecodeError, OSError):
