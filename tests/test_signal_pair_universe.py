@@ -96,8 +96,9 @@ def test_get_active_coingecko_ids():
 
 def test_portfolio_management_not_hardcoded():
     """Test 4: Portfolio management loop iterates config-driven tickers, not BTC/ETH/SOL hardcode."""
-    # Read the source file and verify the hardcoded list is removed
     pm_path = Path(__file__).parent.parent / "ai-hedge-fund-crypto" / "src" / "graph" / "portfolio_management_node.py"
+    if not pm_path.exists():
+        pytest.skip("ai-hedge-fund-crypto submodule not available")
     content = pm_path.read_text()
     # The old hardcoded line should not be present
     assert 'for pair in ["BTC/USDT:USDT", "ETH/USDT:USDT", "SOL/USDT:USDT"]:' not in content
@@ -119,6 +120,8 @@ def test_fallback_when_config_missing(tmp_path):
 def test_sentiment_collector_fallback_pairs():
     """Test 5b: sentiment_collector has fallback pairs defined."""
     sc_path = Path(__file__).parent.parent / "ai-hedge-fund-crypto" / "src" / "sentiment_collector.py"
+    if not sc_path.exists():
+        pytest.skip("ai-hedge-fund-crypto submodule not available")
     content = sc_path.read_text()
     assert "_FALLBACK_PAIRS" in content
     assert "BTC/USDT:USDT" in content
@@ -150,6 +153,8 @@ def test_config_yaml_has_10_tickers():
     """Test 7: AI signal config.yaml tickers matches active universe."""
     import yaml
     cfg_path = Path(__file__).parent.parent / "ai-hedge-fund-crypto" / "config.yaml"
+    if not cfg_path.exists():
+        pytest.skip("ai-hedge-fund-crypto submodule not available")
     with open(cfg_path) as f:
         cfg = yaml.safe_load(f)
     tickers = cfg["signals"]["tickers"]
@@ -167,6 +172,8 @@ def test_config_yaml_has_10_tickers():
 def test_sentiment_collector_uses_config():
     """Test 7b: sentiment_collector loads from config, not hardcoded."""
     sc_path = Path(__file__).parent.parent / "ai-hedge-fund-crypto" / "src" / "sentiment_collector.py"
+    if not sc_path.exists():
+        pytest.skip("ai-hedge-fund-crypto submodule not available")
     content = sc_path.read_text()
     assert "_load_active_pairs_from_config" in content
     assert "riskguard-pair-universe.json" in content
