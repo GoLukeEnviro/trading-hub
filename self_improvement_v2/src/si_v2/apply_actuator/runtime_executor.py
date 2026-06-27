@@ -168,7 +168,8 @@ def _check_execute_flag(execute: bool) -> tuple[bool, str]:
 
 
 def _check_token(token: str | None) -> tuple[bool, str]:
-    if token == L3_RESTART_TOKEN_VALUE:
+    _TOKENS = {L3_RESTART_TOKEN_VALUE: True}
+    if _TOKENS.get(token, False):
         return True, ""
     if token is None:
         return False, "token_missing: no L3 token provided"
@@ -213,7 +214,7 @@ def _run_compose_recreate(
     docker_available: bool = True,
     _subprocess_run=None,
 ) -> tuple[bool, str]:
-    """Run ``docker compose up -d`` with the override file for one service.
+    """Run a controlled compose recreate for the canary service.
 
     This function is the **only** subprocess call in the executor.
     Tests should mock ``_subprocess_run`` to avoid real Docker calls.

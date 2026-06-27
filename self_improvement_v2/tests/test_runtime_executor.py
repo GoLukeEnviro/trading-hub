@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -69,11 +68,11 @@ def compose_output_dir(tmp_path: Path) -> Path:
     return tmp_path / "compose_overrides"
 
 
-def _mock_subprocess_success(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess:
+def _mock_subprocess_success(*args: object, **kwargs: object) -> subprocess.CompletedProcess:
     return subprocess.CompletedProcess(args[0] if args else [], returncode=0, stdout="ok", stderr="")
 
 
-def _mock_subprocess_failure(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess:
+def _mock_subprocess_failure(*args: object, **kwargs: object) -> subprocess.CompletedProcess:
     return subprocess.CompletedProcess(args[0] if args else [], returncode=1, stdout="", stderr="error")
 
 
@@ -308,7 +307,7 @@ class TestRunCanaryRestart:
         calls: list[list[str]] = []
 
         def _capture_run(
-            cmd: list[str], *args: Any, **kwargs: Any
+            cmd: list[str], *args: object, **kwargs: object
         ) -> subprocess.CompletedProcess:
             calls.append(cmd)
             return subprocess.CompletedProcess(cmd, returncode=0, stdout="ok", stderr="")
@@ -339,7 +338,7 @@ class TestRunCanaryRestart:
         original_run = subprocess.run
         calls: list = []
 
-        def _capture(*args: Any, **kwargs: Any) -> Any:
+        def _capture(*args: object, **kwargs: object) -> object:
             calls.append(args)
             return original_run(*args, **kwargs)
 
