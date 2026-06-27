@@ -16,8 +16,6 @@ from si_v2.apply_actuator.restart_with_overlay import (
     CANARY_CONTAINER_NAME,
     CANARY_SERVICE_NAME,
     RESTART_FORBIDDEN_KEYS,
-    RestartPlan,
-    RestartPlanResult,
     RestartExecutionResult,
     _build_proposed_command,
     _build_rollback_command,
@@ -26,7 +24,6 @@ from si_v2.apply_actuator.restart_with_overlay import (
     _check_dry_run,
     _check_overlay_content,
     _check_overlay_path,
-    _parse_command,
     execute_canary_restart_with_overlay,
     plan_canary_restart_with_overlay,
 )
@@ -156,25 +153,25 @@ class TestCheckOverlayContent:
     def test_strategy_forbidden(self, canary_user_data: Path) -> None:
         path = canary_user_data / "overlay_strategy.json"
         path.write_text(json.dumps({"strategy": "OtherStrategy"}))
-        data, blocked = _check_overlay_content(path)
+        _data, blocked = _check_overlay_content(path)
         assert any("forbidden_key_in_overlay" in b and "strategy" in b for b in blocked)
 
     def test_pair_whitelist_forbidden(self, canary_user_data: Path) -> None:
         path = canary_user_data / "overlay_pairs.json"
         path.write_text(json.dumps({"pair_whitelist": ["BTC/USDT"]}))
-        data, blocked = _check_overlay_content(path)
+        _data, blocked = _check_overlay_content(path)
         assert any("forbidden_key_in_overlay" in b and "pair_whitelist" in b for b in blocked)
 
     def test_exchange_forbidden(self, canary_user_data: Path) -> None:
         path = canary_user_data / "overlay_exchange.json"
         path.write_text(json.dumps({"exchange": {"name": "binance"}}))
-        data, blocked = _check_overlay_content(path)
+        _data, blocked = _check_overlay_content(path)
         assert any("forbidden_key_in_overlay" in b and "exchange" in b for b in blocked)
 
     def test_api_server_forbidden(self, canary_user_data: Path) -> None:
         path = canary_user_data / "overlay_api.json"
         path.write_text(json.dumps({"api_server": {"enabled": False}}))
-        data, blocked = _check_overlay_content(path)
+        _data, blocked = _check_overlay_content(path)
         assert any("forbidden_key_in_overlay" in b and "api_server" in b for b in blocked)
 
     def test_all_forbidden_keys_covered(self) -> None:
@@ -184,7 +181,7 @@ class TestCheckOverlayContent:
             "api_server", "db_url", "user_data_dir", "telegram",
             "external_message_consumer",
         }
-        assert RESTART_FORBIDDEN_KEYS == expected
+        assert expected == RESTART_FORBIDDEN_KEYS
 
 
 # ---------------------------------------------------------------------------
@@ -258,10 +255,7 @@ class TestBuildProposedCommand:
 
     def test_no_duplicate_overlay(self, current_command: tuple) -> None:
         """If overlay path already present, return unchanged."""
-        already = current_command + (
-            "--config",
-            "/freqtrade/user_data/overlay_existing.json",
-        )
+        already = (*current_command, "--config", "/freqtrade/user_data/overlay_existing.json")
         proposed = _build_proposed_command(
             already,
             "/freqtrade/user_data/overlay_existing.json",
@@ -284,10 +278,7 @@ class TestBuildProposedCommand:
 
 class TestBuildRollbackCommand:
     def test_removes_overlay(self, current_command: tuple) -> None:
-        with_overlay = current_command + (
-            "--config",
-            "/freqtrade/user_data/overlay_max_open.json",
-        )
+        with_overlay = (*current_command, "--config", "/freqtrade/user_data/overlay_max_open.json")
         rollback = _build_rollback_command(with_overlay)
         assert rollback == current_command
         assert "overlay_" not in " ".join(rollback)
@@ -297,12 +288,9 @@ class TestBuildRollbackCommand:
         assert rollback == current_command
 
     def test_removes_multiple_overlays(self, current_command: tuple) -> None:
-        with_overlays = current_command + (
-            "--config",
-            "/freqtrade/user_data/overlay_1.json",
-            "--config",
-            "/freqtrade/user_data/overlay_2.json",
-        )
+        extras = ("--config", "/freqtrade/user_data/overlay_1.json",
+                  "--config", "/freqtrade/user_data/overlay_2.json")
+        with_overlays = (*current_command, *extras)
         rollback = _build_rollback_command(with_overlays)
         assert rollback == current_command
         assert "overlay_" not in " ".join(rollback)
@@ -524,9 +512,9 @@ class TestPlanCanaryRestart:
         assert d["expected_parameter"] == "max_open_trades"
         assert d["expected_value"] == 2
         from typing import cast
-        proposed = cast(list[str], d["proposed_command"])
-        current = cast(list[str], d["current_command"])
-        rollback = cast(list[str], d["rollback_command"])
+        proposed = cast("list[str]", d["proposed_command"])
+        current = cast("list[str]", d["current_command"])
+        rollback = cast("list[str]", d["rollback_command"])
         assert len(proposed) > len(current)
         assert rollback == list(current_command)
 
@@ -562,7 +550,6 @@ class TestPlanCanaryRestart:
     ) -> None:
         """Verify planner is pure Python — no subprocess, no Docker."""
         import subprocess
-        import sys
 
         original_run = subprocess.run
         calls: list = []
