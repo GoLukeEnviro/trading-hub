@@ -71,6 +71,9 @@ L3_TOKEN_VALUE: Final[str] = "APPROVE"
 DEFAULT_STATE_DIR: Final[Path] = Path(
     "/opt/data/profiles/orchestrator/state/si_v2_controlled_apply"
 )
+RISKGUARD_STATE_PATH: Final[Path] = Path(
+    "/home/hermes/projects/trading/orchestrator/state/riskguard/riskguard_state.json"
+)
 
 
 @dataclass(frozen=True)
@@ -256,13 +259,78 @@ def check_kill_switch(kill_switch_path: Path | None = None) -> GateResult:
     return GateResult(False, f"Kill-switch mode {mode!r} unrecognised - fail-closed BLOCKED")
 
 
-def check_riskguard(riskguard_status: str | None = None) -> GateResult:
-    """Gate 4: RiskGuard must report PASS.  None -> BLOCKED."""
-    if riskguard_status is None:
+def _load_riskguard_state(path: Path) -> dict[str, object]:
+    """Read the canonical RiskGuard state file.  Never raises."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def derive_riskguard_status(state: dict[str, object]) -> str:
+    """Derive a PASS/FAIL verdict from the canonical RiskGuard state dict.
+
+    PASS conditions (all must hold):
+      - summary.status == "ACTIVE"
+      - at least one pair verdict == "ACCEPTED"
+      - no pair verdict == "BLOCK_ENTRY"
+
+    Anything else is FAIL, including missing/corrupt/unknown state.
+    """
+    summary = state.get("summary")
+    if not isinstance(summary, dict):
+        return "FAIL"
+    if summary.get("status") != "ACTIVE":
+        return "FAIL"
+
+    pairs = state.get("pairs")
+    if not isinstance(pairs, dict):
+        return "FAIL"
+
+    has_accepted = False
+    for pair_data in pairs.values():
+        if not isinstance(pair_data, dict):
+            continue
+        verdict = pair_data.get("verdict")
+        if verdict == "BLOCK_ENTRY":
+            return "FAIL"
+        if verdict == "ACCEPTED":
+            has_accepted = True
+
+    return "PASS" if has_accepted else "FAIL"
+
+
+def read_riskguard_status(state_path: Path | None = None) -> GateResult:
+    """Read canonical RiskGuard state and return PASS or fail-closed BLOCK."""
+    path = state_path or RISKGUARD_STATE_PATH
+    state = _load_riskguard_state(path)
+    if not state:
         return GateResult(
             False,
-            "RiskGuard status unknown - conservative block.",
+            "RiskGuard state missing or unreadable - fail-closed BLOCKED.",
         )
+    status = derive_riskguard_status(state)
+    if status == "PASS":
+        return GateResult(True, "RiskGuard state ACTIVE with ACCEPTED pair(s)")
+    return GateResult(
+        False,
+        f"RiskGuard derived status is {status!r} - requires PASS.",
+    )
+
+
+def check_riskguard(riskguard_status: str | None = None) -> GateResult:
+    """Gate 4: RiskGuard must report PASS.  None -> BLOCKED.
+
+    If a literal status string is supplied, it is used directly.
+    Otherwise the canonical RiskGuard state file is read and a PASS/FAIL
+    verdict is derived read-only.
+    """
+    if riskguard_status is None:
+        return read_riskguard_status()
     if riskguard_status == "PASS":
         return GateResult(True, "RiskGuard status is PASS")
     return GateResult(

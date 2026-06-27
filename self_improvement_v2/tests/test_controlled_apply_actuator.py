@@ -36,8 +36,10 @@ from si_v2.apply_actuator.controlled_apply_actuator import (
     check_safe_parameters,
     check_token,
     create_rollback_plan,
+    derive_riskguard_status,
     execute_apply,
     log_shadow_events,
+    read_riskguard_status,
     summarize_decision,
     write_overlay_file,
 )
@@ -163,7 +165,102 @@ class TestRiskGuard:
         assert not check_riskguard("FAIL").passed
 
     def test_reject_none(self) -> None:
-        assert not check_riskguard(None).passed
+        """check_riskguard(None) reads canonical state; on this test host it may PASS.
+
+        We therefore only verify it returns a deterministic GateResult and does
+        not raise.  The fail-closed behavior on a missing file is tested via
+        read_riskguard_status(missing_path).
+        """
+        result = check_riskguard(None)
+        assert isinstance(result.passed, bool)
+        assert result.reason
+
+    def test_derive_pass_active_with_accepted(self) -> None:
+        state = {
+            "summary": {"status": "ACTIVE"},
+            "pairs": {
+                "BTC/USDT": {"verdict": "ACCEPTED"},
+                "ETH/USDT": {"verdict": "WATCH_ONLY"},
+            },
+        }
+        assert derive_riskguard_status(state) == "PASS"
+
+    def test_derive_fail_no_accepted(self) -> None:
+        state = {
+            "summary": {"status": "ACTIVE"},
+            "pairs": {
+                "BTC/USDT": {"verdict": "WATCH_ONLY"},
+            },
+        }
+        assert derive_riskguard_status(state) == "FAIL"
+
+    def test_derive_fail_block_entry(self) -> None:
+        state = {
+            "summary": {"status": "ACTIVE"},
+            "pairs": {
+                "BTC/USDT": {"verdict": "ACCEPTED"},
+                "ETH/USDT": {"verdict": "BLOCK_ENTRY"},
+            },
+        }
+        assert derive_riskguard_status(state) == "FAIL"
+
+    def test_derive_fail_not_active(self) -> None:
+        state = {
+            "summary": {"status": "DEGRADED"},
+            "pairs": {"BTC/USDT": {"verdict": "ACCEPTED"}},
+        }
+        assert derive_riskguard_status(state) == "FAIL"
+
+    def test_derive_fail_missing_summary(self) -> None:
+        assert derive_riskguard_status({"pairs": {}}) == "FAIL"
+
+    def test_read_missing_file_blocks(self, tmp_path: Path) -> None:
+        missing = tmp_path / "missing_riskguard_state.json"
+        result = read_riskguard_status(missing)
+        assert not result.passed
+        assert "fail-closed" in result.reason.lower() or "blocked" in result.reason.lower()
+
+    def test_read_active_accepted_pass(self, tmp_path: Path) -> None:
+        state_path = tmp_path / "riskguard_state.json"
+        state = {
+            "schema_version": "1.0",
+            "summary": {"status": "ACTIVE"},
+            "pairs": {"BTC/USDT": {"verdict": "ACCEPTED", "confidence": 0.85}},
+        }
+        state_path.write_text(json.dumps(state))
+        result = read_riskguard_status(state_path)
+        assert result.passed
+
+    def test_read_corrupt_blocks(self, tmp_path: Path) -> None:
+        state_path = tmp_path / "riskguard_state.json"
+        state_path.write_text("{bad json}")
+        result = read_riskguard_status(state_path)
+        assert not result.passed
+
+    def test_read_none_uses_default_path(self) -> None:
+        """check_riskguard(None) without override should read canonical path.
+
+        We only assert that it returns a GateResult; the actual verdict depends
+        on whether orchestrator/state/riskguard/riskguard_state.json exists.
+        """
+        result = check_riskguard(None)
+        assert isinstance(result.passed, bool)
+
+    def test_check_riskguard_reads_state(self, tmp_path: Path) -> None:
+        state_path = tmp_path / "riskguard_state.json"
+        state = {
+            "summary": {"status": "ACTIVE"},
+            "pairs": {"BTC/USDT": {"verdict": "ACCEPTED"}},
+        }
+        state_path.write_text(json.dumps(state))
+        from si_v2.apply_actuator import controlled_apply_actuator as _caa
+        original = _caa.RISKGUARD_STATE_PATH
+        try:
+            _caa.RISKGUARD_STATE_PATH = state_path
+            result = check_riskguard(None)
+            assert result.passed
+        finally:
+            _caa.RISKGUARD_STATE_PATH = original
 
 
 class TestDryRun:
