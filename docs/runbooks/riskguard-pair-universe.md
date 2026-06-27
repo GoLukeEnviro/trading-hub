@@ -94,6 +94,7 @@ The config file is tracked in git. Changes should go through a PR with validatio
 
 - RiskGuard evaluates ALL pairs from the AI signal file, not just the sanctioned universe.
 - The universe config is for validation, reporting, and dashboard display.
-- To actually change which pairs the AI signal generates, you need to modify `ai-hedge-fund-crypto/config.yaml` (L3 runtime config) and fix hardcoded pair lists in `sentiment_collector.py` and `portfolio_management_node.py` (code PR).
+- The signal generator (`ai-hedge-fund-crypto`) now loads active pairs from this config via `sentiment_collector.py` and `portfolio_management_node.py`. If config is missing, it falls back to BTC/ETH/SOL.
+- `ai-hedge-fund-crypto/config.yaml` tickers should be kept aligned with the active universe.
 - To change which pairs Freqtrade canary scans, you need to modify `freqforge-canary/config/config_canary_dryrun.json` (L3 runtime config).
 - The pair universe config does NOT affect live trading — it is read-only metadata.

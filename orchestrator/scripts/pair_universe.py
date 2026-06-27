@@ -308,3 +308,99 @@ def get_verdict_counts(
         "outside_universe": outside_universe,
         "universe_source": universe.source,
     }
+
+
+# ── Ticker / CoinGecko ID conversion ───────────────
+
+# CoinGecko coin IDs for supported bases
+# This map covers all reviewed active universe + watchlist pairs.
+COINGECKO_ID_MAP = {
+    "BTC": "bitcoin",
+    "ETH": "ethereum",
+    "SOL": "solana",
+    "XRP": "ripple",
+    "BNB": "binancecoin",
+    "DOGE": "dogecoin",
+    "ADA": "cardano",
+    "TRX": "tron",
+    "LINK": "chainlink",
+    "AVAX": "avalanche-2",
+    "SUI": "sui",
+    "BCH": "bitcoin-cash",
+    "XLM": "stellar",
+    "DOT": "polkadot",
+    "ATOM": "cosmos",
+    "UNI": "uniswap",
+    "AAVE": "aave",
+    # Legacy pairs for backward compatibility
+    "NEAR": "near",
+    "ARB": "arbitrum",
+    "OP": "optimism",
+}
+
+
+def pair_to_base(pair: str) -> str:
+    """Convert a pair string like 'BTC/USDT:USDT' to its base ticker 'BTC'."""
+    try:
+        return pair.split("/")[0].upper()
+    except (IndexError, AttributeError):
+        return ""
+
+
+def pair_to_bitget_ticker(pair: str) -> str:
+    """Convert a pair string like 'BTC/USDT:USDT' to Bitget ticker 'BTCUSDT'."""
+    base = pair_to_base(pair)
+    return f"{base}USDT" if base else ""
+
+
+def pair_to_coingecko_id(pair: str) -> str:
+    """Convert a pair string like 'BTC/USDT:USDT' to CoinGecko coin ID 'bitcoin'.
+
+    Returns empty string if the base is not in the COINGECKO_ID_MAP.
+    """
+    base = pair_to_base(pair)
+    return COINGECKO_ID_MAP.get(base, "")
+
+
+def get_active_tickers(universe: Optional[PairUniverse] = None) -> list[str]:
+    """Return active universe pairs as base ticker strings (e.g., ['BTC', 'ETH', ...])."""
+    if universe is None:
+        universe = load_pair_universe()
+    return [pair_to_base(p) for p in universe.active_pairs if pair_to_base(p)]
+
+
+def get_active_coingecko_ids(universe: Optional[PairUniverse] = None) -> dict[str, str]:
+    """Return active universe pairs as {pair: coingecko_id} mapping.
+
+    Only includes pairs that have a known CoinGecko ID.
+    """
+    if universe is None:
+        universe = load_pair_universe()
+    result = {}
+    for pair in universe.active_pairs:
+        cg_id = pair_to_coingecko_id(pair)
+        if cg_id:
+            result[pair] = cg_id
+    return result
+
+
+def build_coingecko_url(universe: Optional[PairUniverse] = None) -> str:
+    """Build a CoinGecko simple/price URL for all active universe pairs.
+
+    Falls back to BTC/ETH/SOL if config is unavailable.
+    """
+    if universe is None:
+        universe = load_pair_universe()
+    ids = get_active_coingecko_ids(universe)
+    if not ids:
+        # Fallback to BTC/ETH/SOL
+        ids = {"BTC/USDT:USDT": "bitcoin", "ETH/USDT:USDT": "ethereum", "SOL/USDT:USDT": "solana"}
+    coin_ids = ",".join(sorted(set(ids.values())))
+    return (
+        f"https://api.coingecko.com/api/v3/simple/price"
+        f"?ids={coin_ids}"
+        f"&vs_currencies=usd"
+        f"&include_24hr_change=true"
+        f"&include_7d_change=true"
+        f"&include_24hr_vol=true"
+    )
