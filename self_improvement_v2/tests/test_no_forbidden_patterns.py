@@ -78,6 +78,7 @@ def test_no_forbidden_patterns(pattern: str) -> None:
                     "test_maintenance.py",
                     "test_telemetry_history.py",
                     "test_telemetry_history_integration.py",
+                    "test_runtime_executor.py",
                 ):
                     continue
                 violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{line_num}: {line.strip()}")

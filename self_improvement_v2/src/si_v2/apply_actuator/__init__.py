@@ -79,6 +79,15 @@ from si_v2.apply_actuator.runtime_binding import (
     BOT_RUNTIME_BINDINGS,
     validate_fleet_bindings,
 )
+from si_v2.apply_actuator.runtime_executor import (
+    L3_RESTART_TOKEN_ENV,
+    L3_RESTART_TOKEN_VALUE,
+    run_canary_restart_with_overlay,
+    write_compose_override_file,
+)
+from si_v2.apply_actuator.runtime_executor import (
+    RuntimeExecutionResult as RuntimeExecutorResult,
+)
 
 __all__ = [
     "ACTIVATION_TOKEN_ENV",
@@ -87,6 +96,8 @@ __all__ = [
     "CANARY_COMPOSE_SERVICE",
     "CANARY_CONTAINER_NAME",
     "CANARY_SERVICE_NAME",
+    "L3_RESTART_TOKEN_ENV",
+    "L3_RESTART_TOKEN_VALUE",
     "RESTART_CANARY_BOT_ID",
     "RESTART_FORBIDDEN_KEYS",
     "ApiConfigProofResult",
@@ -104,6 +115,7 @@ __all__ = [
     "RestartPlan",
     "RestartPlanResult",
     "RuntimeEffectProof",
+    "RuntimeExecutorResult",
     "build_canary_recreate_plan",
     "check_activation_token",
     "check_container_visibility",
@@ -119,10 +131,12 @@ __all__ = [
     "plan_canary_restart_with_overlay",
     "proposal_to_overlay",
     "render_compose_override_preview",
+    "run_canary_restart_with_overlay",
     "run_controlled_apply",
     "run_controlled_apply_batch",
     "summarize_results",
     "validate_fleet_bindings",
     "validate_overlay_safety",
     "verify_runtime_effect",
+    "write_compose_override_file",
 ]
