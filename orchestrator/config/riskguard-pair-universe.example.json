@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "description": "Example RiskGuard pair universe config. Copy to riskguard-pair-universe.json and adjust. RiskGuard evaluates all pairs from the AI signal file; this config defines the sanctioned universe for validation, reporting, and dashboard display.",
+  "active_universe": [
+    "BTC/USDT:USDT",
+    "ETH/USDT:USDT",
+    "SOL/USDT:USDT"
+  ],
+  "watchlist": [],
+  "blacklist": [
+    "UST/USDT:USDT",
+    "LUNA/USDT:USDT",
+    "LUNC/USDT:USDT",
+    "TUSD/USDT:USDT",
+    "USDC/USDT:USDT",
+    "DAI/USDT:USDT"
+  ],
+  "max_active_pairs": 10,
+  "exchange": "bitget",
+  "settle": "USDT",
+  "pair_format_regex": "^[A-Z]+/USDT:USDT$"
+}

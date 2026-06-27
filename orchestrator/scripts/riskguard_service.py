@@ -31,6 +31,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# ── Pair Universe ──────────────────────────────────
+
+# Import pair universe loader (same directory)
+sys.path.insert(0, str(Path(__file__).parent))
+from pair_universe import load_pair_universe, PairUniverse, get_verdict_counts
+
 # ── Config ─────────────────────────────────────────
 
 PROJECT_DIR = Path("/home/hermes/projects/trading")
@@ -49,6 +55,9 @@ CONFIDENCE_THRESHOLD = 0.65
 MAX_AGE_MINUTES = 25.0
 MAX_CONCURRENT_SIGNALS = 5
 SCHEMA_VERSION = "1.0"
+
+# Load the sanctioned pair universe at startup
+PAIR_UNIVERSE = load_pair_universe()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -234,19 +243,30 @@ def main() -> int:
     # 3. Summary
     accepted_final = sum(1 for p in pairs_out.values() if p["verdict"] == "ACCEPTED")
     watch_only_final = sum(1 for p in pairs_out.values() if p["verdict"] == "WATCH_ONLY")
+    block_entry_final = sum(1 for p in pairs_out.values() if p["verdict"] == "BLOCK_ENTRY")
+
+    # Compute verdict counts with universe context
+    verdict_counts = get_verdict_counts(pairs_out, PAIR_UNIVERSE)
 
     summary = {
         "status": "ACTIVE",
         "total_pairs": len(pairs_out),
         "accepted": accepted_final,
         "watch_only": watch_only_final,
+        "block_entry": block_entry_final,
         "confidence_threshold": CONFIDENCE_THRESHOLD,
         "max_age_minutes": MAX_AGE_MINUTES,
         "concurrent_signals": MAX_CONCURRENT_SIGNALS,
         "stale": is_stale,
+        "pair_universe": {
+            "active_count": PAIR_UNIVERSE.active_count,
+            "watchlist_count": PAIR_UNIVERSE.watchlist_count,
+            "source": PAIR_UNIVERSE.source,
+            "outside_universe": verdict_counts["outside_universe"],
+        },
     }
 
-    logger.info(f"RiskGuard: ACCEPTED={accepted_final}, WATCH_ONLY={watch_only_final}, total={len(pairs_out)}")
+    logger.info(f"RiskGuard: ACCEPTED={accepted_final}, WATCH_ONLY={watch_only_final}, BLOCK_ENTRY={block_entry_final}, total={len(pairs_out)}, universe_active={PAIR_UNIVERSE.active_count}, universe_source={PAIR_UNIVERSE.source}")
     for d in decisions:
         logger.info(f"  {d['pair']}: conf={d['confidence']:.2f} -> {d['verdict']} [{d['riskguard_reason']}]")
 
