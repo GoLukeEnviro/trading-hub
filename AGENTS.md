@@ -108,16 +108,20 @@ context only. Do not count them as active SI-v2 loop members.
 
 ### SI-v2 — Self-Improvement Loop
 
-- Active Cycle Runner is the loop entry point.
-- Historical Evidence, Measurement Attribution, ShadowProposal rendering, and
-  Runtime Safety are the current loop-relevant concerns.
-- The controller operates in `HUMAN_GATED_CANARY_APPLY_PHASE_1` mode: canary-only,
-  human-gated, token-gated. No autonomous apply. See `docs/state/current-operational-state.md`.
-- Phase 1 actuator (`controlled_apply_actuator.py`) provides `check_readiness()`
-  (read-only gate evaluation) and `execute_apply()` (human-gated overlay write).
-  Runtime apply requires separate L3 approval with token and rollback plan.
-- Apply-actuator work remains gated by the applicable approval token and runtime
-  proof gates. No autonomous apply is in scope.
+- The SI-v2 controlled apply chain is now fully implemented on `main`.
+- The first L3-gated canary apply (`max_open_trades 3→2`) is **runtime-proven**
+  with `RuntimeEffectProof=GREEN`.
+- The controller operates in **Phase 4 (Measurement Window)** — T0 GREEN, T1 YELLOW,
+  T2/T3 pending. See `docs/state/current-operational-state.md`.
+- The full controlled apply chain:
+  `execute_apply()` → `plan_canary_restart_with_overlay()` →
+  `check_restart_gate()` → `run_canary_restart_with_overlay()` →
+  `RuntimeEffectProof` → `Measurement Decision Engine`
+- The rollback path is rehearsed (Phase 5A) but **not executed**.
+- The candidate pipeline exists (Phase 6A) with `execute=False` default.
+- **No autonomous apply** is in scope. All mutating operations remain:
+  canary-only, dry-run-only, human-gated, L3-token-gated.
+- **No new apply, restart, or rollback** before T2/T3 evidence is evaluated.
 
 ### Freqtrade — Dry-run execution fleet
 
