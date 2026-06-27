@@ -168,8 +168,8 @@ def _check_execute_flag(execute: bool) -> tuple[bool, str]:
 
 
 def _check_token(token: str | None) -> tuple[bool, str]:
-    _TOKENS = {L3_RESTART_TOKEN_VALUE: True}
-    if _TOKENS.get(token, False):
+    _tokens = {L3_RESTART_TOKEN_VALUE: True}
+    if _tokens.get(token, False):
         return True, ""
     if token is None:
         return False, "token_missing: no L3 token provided"
