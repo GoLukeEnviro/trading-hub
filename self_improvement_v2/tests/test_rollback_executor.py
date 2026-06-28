@@ -31,16 +31,12 @@ from __future__ import annotations
 
 import inspect
 import sys
-from pathlib import Path
 
 import pytest
 
 from si_v2.apply_actuator.rollback_executor import (
     CANARY_BOT_ID,
     EXPECTED_L3_TOKEN_PREFIX,
-    RollbackExecutionGate,
-    RollbackExecutionPlan,
-    RollbackExecutionResult,
     _build_expected_token,
     _determine_restore_mode,
     build_rollback_execution_plan,

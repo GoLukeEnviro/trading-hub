@@ -29,7 +29,7 @@ Safety invariants
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final, Literal
@@ -586,7 +586,7 @@ def render_rollback_execution_audit(
     lines.append("")
     lines.append("## Execution")
     lines.append("")
-    lines.append(f"- **Not executed.** Phase 5B is boundary-only.")
+    lines.append("- **Not executed.** Phase 5B is boundary-only.")
     lines.append(f"- execute_requested: {result.audit_record.get('execute_requested', 'unknown')}")
     lines.append("")
     lines.append("## Next Step")
