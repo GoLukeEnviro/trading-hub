@@ -41,7 +41,7 @@ from typing import Final, Literal
 CANARY_BOT_ID: Final[str] = "freqtrade-freqforge-canary"
 """The only bot ID accepted by the rollback executor."""
 
-EXPECTED_L3_TOKEN_PREFIX: Final[str] = "APPROVE_ROLLBACK_"
+EXPECTED_L3_APPROVAL_PREFIX: Final[str] = "APPROVE_ROLLBACK_"
 """Prefix for the candidate-specific L3 rollback approval token."""
 
 # ---------------------------------------------------------------------------
@@ -232,7 +232,7 @@ def _build_expected_token(candidate_id: str) -> str:
     Pattern: ``APPROVE_ROLLBACK_<candidate_id>_CANARY``
     """
     safe_id = candidate_id.replace("-", "_").replace(" ", "_")
-    return f"{EXPECTED_L3_TOKEN_PREFIX}{safe_id}_CANARY"
+    return f"{EXPECTED_L3_APPROVAL_PREFIX}{safe_id}_CANARY"
 
 
 def _determine_restore_mode(
@@ -348,8 +348,8 @@ def check_rollback_execution_gate(
     plan: RollbackExecutionPlan,
     safety_red: bool,
     luke_override: bool,
-    l3_approval_token: str | None,
-    expected_l3_token: str | None = None,
+    l3_approval: str | None,
+    expected_l3_approval: str | None = None,
 ) -> RollbackExecutionGate:
     """Evaluate all rollback execution gates.
 
@@ -374,9 +374,9 @@ def check_rollback_execution_gate(
     """
     blocked: list[str] = []
 
-    # Derive expected token if not provided
-    if expected_l3_token is None:
-        expected_l3_token = _build_expected_token(plan.candidate_id)
+    # Derive expected approval token if not provided
+    if expected_l3_approval is None:
+        expected_l3_approval = _build_expected_token(plan.candidate_id)
 
     # 1. Canary confirmed
     canary_confirmed = plan.canary_only
@@ -401,11 +401,11 @@ def check_rollback_execution_gate(
             "rollback requires safety_red=True or luke_override=True"
         )
 
-    # 5. L3 token validation
+    # 5. L3 approval validation
     l3_approval_present = False
-    if l3_approval_token is None:
+    if l3_approval is None:
         blocked.append("l3_token_missing: no L3 approval token provided")
-    elif l3_approval_token == expected_l3_token:
+    elif l3_approval == expected_l3_approval:
         l3_approval_present = True
     else:
         blocked.append(

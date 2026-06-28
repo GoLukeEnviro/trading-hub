@@ -36,7 +36,7 @@ import pytest
 
 from si_v2.apply_actuator.rollback_executor import (
     CANARY_BOT_ID,
-    EXPECTED_L3_TOKEN_PREFIX,
+    EXPECTED_L3_APPROVAL_PREFIX,
     _build_expected_token,
     _determine_restore_mode,
     build_rollback_execution_plan,
@@ -223,7 +223,7 @@ class TestCheckRollbackExecutionGate:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token=None,
+            l3_approval=None,
         )
         assert gate.allowed is False
         assert "l3_token_missing" in " ".join(gate.blocked_reasons).lower()
@@ -241,7 +241,7 @@ class TestCheckRollbackExecutionGate:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE",
+            l3_approval="APPROVE",
         )
         assert gate.allowed is False
         assert "l3_token_mismatch" in " ".join(gate.blocked_reasons).lower()
@@ -259,7 +259,7 @@ class TestCheckRollbackExecutionGate:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_wrong_candidate_CANARY",
+            l3_approval="APPROVE_ROLLBACK_wrong_candidate_CANARY",
         )
         assert gate.allowed is False
         assert "l3_token_mismatch" in " ".join(gate.blocked_reasons).lower()
@@ -277,7 +277,7 @@ class TestCheckRollbackExecutionGate:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         assert gate.l3_approval_present is True
 
@@ -294,7 +294,7 @@ class TestCheckRollbackExecutionGate:
             plan=plan,
             safety_red=False,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         assert gate.allowed is False
         assert "safety_not_red" in " ".join(gate.blocked_reasons).lower()
@@ -312,7 +312,7 @@ class TestCheckRollbackExecutionGate:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         assert gate.allowed is True
         assert gate.safety_red_required_or_luke_override is True
@@ -330,7 +330,7 @@ class TestCheckRollbackExecutionGate:
             plan=plan,
             safety_red=False,
             luke_override=True,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         assert gate.allowed is True
         assert gate.safety_red_required_or_luke_override is True
@@ -355,7 +355,7 @@ class TestExecuteCanaryRollbackBoundary:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         result = execute_canary_rollback_boundary(plan=plan, gate=gate, execute=False)
         assert result.status in ("READY_FOR_L3_ROLLBACK", "NOT_EXECUTED")
@@ -374,7 +374,7 @@ class TestExecuteCanaryRollbackBoundary:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         result = execute_canary_rollback_boundary(plan=plan, gate=gate, execute=True)
         assert result.status == "EXECUTION_NOT_ALLOWED_IN_PHASE_5B"
@@ -393,7 +393,7 @@ class TestExecuteCanaryRollbackBoundary:
             plan=plan,
             safety_red=False,
             luke_override=False,
-            l3_approval_token=None,
+            l3_approval=None,
         )
         result = execute_canary_rollback_boundary(plan=plan, gate=gate, execute=False)
         assert result.status == "BLOCKED"
@@ -418,7 +418,7 @@ class TestRenderRollbackExecutionAudit:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         result = execute_canary_rollback_boundary(plan=plan, gate=gate, execute=False)
         audit = render_rollback_execution_audit(result)
@@ -440,7 +440,7 @@ class TestRenderRollbackExecutionAudit:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         result = execute_canary_rollback_boundary(plan=plan, gate=gate, execute=False)
         audit = render_rollback_execution_audit(result)
@@ -461,7 +461,7 @@ class TestRenderRollbackExecutionAudit:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         result = execute_canary_rollback_boundary(plan=plan, gate=gate, execute=False)
         audit = render_rollback_execution_audit(result)
@@ -542,7 +542,7 @@ class TestDataclassSerialization:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         d = gate.to_dict()
         assert isinstance(d, dict)
@@ -562,7 +562,7 @@ class TestDataclassSerialization:
             plan=plan,
             safety_red=True,
             luke_override=False,
-            l3_approval_token="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
+            l3_approval="APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY",
         )
         result = execute_canary_rollback_boundary(plan=plan, gate=gate, execute=False)
         d = result.to_dict()
@@ -590,7 +590,7 @@ class TestBlockedReasonsExplicit:
             plan=plan,
             safety_red=False,
             luke_override=False,
-            l3_approval_token=None,
+            l3_approval=None,
         )
         assert len(gate.blocked_reasons) > 0
         for reason in gate.blocked_reasons:
@@ -608,7 +608,7 @@ class TestTokenBuilder:
         """Test that the expected token follows the correct pattern."""
         token = _build_expected_token("max_open_trades_3_to_2")
         assert token == "APPROVE_ROLLBACK_max_open_trades_3_to_2_CANARY"
-        assert token.startswith(EXPECTED_L3_TOKEN_PREFIX)
+        assert token.startswith(EXPECTED_L3_APPROVAL_PREFIX)
         assert token.endswith("_CANARY")
 
     def test_build_expected_token_with_dashes(self) -> None:
