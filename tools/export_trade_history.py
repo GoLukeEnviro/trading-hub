@@ -233,7 +233,7 @@ def fetch_trades(conn, since, until):
     cursor = conn.execute(query, params)
     rows = []
     for row in cursor.fetchall():
-        d = dict(row)
+        d = {key: row[key] for key in row.keys()}
         # Ensure numeric types
         for key in ("profit_abs", "profit_ratio", "stake_amount", "open_rate", "close_rate"):
             if d.get(key) is not None:
