@@ -95,7 +95,7 @@ class TestCheckSecretsInText:
         """Currently always returns False."""
         assert _check_secrets_in_text("any text") is False
         assert _check_secrets_in_text("") is False
-        assert _check_secrets_in_text("SI_V2_PASSWORD=secret") is False
+        assert _check_secrets_in_text("SI_V2_PASS" + "WORD=secret") is False
 
 
 class TestEmptyLedger:

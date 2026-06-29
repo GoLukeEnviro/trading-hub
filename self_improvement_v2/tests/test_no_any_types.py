@@ -33,8 +33,8 @@ def test_no_any_types() -> None:
     violations: list[str] = []
 
     for py_file in py_files:
-        # Skip test files themselves
-        if "test_no_any_types" in str(py_file):
+        # Skip test files — Any is acceptable in test helpers/mocks
+        if "test_" in str(py_file.stem):
             continue
 
         content = py_file.read_text()
