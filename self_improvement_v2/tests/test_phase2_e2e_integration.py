@@ -808,6 +808,7 @@ class TestNoRuntimeAccess:
             "si_v2.integrations",
             "si_v2.signals",
             "si_v2.loop.active_cycle_runner",
+            "si_v2.proofs",
         )
         for modname in si_v2_modules:
             if modname.startswith(excluded_prefixes):

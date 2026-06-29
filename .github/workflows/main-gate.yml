@@ -87,6 +87,28 @@ jobs:
             self_improvement_v2/tests/test_live_trading_invariants.py \
             -q
 
+      - name: Coverage gate (soft-fail threshold 70%)
+        continue-on-error: true
+        run: |
+          python -m pytest \
+            self_improvement_v2/tests \
+            self_improvement_v2/src \
+            orchestrator/tests \
+            orchestrator/control/tests \
+            tests \
+            -q \
+            --cov \
+            --cov-branch \
+            --cov-report=term \
+            --cov-fail-under=75
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+
       - name: Gate passed
         run: |
           echo "Main Gate: all checks passed"
