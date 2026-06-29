@@ -10,14 +10,8 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-import pytest
-
-if TYPE_CHECKING:
-    from _pytest.monkeypatch import MonkeyPatch
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
@@ -224,15 +218,24 @@ class TestAuthTelemetryBuildArtifact:
 
     def _make_bot_results(self, m: Any) -> list:
         return [
-            m.BotTelemetryResult("freqforge", "http://a", m.BOT_GREEN, {"/ping": {"ok": True, "status_code": 200}}, True, True),
-            m.BotTelemetryResult("freqforge-canary", "http://b", m.BOT_YELLOW, {"/ping": {"ok": True, "status_code": 200}}, True, False),
+            m.BotTelemetryResult(
+                "freqforge", "http://a", m.BOT_GREEN,
+                {"/ping": {"ok": True, "status_code": 200}}, True, True,
+            ),
+            m.BotTelemetryResult(
+                "freqforge-canary", "http://b", m.BOT_YELLOW,
+                {"/ping": {"ok": True, "status_code": 200}}, True, False,
+            ),
         ]
 
     def test_builds_artifact(self) -> None:
         m = self._import()
         candidate = self._make_candidate()
         results = self._make_bot_results(m)
-        artifact = m._build_telemetry_artifact(candidate, results, {"result": "PASS"}, {"outcome": "LOGGED"}, auth_post_count=2)
+        artifact = m._build_telemetry_artifact(
+            candidate, results, {"result": "PASS"},
+            {"outcome": "LOGGED"}, auth_post_count=2,
+        )
         assert artifact["artifact_type"] == "shadow_proposal_pending_human"
         assert artifact["approval_status"] == "PENDING_HUMAN"
         assert artifact["runtime_mutations"] == 0
@@ -309,7 +312,7 @@ class TestAsdictShadowProposal:
         return m
 
     def _make_decision(self) -> Any:
-        from si_v2.loop.fleet_analyzer import ShadowProposalDecision, DECISION_SHADOW_PROPOSAL
+        from si_v2.loop.fleet_analyzer import DECISION_SHADOW_PROPOSAL, ShadowProposalDecision
         return ShadowProposalDecision(
             decision_type=DECISION_SHADOW_PROPOSAL,
             bot_id="freqforge",
@@ -397,7 +400,13 @@ class TestBuildReportMarkdown:
         evidence = [self._make_evidence(m)]
         decision = analyze_fleet(evidence, cycle_id="test-cycle")
         safety_results = [
-            {"bot_id": "freqforge", "decision_type": "SHADOW_PROPOSAL", "shadow_logger": "LOGGED", "approval_status": "PENDING_HUMAN", "riskguard": "PASS_SHADOW_ONLY"},
+            {
+                "bot_id": "freqforge",
+                "decision_type": "SHADOW_PROPOSAL",
+                "shadow_logger": "LOGGED",
+                "approval_status": "PENDING_HUMAN",
+                "riskguard": "PASS_SHADOW_ONLY",
+            },
         ]
         report = m._build_report_markdown(
             cycle_id="test-cycle", branch="main", commit_sha="abc",

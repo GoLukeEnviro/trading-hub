@@ -20,13 +20,9 @@ Tests cover:
 from __future__ import annotations
 
 import json
-import os
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-import pytest
 
 if TYPE_CHECKING:
     from _pytest.monkeypatch import MonkeyPatch
@@ -57,11 +53,9 @@ from si_v2.loop.active_cycle_runner import (
 from si_v2.loop.fleet_analyzer import (
     DECISION_NO_PROPOSAL,
     DECISION_SHADOW_PROPOSAL,
-    BotEvidence,
     ShadowProposalDecision,
 )
 from si_v2.loop.telemetry_normalizer import NormalizedTelemetry
-
 
 # ======================================================================
 # Pure function: _is_rainbow_cycle_scoring_eligible
@@ -339,15 +333,12 @@ class TestPerBotHistoricalSummary:
 class TestPrimaryVerdictFromHistoricalWindow:
     def test_returns_verdict(self) -> None:
         window = {"bundle": {"primary_verdict": "GREEN"}}
-        from si_v2.loop.active_cycle_runner import _primary_verdict_from_historical_window
         assert _primary_verdict_from_historical_window(window) == "GREEN"
 
     def test_no_bundle(self) -> None:
-        from si_v2.loop.active_cycle_runner import _primary_verdict_from_historical_window
         assert _primary_verdict_from_historical_window({}) is None
 
     def test_no_verdict(self) -> None:
-        from si_v2.loop.active_cycle_runner import _primary_verdict_from_historical_window
         assert _primary_verdict_from_historical_window({"bundle": {}}) is None
 
 
@@ -357,17 +348,14 @@ class TestPrimaryVerdictFromHistoricalWindow:
 
 class TestWindowsFromHistoricalWindow:
     def test_returns_windows(self) -> None:
-        from si_v2.loop.active_cycle_runner import _windows_from_historical_window
         window = {"bundle": {"windows": {"full": {"closed_trades": 10}}}}
         result = _windows_from_historical_window(window)
         assert result["full"]["closed_trades"] == 10
 
     def test_no_bundle(self) -> None:
-        from si_v2.loop.active_cycle_runner import _windows_from_historical_window
         assert _windows_from_historical_window({}) == {}
 
     def test_no_windows(self) -> None:
-        from si_v2.loop.active_cycle_runner import _windows_from_historical_window
         assert _windows_from_historical_window({"bundle": {}}) == {}
 
 
@@ -667,7 +655,7 @@ class TestCollectOne:
             "base_url": "http://trading-freqforge-1:8080",
             "auth": {},
         }
-        telemetry, debug, auth_connector = acr._collect_one(bot, "2026-06-22T12:00:00Z")
+        telemetry, _debug, auth_connector = acr._collect_one(bot, "2026-06-22T12:00:00Z")
         assert "no auth config" in telemetry.status_response_summary
         assert auth_connector is None
 
@@ -681,10 +669,10 @@ class TestRunActiveCycle:
 
     def _setup_mocks(self, monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         """Set up all mocks needed for run_active_cycle()."""
-        from si_v2.loop import active_cycle_runner as acr
-
         # 1. Mock git subprocess
         import subprocess
+
+        from si_v2.loop import active_cycle_runner as acr
         monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "abc1234\n")
 
         # 2. Mock bot registry config
@@ -791,8 +779,12 @@ class TestRunActiveCycle:
             signal_quality = type("Q", (), {"available_count": 3, "total_endpoints": 5})()
 
         monkeypatch.setattr(acr, "collect_bot_signals", lambda *a: MockSignalSnapshot())
-        monkeypatch.setattr(acr, "fuse_signals", lambda *a: type("FS", (), {"fleet_signal_depth": 0.5, "has_rich_signals": True})())
-        monkeypatch.setattr(acr, "build_proposal_evidence", lambda *a: type("PE", (), {"to_json_safe": lambda self: {"score": 0.5}})())
+        monkeypatch.setattr(acr, "fuse_signals", lambda *a: type(
+            "FS", (), {"fleet_signal_depth": 0.5, "has_rich_signals": True},
+        )())
+        monkeypatch.setattr(acr, "build_proposal_evidence", lambda *a: type(
+            "PE", (), {"to_json_safe": lambda self: {"score": 0.5}},
+        )())
 
         # 8. Mock Rainbow (disabled by default)
         monkeypatch.setattr(acr, "_load_rainbow_signals", lambda: {
@@ -814,7 +806,10 @@ class TestRunActiveCycle:
 
         class MockHistoryAnalyzer:
             def analyze_window(self, n: int = 5) -> Any:
-                return type("Trend", (), {"runs_observed": 0, "weakest_bot": None, "strongest_bot": None, "fleet_freshness": "inactive"})()
+                return type("Trend", (), {
+                    "runs_observed": 0, "weakest_bot": None,
+                    "strongest_bot": None, "fleet_freshness": "inactive",
+                })()
             def build_evidence_window(self, n: int = 5) -> Any:
                 return None
 
@@ -831,7 +826,8 @@ class TestRunActiveCycle:
 
         # 11. Mock walk-forward materializer (imported inside function body)
         class MockMatResult:
-            bots = [type("B", (), {"bot_id": "freqforge"})()]
+            def __init__(self) -> None:
+                self.bots = [type("B", (), {"bot_id": "freqforge"})()]
             def to_walk_forward_by_bot(self) -> dict:
                 return {}
 
@@ -847,7 +843,11 @@ class TestRunActiveCycle:
         )
         monkeypatch.setattr(
             "si_v2.evaluation.walk_forward_net_metrics.evaluate_from_aggregate_metrics",
-            lambda *a: type("E", (), {"to_dict": lambda self: {"evaluation_status": "INSUFFICIENT_EVIDENCE", "promotion_blocked": True, "promotion_block_reason_codes": ["insufficient_evidence"]}})(),
+            lambda *a: type("E", (), {"to_dict": lambda self: {
+                "evaluation_status": "INSUFFICIENT_EVIDENCE",
+                "promotion_blocked": True,
+                "promotion_block_reason_codes": ["insufficient_evidence"],
+            }})(),
         )
         monkeypatch.setattr(
             "si_v2.evaluation.walk_forward_net_metrics.default_no_proposal_evaluation",
@@ -857,14 +857,23 @@ class TestRunActiveCycle:
         # 13. Mock profitability gate (imported inside function body)
         monkeypatch.setattr(
             "si_v2.evaluation.profitability_gate.evaluate_from_walk_forward_dicts",
-            lambda *a: type("GR", (), {"to_dict": lambda self: {"verdict": "blocked", "reasons": ["no_data"], "bot_verdicts": {}, "fleet_summary": {"bot_count": 0, "total_trades": 0, "total_net_pnl": 0.0, "max_drawdown_pct": 0.0, "fleet_profit_factor": 0.0}}})(),
+            lambda *a: type("GR", (), {"to_dict": lambda self: {
+                "verdict": "blocked", "reasons": ["no_data"],
+                "bot_verdicts": {},
+                "fleet_summary": {
+                    "bot_count": 0, "total_trades": 0,
+                    "total_net_pnl": 0.0, "max_drawdown_pct": 0.0,
+                    "fleet_profit_factor": 0.0,
+                },
+            }})(),
         )
 
         # 14. Mock approval gate (imported inside function body)
         class MockApprovalVerdict:
             approval_status = "PENDING_HUMAN"
             approval_eligible = True
-            reason_codes = []
+            def __init__(self) -> None:
+                self.reason_codes: list[str] = []
 
         monkeypatch.setattr(
             "si_v2.approval.approval_gate.evaluate_approval_eligibility",
@@ -887,10 +896,11 @@ class TestRunActiveCycle:
         # 17. Mock build_ledger / persist_ledger
         class MockLedger:
             cycle_count = 1
-            bot_points = [type("BP", (), {"runtime_mutations": 0})()]
-            fleet_points = [type("FP", (), {"runtime_mutations": 0})()]
-            proposal_records = []
-            attribution_windows = []
+            def __init__(self) -> None:
+                self.bot_points = [type("BP", (), {"runtime_mutations": 0})()]
+                self.fleet_points = [type("FP", (), {"runtime_mutations": 0})()]
+                self.proposal_records: list[Any] = []
+                self.attribution_windows: list[Any] = []
 
         monkeypatch.setattr(acr, "build_ledger", lambda *a, **kw: MockLedger())
         monkeypatch.setattr(acr, "persist_ledger", lambda *a, **kw: {"jsonl": str(tmp_path / "ledger.jsonl")})
@@ -946,7 +956,6 @@ class TestRunActiveCycle:
 
     def test_cycle_no_apply_executed(self, monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         """Verify that no apply function is called during the cycle."""
-        from si_v2.loop import active_cycle_runner as acr
         apply_called = False
 
         def _mock_apply(*args: Any, **kwargs: Any) -> None:

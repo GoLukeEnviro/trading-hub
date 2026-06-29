@@ -12,12 +12,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
 
 import pytest
-
-if TYPE_CHECKING:
-    from _pytest.monkeypatch import MonkeyPatch
 
 from si_v2.measurement.ledger import (
     _build_summary,
@@ -34,7 +30,6 @@ from si_v2.measurement.models import (
     FleetMeasurementPoint,
     MeasurementLedger,
 )
-
 
 # ======================================================================
 # Pure helpers
@@ -207,7 +202,7 @@ class TestPersistLedger:
         ledger = self._make_ledger()
         paths = persist_ledger(ledger, ledger_dir=tmp_path)
         lines = paths["jsonl"].read_text().strip().split("\n")
-        fleet_lines = [l for l in lines if json.loads(l).get("_type") == "fleet"]
+        fleet_lines = [line for line in lines if json.loads(line).get("_type") == "fleet"]
         assert len(fleet_lines) == 1
 
 

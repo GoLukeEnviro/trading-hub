@@ -12,7 +12,6 @@ from typing import Any
 
 import pytest
 
-
 # =========================================================================
 # Module 1: multi_bot_rest_shadowproposal_proof — _write_report
 # =========================================================================
@@ -23,11 +22,11 @@ class TestRestShadowproposalWriteReport:
     @pytest.fixture
     def proof_mod(self):
         import importlib.util as iu
-        _PROOF_PATH = (
+        proof_path = (
             Path(__file__).resolve().parents[1] / "src" / "si_v2" / "proofs"
             / "multi_bot_rest_shadowproposal_proof.py"
         )
-        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_rest_shadowproposal_proof", _PROOF_PATH)
+        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_rest_shadowproposal_proof", proof_path)
         mod = iu.module_from_spec(spec)
         assert spec is not None and spec.loader is not None
         spec.loader.exec_module(mod)
@@ -125,11 +124,11 @@ class TestRestShadowproposalMain:
     @pytest.fixture
     def proof_mod(self):
         import importlib.util as iu
-        _PROOF_PATH = (
+        proof_path = (
             Path(__file__).resolve().parents[1] / "src" / "si_v2" / "proofs"
             / "multi_bot_rest_shadowproposal_proof.py"
         )
-        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_rest_shadowproposal_proof", _PROOF_PATH)
+        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_rest_shadowproposal_proof", proof_path)
         mod = iu.module_from_spec(spec)
         assert spec is not None and spec.loader is not None
         spec.loader.exec_module(mod)
@@ -160,11 +159,11 @@ class TestAuthTelemetryWriteReport:
     @pytest.fixture
     def proof_mod(self):
         import importlib.util as iu
-        _PROOF_PATH = (
+        proof_path = (
             Path(__file__).resolve().parents[1] / "src" / "si_v2" / "proofs"
             / "multi_bot_authenticated_telemetry_proof.py"
         )
-        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_authenticated_telemetry_proof", _PROOF_PATH)
+        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_authenticated_telemetry_proof", proof_path)
         mod = iu.module_from_spec(spec)
         assert spec is not None and spec.loader is not None
         spec.loader.exec_module(mod)
@@ -186,12 +185,12 @@ class TestAuthTelemetryWriteReport:
         monkeypatch.setattr(proof_mod, "_REPORT_PATH", report_path)
 
         candidate = self._make_candidate(proof_mod)
-        BotTelemetryResult = proof_mod.BotTelemetryResult
+        bot_telemetry_result = proof_mod.BotTelemetryResult
         results = [
-            BotTelemetryResult(bot_id="freqforge", base_url="http://a:8080",
+            bot_telemetry_result(bot_id="freqforge", base_url="http://a:8080",
                                classification=proof_mod.BOT_GREEN, auth_success=True,
                                endpoints={"/api/v1/ping": {"ok": True, "status_code": 200}}),
-            BotTelemetryResult(bot_id="freqforge-canary", base_url="http://b:8080",
+            bot_telemetry_result(bot_id="freqforge-canary", base_url="http://b:8080",
                                classification=proof_mod.BOT_YELLOW, auth_attempted=True,
                                endpoints={"/api/v1/ping": {"ok": True, "status_code": 200}}),
         ]
@@ -213,9 +212,9 @@ class TestAuthTelemetryWriteReport:
         monkeypatch.setattr(proof_mod, "_REPORT_PATH", report_path)
 
         candidate = self._make_candidate(proof_mod)
-        BotTelemetryResult = proof_mod.BotTelemetryResult
+        bot_telemetry_result = proof_mod.BotTelemetryResult
         results = [
-            BotTelemetryResult(bot_id="dead-bot", base_url="http://x:8080",
+            bot_telemetry_result(bot_id="dead-bot", base_url="http://x:8080",
                                classification=proof_mod.BOT_RED, error="Connection refused"),
         ]
         riskguard = {"result": "PASS_SHADOW_ONLY", "reason": "ok", "details": []}
@@ -239,11 +238,11 @@ class TestAuthTelemetryMain:
     @pytest.fixture
     def proof_mod(self):
         import importlib.util as iu
-        _PROOF_PATH = (
+        proof_path = (
             Path(__file__).resolve().parents[1] / "src" / "si_v2" / "proofs"
             / "multi_bot_authenticated_telemetry_proof.py"
         )
-        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_authenticated_telemetry_proof", _PROOF_PATH)
+        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_authenticated_telemetry_proof", proof_path)
         mod = iu.module_from_spec(spec)
         assert spec is not None and spec.loader is not None
         spec.loader.exec_module(mod)
@@ -274,11 +273,11 @@ class TestReadAnalyzeCollectOne:
     @pytest.fixture
     def proof_mod(self):
         import importlib.util as iu
-        _PROOF_PATH = (
+        proof_path = (
             Path(__file__).resolve().parents[1] / "src" / "si_v2" / "proofs"
             / "multi_bot_read_analyze_shadow_proposal.py"
         )
-        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_read_analyze_shadow_proposal", _PROOF_PATH)
+        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_read_analyze_shadow_proposal", proof_path)
         mod = iu.module_from_spec(spec)
         assert spec is not None and spec.loader is not None
         spec.loader.exec_module(mod)
@@ -307,7 +306,7 @@ class TestReadAnalyzeCollectOne:
         monkeypatch.setattr(proof_mod, "SIV2FreqtradeTelemetryConnector",
                             lambda base_url, bot_id, **kwargs: mock_connector)
 
-        evidence, debug = proof_mod._collect_one(bot_config, now_iso="2026-06-15T10:00:00Z")
+        evidence, _debug = proof_mod._collect_one(bot_config, now_iso="2026-06-15T10:00:00Z")
         assert evidence is not None
         assert evidence.bot_id == "test-bot"
 
@@ -334,7 +333,7 @@ class TestReadAnalyzeCollectOne:
         monkeypatch.setattr(proof_mod, "SIV2FreqtradeTelemetryConnector",
                             lambda base_url, bot_id, **kwargs: mock_connector)
 
-        evidence, debug = proof_mod._collect_one(bot_config, now_iso="2026-06-15T10:00:00Z")
+        evidence, _debug = proof_mod._collect_one(bot_config, now_iso="2026-06-15T10:00:00Z")
         assert evidence is not None
         assert evidence.bot_id == "test-bot"
 
@@ -365,7 +364,7 @@ class TestReadAnalyzeCollectOne:
         monkeypatch.setattr(proof_mod, "SIV2FreqtradeTelemetryConnector",
                             lambda base_url, bot_id, **kwargs: mock_connector)
 
-        evidence, debug = proof_mod._collect_one(bot_config, now_iso="2026-06-15T10:00:00Z")
+        evidence, _debug = proof_mod._collect_one(bot_config, now_iso="2026-06-15T10:00:00Z")
         assert evidence is not None
         assert evidence.bot_id == "test-bot"
 
@@ -380,11 +379,11 @@ class TestReadAnalyzeGitHelpers:
     @pytest.fixture
     def proof_mod(self):
         import importlib.util as iu
-        _PROOF_PATH = (
+        proof_path = (
             Path(__file__).resolve().parents[1] / "src" / "si_v2" / "proofs"
             / "multi_bot_read_analyze_shadow_proposal.py"
         )
-        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_read_analyze_shadow_proposal", _PROOF_PATH)
+        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_read_analyze_shadow_proposal", proof_path)
         mod = iu.module_from_spec(spec)
         assert spec is not None and spec.loader is not None
         spec.loader.exec_module(mod)
@@ -411,11 +410,11 @@ class TestReadAnalyzeMain:
     @pytest.fixture
     def proof_mod(self):
         import importlib.util as iu
-        _PROOF_PATH = (
+        proof_path = (
             Path(__file__).resolve().parents[1] / "src" / "si_v2" / "proofs"
             / "multi_bot_read_analyze_shadow_proposal.py"
         )
-        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_read_analyze_shadow_proposal", _PROOF_PATH)
+        spec = iu.spec_from_file_location("si_v2.proofs.multi_bot_read_analyze_shadow_proposal", proof_path)
         mod = iu.module_from_spec(spec)
         assert spec is not None and spec.loader is not None
         spec.loader.exec_module(mod)

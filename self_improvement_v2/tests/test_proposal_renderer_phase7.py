@@ -9,8 +9,6 @@ Tests cover:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from si_v2.proposal.renderer import render_proposal_list, render_proposal_packet
 from si_v2.proposal.schema import (
     EvidenceReference,
@@ -69,7 +67,10 @@ class TestRenderProposalPacket:
             confidence_bucket="high",
             estimated_impact="positive",
             evidence_refs=[
-                EvidenceReference(category="walk_forward", path="wf/metrics.json", schema_version=1, summary="PF improved"),
+                EvidenceReference(
+                    category="walk_forward", path="wf/metrics.json",
+                    schema_version=1, summary="PF improved",
+                ),
             ],
         )
         output = render_proposal_packet(c)
@@ -133,8 +134,8 @@ class TestRenderProposalPacket:
         output1 = render_proposal_packet(c)
         output2 = render_proposal_packet(c)
         # Remove the timestamp line before comparing
-        lines1 = [l for l in output1.split("\n") if not l.startswith("*Rendered at")]
-        lines2 = [l for l in output2.split("\n") if not l.startswith("*Rendered at")]
+        lines1 = [line for line in output1.split("\n") if not line.startswith("*Rendered at")]
+        lines2 = [line for line in output2.split("\n") if not line.startswith("*Rendered at")]
         assert lines1 == lines2
 
 
