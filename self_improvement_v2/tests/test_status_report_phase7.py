@@ -8,10 +8,7 @@ Tests cover:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-
-import pytest
 
 if TYPE_CHECKING:
     from _pytest.monkeypatch import MonkeyPatch
@@ -27,7 +24,6 @@ from si_v2.status import (
     TestBaseline,
 )
 from si_v2.status.report import generate_report, render_markdown
-
 
 # ======================================================================
 # render_markdown — pure function

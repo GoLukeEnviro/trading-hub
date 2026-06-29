@@ -8,14 +8,10 @@ Tests cover:
 
 from __future__ import annotations
 
-import json
-import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-import pytest
 
 if TYPE_CHECKING:
     from _pytest.monkeypatch import MonkeyPatch
@@ -56,7 +52,7 @@ class TestBridgeValidateSignal:
 
     def _valid_signal(self) -> dict:
         return {
-            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "timestamp_utc": datetime.now(UTC).isoformat(),
             "pair": "BTC/USDT:USDT",
             "direction": "long",
             "confidence": 0.75,
@@ -80,7 +76,7 @@ class TestBridgeValidateSignal:
         hpb = self._import()
         signal = self._valid_signal()
         # Set timestamp 2x freshness in the past
-        signal["timestamp_utc"] = datetime(2020, 1, 1, tzinfo=timezone.utc).isoformat()
+        signal["timestamp_utc"] = datetime(2020, 1, 1, tzinfo=UTC).isoformat()
         assert hpb.validate_signal(signal) is False
 
     def test_invalid_timestamp(self) -> None:
@@ -418,8 +414,8 @@ class TestRegimeDetectorDetectRegime:
     def test_sufficient_data_returns_regime(self) -> None:
         """With enough data, should return a regime."""
         rd = self._import()
-        import pandas as pd
         import numpy as np
+        import pandas as pd
         # Generate 250 rows of trending data
         np.random.seed(42)
         close = 50000 + np.cumsum(np.random.randn(250) * 100)

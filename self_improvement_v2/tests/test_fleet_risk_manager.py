@@ -6,13 +6,11 @@ No Docker, no HTTP, no real filesystem outside tmp_path.
 from __future__ import annotations
 
 import json
-import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import pytest
-
 from freqtrade.shared.fleet_risk_manager import (
     BACKTEST_GATES,
     CONFIDENCE_MIN,
@@ -23,7 +21,6 @@ from freqtrade.shared.fleet_risk_manager import (
     _safe_float,
     _utc_now,
 )
-
 
 # =========================================================================
 # Pure helper functions
@@ -61,7 +58,7 @@ class TestAsIso:
         assert _as_iso("2026-06-29T12:00:00") == "2026-06-29T12:00:00"
 
     def test_datetime(self) -> None:
-        dt = datetime(2026, 6, 29, 12, 0, 0, tzinfo=timezone.utc)
+        dt = datetime(2026, 6, 29, 12, 0, 0, tzinfo=UTC)
         result = _as_iso(dt)
         assert result is not None
         assert "2026-06-29" in result
@@ -396,6 +393,7 @@ class TestGetExposureMultiplier:
 class TestGetClusterPenalty:
     def _make_mgr(self, tmp_path: Path, **overrides: Any) -> FleetRiskManager:
         import unittest.mock as um
+
         import freqtrade.shared.fleet_risk_manager as frm
         frm.BACKTEST_GATES = True
         state_file = tmp_path / "state.json"
@@ -505,6 +503,7 @@ class TestShouldReduceExposure:
 class TestCheckDirectionBias:
     def _make_mgr(self, tmp_path: Path, **overrides: Any) -> FleetRiskManager:
         import unittest.mock as um
+
         import freqtrade.shared.fleet_risk_manager as frm
         frm.BACKTEST_GATES = True
         state_file = tmp_path / "state.json"
@@ -580,6 +579,7 @@ class TestCheckDirectionBias:
 class TestLoadCorrelationMatrix:
     def _make_mgr(self, tmp_path: Path, **overrides: Any) -> FleetRiskManager:
         import unittest.mock as um
+
         import freqtrade.shared.fleet_risk_manager as frm
         frm.BACKTEST_GATES = True
         state_file = tmp_path / "state.json"
@@ -717,6 +717,7 @@ class TestCheckEntryAllowed:
     def _make_mgr(self, tmp_path: Path, **overrides: Any) -> FleetRiskManager:
         """Create a FleetRiskManager with a tmp_path state file and mocked refresh_from_disk."""
         import unittest.mock as um
+
         import freqtrade.shared.fleet_risk_manager as frm
         frm.BACKTEST_GATES = True
 
