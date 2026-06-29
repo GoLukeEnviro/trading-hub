@@ -96,6 +96,7 @@ jobs:
             orchestrator/tests \
             orchestrator/control/tests \
             tests \
+            freqtrade/tests \
             -q \
             --cov \
             --cov-branch \
