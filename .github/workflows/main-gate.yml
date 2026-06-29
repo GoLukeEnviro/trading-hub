@@ -87,7 +87,7 @@ jobs:
             self_improvement_v2/tests/test_live_trading_invariants.py \
             -q
 
-      - name: Coverage gate (soft-fail threshold 60%)
+      - name: Coverage gate (soft-fail threshold 70%)
         continue-on-error: true
         run: |
           python -m pytest \
@@ -100,7 +100,7 @@ jobs:
             --cov \
             --cov-branch \
             --cov-report=term \
-            --cov-fail-under=60
+            --cov-fail-under=70
 
       - name: Upload coverage report
         if: always()
