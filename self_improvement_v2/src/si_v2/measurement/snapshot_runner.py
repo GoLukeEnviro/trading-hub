@@ -385,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target-bot", default=CANARY_BOT_ID, help="Target bot ID")
     parser.add_argument("--control-bot", default=CONTROL_BOT_ID, help="Control bot ID")
     parser.add_argument("--official", action="store_true", help="Official measurement point")
-    parser.add_argument("--smoke", action="store_true", default=True, help="Smoke test mode")
+    parser.add_argument("--smoke", action="store_true", default=False, help="Smoke test mode")
     parser.add_argument("--write-report", action="store_true", default=True, help="Write report file")
     parser.add_argument("--no-write-report", action="store_false", dest="write_report", help="Skip report writing")
 
