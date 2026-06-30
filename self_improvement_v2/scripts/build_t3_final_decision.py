@@ -18,8 +18,8 @@ _HERE = Path(__file__).resolve().parent
 _SRC = _HERE.parent / "src"
 sys.path.insert(0, str(_SRC))
 
-from si_v2.measurement.decision_engine import MeasurementPoint  # noqa: E402
-from si_v2.measurement.final_decision_pack import (  # noqa: E402
+from si_v2.measurement.decision_engine import MeasurementPoint  # noqa: E402, I001
+from si_v2.measurement.final_decision_pack import (  # noqa: E402, I001
     build_final_measurement_decision_pack,
     build_measurement_report_registry,
     render_final_measurement_report,
