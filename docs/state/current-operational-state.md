@@ -1,7 +1,7 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `c9cdcf9` (PR #393 squash-merge).
+> commit `9140850` (PR #394 squash-merge).
 >
 > **Last updated:** 2026-06-30 after T3 + Final Measurement Decision
 > **Previous update:** 2026-06-27 after PRs #379–#384 (Complete SI-v2 Chain)
