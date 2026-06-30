@@ -1,7 +1,7 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot** — validated against `main` at
-> commit `4d66323`.
+> **Canonical current-state snapshot** — validated against PR #392 head
+> commit `347b0b4` on top of `origin/main` (`3ec434a`).
 >
 > **Last updated:** 2026-06-30 after T3 + Final Measurement Decision
 > **Previous update:** 2026-06-27 after PRs #379–#384 (Complete SI-v2 Chain)
