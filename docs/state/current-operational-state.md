@@ -1,7 +1,7 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `c3cce60` (PR #392 squash-merge).
+> commit `c9cdcf9` (PR #393 squash-merge).
 >
 > **Last updated:** 2026-06-30 after T3 + Final Measurement Decision
 > **Previous update:** 2026-06-27 after PRs #379–#384 (Complete SI-v2 Chain)
@@ -81,6 +81,7 @@ context only.
 | **T1** | 2026-06-27T19:27Z | 🟡 **YELLOW / CONTINUE** — Bitget 429 warnings |
 | **T2** | 2026-06-28T00:27Z | 🟡 **YELLOW / CONTINUE** — Bitget 429 warnings, 0 new trades |
 | **T3** | 2026-06-28T18:27Z | 🟡 **YELLOW / EXTEND_MEASUREMENT** — Bitget 429, Kill Switch HALT_NEW compromised window |
+| **T4 Readiness** | 2026-06-30 | ⏳ **NOT_ENOUGH_DATA** — 0 new closed canary trades since T3 |
 | **Final Decision** | 2026-06-30 | 🟡 **EXTEND_MEASUREMENT** — MEDIUM confidence |
 
 ### Why EXTEND_MEASUREMENT
@@ -112,7 +113,7 @@ context only.
 - monitoring for trade activity under Kill Switch NORMAL
 
 ### Next runtime action
-**Extended Measurement — collect T4 data after sufficient trade activity under Kill Switch NORMAL.**
+**Re-check after canary UNI/USDT trade closes. Minimum: 1 new closed canary trade + 1 new closed control trade for official T4.**
 
 ---
 
