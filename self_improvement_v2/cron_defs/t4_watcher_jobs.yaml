@@ -1,0 +1,15 @@
+schema_version: 1
+jobs:
+  - job_id: si_v2_t4_measurement_watch
+    bot_id: si_v2
+    phase: analyze
+    schedule: "*/30 * * * *"
+    command: "orchestrator/scripts/si_v2_t4_watcher_cron.sh"
+    enabled_default: false
+    dry_run_only: true
+    no_agent: true
+    description: >-
+      Read-only T4 measurement watcher for SI-v2. Detects the first
+      post-T3 Canary close, emits STILL_WAITING as healthy/no-op, and writes
+      local MEASUREMENT_READY / BLOCKED / DATA_UNAVAILABLE alerts without
+      running the Decision Engine, Apply, Restart, or Rollback paths.

@@ -18,7 +18,7 @@ This runbook is the repo-backed registration contract for PR #404.
 
 ## Canonical Runtime Script
 
-- Repo source: `/home/hermes/projects/trading/orchestrator/scripts/si_v2_t4_watcher_job.sh`
+- Canonical entrypoint: `/home/hermes/projects/trading/orchestrator/scripts/si_v2_t4_watcher_cron.sh`
 - Underlying detector: `/home/hermes/projects/trading/orchestrator/scripts/si_v2_t4_measurement_watcher.sh`
 - Runtime logs: `/opt/data/logs/si-v2-t4-watcher/`
 
@@ -38,7 +38,7 @@ This runbook is the repo-backed registration contract for PR #404.
 {
   "name": "si-v2-t4-watcher (30m, detector-only)",
   "schedule": "every 30m",
-  "script": "si_v2_t4_watcher_job.sh",
+  "script": "si_v2_t4_watcher_cron.sh",
   "no_agent": true,
   "deliver": "local",
   "workdir": "/home/hermes/projects/trading"
@@ -54,7 +54,7 @@ Use the Hermes cron tool payload below after explicit runtime approval. The repo
   "action": "create",
   "name": "si-v2-t4-watcher (30m, detector-only)",
   "schedule": "every 30m",
-  "script": "si_v2_t4_watcher_job.sh",
+  "script": "si_v2_t4_watcher_cron.sh",
   "no_agent": true,
   "deliver": "local",
   "workdir": "/home/hermes/projects/trading"
@@ -66,21 +66,22 @@ If the CLI path is preferred, create the job interactively with the same fields 
 ## Validation
 
 ```bash
-bash -n orchestrator/scripts/si_v2_t4_watcher_job.sh
-python3 -m pytest tests/test_si_v2_t4_watcher_job.py tests/test_si_v2_scheduler_scripts.py -q
-SI_V2_REPO_ROOT=/home/hermes/projects/trading bash orchestrator/scripts/si_v2_t4_watcher_job.sh
+bash -n orchestrator/scripts/si_v2_t4_watcher_cron.sh
+PYTHONPATH=self_improvement_v2/src python3 self_improvement_v2/scripts/cron_planner.py validate self_improvement_v2/cron_defs/t4_watcher_jobs.yaml
+PYTHONPATH=self_improvement_v2/src python3 self_improvement_v2/scripts/cron_planner.py render-plan self_improvement_v2/cron_defs/t4_watcher_jobs.yaml
+python3 -m pytest tests/test_si_v2_scheduler_scripts.py tests/test_si_v2_t4_watcher_registration.py -q
 ```
 
 Expected outcomes:
 - `STILL_WAITING` → exit `0`, no stdout, log file created under `/opt/data/logs/si-v2-t4-watcher/`
 - `MEASUREMENT_READY` → exit `0`, visible alert on stdout, log file created
-- blocked / data unavailable / script error → non-zero exit with alert text
+- blocked / data unavailable / script error → exit `1` with alert text
 
 ## Rollback
 
 - Pause or remove the Hermes job.
 - Restore `jobs.json` from the last known-good backup if a revert is required.
-- Remove runtime-deployed `si_v2_t4_watcher_job.sh` only via the standard runtime ownership path.
+- Remove runtime-deployed `si_v2_t4_watcher_cron.sh` only via the standard runtime ownership path.
 
 ## Non-Goals
 
