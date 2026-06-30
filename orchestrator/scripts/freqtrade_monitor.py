@@ -17,8 +17,9 @@ from datetime import datetime, timezone
 PROJECT_ROOT = "/home/hermes/projects/trading/freqtrade"
 BOTS_DIR = os.path.join(PROJECT_ROOT, "bots")
 
-# Docker network
-DOCKER_NETWORK = "ki-fabrik"
+# Docker network — containers are on trading_hermes-net or hermes-net.
+# Individual bot entries override this if needed.
+DOCKER_NETWORK = "trading_hermes-net"
 
 # Docker host is inherited from the environment (DOCKER_HOST).
 # In hermes-green this is tcp://docker-proxy:2375 (EXEC=1, POST=1 enabled).
@@ -43,14 +44,14 @@ BOTS = {
         "port": 8081,
         "db": "tradesv3.freqforge_canary.dryrun.sqlite",
         "config": "/freqtrade/user_data/config.json",
-        "network": DOCKER_NETWORK,
+        "network": "hermes-net",
     },
     "trading-freqai-rebel-1": {
-        "bot_dir": None,  # Docker volume: freqai-rebel-data
+        "bot_dir": "/home/hermes/projects/trading/freqtrade/bots/freqai-rebel/user_data",
         "port": 8087,
-        "db": "tradesv3.freqai_rebel.dryrun.sqlite",  # FIX-2026-06-06: bot-specific DB name
+        "db": "tradesv3.freqai_rebel.dryrun.sqlite",
         "config": "/freqtrade/user_data/config.json",
-        "network": "trading-freqai-rebel-1-net",
+        "network": DOCKER_NETWORK,
     },
 }
 
@@ -82,7 +83,12 @@ def sh_quote(s):
 
 
 def get_container_ip(container):
-    """Get container IP on the appropriate Docker network."""
+    """Get container IP on the appropriate Docker network.
+
+    Tries the configured network first.  If that yields no IP, falls back
+    to the first available network from ``docker inspect``.  As a last
+    resort, uses ``hostname -i`` inside the container.
+    """
     if container in CONTAINER_IPS:
         return CONTAINER_IPS[container]
     # Determine network from BOTS config
@@ -92,6 +98,19 @@ def get_container_ip(container):
     if out and out != "<no value>":
         CONTAINER_IPS[container] = out
         return out
+    # Fallback: discover first network from docker inspect
+    net_out, _ = run_cmd(
+        'docker inspect ' + container + " --format='{{range $k, $v := .NetworkSettings.Networks}}{{$k}}:{{.IPAddress}} {{end}}'",
+        timeout=5,
+    )
+    if net_out and ":" in net_out:
+        # Format: "network1:172.x.x.x network2:172.y.y.y"
+        for part in net_out.split():
+            if ":" in part:
+                ip = part.split(":")[1].strip()
+                if ip and ip != "<no value>":
+                    CONTAINER_IPS[container] = ip
+                    return ip
     # Fallback: via hostname -i inside the container
     out2, _ = docker_exec(container, "hostname -i", timeout=5)
     if out2:
@@ -224,10 +243,18 @@ WHERE is_open = 0;
 
 
 def get_open_trade_details(bot_name, bot_info):
-    """Get currently open trades with details."""
+    """Get currently open trades with details.
+
+    The host DB path is only a sanity check — the container DB remains
+    the authoritative source.  If the host path is unknown (bot_dir=None)
+    or the host file is missing/empty, we still query the container.
+    """
     db_path = get_trade_db_path(bot_name, bot_info)
-    if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
-        return []
+    if db_path is not None and (
+        not os.path.exists(db_path) or os.path.getsize(db_path) == 0
+    ):
+        # Host DB not available, but container may still have the current DB.
+        pass
 
     container = bot_name
     db_container_path = f"/freqtrade/user_data/{bot_info['db']}"
