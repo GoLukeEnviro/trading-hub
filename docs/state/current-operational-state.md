@@ -1,7 +1,7 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `9140850` (PR #394 squash-merge).
+> commit `26e8a2e` (PR #395 squash-merge).
 >
 > **Last updated:** 2026-06-30 after T3 + Final Measurement Decision
 > **Previous update:** 2026-06-27 after PRs #379–#384 (Complete SI-v2 Chain)
@@ -82,6 +82,7 @@ context only.
 | **T2** | 2026-06-28T00:27Z | 🟡 **YELLOW / CONTINUE** — Bitget 429 warnings, 0 new trades |
 | **T3** | 2026-06-28T18:27Z | 🟡 **YELLOW / EXTEND_MEASUREMENT** — Bitget 429, Kill Switch HALT_NEW compromised window |
 | **T4 Readiness** | 2026-06-30 | ⏳ **NOT_ENOUGH_DATA** — 0 new closed canary trades since T3 |
+| **T4 Follow-up** | 2026-06-30 | ⏳ **STILL_NOT_ENOUGH_DATA** — UNI/USDT still open, no change since T4 Readiness |
 | **Final Decision** | 2026-06-30 | 🟡 **EXTEND_MEASUREMENT** — MEDIUM confidence |
 
 ### Why EXTEND_MEASUREMENT
