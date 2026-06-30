@@ -13,13 +13,13 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-# Ensure src is on the path
+# Ensure src is on the path — before si_v2 imports
 _HERE = Path(__file__).resolve().parent
 _SRC = _HERE.parent / "src"
 sys.path.insert(0, str(_SRC))
 
-from si_v2.measurement.decision_engine import MeasurementPoint
-from si_v2.measurement.final_decision_pack import (
+from si_v2.measurement.decision_engine import MeasurementPoint  # noqa: E402
+from si_v2.measurement.final_decision_pack import (  # noqa: E402
     build_final_measurement_decision_pack,
     build_measurement_report_registry,
     render_final_measurement_report,
@@ -231,7 +231,7 @@ def main() -> int:
     now_str = now.isoformat()
     date_str = now.strftime("%Y-%m-%d")
 
-    print(f"=== Building T3 + Final Decision Pack ===")
+    print("=== Building T3 + Final Decision Pack ===")
     print(f"Timestamp: {now_str}")
     print()
 
@@ -333,7 +333,7 @@ def main() -> int:
     print(f"  Confidence: {pack.confidence}")
     print(f"  Official T3: {'YES' if pack.official_t3_present else 'NO'}")
     print(f"  All reports: {'YES' if pack.all_required_reports_present else 'NO'}")
-    print(f"  Runtime mutation: NONE")
+    print("  Runtime mutation: NONE")
     print(f"  Next step: {pack.next_step}")
 
     return 0
