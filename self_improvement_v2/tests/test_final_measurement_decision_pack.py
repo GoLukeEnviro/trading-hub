@@ -194,6 +194,25 @@ class TestBuildFinalMeasurementDecisionPack:
         assert pack.final_decision == "EXTEND_MEASUREMENT"
         assert any("smoke" in r for r in pack.blocked_reasons)
 
+    def test_final_decision_blocks_or_extends_when_official_t3_missing(
+        self,
+        reports_without_t3: list,
+    ) -> None:
+        pack = build_final_measurement_decision_pack(
+            canary_points=[
+                _make_point("T0", closed_trades=59, total_profit_abs=3.98),
+                _make_point("T1", closed_trades=59, total_profit_abs=3.98, warnings_since_last=3),
+                _make_point("T2", closed_trades=59, total_profit_abs=3.98, warnings_since_last=12),
+                _make_point("T3", closed_trades=61, total_profit_abs=3.98311161, container_healthy=None),
+            ],
+            reports=reports_without_t3,
+            now_utc="2026-06-28T19:00:00Z",
+        )
+
+        assert pack.final_decision == "EXTEND_MEASUREMENT"
+        assert not pack.official_t3_present
+        assert any("official_t3_report_missing" in reason for reason in pack.blocked_reasons)
+
     def test_official_t3_green_returns_keep(
         self,
         reports_with_official_t3: list,

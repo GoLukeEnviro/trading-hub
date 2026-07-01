@@ -65,6 +65,46 @@ def _make_point(
     )
 
 
+def _make_control_point(
+    label: Literal["T0", "T1", "T2", "T3"] = "T0",
+    *,
+    runtime_proof_status: str = "GREEN",
+    max_open_trades: int | None = 5,
+    dry_run: bool | None = True,
+    container_healthy: bool | None = True,
+    open_trades: int | None = 0,
+    closed_trades: int | None = 78,
+    total_profit_abs: float | None = 24.78,
+    realized_profit_abs: float | None = 24.78,
+    win_rate: float | None = 0.795,
+    drawdown_abs: float | None = 0.0,
+    errors_since_last: int | None = 0,
+    warnings_since_last: int | None = 0,
+    unexpected_restart: bool = False,
+    rollback_required: bool = False,
+) -> MeasurementPoint:
+    return MeasurementPoint(
+        label=label,
+        timestamp_utc="2026-06-27T18:27:00Z",
+        bot_id="freqtrade-freqforge",
+        candidate_id="max_open_trades_3_to_2",
+        runtime_proof_status=runtime_proof_status,
+        max_open_trades=max_open_trades,
+        dry_run=dry_run,
+        container_healthy=container_healthy,
+        open_trades=open_trades,
+        closed_trades=closed_trades,
+        total_profit_abs=total_profit_abs,
+        realized_profit_abs=realized_profit_abs,
+        win_rate=win_rate,
+        drawdown_abs=drawdown_abs,
+        errors_since_last=errors_since_last,
+        warnings_since_last=warnings_since_last,
+        unexpected_restart=unexpected_restart,
+        rollback_required=rollback_required,
+    )
+
+
 @pytest.fixture
 def t0_green() -> MeasurementPoint:
     return _make_point("T0", closed_trades=59, total_profit_abs=3.98)
@@ -416,14 +456,123 @@ class TestDecideFinalMeasurement:
                 label="T3", timestamp_utc="", bot_id="freqtrade-freqforge",
                 candidate_id="", runtime_proof_status="GREEN",
                 max_open_trades=3, dry_run=True, container_healthy=True,
-                open_trades=0, closed_trades=84, total_profit_abs=27.0,
-                realized_profit_abs=27.0, win_rate=0.81, drawdown_abs=0.0,
+                open_trades=0, closed_trades=84, total_profit_abs=26.0,
+                realized_profit_abs=26.0, win_rate=0.81, drawdown_abs=0.0,
                 errors_since_last=0, warnings_since_last=0,
                 unexpected_restart=False, rollback_required=False,
             ),
         ]
         d = decide_final_measurement(canary_points=canary_points, control_points=control_points)
         assert d.decision == "KEEP_CANARY_OVERLAY"
+
+    def test_final_decision_keeps_when_only_historical_noncritical_warnings_and_canary_outperforms_control(
+        self,
+    ) -> None:
+        canary_points = [
+            _make_point("T0", closed_trades=59, total_profit_abs=3.98),
+            _make_point("T1", closed_trades=59, total_profit_abs=3.98, warnings_since_last=3),
+            _make_point("T2", closed_trades=59, total_profit_abs=3.98, warnings_since_last=12),
+            _make_point(
+                "T3",
+                closed_trades=61,
+                total_profit_abs=3.98311161,
+                warnings_since_last=0,
+                container_healthy=None,
+            ),
+        ]
+        control_points = [
+            _make_control_point("T0", closed_trades=78, total_profit_abs=24.78),
+            _make_control_point("T1", closed_trades=78, total_profit_abs=24.78),
+            _make_control_point("T2", closed_trades=78, total_profit_abs=24.78),
+            _make_control_point("T3", closed_trades=81, total_profit_abs=3.33600672),
+        ]
+
+        d = decide_final_measurement(
+            canary_points=canary_points,
+            control_points=control_points,
+        )
+
+        assert d.verdict == "GREEN"
+        assert d.decision == "KEEP_CANARY_OVERLAY"
+        assert any("profit_gap" in reason for reason in d.reasons)
+
+    def test_final_decision_extends_when_canary_underperforms_control(self) -> None:
+        canary_points = [
+            _make_point("T0", closed_trades=59, total_profit_abs=3.98),
+            _make_point("T1", closed_trades=60, total_profit_abs=3.90, warnings_since_last=3),
+            _make_point("T2", closed_trades=60, total_profit_abs=3.80, warnings_since_last=12),
+            _make_point("T3", closed_trades=61, total_profit_abs=3.50, container_healthy=None),
+        ]
+        control_points = [
+            _make_control_point("T0", closed_trades=78, total_profit_abs=24.78),
+            _make_control_point("T1", closed_trades=79, total_profit_abs=25.10),
+            _make_control_point("T2", closed_trades=80, total_profit_abs=25.80),
+            _make_control_point("T3", closed_trades=81, total_profit_abs=26.50),
+        ]
+
+        d = decide_final_measurement(
+            canary_points=canary_points,
+            control_points=control_points,
+        )
+
+        assert d.verdict == "YELLOW"
+        assert d.decision == "EXTEND_MEASUREMENT"
+        assert any("underperform" in reason for reason in d.reasons)
+
+    def test_final_decision_rolls_back_on_rollback_required_even_if_profit_positive(self) -> None:
+        canary_points = [
+            _make_point("T0", closed_trades=59, total_profit_abs=3.98),
+            _make_point("T1", closed_trades=61, total_profit_abs=4.50),
+            _make_point("T2", closed_trades=63, total_profit_abs=5.20),
+            _make_point("T3", closed_trades=65, total_profit_abs=8.00, rollback_required=True),
+        ]
+
+        d = decide_final_measurement(canary_points=canary_points)
+
+        assert d.verdict == "RED"
+        assert d.decision == "ROLLBACK_CANARY_OVERLAY"
+        assert any("rollback_required" in reason for reason in d.reasons)
+
+    def test_container_health_unknown_from_read_only_mode_is_not_hard_blocker(self) -> None:
+        canary_points = [
+            _make_point("T0", closed_trades=59, total_profit_abs=3.98),
+            _make_point("T1", closed_trades=61, total_profit_abs=4.50),
+            _make_point("T2", closed_trades=63, total_profit_abs=5.20, warnings_since_last=2),
+            _make_point("T3", closed_trades=65, total_profit_abs=6.00, container_healthy=None),
+        ]
+
+        d = decide_final_measurement(canary_points=canary_points)
+
+        assert d.decision == "KEEP_CANARY_OVERLAY"
+        assert d.verdict == "GREEN"
+
+    def test_final_decision_extends_when_runtime_proof_missing(self) -> None:
+        canary_points = [
+            _make_point("T0", closed_trades=59, total_profit_abs=3.98),
+            _make_point("T1", closed_trades=61, total_profit_abs=4.50),
+            _make_point("T2", closed_trades=63, total_profit_abs=5.20),
+            _make_point("T3", closed_trades=65, total_profit_abs=6.00, runtime_proof_status=""),
+        ]
+
+        d = decide_final_measurement(canary_points=canary_points)
+
+        assert d.verdict == "YELLOW"
+        assert d.decision == "EXTEND_MEASUREMENT"
+        assert any("runtime proof not checked" in reason for reason in d.reasons)
+
+    def test_dry_run_false_remains_hard_safety_blocker(self) -> None:
+        canary_points = [
+            _make_point("T0"),
+            _make_point("T1", closed_trades=61, total_profit_abs=4.50),
+            _make_point("T2", closed_trades=63, total_profit_abs=5.20),
+            _make_point("T3", closed_trades=65, total_profit_abs=6.00, dry_run=False),
+        ]
+
+        d = decide_final_measurement(canary_points=canary_points)
+
+        assert d.verdict == "RED"
+        assert d.decision == "ROLLBACK_CANARY_OVERLAY"
+        assert any("dry_run" in reason for reason in d.reasons)
 
 
 # ---------------------------------------------------------------------------

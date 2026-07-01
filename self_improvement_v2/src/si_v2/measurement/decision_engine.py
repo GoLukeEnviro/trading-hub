@@ -144,16 +144,10 @@ EXPECTED_BOT_ID: str = "freqtrade-freqforge-canary"
 EXPECTED_MAX_OPEN_TRADES: int = 2
 
 
-def evaluate_measurement_safety(point: MeasurementPoint) -> MeasurementDecision:
-    """Evaluate whether a single measurement point is safe.
-
-    Returns RED on any safety or runtime violation.
-    Returns YELLOW on missing data or warnings.
-    Returns GREEN if all safety criteria pass.
-    """
+def _hard_safety_reasons(point: MeasurementPoint) -> list[str]:
+    """Return hard blockers that must force rollback or block final KEEP."""
     reasons: list[str] = []
 
-    # RED triggers
     if point.dry_run is False:
         reasons.append("RED: dry_run is False — live trading risk")
     if point.runtime_proof_status not in ("GREEN", ""):
@@ -170,17 +164,13 @@ def evaluate_measurement_safety(point: MeasurementPoint) -> MeasurementDecision:
     if point.rollback_required:
         reasons.append("RED: rollback_required is True")
 
-    if reasons:
-        return MeasurementDecision(
-            verdict="RED",
-            decision="ROLLBACK_CANARY_OVERLAY",
-            confidence="HIGH",
-            reasons=tuple(reasons),
-            next_step="Immediate safety rollback required. Remove overlay and restart canary with base config only.",
-        )
+    return reasons
 
-    # YELLOW triggers — insufficient data or warnings
+
+def _point_warning_reasons(point: MeasurementPoint) -> list[str]:
+    """Return non-red warning/unknown reasons for one measurement point."""
     warnings: list[str] = []
+
     if point.errors_since_last is not None and point.errors_since_last > 0:
         warnings.append(f"YELLOW: {point.errors_since_last} error(s) since last snapshot")
     if point.warnings_since_last is not None and point.warnings_since_last > 0:
@@ -190,9 +180,32 @@ def evaluate_measurement_safety(point: MeasurementPoint) -> MeasurementDecision:
     if point.total_profit_abs is None:
         warnings.append("YELLOW: profit data unavailable")
     if point.container_healthy is None:
-        warnings.append("YELLOW: container health unknown")
+        warnings.append("UNKNOWN: container health not collected in read-only mode")
     if point.runtime_proof_status == "":
-        warnings.append("YELLOW: runtime proof not checked")
+        warnings.append("UNKNOWN: runtime proof not checked")
+
+    return warnings
+
+
+def evaluate_measurement_safety(point: MeasurementPoint) -> MeasurementDecision:
+    """Evaluate whether a single measurement point is safe.
+
+    Returns RED on any safety or runtime violation.
+    Returns YELLOW on missing data or warnings.
+    Returns GREEN if all safety criteria pass.
+    """
+    reasons = _hard_safety_reasons(point)
+
+    if reasons:
+        return MeasurementDecision(
+            verdict="RED",
+            decision="ROLLBACK_CANARY_OVERLAY",
+            confidence="HIGH",
+            reasons=tuple(reasons),
+            next_step="Immediate safety rollback required. Remove overlay and restart canary with base config only.",
+        )
+
+    warnings = _point_warning_reasons(point)
 
     if warnings:
         return MeasurementDecision(
@@ -203,7 +216,6 @@ def evaluate_measurement_safety(point: MeasurementPoint) -> MeasurementDecision:
             next_step="Continue measurement. Monitor warnings. Do not rollback or apply.",
         )
 
-    # GREEN
     return MeasurementDecision(
         verdict="GREEN",
         decision="CONTINUE_MEASUREMENT" if point.label in ("T1", "T2") else "KEEP_CANARY_OVERLAY",
@@ -404,11 +416,11 @@ def decide_final_measurement(
     """Evaluate the entire measurement sequence (T0..T3).
 
     Requires all 4 canary points. Missing control data is accepted
-    (lowers confidence to MEDIUM).
+    (lowers confidence to MEDIUM). Final KEEP decisions distinguish
+    hard safety blockers from historical non-critical warnings.
     """
     reasons: list[str] = []
 
-    # Validate minimum required points
     if len(canary_points) < 4:
         return MeasurementDecision(
             verdict="YELLOW",
@@ -421,72 +433,164 @@ def decide_final_measurement(
             next_step="Collect all 4 measurement points before final decision.",
         )
 
-    # Check for labels T0..T3
-    labels = {p.label for p in canary_points}
-    if labels != {"T0", "T1", "T2", "T3"}:
+    canary_by_label = {p.label: p for p in canary_points}
+    if set(canary_by_label) != {"T0", "T1", "T2", "T3"}:
         return MeasurementDecision(
             verdict="YELLOW",
             decision="EXTEND_MEASUREMENT",
             confidence="LOW",
-            reasons=(f"invalid_labels: expected T0..T3, got {sorted(labels)}",),
+            reasons=(f"invalid_labels: expected T0..T3, got {sorted(canary_by_label)}",),
             next_step="Ensure T0..T3 are all present before final decision.",
         )
 
-    # Evaluate each point
-    all_green = True
-    any_red = False
-    any_yellow = False
+    ordered_canary_points = [canary_by_label[label] for label in ("T0", "T1", "T2", "T3")]
 
-    for point in canary_points:
-        safety = evaluate_measurement_safety(point)
-        if safety.verdict == "RED":
-            any_red = True
-            reasons.append(f"{point.label}: RED — {safety.reasons[0]}")
-        elif safety.verdict == "YELLOW":
-            any_yellow = True
-            reasons.append(f"{point.label}: YELLOW — {safety.reasons[0] if safety.reasons else 'inconclusive'}")
+    hard_reasons: list[str] = []
+    inconclusive_reasons: list[str] = []
+    soft_reasons: list[str] = []
+    point_summaries: list[str] = []
+
+    for point in ordered_canary_points:
+        point_hard_reasons = _hard_safety_reasons(point)
+        if point_hard_reasons:
+            hard_reasons.extend(f"{point.label}: {reason}" for reason in point_hard_reasons)
+            point_summaries.append(f"{point.label}: RED — {point_hard_reasons[0]}")
+            continue
+
+        point_inconclusive = False
+        point_soft = False
+
+        if point.errors_since_last is not None and point.errors_since_last > 0:
+            inconclusive_reasons.append(
+                f"{point.label}: YELLOW — {point.errors_since_last} error(s) since last snapshot"
+            )
+            point_inconclusive = True
+        elif point.warnings_since_last is not None and point.warnings_since_last > 0:
+            soft_reasons.append(
+                f"{point.label}: SOFT_WARNING — {point.warnings_since_last} warning(s) since last snapshot"
+            )
+            point_soft = True
+
+        if point.container_healthy is None:
+            soft_reasons.append(
+                f"{point.label}: UNKNOWN — container health not collected in read-only mode"
+            )
+            point_soft = True
+        if point.runtime_proof_status == "":
+            inconclusive_reasons.append(
+                f"{point.label}: UNKNOWN — runtime proof not checked"
+            )
+            point_inconclusive = True
+
+        if point_inconclusive:
+            point_summaries.append(f"{point.label}: YELLOW")
+        elif point_soft:
+            point_summaries.append(f"{point.label}: GREEN_WITH_SOFT_WARNINGS")
         else:
-            reasons.append(f"{point.label}: GREEN")
+            point_summaries.append(f"{point.label}: GREEN")
 
-    # Build comparison across all points
-    if control_points and len(control_points) >= 4:
-        first_canary = canary_points[0]
-        last_canary = canary_points[-1]
-        first_control = control_points[0]
-        last_control = control_points[-1]
-        comparison = compare_canary_to_control(
-            canary_previous=first_canary,
-            canary_current=last_canary,
-            control_previous=first_control,
-            control_current=last_control,
-        )
-        for note in comparison.notes:
-            reasons.append(f"comparison: {note}")
-
-    # Decision logic
-    if any_red:
+    if hard_reasons:
         return MeasurementDecision(
             verdict="RED",
             decision="ROLLBACK_CANARY_OVERLAY",
             confidence="HIGH",
-            reasons=tuple(reasons),
+            reasons=tuple(hard_reasons),
             next_step="Safety violation detected. Rollback canary overlay immediately.",
         )
 
-    if all_green and not any_yellow:
-        return MeasurementDecision(
-            verdict="GREEN",
-            decision="KEEP_CANARY_OVERLAY",
-            confidence="HIGH" if control_points else "MEDIUM",
-            reasons=tuple(reasons),
-            next_step="All measurement points GREEN. Keep canary overlay. Proceed to next candidate research.",
+    t0 = canary_by_label["T0"]
+    t3 = canary_by_label["T3"]
+
+    comparison: MeasurementComparison | None = None
+    control_comparison_available = False
+    control_by_label: dict[str, MeasurementPoint] = {}
+    if control_points and len(control_points) >= 4:
+        control_by_label = {p.label: p for p in control_points}
+        if {"T0", "T1", "T2", "T3"}.issubset(control_by_label):
+            comparison = compare_canary_to_control(
+                canary_previous=t0,
+                canary_current=t3,
+                control_previous=control_by_label["T0"],
+                control_current=control_by_label["T3"],
+            )
+            control_comparison_available = True
+
+    if t0.closed_trades is None or t3.closed_trades is None:
+        inconclusive_reasons.append("incomplete_canary_trade_data: missing T0/T3 closed trade counts")
+    if t0.total_profit_abs is None or t3.total_profit_abs is None:
+        inconclusive_reasons.append("incomplete_canary_profit_data: missing T0/T3 total profit")
+
+    canary_profit_delta: float | None = None
+    canary_trade_delta: int | None = None
+    if comparison is not None:
+        canary_profit_delta = comparison.canary_delta_profit_abs
+        canary_trade_delta = comparison.canary_delta_trades
+    elif t0.total_profit_abs is not None and t3.total_profit_abs is not None:
+        canary_profit_delta = round(t3.total_profit_abs - t0.total_profit_abs, 2)
+    if t0.closed_trades is not None and t3.closed_trades is not None:
+        canary_trade_delta = t3.closed_trades - t0.closed_trades
+
+    if canary_profit_delta is None:
+        inconclusive_reasons.append("incomplete_canary_profit_delta: unable to compute T0→T3 profit delta")
+    if canary_trade_delta is None:
+        inconclusive_reasons.append("incomplete_canary_trade_delta: unable to compute T0→T3 trade delta")
+    elif canary_trade_delta <= 0:
+        inconclusive_reasons.append(
+            "insufficient_canary_closures: no new closed canary trades across the final measurement window"
         )
 
-    # Mixed YELLOW/GREEN or all YELLOW
+    if control_comparison_available and comparison is not None:
+        for note in comparison.notes:
+            reasons.append(f"comparison: {note}")
+
+        if comparison.control_delta_profit_abs is None:
+            inconclusive_reasons.append(
+                "incomplete_control_profit_delta: unable to compute control T0→T3 profit delta"
+            )
+        if comparison.control_delta_trades is None:
+            inconclusive_reasons.append(
+                "incomplete_control_trade_delta: unable to compute control T0→T3 trade delta"
+            )
+        if (
+            comparison.canary_vs_control_profit_gap is not None
+            and comparison.canary_vs_control_profit_gap < 0
+        ):
+            inconclusive_reasons.append(
+                "underperform: canary profit delta "
+                f"{comparison.canary_delta_profit_abs:+.2f} is below control "
+                f"{comparison.control_delta_profit_abs:+.2f}"
+            )
+
+    if inconclusive_reasons:
+        return MeasurementDecision(
+            verdict="YELLOW",
+            decision="EXTEND_MEASUREMENT",
+            confidence="MEDIUM" if control_comparison_available else "LOW",
+            reasons=tuple([
+                *point_summaries,
+                *soft_reasons,
+                *reasons,
+                *inconclusive_reasons,
+            ]),
+            next_step="Measurement inconclusive. Extend window or investigate root cause.",
+        )
+
+    summary_reasons = list(point_summaries)
+    summary_reasons.extend(soft_reasons)
+    summary_reasons.extend(reasons)
+    if not control_comparison_available:
+        summary_reasons.append(
+            "comparison: control baseline unavailable; KEEP based on canary-only safety "
+            "and progression"
+        )
+
     return MeasurementDecision(
-        verdict="YELLOW",
-        decision="EXTEND_MEASUREMENT",
-        confidence="MEDIUM" if control_points else "LOW",
-        reasons=tuple(reasons),
-        next_step="Measurement inconclusive. Extend window or investigate root cause.",
+        verdict="GREEN",
+        decision="KEEP_CANARY_OVERLAY",
+        confidence="MEDIUM" if soft_reasons or not control_comparison_available else "HIGH",
+        reasons=tuple(summary_reasons),
+        next_step=(
+            "Final safety and measurement evidence are sufficient. Keep canary overlay "
+            "and prepare the next candidate review."
+        ),
     )
