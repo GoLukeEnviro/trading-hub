@@ -52,6 +52,26 @@ runtime action:
 
 The runner does NOT enable scheduler or watcher jobs. No live trading.
 
+## Phase 7 Autonomous Measurement Watcher
+
+The watcher (`self_improvement_v2/src/si_v2/measurement/autonomous_measurement_watcher.py`)
+consumes Phase-6C T0 activation records and emits autonomous measurement
+decisions:
+
+1. **T0 validation** — record must be CEREMONY_EXECUTED_GREEN, GREEN proof,
+   canary-only, correct next component
+2. **T0 age check** — measurement must be within max age window
+3. **Fleet evidence** — read-only evidence reader protocol for Freqtrade
+   dry-run DB or REST API data
+4. **Snapshot validation** — schema check for required fields (closed trades,
+   profit, profit factor on both arms)
+5. **Readiness rules** — minimum closed trades per arm before KEEP/ROLLBACK
+6. **Final decision** — KEEP_CANARY_OVERLAY, EXTEND_MEASUREMENT, or
+   ROLLBACK_CANARY_OVERLAY based on canary vs control comparison
+7. **Decision pack** — JSON output written to `var/si_v2/measurement_decisions/`
+
+The watcher does NOT execute rollback or scheduler changes. No live trading.
+
 ## Data Sources (Real Data Only)
 
 All decisions must be based on real runtime evidence:
