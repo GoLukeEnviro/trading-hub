@@ -271,6 +271,9 @@ def run_fleet_runtime_ceremony(
             continue
 
         # Verify overlay file exists and hash matches
+        # The planned_overlay.json is a wrapper with overlay_content inside.
+        # We extract the overlay_content and hash that to compare.
+        # If the file is a raw overlay (no overlay_content field), hash directly.
         overlay_file = Path(overlay_path)
         if not overlay_file.exists():
             ceremony_blocked.append(
@@ -280,7 +283,23 @@ def run_fleet_runtime_ceremony(
             continue
 
         import hashlib
-        actual_sha = hashlib.sha256(overlay_file.read_bytes()).hexdigest()
+        try:
+            overlay_data = json.loads(overlay_file.read_text())
+            overlay_content = overlay_data.get("overlay_content")
+            if overlay_content is not None:
+                # Planned overlay wrapper — extract content and re-serialize
+                overlay_bytes = json.dumps(overlay_content, indent=2, sort_keys=True).encode()
+            else:
+                # Raw overlay — hash the file content directly
+                overlay_bytes = json.dumps(overlay_data, indent=2, sort_keys=True).encode()
+            actual_sha = hashlib.sha256(overlay_bytes).hexdigest()
+        except (json.JSONDecodeError, OSError) as e:
+            ceremony_blocked.append(
+                f"overlay_read_error: {target_bot} could not read "
+                f"planned_overlay: {e}"
+            )
+            continue
+
         if actual_sha != overlay_sha256:
             ceremony_blocked.append(
                 f"overlay_hash_mismatch: {target_bot} expected "

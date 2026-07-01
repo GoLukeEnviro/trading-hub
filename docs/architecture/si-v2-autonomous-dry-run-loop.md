@@ -70,6 +70,22 @@ consumes Phase-9B fleet rollout plans and runs controlled dry-run-only target
 ceremonies. It writes pre-apply snapshots, audit events, RuntimeEffectProof,
 and measurement-start records per target through a mockable runtime executor.
 
+## Phase 10 — Fleet Rollout Chain Active-Cycle Integration
+
+The chain runner (`self_improvement_v2/src/si_v2/rollout/fleet_rollout_chain_runner.py`)
+integrates Phase 9A/9B/9C into a controlled fleet rollout chain runner and
+optional Active Cycle hook. Scheduler activation remains out of scope.
+
+The chain runner:
+1. Reads the Measurement Watcher decision pack
+2. Runs Phase 9A rollout policy evaluation
+3. Runs Phase 9B artifact planning
+4. Runs Phase 9C runtime ceremony (READY-only by default)
+5. Writes a chain audit artifact
+
+The Active Cycle hook (`maybe_run_fleet_rollout_chain_from_active_cycle`)
+is disabled by default (`_FLEET_ROLLOUT_CHAIN_ENABLED = False`).
+
 ## T0 Activation Record
 
 The runner does NOT enable scheduler or watcher jobs. No live trading.
