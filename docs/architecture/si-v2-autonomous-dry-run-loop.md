@@ -104,6 +104,16 @@ Key behavior:
 - Missing trade samples do not block the simple decision path
 - ``runtime_mutation`` remains ``NONE`` regardless of stat result
 
+## Phase 9A Controlled Fleet Rollout Policy
+
+Phase 9A evaluates fleet promotion eligibility from enriched Measurement
+Watcher decision packs. It validates KEEP + statistical evidence, blocks
+HARD statistical conflicts, selects eligible fleet target bots, and writes
+a rollout policy artifact.
+
+The evaluator is read-only — it does not apply overlays to fleet bots,
+execute rollback, or enable schedulers.
+
 ## Data Sources (Real Data Only)
 
 All decisions must be based on real runtime evidence:
