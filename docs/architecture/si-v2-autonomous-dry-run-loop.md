@@ -72,6 +72,25 @@ decisions:
 
 The watcher does NOT execute rollback or scheduler changes. No live trading.
 
+## Phase 8 Statistical Evidence Framework
+
+The framework (`self_improvement_v2/src/si_v2/measurement/statistical_evidence.py`)
+provides a read-only statistical evidence layer for autonomous dry-run
+measurement decisions. It enriches Phase-7 decisions with bootstrap
+confidence intervals, effect sizes, winrate, profit factor, and evidence
+grades.
+
+Key features:
+- Evidence classes A/B/C with graduated sample requirements
+- Bootstrap confidence intervals (stdlib-only, deterministic)
+- Effect size via pooled two-sample formula
+- Profit factor and winrate computation
+- Snapshot-to-input builder for optional Phase-7 integration
+- Graded evidence output: STRONG / MODERATE / WEAK / INSUFFICIENT / BLOCKED
+
+The framework is read-only and does not execute KEEP/ROLLBACK or
+enable schedulers.
+
 ## Data Sources (Real Data Only)
 
 All decisions must be based on real runtime evidence:
