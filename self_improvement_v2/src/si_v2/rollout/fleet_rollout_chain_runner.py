@@ -563,3 +563,64 @@ def maybe_run_fleet_rollout_chain_from_active_cycle(
         runtime_executor=runtime_executor,
         now_utc=now_utc,
     )
+
+
+def maybe_resolve_and_run_fleet_rollout_chain(
+    *,
+    decision_pack_path: str | None = None,
+    decision_pack_dir: str | None = None,
+    bot_registry_path: str | None = None,
+    explicit_allowed_targets: tuple[str, ...] | None = None,
+    explicit_overlay_path: str | None = None,
+    candidate_overlay: dict[str, object] | None = None,
+    change_id_override: str | None = None,
+    fleet_rollout_chain_enabled: bool = False,
+    chain_output_dir: Path | None = None,
+    resolver_output_dir: str | None = None,
+) -> FleetRolloutChainResult | None:
+    """Active Cycle integration using the real fleet rollout input resolver.
+
+    When ``fleet_rollout_chain_enabled`` is False (default), this function
+    returns None and does nothing.
+
+    When enabled, it uses ``resolve_fleet_rollout_chain_input()`` to build
+    ``FleetRolloutChainInput`` from real SI-v2 artifacts, then calls
+    ``run_fleet_rollout_chain()`` with ``execute_fleet_runtime=False``.
+
+    This function replaces the stub-based ``maybe_run_fleet_rollout_chain_from_active_cycle``
+    for new code. The old function is kept for backward compatibility.
+
+    Args:
+        decision_pack_path: Explicit decision pack path. If None, uses
+            directory lookup via ``decision_pack_dir``.
+        decision_pack_dir: Directory to search for the latest qualified
+            decision pack.
+        bot_registry_path: Path to the fleet bot registry JSON.
+        explicit_allowed_targets: Explicit allowlist of target bot IDs.
+        explicit_overlay_path: Explicit path to a source overlay JSON.
+        candidate_overlay: Candidate overlay dict for materialization.
+        change_id_override: Override change_id.
+        fleet_rollout_chain_enabled: Master switch. Default False.
+        chain_output_dir: Override for chain output directory.
+        resolver_output_dir: Override for resolver output directory.
+
+    Returns:
+        ``FleetRolloutChainResult`` when chain runs, None when disabled.
+    """
+    # Lazy import to avoid circular dependency at module level
+    from si_v2.rollout.fleet_rollout_input_resolver import (  # type: ignore[import-untyped]
+        maybe_resolve_and_run_chain as _resolver_hook,
+    )
+
+    return _resolver_hook(
+        decision_pack_path=decision_pack_path,
+        decision_pack_dir=decision_pack_dir,
+        bot_registry_path=bot_registry_path,
+        explicit_allowed_targets=explicit_allowed_targets,
+        explicit_overlay_path=explicit_overlay_path,
+        candidate_overlay=candidate_overlay,
+        change_id_override=change_id_override,
+        fleet_rollout_chain_enabled=fleet_rollout_chain_enabled,
+        chain_output_dir=str(chain_output_dir) if chain_output_dir else None,
+        resolver_output_dir=resolver_output_dir,
+    )
