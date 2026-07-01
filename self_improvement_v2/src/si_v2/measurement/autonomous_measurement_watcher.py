@@ -18,6 +18,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, Protocol, cast
 
+from si_v2.measurement.statistical_evidence import (
+    build_stat_input_from_snapshot,
+    evaluate_statistical_evidence,
+)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -84,6 +89,21 @@ class MeasurementWatcherInput:
 
     allow_extend: bool = True
     """If True, EXTEND_MEASUREMENT can be emitted for ambiguous evidence."""
+
+    use_statistical_evidence: bool = False
+    """If True, evaluate Phase-8 statistical evidence from trade samples."""
+
+    evidence_class: str = "A"
+    """Evidence class for statistical evaluation: A, B, or C."""
+
+    bootstrap_iterations: int = 1000
+    """Number of bootstrap resamples for CI estimation."""
+
+    confidence_level: float = 0.90
+    """Confidence level for bootstrap CI (0.5 to 0.99)."""
+
+    random_seed: int = 42
+    """Random seed for deterministic bootstrap resampling."""
 
 
 @dataclass(frozen=True)
@@ -228,6 +248,8 @@ def _write_decision_pack(
     evidence_ref: str,
     decision_pack_dir: Path,
     now_utc: str,
+    statistical_evidence: dict[str, object] | None = None,
+    statistical_conflict: dict[str, object] | None = None,
 ) -> str:
     """Write a decision pack JSON file.
 
@@ -252,6 +274,8 @@ def _write_decision_pack(
             else "extend_measurement_or_recheck"
         ),
         "runtime_mutation": "NONE",
+        "statistical_evidence": statistical_evidence,
+        "statistical_conflict": statistical_conflict,
     }
     filename = f"{change_id[:24]}_{decision_pack_dir.name}_{decision}.json"
     path = decision_pack_dir / filename
@@ -390,6 +414,129 @@ def _extract_snapshot_label(snapshot: dict[str, object]) -> Literal["T1", "T2", 
 
 
 # ---------------------------------------------------------------------------
+# Statistical evidence helpers
+# ---------------------------------------------------------------------------
+
+_WatcherStatConflictType = dict[str, object]
+
+
+def _maybe_evaluate_statistical_evidence(
+    *,
+    enabled: bool,
+    change_id: str,
+    candidate_id: str,
+    snapshot: dict[str, object],
+    canary_bot: str,
+    control_bot: str,
+    evidence_class: str,
+    bootstrap_iterations: int,
+    confidence_level: float,
+    random_seed: int,
+) -> dict[str, object] | None:
+    """Optionally evaluate Phase-8 statistical evidence from a snapshot.
+
+    Returns ``None`` when:
+    - ``enabled`` is False (default, preserves legacy behavior)
+    - Trade samples are missing or malformed (non-blocking)
+    - The statistical engine raises (fail-safe)
+
+    Returns a ``StatisticalEvidenceResult.to_dict()`` dict when stat
+    evaluation succeeds.
+    """
+    if not enabled:
+        return None
+
+    stat_input = build_stat_input_from_snapshot(
+        change_id=change_id,
+        candidate_id=candidate_id,
+        snapshot=snapshot,
+        canary_bot=canary_bot,
+        control_bot=control_bot,
+        evidence_class=evidence_class,
+        bootstrap_iterations=bootstrap_iterations,
+        confidence_level=confidence_level,
+        random_seed=random_seed,
+    )
+    if stat_input is None:
+        return None
+
+    result = evaluate_statistical_evidence(stat_input)
+    return result.to_dict()
+
+
+def _compare_simple_and_statistical_decision(
+    *,
+    simple_decision: str,
+    statistical_evidence: dict[str, object] | None,
+) -> _WatcherStatConflictType:
+    """Compare simple watcher decision with statistical recommendation.
+
+    Returns a conflict dict:
+    - ``has_conflict``: True when simple and stat disagree significantly
+    - ``severity``: NONE | SOFT | HARD
+    - ``simple_decision``: the original watcher decision
+    - ``stat_recommendation``: the statistical recommendation (or null)
+    - ``reason``: human-readable explanation
+    """
+    result: _WatcherStatConflictType = {
+        "has_conflict": False,
+        "severity": "NONE",
+        "simple_decision": simple_decision,
+        "stat_recommendation": None,
+        "reason": "",
+    }
+
+    if statistical_evidence is None:
+        result["reason"] = "no_statistical_evidence_available"
+        return result
+
+    stat_rec = statistical_evidence.get("recommendation")
+    result["stat_recommendation"] = stat_rec
+
+    if stat_rec is None:
+        result["reason"] = "stat_recommendation_missing"
+        return result
+
+    # Map simple decisions to stat equivalents
+    simple_to_stat = {
+        "KEEP_CANARY_OVERLAY": "STAT_KEEP",
+        "EXTEND_MEASUREMENT": "STAT_EXTEND",
+        "ROLLBACK_CANARY_OVERLAY": "STAT_ROLLBACK",
+    }
+    expected_stat = simple_to_stat.get(simple_decision)
+
+    if expected_stat is None:
+        result["reason"] = f"unknown_simple_decision: {simple_decision}"
+        return result
+
+    # Check alignment
+    if stat_rec == expected_stat:
+        result["reason"] = f"aligned: simple={simple_decision}, stat={stat_rec}"
+        return result
+
+    # Hard conflicts: KEEP ↔ ROLLBACK
+    if (simple_decision == "KEEP_CANARY_OVERLAY" and stat_rec == "STAT_ROLLBACK") or (
+        simple_decision == "ROLLBACK_CANARY_OVERLAY" and stat_rec == "STAT_KEEP"
+    ):
+        result["has_conflict"] = True
+        result["severity"] = "HARD"
+        result["reason"] = (
+            f"hard_conflict: simple={simple_decision} vs "
+            f"stat={stat_rec}"
+        )
+        return result
+
+    # Soft conflicts: KEEP/ROLLBACK vs EXTEND/INSUFFICIENT
+    result["has_conflict"] = True
+    result["severity"] = "SOFT"
+    result["reason"] = (
+        f"soft_conflict: simple={simple_decision} vs "
+        f"stat={stat_rec}"
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Final decision emission
 # ---------------------------------------------------------------------------
 
@@ -403,6 +550,8 @@ def _emit_keep_decision(
     evidence_ref: str,
     decision_pack_dir: Path,
     now_utc: str,
+    statistical_evidence: dict[str, object] | None = None,
+    statistical_conflict: dict[str, object] | None = None,
 ) -> MeasurementWatcherResult:
     """Emit KEEP_CANARY_OVERLAY."""
     pack_path = _write_decision_pack(
@@ -415,6 +564,8 @@ def _emit_keep_decision(
         evidence_ref=evidence_ref,
         decision_pack_dir=decision_pack_dir,
         now_utc=now_utc,
+        statistical_evidence=statistical_evidence,
+        statistical_conflict=statistical_conflict,
     )
     return MeasurementWatcherResult(
         status="FINAL_DECISION_EMITTED",
@@ -442,6 +593,8 @@ def _emit_rollback_decision(
     decision_pack_dir: Path,
     now_utc: str,
     reasons: tuple[str, ...],
+    statistical_evidence: dict[str, object] | None = None,
+    statistical_conflict: dict[str, object] | None = None,
 ) -> MeasurementWatcherResult:
     """Emit ROLLBACK_CANARY_OVERLAY.
 
@@ -457,6 +610,8 @@ def _emit_rollback_decision(
         evidence_ref=str(snapshot.get("source", "unknown")),
         decision_pack_dir=decision_pack_dir,
         now_utc=now_utc,
+        statistical_evidence=statistical_evidence,
+        statistical_conflict=statistical_conflict,
     )
     return MeasurementWatcherResult(
         status="FINAL_DECISION_EMITTED",
@@ -485,6 +640,8 @@ def _emit_extend_decision(
     decision_pack_dir: Path,
     now_utc: str,
     reasons: tuple[str, ...],
+    statistical_evidence: dict[str, object] | None = None,
+    statistical_conflict: dict[str, object] | None = None,
 ) -> MeasurementWatcherResult:
     """Emit EXTEND_MEASUREMENT."""
     pack_path = _write_decision_pack(
@@ -497,6 +654,8 @@ def _emit_extend_decision(
         evidence_ref=evidence_ref,
         decision_pack_dir=decision_pack_dir,
         now_utc=now_utc,
+        statistical_evidence=statistical_evidence,
+        statistical_conflict=statistical_conflict,
     )
     return MeasurementWatcherResult(
         status="FINAL_DECISION_EMITTED",
@@ -907,6 +1066,28 @@ def run_autonomous_measurement_watcher(
         allow_extend=input_.allow_extend,
     )
 
+    # ------------------------------------------------------------------
+    # Step 8a: Optional statistical evidence enrichment (Phase 8B)
+    # ------------------------------------------------------------------
+
+    statistical_evidence = _maybe_evaluate_statistical_evidence(
+        enabled=input_.use_statistical_evidence,
+        change_id=change_id,
+        candidate_id=candidate_id,
+        snapshot=snapshot,
+        canary_bot=input_.canary_bot,
+        control_bot=input_.control_bot,
+        evidence_class=input_.evidence_class,
+        bootstrap_iterations=input_.bootstrap_iterations,
+        confidence_level=input_.confidence_level,
+        random_seed=input_.random_seed,
+    )
+
+    statistical_conflict = _compare_simple_and_statistical_decision(
+        simple_decision=decision,
+        statistical_evidence=statistical_evidence,
+    )
+
     if decision == "KEEP_CANARY_OVERLAY":
         return _emit_keep_decision(
             change_id=change_id,
@@ -917,6 +1098,8 @@ def run_autonomous_measurement_watcher(
             evidence_ref=evidence_ref,
             decision_pack_dir=resolved_decision_pack_dir,
             now_utc=resolved_now,
+            statistical_evidence=statistical_evidence,
+            statistical_conflict=statistical_conflict,
         )
 
     if decision == "ROLLBACK_CANARY_OVERLAY":
@@ -929,6 +1112,8 @@ def run_autonomous_measurement_watcher(
             decision_pack_dir=resolved_decision_pack_dir,
             now_utc=resolved_now,
             reasons=decision_reasons,
+            statistical_evidence=statistical_evidence,
+            statistical_conflict=statistical_conflict,
         )
 
     # EXTEND_MEASUREMENT
@@ -942,4 +1127,6 @@ def run_autonomous_measurement_watcher(
         decision_pack_dir=resolved_decision_pack_dir,
         now_utc=resolved_now,
         reasons=decision_reasons,
+        statistical_evidence=statistical_evidence,
+        statistical_conflict=statistical_conflict,
     )
