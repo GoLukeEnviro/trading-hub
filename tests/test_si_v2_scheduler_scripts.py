@@ -7,6 +7,7 @@ SCRIPTS = {
     "active_cycle_cron": ROOT / "orchestrator/scripts/si_v2_active_cycle_cron.sh",
     "active_cycle_runner": ROOT / "orchestrator/scripts/si-v2-active-cycle-runner.sh",
     "t4_watcher": ROOT / "orchestrator/scripts/si_v2_t4_measurement_watcher.sh",
+    "t4_watcher_cron": ROOT / "orchestrator/scripts/si_v2_t4_watcher_cron.sh",
 }
 
 FORBIDDEN_TOKENS = [
@@ -86,3 +87,12 @@ def test_t4_watcher_does_not_execute_decision_engine() -> None:
     assert "run_measurement_decision_engine_read_only" in watcher
     assert "decision_engine.py" not in watcher
     assert "python -m" not in watcher
+
+
+def test_t4_watcher_cron_wrapper_is_detection_only() -> None:
+    watcher_cron = _read("t4_watcher_cron")
+    assert "/opt/data/logs/si-v2-t4-watcher" in watcher_cron
+    assert "SI_V2_T4_ALERT=MEASUREMENT_READY" in watcher_cron
+    assert "run_measurement_decision_engine_read_only" in watcher_cron
+    assert "execute_apply" not in watcher_cron
+    assert "docker compose up" not in watcher_cron
