@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `0dd7231` (PR #409 squash-merge).
+> commit `20aee88` (PR #425 squash-merge).
 >
-> **Last updated:** 2026-07-01 after ADR-2026-07-01 (Autonomous Dry-Run Pivot)
-> **Previous update:** 2026-06-30 after T3 + Final Measurement Decision
+> **Last updated:** 2026-07-01 after Phase 10.4 (Post-Fleet Measurement Watcher)
+> **Previous update:** 2026-07-01 after Phase 10.3 (Controlled Dry-Run Fleet Runtime Executor)
 
 ---
 
@@ -44,7 +44,11 @@ The following modules exist on `main` and form the complete controlled apply cha
 | 5A | `rollback_rehearsal.py` | #383 | 24 | ✅ |
 | 6A | `pipeline/candidate_to_apply.py` | #384 | 36 | ✅ |
 | **Autonomy Policy** | `autonomy/autonomy_policy.py` | **NEW** | **NEW** | ✅ |
-| **Total** | **7 modules** | **7 PRs** | **+ tests** | **All GREEN** |
+| **10.1 Resolver** | `fleet_rollout_input_resolver.py` | #421 | 24 | ✅ |
+| **10.2 Evidence Runner** | `fleet_rollout_ready_evidence_runner.py` | #422 | 12 | ✅ |
+| **10.3 Dry-Run Executor** | `fleet_dry_run_runtime_executor.py` | #424 | 18 | ✅ |
+| **10.4 Post-Fleet Measurement** | `fleet_post_fleet_measurement_watcher.py` | #425 | 20 | ✅ |
+| **Total** | **11 modules** | **11 PRs** | **+ tests** | **All GREEN** |
 
 ### Control flow (autonomous dry-run)
 
