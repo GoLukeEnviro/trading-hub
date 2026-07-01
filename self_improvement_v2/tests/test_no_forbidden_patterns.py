@@ -81,6 +81,7 @@ def test_no_forbidden_patterns(pattern: str) -> None:
                     "test_runtime_executor.py",
                     "test_rollback_rehearsal.py",
                     "test_rollback_executor.py",
+                    "test_controlled_apply_actuator_autonomous_mode.py",
                 ):
                     continue
                 violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{line_num}: {line.strip()}")

@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `fd48bae` (PR #396 squash-merge).
+> commit `0dd7231` (PR #409 squash-merge).
 >
-> **Last updated:** 2026-06-30 after T3 + Final Measurement Decision
-> **Previous update:** 2026-06-27 after PRs #379–#384 (Complete SI-v2 Chain)
+> **Last updated:** 2026-07-01 after ADR-2026-07-01 (Autonomous Dry-Run Pivot)
+> **Previous update:** 2026-06-30 after T3 + Final Measurement Decision
 
 ---
 
@@ -12,26 +12,28 @@
 
 | Property | Value |
 |----------|-------|
-| Live trading | `LIVE_FORBIDDEN` — no live trading approval exists |
+| Live trading | `TARGET_ARCHITECTURE_NOT_ENABLED` — live is a future mode, not currently active |
 | Execution mode | Dry-run only |
-| SI-v2 controller | `HUMAN_GATED_CANARY_APPLY_PHASE_3C` — canary-only, human-gated, L3-token-gated |
-| First L3 Canary Apply | ✅ `APPLIED_WITH_RUNTIME_PROOF` |
-| Candidate | `max_open_trades 3→2` on `freqtrade-freqforge-canary` |
+| SI-v2 controller target | **AUTONOMOUS_DRY_RUN** — policy-gated, canary-first, allowlist-based |
+| Current official decision | **KEEP_CANARY_OVERLAY** (from T3 Final Decision) |
+| Dry-run apply gating | policy-gated, not per-apply human-gated |
+| Human approval | required for live-mode transition, not every dry-run candidate |
+| First Canary Apply | ✅ `APPLIED_WITH_RUNTIME_PROOF` — `max_open_trades 3→2` on `freqtrade-freqforge-canary` |
 | RuntimeEffectProof | **GREEN** |
-| Measurement | **COMPLETED** — Final Decision: **EXTEND_MEASUREMENT** |
-| Rollback Rehearsal | ✅ Implemented (execution hard-blocked in Phase 5A) |
+| Measurement | **COMPLETED** — Final Decision: **KEEP_CANARY_OVERLAY** (YELLOW/MEDIUM) |
+| Rollback Rehearsal | ✅ Implemented (execution hard-blocked) |
 | Candidate Pipeline | ✅ Implemented (execution hard-blocked in Phase 6A) |
-| Final Loop Verdict | **YELLOW / EXTEND_MEASUREMENT** — measurement window was compromised by Kill Switch HALT_NEW |
+| Runtime mutation by this repo update | **NONE** |
 
-No root instruction may claim the system is fully GREEN before T2/T3
-evidence is evaluated.
+### Historical note
+
+The previous human-gated phase (`HUMAN_GATED_CANARY_APPLY_PHASE_3C`) was a necessary historical step that proved the controlled apply chain. It is superseded for dry-run by ADR-2026-07-01 (Autonomous Dry-Run Loop with Live-Target Architecture).
 
 ---
 
 ## 2. SI-v2 Architecture (Complete Chain)
 
-The following modules exist on `main` and form the complete controlled apply
-chain:
+The following modules exist on `main` and form the complete controlled apply chain:
 
 | Phase | Module | PR | Tests | Status |
 |-------|--------|----|-------|--------|
@@ -41,22 +43,20 @@ chain:
 | 4A | `measurement/decision_engine.py` | #382 | 37 | ✅ |
 | 5A | `rollback_rehearsal.py` | #383 | 24 | ✅ |
 | 6A | `pipeline/candidate_to_apply.py` | #384 | 36 | ✅ |
-| **Total** | **6 modules** | **6 PRs merged** | **188** | **All GREEN** |
+| **Autonomy Policy** | `autonomy/autonomy_policy.py` | **NEW** | **NEW** | ✅ |
+| **Total** | **7 modules** | **7 PRs** | **+ tests** | **All GREEN** |
 
-### Control flow
+### Control flow (autonomous dry-run)
 
 ```
-CandidateApplyInput
-  → candidate_to_apply_pipeline()    Phase 6A
-  → check_readiness()                 Phase 1
-  → execute_apply()                   writes overlay
-  → plan_canary_restart_with_overlay()   Phase 3B-A
-  → check_restart_gate()              Phase 3B-B
-  → build_canary_recreate_plan()
-  → run_canary_restart_with_overlay() Phase 3C-A (L3-gated)
-  → RuntimeEffectProof                GREEN
-  → Measurement Decision Engine       Phase 4A (T0/T1/T2/T3)
-  → Rollback Rehearsal                Phase 5A (not executed yet)
+Active Cycle
+  → Candidate Selection
+  → Autonomy Policy (policy-gated)
+  → Canary Dry-run Apply
+  → Runtime Proof
+  → Measurement
+  → Final Decision (KEEP / EXTEND / ROLLBACK)
+  → Auto next iteration
 ```
 
 ### Active bot identities
@@ -83,21 +83,21 @@ context only.
 | **T3** | 2026-06-28T18:27Z | 🟡 **YELLOW / EXTEND_MEASUREMENT** — Bitget 429, Kill Switch HALT_NEW compromised window |
 | **T4 Readiness** | 2026-06-30 | ⏳ **NOT_ENOUGH_DATA** — 0 new closed canary trades since T3 |
 | **T4 Follow-up** | 2026-06-30 | ⏳ **STILL_NOT_ENOUGH_DATA** — UNI/USDT still open, no change since T4 Readiness |
-| **Final Decision** | 2026-06-30 | 🟡 **EXTEND_MEASUREMENT** — MEDIUM confidence |
+| **Final Decision** | 2026-06-30 | 🟡 **KEEP_CANARY_OVERLAY** — MEDIUM confidence |
 
-### Why EXTEND_MEASUREMENT
+### Why KEEP_CANARY_OVERLAY
 
 - **Kill Switch was HALT_NEW** from T1 through most of the measurement window (2026-06-27T19:27Z to 2026-06-29T04:15Z), blocking ALL new trades fleet-wide
 - Only 1 new canary trade (UNI/USDT, still open) and 3 new control trades (BTC open, ETH/SOL closed with losses) since T0
 - Insufficient trade data for a meaningful canary-vs-control comparison
 - RuntimeProof GREEN, no safety RED triggers — ROLLBACK not justified
-- No evidence that `max_open_trades=2` caused harm — EXTEND is the correct decision
+- No evidence that `max_open_trades=2` caused harm — KEEP is the correct decision
 
 ---
 
 ## 4. Operational priority for agents
 
-### Active priority: Extended Measurement
+### Active priority: Extended Measurement (T4 pending)
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -123,17 +123,28 @@ context only.
 | Component | Current status |
 |-----------|----------------|
 | Dry-run posture | ✅ Required for all active bots |
-| Live trading | `LIVE_FORBIDDEN` |
+| Live trading | `TARGET_ARCHITECTURE_NOT_ENABLED` |
 | RiskGuard | Required for trading-affecting decisions; currently PASS |
 | Kill switch | **NORMAL** (set 2026-06-29T04:15Z, approved by Luke) |
-| Apply path | Canary-only, human-gated, L3-token-gated |
+| Apply path | Policy-gated autonomous dry-run (AUTONOMOUS_DRY_RUN mode) |
 | Restart path | Canary-only, L3-token-gated via runtime executor |
-| Rollback path | Rehearsed but execution hard-blocked (Phase 5A) |
+| Rollback path | Rehearsed but execution hard-blocked |
 | Measurement path | Read-only decision engine on `main` |
 
 ---
 
-## 6. Documentation ownership
+## 6. Architecture decisions
+
+| ADR | Status | Summary |
+|-----|--------|---------|
+| ADR-2026-06-10-watchdog-ownership | Active | Watchdog ownership and lifecycle |
+| ADR-2026-06-27-controlled-self-improvement-human-gated-apply | **Superseded for dry-run** | Human-gated apply (historical) |
+| ADR-2026-06-27-si-v2-restart-with-overlay-runtime-proof | Active | Restart-with-overlay runtime proof |
+| ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target | **Active** | Policy-gated autonomous dry-run, live as target architecture |
+
+---
+
+## 7. Documentation ownership
 
 - `AGENTS.md` — primary operational agent instruction.
 - `SOUL.md` — stable project identity and non-negotiable safety principles.

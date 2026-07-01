@@ -76,6 +76,20 @@ RISKGUARD_STATE_PATH: Final[Path] = Path(
 )
 
 
+class ApplyMode:
+    """Operating modes for the controlled apply actuator.
+
+    AUTONOMOUS_DRY_RUN — policy-gated autonomous dry-run applies.
+      No human/token gate required. All other safety gates remain.
+    MANUAL_L3 — legacy human-gated mode with L3 token requirement.
+    LIVE_CAPITAL_MODE — future live-capital mode (not implemented).
+    """
+
+    AUTONOMOUS_DRY_RUN: str = "AUTONOMOUS_DRY_RUN"
+    MANUAL_L3: str = "MANUAL_L3"
+    LIVE_CAPITAL_MODE: str = "LIVE_CAPITAL_MODE"
+
+
 @dataclass(frozen=True)
 class GateResult:
     """Result of a single gate check."""
@@ -547,20 +561,46 @@ def check_readiness(
     riskguard_status: str | None = None,
     pre_apply_config: dict[str, object] | None = None,
     expected_baselines: Mapping[str, object] | None = None,
+    apply_mode: str = ApplyMode.MANUAL_L3,
 ) -> ReadinessReport:
-    """Evaluate all gates and return a read-only readiness report."""
+    """Evaluate all gates and return a read-only readiness report.
+
+    Args:
+        apply_mode: Operating mode for gate evaluation.
+            - ``ApplyMode.AUTONOMOUS_DRY_RUN``: policy-gated, no human/token gate.
+            - ``ApplyMode.MANUAL_L3`` (default): legacy human + token gate.
+            - ``ApplyMode.LIVE_CAPITAL_MODE``: blocked (not implemented).
+    """
     resolved_state_dir = state_dir or DEFAULT_STATE_DIR
+
+    # LIVE_CAPITAL_MODE is always blocked
+    if apply_mode == ApplyMode.LIVE_CAPITAL_MODE:
+        return ReadinessReport(
+            candidate_sha=candidate_sha,
+            bot_id=bot_id,
+            parameter_overlay=dict(parameter_overlay),
+            ready=False,
+        )
+
     g1 = check_canary_bot(bot_id)
     g2 = check_safe_parameters(parameter_overlay)
     g3 = check_kill_switch(kill_switch_path)
     g4 = check_riskguard(riskguard_status)
-    g5 = check_human_approval(requires_human_approval)
-    g6 = check_token()
     _, g7 = check_cooldown(resolved_state_dir)
     g8 = check_dry_run(pre_apply_config)
     g9 = check_candidate_compatibility(
         parameter_overlay, pre_apply_config, expected_baselines
     )
+
+    if apply_mode == ApplyMode.AUTONOMOUS_DRY_RUN:
+        # In autonomous dry-run mode: no human/token gate required
+        g5 = GateResult(True, "autonomous_dry_run_mode: human approval gate bypassed")
+        g6 = GateResult(True, "autonomous_dry_run_mode: token gate bypassed")
+    else:
+        # MANUAL_L3 mode: human + token gates required
+        g5 = check_human_approval(requires_human_approval)
+        g6 = check_token()
+
     planned_path = ""
     binding = resolve_binding(bot_id)
     if binding is not None:
@@ -711,9 +751,21 @@ def execute_apply(
     kill_switch_path: Path | None = None,
     riskguard_status: str | None = None,
     expected_baselines: Mapping[str, object] | None = None,
+    apply_mode: str = ApplyMode.MANUAL_L3,
 ) -> ControlledApplyDecision:
     """Execute the controlled apply after all gates pass."""
     resolved_state_dir = state_dir or DEFAULT_STATE_DIR
+
+    # LIVE_CAPITAL_MODE is always blocked
+    if apply_mode == ApplyMode.LIVE_CAPITAL_MODE:
+        return ControlledApplyDecision(
+            overall_status="BLOCKED",
+            candidate_sha=candidate_sha,
+            bot_id=bot_id,
+            parameter_overlay=dict(parameter_overlay),
+            errors=("live_capital_mode_not_implemented: LIVE_CAPITAL_MODE is not implemented",),
+        )
+
     report = check_readiness(
         candidate_sha,
         bot_id,
@@ -724,6 +776,7 @@ def execute_apply(
         riskguard_status=riskguard_status,
         pre_apply_config=pre_apply_config,
         expected_baselines=expected_baselines,
+        apply_mode=apply_mode,
     )
     if not report.ready:
         all_gates = [

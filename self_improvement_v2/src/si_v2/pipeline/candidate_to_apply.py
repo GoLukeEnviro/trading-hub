@@ -15,18 +15,22 @@ Architecture
         ├─ 1. Validate target bot (canary-only)
         ├─ 2. Validate parameter (safe, not forbidden)
         ├─ 3. Check dry_run
-        ├─ 4. Check human approval
+        ├─ 4. Check autonomy policy (replaces human gate in dry-run)
         ├─ 5. Check active measurement window
         ├─ 6. Check readiness (optional, read-only)
         ├─ 7. Check rollback availability
         └─ 8. Return CandidatePipelineDecision
 
     Status values:
-        READY_FOR_HUMAN_APPROVAL  — candidate valid, needs human gate
-        READY_FOR_CANARY_APPLY     — all gates pass, canary-ready
-        BLOCKED                    — safety gate violation
-        DEFERRED                   — measurement window active
-        NOT_IMPLEMENTED_EXECUTION  — execute=True in Phase 6A
+        READY_FOR_AUTONOMOUS_DRY_RUN_APPLY  — all policy gates pass, ready for apply
+        AUTO_DRY_RUN_APPROVED               — policy gates pass, execution not wired yet
+        AUTO_DRY_RUN_BLOCKED                — policy gate violation
+        AUTO_DRY_RUN_DEFERRED               — measurement window active
+        READY_FOR_HUMAN_APPROVAL            — legacy: candidate needs human gate
+        READY_FOR_CANARY_APPLY              — legacy: all gates pass, canary-ready
+        BLOCKED                             — safety gate violation
+        DEFERRED                            — measurement window active
+        NOT_IMPLEMENTED_EXECUTION           — execute=True in Phase 6A
 
 Safety invariants
 -----------------
@@ -47,6 +51,10 @@ from typing import Final, Literal
 
 from si_v2.apply_actuator.restart_with_overlay import CANARY_BOT_ID
 from si_v2.apply_actuator.runtime_binding import resolve_binding
+from si_v2.autonomy import (
+    AutonomyPolicyInput,
+    evaluate_autonomy_policy,
+)
 from si_v2.propose.safe_parameters import FORBIDDEN_KEYS, SAFE_PARAMETERS
 
 # ---------------------------------------------------------------------------
@@ -55,7 +63,7 @@ from si_v2.propose.safe_parameters import FORBIDDEN_KEYS, SAFE_PARAMETERS
 
 NOT_IMPLEMENTED_EXECUTION_MSG: Final[str] = (
     "execution_not_allowed_in_phase_6a: execute=True is not implemented. "
-    "Requires separate L3 approval and Phase 6B runtime executor integration."
+    "Requires separate Phase 6B runtime executor integration."
 )
 
 # ---------------------------------------------------------------------------
@@ -107,7 +115,19 @@ class CandidateApplyInput:
     """References to evidence artifacts (reports, cycle IDs)."""
 
     requires_human_approval: bool = True
-    """Whether human approval is required before apply."""
+    """Whether human approval is required before apply.
+
+    In AUTONOMOUS_DRY_RUN mode, this is replaced by the autonomy policy.
+    Retained for legacy compatibility.
+    """
+
+    autonomy_mode: Literal["OFF", "DRY_RUN", "LIVE_READY"] = "DRY_RUN"
+    """Autonomy mode for this candidate evaluation.
+
+    - ``OFF``: legacy human-gated behavior.
+    - ``DRY_RUN``: use autonomy policy for dry-run decisions (default).
+    - ``LIVE_READY``: future live-capable mode (not implemented).
+    """
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -120,6 +140,7 @@ class CandidateApplyInput:
             "confidence": self.confidence,
             "evidence_refs": list(self.evidence_refs),
             "requires_human_approval": self.requires_human_approval,
+            "autonomy_mode": self.autonomy_mode,
         }
 
 
@@ -130,6 +151,10 @@ class CandidatePipelineDecision:
     status: Literal[
         "READY_FOR_HUMAN_APPROVAL",
         "READY_FOR_CANARY_APPLY",
+        "READY_FOR_AUTONOMOUS_DRY_RUN_APPLY",
+        "AUTO_DRY_RUN_APPROVED",
+        "AUTO_DRY_RUN_BLOCKED",
+        "AUTO_DRY_RUN_DEFERRED",
         "BLOCKED",
         "DEFERRED",
         "NOT_IMPLEMENTED_EXECUTION",
@@ -272,6 +297,50 @@ def _check_rollback_available() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Autonomy policy integration
+# ---------------------------------------------------------------------------
+
+
+def _evaluate_autonomy_for_candidate(
+    candidate: CandidateApplyInput,
+    pre_apply_config: Mapping[str, object],
+    active_measurement_candidate_id: str | None,
+) -> AutonomyPolicyInput | None:
+    """Build an AutonomyPolicyInput from candidate data.
+
+    Returns None if the candidate cannot be evaluated (e.g. missing data).
+    """
+    # Determine dry_run_all_true from config
+    dry_run_val = pre_apply_config.get("dry_run")
+    dry_run_all_true = dry_run_val is True
+
+    # Build parameter overlay
+    overlay: dict[str, int | float] = {}
+    if candidate.parameter and candidate.proposed_value is not None:
+        val = candidate.proposed_value
+        if isinstance(val, (int, float)):
+            overlay[candidate.parameter] = val
+
+    return AutonomyPolicyInput(
+        candidate_id=candidate.candidate_id,
+        candidate_sha=candidate.candidate_id,  # candidate_id serves as SHA in Phase 6A
+        target_bot=candidate.target_bot,
+        hypothesis=candidate.source,
+        parameter_overlay=overlay,
+        source_cycle=candidate.source,
+        confidence=candidate.confidence,
+        dry_run_all_true=dry_run_all_true,
+        kill_switch_mode="NORMAL",  # caller should provide real value
+        riskguard_status="PASS",  # caller should provide real value
+        active_measurement_candidate_id=active_measurement_candidate_id,
+        rollback_available=_check_rollback_available(),
+        allowlist_compatible=True,  # caller should provide real value
+        canary_first=(candidate.target_bot == CANARY_BOT_ID),
+        open_trades_on_target=None,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main pipeline function
 # ---------------------------------------------------------------------------
 
@@ -375,27 +444,105 @@ def candidate_to_apply_pipeline(
     if not measure_ok:
         blocked.append(measure_reason)
 
-    # 7. Human approval
-    if not candidate.requires_human_approval:
+    # 7. Check blocked list before autonomy policy
+    if blocked:
+        rollback_avail = _check_rollback_available()
         return CandidatePipelineResult(
             decision=CandidatePipelineDecision(
-                status="DEFERRED",
+                status="BLOCKED",
                 candidate_id=candidate.candidate_id,
                 target_bot=candidate.target_bot,
                 canary_only=not allow_non_canary,
                 readiness_ready=False,
                 restart_required=True,
                 measurement_required=True,
-                rollback_available=_check_rollback_available(),
-                blocked_reasons=("requires_human_approval is False",),
-                next_step="Set requires_human_approval=True or obtain explicit human approval.",
+                rollback_available=rollback_avail,
+                blocked_reasons=tuple(blocked),
+                next_step="Review blocked reasons, fix before retrying pipeline.",
                 created_at_utc=now,
             ),
             readiness_report=None,
             restart_plan_required=True,
             measurement_plan_required=True,
-            rollback_plan_required=True,
+            rollback_plan_required=rollback_avail,
         )
+
+    # 8. Autonomy policy check (replaces human gate in DRY_RUN mode)
+    if candidate.autonomy_mode == "DRY_RUN":
+        policy_input = _evaluate_autonomy_for_candidate(
+            candidate, pre_apply_config, active_measurement_candidate_id,
+        )
+        if policy_input is not None:
+            policy_decision = evaluate_autonomy_policy(policy_input)
+
+            if policy_decision.status == "AUTO_DRY_RUN_BLOCKED":
+                return CandidatePipelineResult(
+                    decision=CandidatePipelineDecision(
+                        status="AUTO_DRY_RUN_BLOCKED",
+                        candidate_id=candidate.candidate_id,
+                        target_bot=candidate.target_bot,
+                        canary_only=not allow_non_canary,
+                        readiness_ready=False,
+                        restart_required=True,
+                        measurement_required=True,
+                        rollback_available=_check_rollback_available(),
+                        blocked_reasons=policy_decision.reasons,
+                        next_step=policy_decision.required_next_step,
+                        created_at_utc=now,
+                    ),
+                    readiness_report=None,
+                    restart_plan_required=True,
+                    measurement_plan_required=True,
+                    rollback_plan_required=True,
+                )
+
+            if policy_decision.status == "AUTO_DRY_RUN_DEFERRED":
+                return CandidatePipelineResult(
+                    decision=CandidatePipelineDecision(
+                        status="AUTO_DRY_RUN_DEFERRED",
+                        candidate_id=candidate.candidate_id,
+                        target_bot=candidate.target_bot,
+                        canary_only=not allow_non_canary,
+                        readiness_ready=False,
+                        restart_required=True,
+                        measurement_required=False,
+                        rollback_available=_check_rollback_available(),
+                        blocked_reasons=policy_decision.reasons,
+                        next_step=policy_decision.required_next_step,
+                        created_at_utc=now,
+                    ),
+                    readiness_report=None,
+                    restart_plan_required=True,
+                    measurement_plan_required=False,
+                    rollback_plan_required=True,
+                )
+
+            # AUTO_DRY_RUN_APPROVED — continue to readiness check
+            # (policy gates pass, but execution is not wired yet in Phase 6A)
+        else:
+            blocked.append("autonomy_policy_input_failed: could not build policy input")
+    else:
+        # Legacy human approval check (OFF mode)
+        if not candidate.requires_human_approval:
+            return CandidatePipelineResult(
+                decision=CandidatePipelineDecision(
+                    status="DEFERRED",
+                    candidate_id=candidate.candidate_id,
+                    target_bot=candidate.target_bot,
+                    canary_only=not allow_non_canary,
+                    readiness_ready=False,
+                    restart_required=True,
+                    measurement_required=True,
+                    rollback_available=_check_rollback_available(),
+                    blocked_reasons=("requires_human_approval is False",),
+                    next_step="Set requires_human_approval=True or obtain explicit human approval.",
+                    created_at_utc=now,
+                ),
+                readiness_report=None,
+                restart_plan_required=True,
+                measurement_plan_required=True,
+                rollback_plan_required=True,
+            )
 
     # 8. Readiness check (optional, read-only)
     if _check_readiness_available() and not blocked:
@@ -407,7 +554,7 @@ def candidate_to_apply_pipeline(
                 candidate_sha=candidate.candidate_id,
                 bot_id=candidate.target_bot,
                 parameter_overlay=overlay_dict,
-                requires_human_approval=True,
+                requires_human_approval=(candidate.autonomy_mode != "DRY_RUN"),
                 pre_apply_config=dict(pre_apply_config),
                 riskguard_status="PASS",
             )
@@ -420,10 +567,35 @@ def candidate_to_apply_pipeline(
     # Determine status
     rollback_avail = _check_rollback_available()
 
-    if blocked:
+    if candidate.autonomy_mode == "DRY_RUN":
+        # In DRY_RUN mode, policy gates passed — return approved status
+        if readiness_ready:
+            return CandidatePipelineResult(
+                decision=CandidatePipelineDecision(
+                    status="READY_FOR_AUTONOMOUS_DRY_RUN_APPLY",
+                    candidate_id=candidate.candidate_id,
+                    target_bot=candidate.target_bot,
+                    canary_only=not allow_non_canary,
+                    readiness_ready=True,
+                    restart_required=True,
+                    measurement_required=True,
+                    rollback_available=rollback_avail,
+                    blocked_reasons=(),
+                    next_step=(
+                        "All policy gates pass. Candidate is ready for autonomous "
+                        "dry-run apply. Wire autonomous dry-run executor in Phase 6B."
+                    ),
+                    created_at_utc=now,
+                ),
+                readiness_report=readiness_report,
+                restart_plan_required=True,
+                measurement_plan_required=True,
+                rollback_plan_required=rollback_avail,
+            )
+
         return CandidatePipelineResult(
             decision=CandidatePipelineDecision(
-                status="BLOCKED",
+                status="AUTO_DRY_RUN_APPROVED",
                 candidate_id=candidate.candidate_id,
                 target_bot=candidate.target_bot,
                 canary_only=not allow_non_canary,
@@ -431,8 +603,11 @@ def candidate_to_apply_pipeline(
                 restart_required=True,
                 measurement_required=True,
                 rollback_available=rollback_avail,
-                blocked_reasons=tuple(blocked),
-                next_step="Review blocked reasons, fix before retrying pipeline.",
+                blocked_reasons=(),
+                next_step=(
+                    "All policy gates pass. Candidate is approved for autonomous "
+                    "dry-run apply. Wire autonomous dry-run executor in Phase 6B."
+                ),
                 created_at_utc=now,
             ),
             readiness_report=readiness_report,
@@ -441,6 +616,7 @@ def candidate_to_apply_pipeline(
             rollback_plan_required=rollback_avail,
         )
 
+    # Legacy mode (autonomy_mode == "OFF")
     if readiness_ready:
         return CandidatePipelineResult(
             decision=CandidatePipelineDecision(
