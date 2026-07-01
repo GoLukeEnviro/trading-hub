@@ -114,6 +114,15 @@ a rollout policy artifact.
 The evaluator is read-only — it does not apply overlays to fleet bots,
 execute rollback, or enable schedulers.
 
+## Phase 9B Fleet Rollout Artifact Planner
+
+Phase 9B converts rollout policy eligibility into concrete per-target
+rollout artifacts. It reads the Phase-9A rollout policy, validates the
+source overlay hash, validates target runtime specs (dry-run, config
+path, command), and generates per-target plan artifacts: planned
+overlay copy, pre-apply snapshot plan, and rollback plan. It does not
+apply overlays or mutate runtime.
+
 ## Data Sources (Real Data Only)
 
 All decisions must be based on real runtime evidence:
