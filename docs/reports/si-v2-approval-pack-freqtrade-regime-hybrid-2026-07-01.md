@@ -50,10 +50,8 @@
 
 ## Next Step
 
-For a real apply, a separate human approval token is required, for example:
+For a real apply, a separate human approval step is required.
 
-```
-APPROVE_SI_V2_NEXT_CANARY_APPLY=9658ccc051ef03a5
-```
+This document does not define or issue an approval token. The candidate hash is evidence identity only, not an execution credential.
 
-The apply path must be canary-first or demonstrably contain no runtime/bot mutation.
+The apply path must be canary-first or demonstrably contain no runtime/bot mutation. Any runtime actuator approval must use the implemented SI-v2 actuator gate from code, not a report-defined token name.
