@@ -349,12 +349,16 @@ def run_canary_restart_with_overlay(
     token: str | None = None,
     compose_output_dir: Path | None = None,
     docker_available: bool = True,
+    apply_mode: str = "MANUAL_L3",
 ) -> RuntimeExecutionResult:
     """Run the controlled canary restart with overlay.
 
     This is the **Phase 3C** entry point. Default mode (``execute=False``)
     returns ``BLOCKED`` — safe for dry-run audits. Actual execution requires
     ``execute=True`` + matching L3 token + all gates passing.
+
+    In ``AUTONOMOUS_DRY_RUN`` mode, the L3 token gate is bypassed.
+    All other safety gates remain active.
 
     Args:
         recreate_plan: A validated ``CanaryRecreatePlan`` (from Phase 3B-B).
@@ -364,6 +368,8 @@ def run_canary_restart_with_overlay(
         token: L3 activation token (must match ``APPROVE``).
         compose_output_dir: Where to write the compose override file.
         docker_available: If False, skips actual Docker calls (for tests/audit).
+        apply_mode: Operating mode. ``AUTONOMOUS_DRY_RUN`` bypasses token gate.
+            ``MANUAL_L3`` (default) requires token. ``LIVE_CAPITAL_MODE`` blocks.
 
     Returns:
         ``RuntimeExecutionResult`` with status and evidence.
@@ -388,15 +394,29 @@ def run_canary_restart_with_overlay(
             rollback_instruction="",
         )
 
-    # -- Gate 2: L3 token ----------------------------------------------------
-    ok2, reason2 = _check_token(token)
-    if not ok2:
-        blocked_reasons.append(reason2)
+    # -- Gate 2: L3 token (bypassed in AUTONOMOUS_DRY_RUN mode) ---------------
+    if apply_mode == "AUTONOMOUS_DRY_RUN":
+        # No L3 token required for autonomous dry-run
+        pass
+    elif apply_mode == "LIVE_CAPITAL_MODE":
+        blocked_reasons.append(
+            "live_capital_mode_not_implemented: LIVE_CAPITAL_MODE is not implemented"
+        )
         return RuntimeExecutionResult(
             status="BLOCKED",
             reason="; ".join(blocked_reasons),
             plan_id=plan_id,
         )
+    else:
+        # MANUAL_L3 mode: require token
+        ok2, reason2 = _check_token(token)
+        if not ok2:
+            blocked_reasons.append(reason2)
+            return RuntimeExecutionResult(
+                status="BLOCKED",
+                reason="; ".join(blocked_reasons),
+                plan_id=plan_id,
+            )
 
     # -- Gate 3: bot is canary -----------------------------------------------
     ok3, reason3 = _check_execution_bot(recreate_plan)

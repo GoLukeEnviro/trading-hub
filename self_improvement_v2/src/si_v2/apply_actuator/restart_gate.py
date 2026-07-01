@@ -209,7 +209,11 @@ def _g9_rollback_command_available(plan: RestartPlan) -> tuple[bool, str]:
 
 def _g10_runtime_execution_still_blocked(
     execution_enabled: bool,
+    apply_mode: str = "MANUAL_L3",
 ) -> tuple[bool, str]:
+    if execution_enabled and apply_mode == "AUTONOMOUS_DRY_RUN":
+        # AUTONOMOUS_DRY_RUN mode allows execution without L3 phase gate
+        return True, ""
     if execution_enabled:
         return (
             False,
@@ -229,6 +233,7 @@ def check_restart_gate(
     overlay_payload: Mapping[str, object],
     pre_apply_config: Mapping[str, object],
     execution_enabled: bool = False,
+    apply_mode: str = "MANUAL_L3",
 ) -> RestartGateResult:
     """Evaluate all 10 restart gates against a validated RestartPlan.
 
@@ -320,7 +325,7 @@ def check_restart_gate(
         gate_results["rollback_command_available"] = False
 
     # G10 — independent
-    ok10, reason10 = _g10_runtime_execution_still_blocked(execution_enabled)
+    ok10, reason10 = _g10_runtime_execution_still_blocked(execution_enabled, apply_mode)
     gate_results["runtime_execution_still_blocked"] = ok10
     if not ok10:
         blocked.append(reason10)
