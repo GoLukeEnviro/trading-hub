@@ -31,8 +31,26 @@ apply artifacts:
 - **Audit event** — append-only JSONL audit trail
 - **Measurement start plan** — T0 timestamp, baseline snapshot, expected policy
 
-The executor does NOT execute runtime actions (Docker restart, compose,
-scheduler jobs). Runtime activation remains a separate ceremony/enablement step.
+The executor does NOT execute external runtime actions or scheduler changes.
+Runtime activation is handled by Phase 6C Runtime Ceremony Runner.
+
+## Phase 6C Runtime Ceremony Runner
+
+The runner (`self_improvement_v2/src/si_v2/pipeline/runtime_ceremony_runner.py`)
+closes the loop between Phase-6B artifacts and controlled canary dry-run
+runtime action:
+
+1. **Artifact verification** — overlay exists, hash matches, rollback/audit/
+   measurement plan exist, dry_run=true, kill switch NORMAL, RiskGuard PASS
+2. **Restart plan** — builds and validates a canary restart plan via
+   `plan_canary_restart_with_overlay()`
+3. **Restart gate** — evaluates G1-G10 gates (G10 bypassed in AUTONOMOUS_DRY_RUN)
+4. **Runtime execution** — delegates to `run_canary_restart_with_overlay()`
+   with `apply_mode=AUTONOMOUS_DRY_RUN` (bypasses L3 token)
+5. **RuntimeEffectProof** — standard proof pipeline
+6. **T0 activation record** — only written after GREEN proof
+
+The runner does NOT enable scheduler or watcher jobs. No live trading.
 
 ## Data Sources (Real Data Only)
 
