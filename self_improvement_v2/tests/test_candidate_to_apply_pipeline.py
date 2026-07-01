@@ -153,6 +153,9 @@ class TestCandidateToApplyPipeline:
             candidate=valid_candidate,
             pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id=None,
+            kill_switch_mode="NORMAL",
+            riskguard_status="PASS",
+            allowlist_compatible=True,
         )
         assert result.decision.status in (
             "READY_FOR_CANARY_APPLY", "READY_FOR_HUMAN_APPROVAL",
@@ -328,6 +331,9 @@ class TestCandidateToApplyPipeline:
             candidate=valid_candidate,
             pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id="test_max_open_trades_3_to_2",
+            kill_switch_mode="NORMAL",
+            riskguard_status="PASS",
+            allowlist_compatible=True,
         )
         # May be READY_FOR_CANARY_APPLY or READY_FOR_HUMAN_APPROVAL depending on readiness
         assert result.decision.status in (
@@ -417,6 +423,9 @@ class TestSerialization:
             candidate=valid_candidate,
             pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id=None,
+            kill_switch_mode="NORMAL",
+            riskguard_status="PASS",
+            allowlist_compatible=True,
         )
         d = result.decision.to_dict()
         json.dumps(d)

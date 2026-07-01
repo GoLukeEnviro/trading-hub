@@ -6,6 +6,7 @@ Test coverage:
   3. Non-canary mutating candidate blocked
   4. Active measurement deferred
   5. execute=True does not mutate and returns explicit Phase 6B status
+  6. Missing evidence values (kill_switch_mode=None) → BLOCKED
 """
 
 from __future__ import annotations
@@ -51,6 +52,15 @@ def _default_config() -> dict[str, object]:
     }
 
 
+def _default_evidence() -> dict[str, object]:
+    """Real evidence values required for autonomous dry-run evaluation."""
+    return {
+        "kill_switch_mode": "NORMAL",
+        "riskguard_status": "PASS",
+        "allowlist_compatible": True,
+    }
+
+
 class TestCandidatePipelineAutonomousDryRun:
     """Tests for the autonomous dry-run policy path."""
 
@@ -61,6 +71,7 @@ class TestCandidatePipelineAutonomousDryRun:
             candidate=candidate,
             pre_apply_config=_default_config(),
             active_measurement_candidate_id=None,
+            **_default_evidence(),
         )
         assert result.decision.status in (
             "READY_FOR_AUTONOMOUS_DRY_RUN_APPLY",
@@ -77,6 +88,7 @@ class TestCandidatePipelineAutonomousDryRun:
             candidate=candidate,
             pre_apply_config=_default_config(),
             active_measurement_candidate_id=None,
+            **_default_evidence(),
         )
         # Should not be blocked by human approval
         assert result.decision.status not in ("BLOCKED", "DEFERRED"), (
@@ -93,6 +105,7 @@ class TestCandidatePipelineAutonomousDryRun:
             candidate=candidate,
             pre_apply_config=_default_config(),
             active_measurement_candidate_id=None,
+            **_default_evidence(),
         )
         assert result.decision.status in (
             "BLOCKED", "AUTO_DRY_RUN_BLOCKED",
@@ -107,6 +120,7 @@ class TestCandidatePipelineAutonomousDryRun:
             candidate=candidate,
             pre_apply_config=_default_config(),
             active_measurement_candidate_id="existing_measurement_001",
+            **_default_evidence(),
         )
         assert result.decision.status in (
             "DEFERRED", "AUTO_DRY_RUN_DEFERRED",
@@ -138,6 +152,63 @@ class TestCandidatePipelineAutonomousDryRun:
         assert result.restart_plan_required
         assert result.measurement_plan_required
         assert result.rollback_plan_required
+
+    def test_missing_evidence_blocks(self) -> None:
+        """Missing evidence values (kill_switch_mode=None) should block."""
+        candidate = _make_candidate()
+        result = candidate_to_apply_pipeline(
+            candidate=candidate,
+            pre_apply_config=_default_config(),
+            active_measurement_candidate_id=None,
+        )
+        assert result.decision.status in (
+            "BLOCKED", "AUTO_DRY_RUN_BLOCKED",
+        ), f"Missing evidence should block: {result.decision.status}"
+
+    def test_missing_kill_switch_blocks(self) -> None:
+        """kill_switch_mode=None should block."""
+        candidate = _make_candidate()
+        result = candidate_to_apply_pipeline(
+            candidate=candidate,
+            pre_apply_config=_default_config(),
+            active_measurement_candidate_id=None,
+            kill_switch_mode=None,
+            riskguard_status="PASS",
+            allowlist_compatible=True,
+        )
+        assert result.decision.status in (
+            "BLOCKED", "AUTO_DRY_RUN_BLOCKED",
+        ), f"Missing kill_switch should block: {result.decision.status}"
+
+    def test_missing_riskguard_blocks(self) -> None:
+        """riskguard_status=None should block."""
+        candidate = _make_candidate()
+        result = candidate_to_apply_pipeline(
+            candidate=candidate,
+            pre_apply_config=_default_config(),
+            active_measurement_candidate_id=None,
+            kill_switch_mode="NORMAL",
+            riskguard_status=None,
+            allowlist_compatible=True,
+        )
+        assert result.decision.status in (
+            "BLOCKED", "AUTO_DRY_RUN_BLOCKED",
+        ), f"Missing riskguard should block: {result.decision.status}"
+
+    def test_missing_allowlist_blocks(self) -> None:
+        """allowlist_compatible=None should block."""
+        candidate = _make_candidate()
+        result = candidate_to_apply_pipeline(
+            candidate=candidate,
+            pre_apply_config=_default_config(),
+            active_measurement_candidate_id=None,
+            kill_switch_mode="NORMAL",
+            riskguard_status="PASS",
+            allowlist_compatible=None,
+        )
+        assert result.decision.status in (
+            "BLOCKED", "AUTO_DRY_RUN_BLOCKED",
+        ), f"Missing allowlist should block: {result.decision.status}"
 
 
 class TestCandidatePipelineLegacyMode:
@@ -237,6 +308,7 @@ class TestCandidatePipelineResultShape:
             candidate=candidate,
             pre_apply_config=_default_config(),
             active_measurement_candidate_id=None,
+            **_default_evidence(),
         )
         d = result.to_dict()
         assert "decision" in d
@@ -251,6 +323,7 @@ class TestCandidatePipelineResultShape:
             candidate=candidate,
             pre_apply_config=_default_config(),
             active_measurement_candidate_id=None,
+            **_default_evidence(),
         )
         d = result.decision.to_dict()
         assert d["status"] in (

@@ -305,11 +305,31 @@ def _evaluate_autonomy_for_candidate(
     candidate: CandidateApplyInput,
     pre_apply_config: Mapping[str, object],
     active_measurement_candidate_id: str | None,
+    *,
+    kill_switch_mode: str | None = None,
+    riskguard_status: str | None = None,
+    allowlist_compatible: bool | None = None,
 ) -> AutonomyPolicyInput | None:
     """Build an AutonomyPolicyInput from candidate data.
 
     Returns None if the candidate cannot be evaluated (e.g. missing data).
+
+    Args:
+        kill_switch_mode: Real kill switch mode from runtime evidence.
+            Must not be None for autonomous dry-run evaluation.
+        riskguard_status: Real RiskGuard status from runtime evidence.
+            Must not be None for autonomous dry-run evaluation.
+        allowlist_compatible: Real allowlist compatibility from evidence.
+            Must not be None for autonomous dry-run evaluation.
     """
+    # Fail-closed: missing evidence values block evaluation
+    if kill_switch_mode is None:
+        return None
+    if riskguard_status is None:
+        return None
+    if allowlist_compatible is None:
+        return None
+
     # Determine dry_run_all_true from config
     dry_run_val = pre_apply_config.get("dry_run")
     dry_run_all_true = dry_run_val is True
@@ -330,11 +350,11 @@ def _evaluate_autonomy_for_candidate(
         source_cycle=candidate.source,
         confidence=candidate.confidence,
         dry_run_all_true=dry_run_all_true,
-        kill_switch_mode="NORMAL",  # caller should provide real value
-        riskguard_status="PASS",  # caller should provide real value
+        kill_switch_mode=kill_switch_mode,
+        riskguard_status=riskguard_status,
         active_measurement_candidate_id=active_measurement_candidate_id,
         rollback_available=_check_rollback_available(),
-        allowlist_compatible=True,  # caller should provide real value
+        allowlist_compatible=allowlist_compatible,
         canary_first=(candidate.target_bot == CANARY_BOT_ID),
         open_trades_on_target=None,
     )
@@ -352,6 +372,9 @@ def candidate_to_apply_pipeline(
     execute: bool = False,
     allow_non_canary: bool = False,
     active_measurement_candidate_id: str | None = "max_open_trades_3_to_2",
+    kill_switch_mode: str | None = None,
+    riskguard_status: str | None = None,
+    allowlist_compatible: bool | None = None,
 ) -> CandidatePipelineResult:
     """Evaluate a candidate through the full SI-v2 apply pipeline.
 
@@ -366,6 +389,12 @@ def candidate_to_apply_pipeline(
         allow_non_canary: Allow non-canary targets (default: False).
         active_measurement_candidate_id: Currently active measurement
             candidate ID (default: ``max_open_trades_3_to_2``).
+        kill_switch_mode: Real kill switch mode from runtime evidence.
+            Required for autonomous dry-run evaluation. None -> BLOCKED.
+        riskguard_status: Real RiskGuard status from runtime evidence.
+            Required for autonomous dry-run evaluation. None -> BLOCKED.
+        allowlist_compatible: Real allowlist compatibility from evidence.
+            Required for autonomous dry-run evaluation. None -> BLOCKED.
 
     Returns:
         ``CandidatePipelineResult`` with decision and context flags.
@@ -471,6 +500,9 @@ def candidate_to_apply_pipeline(
     if candidate.autonomy_mode == "DRY_RUN":
         policy_input = _evaluate_autonomy_for_candidate(
             candidate, pre_apply_config, active_measurement_candidate_id,
+            kill_switch_mode=kill_switch_mode,
+            riskguard_status=riskguard_status,
+            allowlist_compatible=allowlist_compatible,
         )
         if policy_input is not None:
             policy_decision = evaluate_autonomy_policy(policy_input)
@@ -521,6 +553,29 @@ def candidate_to_apply_pipeline(
             # (policy gates pass, but execution is not wired yet in Phase 6A)
         else:
             blocked.append("autonomy_policy_input_failed: could not build policy input")
+
+        # Check blocked list after autonomy policy evaluation
+        if blocked:
+            rollback_avail = _check_rollback_available()
+            return CandidatePipelineResult(
+                decision=CandidatePipelineDecision(
+                    status="BLOCKED",
+                    candidate_id=candidate.candidate_id,
+                    target_bot=candidate.target_bot,
+                    canary_only=not allow_non_canary,
+                    readiness_ready=False,
+                    restart_required=True,
+                    measurement_required=True,
+                    rollback_available=rollback_avail,
+                    blocked_reasons=tuple(blocked),
+                    next_step="Review blocked reasons, fix before retrying pipeline.",
+                    created_at_utc=now,
+                ),
+                readiness_report=None,
+                restart_plan_required=True,
+                measurement_plan_required=True,
+                rollback_plan_required=rollback_avail,
+            )
     else:
         # Legacy human approval check (OFF mode)
         if not candidate.requires_human_approval:
