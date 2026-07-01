@@ -63,6 +63,7 @@ class FakeEvidenceReader:
         return {
             "timestamp_utc": datetime.now(UTC).isoformat(),
             "source": "fake_evidence_reader",
+            "label": "T1",
             "control": {
                 "bot_id": control_bot,
                 "closed_trades_since_t0": self.control_closed,
@@ -108,6 +109,7 @@ def make_fake_evidence(tmp_path: Path, **overrides: Any) -> str:
     defaults = {
         "timestamp_utc": datetime.now(UTC).isoformat(),
         "source": "fake_evidence_file",
+        "label": "T1",
         "control": {
             "bot_id": CONTROL_BOT_ID,
             "closed_trades_since_t0": 4,
@@ -492,6 +494,7 @@ class TestSafetyAndSerialization:
                 return {
                     "timestamp_utc": "2026-07-01T12:00:00Z",
                     "source": "capture_test",
+                    "label": "T1",
                     "control": {
                         "bot_id": control_bot,
                         "closed_trades_since_t0": 4,
@@ -561,7 +564,7 @@ class TestSafetyAndSerialization:
     def test_measurement_point_to_dict(self) -> None:
         """MeasurementPoint.to_dict serializes correctly."""
         mp = MeasurementPoint(
-            label="T0",
+            label="T1",
             timestamp_utc="2026-07-01T12:00:00Z",
             canary_closed_trades=5,
             control_closed_trades=4,
@@ -574,7 +577,7 @@ class TestSafetyAndSerialization:
             evidence_source="test",
         )
         d = mp.to_dict()
-        assert d["label"] == "T0"
+        assert d["label"] == "T1"
         assert d["canary_closed_trades"] == 5
 
     def test_result_with_evidence_file_fallback(
@@ -619,3 +622,110 @@ class TestSafetyAndSerialization:
             decision_pack_dir=tmp_path / "packs",
         )
         assert result.status == "MEASUREMENT_BLOCKED"
+
+class TestMeasurementLabels:
+    """MeasurementPoint label semantics (T0 is activation record, not a measurement point)."""
+
+    def test_snapshot_label_defaults_to_t1(self, tmp_path: Path) -> None:
+        """Evidence without 'label' defaults to T1."""
+        t0_path = make_t0_record(tmp_path)
+        ev = {
+            "timestamp_utc": "2026-07-01T12:00:00Z",
+            "source": "no_label_test",
+            "control": {
+                "bot_id": CONTROL_BOT_ID,
+                "closed_trades_since_t0": 5,
+                "open_trades": 0,
+                "profit_abs_since_t0": 2.0,
+                "profit_factor_since_t0": 1.5,
+            },
+            "canary": {
+                "bot_id": CANARY_BOT_ID,
+                "closed_trades_since_t0": 6,
+                "open_trades": 1,
+                "profit_abs_since_t0": 3.0,
+                "profit_factor_since_t0": 1.6,
+            },
+        }
+        ev_path = tmp_path / "no_label.json"
+        ev_path.write_text(json.dumps(ev))
+        result = run_autonomous_measurement_watcher(
+            MeasurementWatcherInput(
+                t0_record_path=t0_path,
+                fleet_evidence_ref=str(ev_path),
+            ),
+            decision_pack_dir=tmp_path / "packs",
+        )
+        assert result.status == "FINAL_DECISION_EMITTED"
+        assert len(result.measurement_points) >= 1
+        assert result.measurement_points[0].label == "T1"
+
+    def test_snapshot_label_t2_preserved(self, tmp_path: Path) -> None:
+        """Evidence with label=T2 preserves it."""
+        t0_path = make_t0_record(tmp_path)
+        ev = {
+            "timestamp_utc": "2026-07-01T12:00:00Z",
+            "source": "t2_label_test",
+            "label": "T2",
+            "control": {
+                "bot_id": CONTROL_BOT_ID,
+                "closed_trades_since_t0": 5,
+                "open_trades": 0,
+                "profit_abs_since_t0": 2.0,
+                "profit_factor_since_t0": 1.5,
+            },
+            "canary": {
+                "bot_id": CANARY_BOT_ID,
+                "closed_trades_since_t0": 6,
+                "open_trades": 1,
+                "profit_abs_since_t0": 3.0,
+                "profit_factor_since_t0": 1.6,
+            },
+        }
+        ev_path = tmp_path / "t2_label.json"
+        ev_path.write_text(json.dumps(ev))
+        result = run_autonomous_measurement_watcher(
+            MeasurementWatcherInput(
+                t0_record_path=t0_path,
+                fleet_evidence_ref=str(ev_path),
+            ),
+            decision_pack_dir=tmp_path / "packs",
+        )
+        assert result.status == "FINAL_DECISION_EMITTED"
+        assert len(result.measurement_points) >= 1
+        assert result.measurement_points[0].label == "T2"
+
+    def test_t0_record_is_not_used_as_measurement_point(self, tmp_path: Path) -> None:
+        """No MeasurementPoint has label T0."""
+        t0_path = make_t0_record(tmp_path)
+        ev = {
+            "timestamp_utc": "2026-07-01T12:00:00Z",
+            "source": "check_label_test",
+            "label": "T1",
+            "control": {
+                "bot_id": CONTROL_BOT_ID,
+                "closed_trades_since_t0": 5,
+                "open_trades": 0,
+                "profit_abs_since_t0": 2.0,
+                "profit_factor_since_t0": 1.5,
+            },
+            "canary": {
+                "bot_id": CANARY_BOT_ID,
+                "closed_trades_since_t0": 6,
+                "open_trades": 1,
+                "profit_abs_since_t0": 3.0,
+                "profit_factor_since_t0": 1.6,
+            },
+        }
+        ev_path = tmp_path / "check_label.json"
+        ev_path.write_text(json.dumps(ev))
+        result = run_autonomous_measurement_watcher(
+            MeasurementWatcherInput(
+                t0_record_path=t0_path,
+                fleet_evidence_ref=str(ev_path),
+            ),
+            decision_pack_dir=tmp_path / "packs",
+        )
+        assert result.status == "FINAL_DECISION_EMITTED"
+        for mp in result.measurement_points:
+            assert mp.label != "T0", "Unexpected T0 label in measurement point"

@@ -53,6 +53,6 @@ T0 activation record
 ## Files
 
 - `self_improvement_v2/src/si_v2/measurement/autonomous_measurement_watcher.py` — watcher module
-- `self_improvement_v2/tests/test_autonomous_measurement_watcher.py` — 26 tests
+- `self_improvement_v2/tests/test_autonomous_measurement_watcher.py` — 29 tests
 - `docs/reports/si-v2-phase-7-autonomous-measurement-watcher-2026-07-01.md` — this report
 - `docs/architecture/si-v2-autonomous-dry-run-loop.md` — architecture doc update

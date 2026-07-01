@@ -16,7 +16,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -94,7 +94,7 @@ class MeasurementPoint:
     canary-vs-control comparison.
     """
 
-    label: Literal["T0", "T1", "T2", "T3"]
+    label: Literal["T1", "T2", "T3"]
     timestamp_utc: str
     canary_closed_trades: int
     control_closed_trades: int
@@ -366,6 +366,27 @@ def _check_t0_age(
             f"(max {max_age_hours} hours)"
         )
     return True, None
+
+
+# ---------------------------------------------------------------------------
+# Snapshot label extraction
+# ---------------------------------------------------------------------------
+
+
+def _extract_snapshot_label(snapshot: dict[str, object]) -> Literal["T1", "T2", "T3"]:
+    """Extract the measurement label from an evidence snapshot.
+
+    If the snapshot has a ``label`` field with value ``T1``, ``T2``, or
+    ``T3``, it is preserved. Otherwise defaults to ``T1`` (the first
+    post-T0 measurement point).
+
+    T0 is never a valid measurement point label — T0 is the activation
+    record, not a fleet-evidence snapshot.
+    """
+    raw = str(snapshot.get("label", "")).upper()
+    if raw in ("T1", "T2", "T3"):
+        return cast("Literal['T1', 'T2', 'T3']", raw)
+    return "T1"
 
 
 # ---------------------------------------------------------------------------
@@ -824,7 +845,7 @@ def run_autonomous_measurement_watcher(
 
     # Create measurement point
     measurement_point = MeasurementPoint(
-        label="T0",
+        label=_extract_snapshot_label(snapshot),
         timestamp_utc=snapshot_ts,
         canary_closed_trades=canary_closed,
         control_closed_trades=control_closed,
