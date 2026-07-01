@@ -48,7 +48,29 @@ runtime action:
 4. **Runtime execution** — delegates to `run_canary_restart_with_overlay()`
    with `apply_mode=AUTONOMOUS_DRY_RUN` (bypasses L3 token)
 5. **RuntimeEffectProof** — standard proof pipeline
-6. **T0 activation record** — only written after GREEN proof
+
+## Phase 9A — Controlled Fleet Rollout Policy
+
+The policy evaluator (`self_improvement_v2/src/si_v2/rollout/fleet_rollout_policy.py`)
+consumes enriched Measurement Watcher decision packs, validates KEEP +
+statistical evidence, blocks HARD conflicts, selects eligible fleet target
+bots, and writes a rollout policy artifact.
+
+## Phase 9B — Fleet Rollout Artifact Planner
+
+The planner (`self_improvement_v2/src/si_v2/rollout/fleet_rollout_artifact_planner.py`)
+consumes Phase-9A rollout policy artifacts and generates concrete per-target
+rollout plan artifacts: planned overlay, pre-apply snapshot plan, rollback
+plan, and fleet rollout plan.
+
+## Phase 9C — Controlled Fleet Runtime Ceremony
+
+The ceremony module (`self_improvement_v2/src/si_v2/rollout/fleet_runtime_ceremony.py`)
+consumes Phase-9B fleet rollout plans and runs controlled dry-run-only target
+ceremonies. It writes pre-apply snapshots, audit events, RuntimeEffectProof,
+and measurement-start records per target through a mockable runtime executor.
+
+## T0 Activation Record
 
 The runner does NOT enable scheduler or watcher jobs. No live trading.
 
