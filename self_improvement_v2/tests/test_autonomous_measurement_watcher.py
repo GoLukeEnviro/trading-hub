@@ -729,3 +729,339 @@ class TestMeasurementLabels:
         assert result.status == "FINAL_DECISION_EMITTED"
         for mp in result.measurement_points:
             assert mp.label != "T0", "Unexpected T0 label in measurement point"
+
+class TestStatisticalEvidence:
+    """Phase 8B — Statistical evidence enrichment tests."""
+
+    def test_statistical_evidence_disabled_preserves_existing_decision_pack_shape(
+        self, tmp_path: Path,
+    ) -> None:
+        """Decision pack without stat has null stat fields."""
+        result = run_watcher(
+            tmp_path,
+            evidence_reader=FakeEvidenceReader(),
+        )
+        assert result.status == "FINAL_DECISION_EMITTED"
+        pack_path = Path(result.decision_pack_path)
+        pack = json.loads(pack_path.read_text())
+        # Legacy shape preserved
+        assert pack["runtime_mutation"] == "NONE"
+        # New stat fields present but null
+        assert pack["statistical_evidence"] is None
+        assert pack["statistical_conflict"] is not None
+        assert pack["statistical_conflict"]["has_conflict"] is False
+
+    def test_statistical_evidence_enabled_with_samples_adds_statistical_evidence(
+        self, tmp_path: Path,
+    ) -> None:
+        """Stat enabled with trade samples adds stat evidence to pack."""
+        reader = FakeEvidenceReader(
+            canary_closed=5, control_closed=5,
+            canary_profit=2.0, control_profit=1.0,
+        )
+        canary_trades = [{"trade_id": str(i), "profit_abs": 0.2,
+                          "profit_ratio": 0.01,
+                          "close_timestamp_utc": "2026-07-01T10:00:00Z"}
+                         for i in range(5)]
+        control_trades = [{"trade_id": str(i), "profit_abs": 0.1,
+                           "profit_ratio": 0.005,
+                           "close_timestamp_utc": "2026-07-01T10:00:00Z"}
+                          for i in range(5)]
+        reader.canary_trades = canary_trades
+        reader.control_trades = control_trades
+        reader._extra_canary = "trades_since_t0"
+        reader._extra_control = "trades_since_t0"
+
+        # We need the reader to include trades in the snapshot
+        original_read = reader.read_measurement_snapshot
+
+        def read_with_trades(**kw):
+            snap = original_read(**kw)
+            snap["canary"]["trades_since_t0"] = canary_trades
+            snap["control"]["trades_since_t0"] = control_trades
+            return snap
+
+        reader.read_measurement_snapshot = read_with_trades
+
+        t0_path = make_t0_record(tmp_path)
+        dec_dir = tmp_path / "stat_packs"
+        watcher_input = MeasurementWatcherInput(
+            t0_record_path=t0_path,
+            fleet_evidence_ref="test_ref",
+            use_statistical_evidence=True,
+            evidence_class="A",
+        )
+        result = run_autonomous_measurement_watcher(
+            watcher_input,
+            evidence_reader=reader,
+            decision_pack_dir=dec_dir,
+        )
+        assert result.status == "FINAL_DECISION_EMITTED"
+        pack_path = Path(result.decision_pack_path)
+        pack = json.loads(pack_path.read_text())
+        assert pack["statistical_evidence"] is not None
+        assert pack["statistical_evidence"]["recommendation"] == "STAT_KEEP"
+        assert pack["statistical_evidence"]["evidence_grade"] in ("STRONG", "MODERATE", "WEAK")
+
+    def test_statistical_evidence_missing_samples_does_not_block_simple_decision(
+        self, tmp_path: Path,
+    ) -> None:
+        """Missing trade samples with stat enabled does not block."""
+        t0_path = make_t0_record(tmp_path)
+        dec_dir = tmp_path / "missing_stat"
+        watcher_input = MeasurementWatcherInput(
+            t0_record_path=t0_path,
+            fleet_evidence_ref="test_ref",
+            use_statistical_evidence=True,
+        )
+        result = run_autonomous_measurement_watcher(
+            watcher_input,
+            evidence_reader=FakeEvidenceReader(),
+            decision_pack_dir=dec_dir,
+        )
+        assert result.status == "FINAL_DECISION_EMITTED"
+        pack_path = Path(result.decision_pack_path)
+        pack = json.loads(pack_path.read_text())
+        # Simple decision still works
+        assert pack["decision"] in ("KEEP_CANARY_OVERLAY", "EXTEND_MEASUREMENT")
+        # Stat evidence is null (no trades in snapshot)
+        assert pack["statistical_evidence"] is None
+
+    def test_statistical_keep_aligns_with_simple_keep_no_conflict(
+        self, tmp_path: Path,
+    ) -> None:
+        """Aligned KEEP/STAT_KEEP produces no conflict."""
+        t0_path = make_t0_record(tmp_path)
+        dec_dir = tmp_path / "align_keep"
+        watcher_input = MeasurementWatcherInput(
+            t0_record_path=t0_path,
+            fleet_evidence_ref="test_ref",
+            use_statistical_evidence=True,
+        )
+        # Monkeypatch to return STAT_KEEP
+        import si_v2.measurement.autonomous_measurement_watcher as watcher_mod
+
+        original = watcher_mod._maybe_evaluate_statistical_evidence
+
+        def fake_stat(**kw):
+            return {
+                "status": "STAT_READY",
+                "recommendation": "STAT_KEEP",
+                "evidence_grade": "MODERATE",
+                "canary_mean_profit": 0.3,
+                "control_mean_profit": 0.1,
+                "mean_profit_diff": 0.2,
+                "bootstrap_ci_low": 0.05,
+                "bootstrap_ci_high": 0.35,
+                "effect_size": 0.8,
+            }
+
+        watcher_mod._maybe_evaluate_statistical_evidence = fake_stat
+        try:
+            result = run_autonomous_measurement_watcher(
+                watcher_input,
+                evidence_reader=FakeEvidenceReader(
+                    canary_closed=5, control_closed=4,
+                    canary_profit=2.0, control_profit=1.0,
+                ),
+                decision_pack_dir=dec_dir,
+            )
+        finally:
+            watcher_mod._maybe_evaluate_statistical_evidence = original
+
+        assert result.status == "FINAL_DECISION_EMITTED"
+        assert result.final_decision == "KEEP_CANARY_OVERLAY"
+        pack_path = Path(result.decision_pack_path)
+        pack = json.loads(pack_path.read_text())
+        assert pack["statistical_conflict"]["has_conflict"] is False
+        assert pack["statistical_conflict"]["severity"] == "NONE"
+
+    def test_statistical_rollback_conflicts_with_simple_keep_hard_conflict(
+        self, tmp_path: Path,
+    ) -> None:
+        """KEEP vs STAT_ROLLBACK produces HARD conflict."""
+        t0_path = make_t0_record(tmp_path)
+        dec_dir = tmp_path / "hard_conflict"
+        watcher_input = MeasurementWatcherInput(
+            t0_record_path=t0_path,
+            fleet_evidence_ref="test_ref",
+            use_statistical_evidence=True,
+        )
+        import si_v2.measurement.autonomous_measurement_watcher as watcher_mod
+
+        original = watcher_mod._maybe_evaluate_statistical_evidence
+
+        def fake_rollback(**kw):
+            return {
+                "status": "STAT_READY",
+                "recommendation": "STAT_ROLLBACK",
+                "evidence_grade": "STRONG",
+                "canary_mean_profit": 0.1,
+                "control_mean_profit": 0.3,
+                "mean_profit_diff": -0.2,
+                "bootstrap_ci_low": -0.35,
+                "bootstrap_ci_high": -0.05,
+                "effect_size": -0.8,
+            }
+
+        watcher_mod._maybe_evaluate_statistical_evidence = fake_rollback
+        try:
+            result = run_autonomous_measurement_watcher(
+                watcher_input,
+                evidence_reader=FakeEvidenceReader(
+                    canary_closed=5, control_closed=4,
+                    canary_profit=2.0, control_profit=1.0,
+                ),
+                decision_pack_dir=dec_dir,
+            )
+        finally:
+            watcher_mod._maybe_evaluate_statistical_evidence = original
+
+        assert result.status == "FINAL_DECISION_EMITTED"
+        assert result.final_decision == "KEEP_CANARY_OVERLAY"
+        pack_path = Path(result.decision_pack_path)
+        pack = json.loads(pack_path.read_text())
+        assert pack["statistical_conflict"]["has_conflict"] is True
+        assert pack["statistical_conflict"]["severity"] == "HARD"
+
+    def test_statistical_extend_soft_conflict_with_simple_keep(
+        self, tmp_path: Path,
+    ) -> None:
+        """KEEP vs STAT_EXTEND produces SOFT conflict."""
+        import si_v2.measurement.autonomous_measurement_watcher as watcher_mod
+
+        original = watcher_mod._maybe_evaluate_statistical_evidence
+        t0_path = make_t0_record(tmp_path)
+        dec_dir = tmp_path / "soft_conflict"
+        watcher_input = MeasurementWatcherInput(
+            t0_record_path=t0_path,
+            fleet_evidence_ref="test_ref",
+            use_statistical_evidence=True,
+        )
+
+        def fake_extend(**kw):
+            return {
+                "status": "STAT_READY",
+                "recommendation": "STAT_EXTEND",
+                "evidence_grade": "WEAK",
+                "canary_mean_profit": 0.15,
+                "control_mean_profit": 0.14,
+                "mean_profit_diff": 0.01,
+                "bootstrap_ci_low": -0.05,
+                "bootstrap_ci_high": 0.07,
+                "effect_size": 0.1,
+            }
+
+        watcher_mod._maybe_evaluate_statistical_evidence = fake_extend
+        try:
+            result = run_autonomous_measurement_watcher(
+                watcher_input,
+                evidence_reader=FakeEvidenceReader(
+                    canary_closed=5, control_closed=4,
+                    canary_profit=2.0, control_profit=1.0,
+                ),
+                decision_pack_dir=dec_dir,
+            )
+        finally:
+            watcher_mod._maybe_evaluate_statistical_evidence = original
+
+        assert result.status == "FINAL_DECISION_EMITTED"
+        assert result.final_decision == "KEEP_CANARY_OVERLAY"
+        pack_path = Path(result.decision_pack_path)
+        pack = json.loads(pack_path.read_text())
+        assert pack["statistical_conflict"]["has_conflict"] is True
+        assert pack["statistical_conflict"]["severity"] == "SOFT"
+
+    def test_statistical_evidence_class_passed_to_engine(
+        self, tmp_path: Path,
+    ) -> None:
+        """Evidence class is passed through to stats."""
+        from si_v2.measurement.autonomous_measurement_watcher import (
+            _maybe_evaluate_statistical_evidence,
+        )
+
+        snapshot: dict[str, object] = {
+            "timestamp_utc": "2026-07-01T12:00:00Z",
+            "source": "test",
+            "label": "T1",
+            "control": {
+                "bot_id": CONTROL_BOT_ID,
+                "closed_trades_since_t0": 5,
+                "open_trades": 0,
+                "profit_abs_since_t0": 0.5,
+                "profit_factor_since_t0": 1.2,
+                "trades_since_t0": [
+                    {"trade_id": str(i), "profit_abs": 0.1,
+                     "profit_ratio": 0.01,
+                     "close_timestamp_utc": "2026-07-01T10:00:00Z"}
+                    for i in range(5)
+                ],
+            },
+            "canary": {
+                "bot_id": CANARY_BOT_ID,
+                "closed_trades_since_t0": 5,
+                "open_trades": 1,
+                "profit_abs_since_t0": 1.0,
+                "profit_factor_since_t0": 1.5,
+                "trades_since_t0": [
+                    {"trade_id": str(i), "profit_abs": 0.2,
+                     "profit_ratio": 0.02,
+                     "close_timestamp_utc": "2026-07-01T10:00:00Z"}
+                    for i in range(5)
+                ],
+            },
+        }
+
+        stat = _maybe_evaluate_statistical_evidence(
+            enabled=True,
+            change_id="ch-1",
+            candidate_id="cand-1",
+            snapshot=snapshot,
+            canary_bot=CANARY_BOT_ID,
+            control_bot=CONTROL_BOT_ID,
+            evidence_class="B",
+            bootstrap_iterations=1000,
+            confidence_level=0.90,
+            random_seed=42,
+        )
+        assert stat is not None
+        assert stat["status"] == "STAT_INSUFFICIENT"  # class B needs 15
+        assert "INSUFFICIENT" in str(stat["evidence_grade"])
+
+    def test_statistical_result_never_executes_runtime_mutation(
+        self, tmp_path: Path,
+    ) -> None:
+        """Decision pack runtime_mutation remains NONE with stat."""
+        import si_v2.measurement.autonomous_measurement_watcher as watcher_mod
+
+        original = watcher_mod._maybe_evaluate_statistical_evidence
+
+        def fake_stat(**kw):
+            return {
+                "status": "STAT_READY",
+                "recommendation": "STAT_ROLLBACK",
+            }
+
+        watcher_mod._maybe_evaluate_statistical_evidence = fake_stat
+        t0_path = make_t0_record(tmp_path)
+        dec_dir = tmp_path / "no_mut"
+        watcher_input = MeasurementWatcherInput(
+            t0_record_path=t0_path,
+            fleet_evidence_ref="test_ref",
+            use_statistical_evidence=True,
+        )
+        try:
+            result = run_autonomous_measurement_watcher(
+                watcher_input,
+                evidence_reader=FakeEvidenceReader(
+                    canary_closed=5, control_closed=4,
+                ),
+                decision_pack_dir=dec_dir,
+            )
+        finally:
+            watcher_mod._maybe_evaluate_statistical_evidence = original
+
+        assert result.status == "FINAL_DECISION_EMITTED"
+        pack_path = Path(result.decision_pack_path)
+        pack = json.loads(pack_path.read_text())
+        assert pack["runtime_mutation"] == "NONE"

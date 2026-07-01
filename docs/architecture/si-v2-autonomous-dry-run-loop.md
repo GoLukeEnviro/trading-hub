@@ -91,6 +91,19 @@ Key features:
 The framework is read-only and does not execute KEEP/ROLLBACK or
 enable schedulers.
 
+## Phase 8B Watcher Statistical Integration
+
+Phase 8B enriches Measurement Watcher decision packs with
+``StatisticalEvidenceResult``. When ``use_statistical_evidence=True``
+and trade samples are present in the evidence snapshot, the watcher
+evaluates statistical evidence and includes it in the decision pack.
+
+Key behavior:
+- Existing simple watcher rules remain default and authoritative
+- Statistical conflicts are recorded (SOFT or HARD) but not auto-applied
+- Missing trade samples do not block the simple decision path
+- ``runtime_mutation`` remains ``NONE`` regardless of stat result
+
 ## Data Sources (Real Data Only)
 
 All decisions must be based on real runtime evidence:
