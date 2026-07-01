@@ -101,6 +101,9 @@ from si_v2.signals.models import (  # noqa: E402
     BotSignalSnapshot,
 )
 
+# Fleet rollout chain hook (Phase 10, disabled by default)
+_FLEET_ROLLOUT_CHAIN_ENABLED: bool = False
+
 # ------------------------------------------------------------------
 # Measurement Ledger post-step constants
 # ------------------------------------------------------------------
@@ -2052,6 +2055,44 @@ def run_active_cycle() -> int:
     print(f"  cycle state:             {state_path}")
     print(f"  report:                  {report_path}")
     print("=" * 72)
+
+    # ------------------------------------------------------------------
+    # Fleet Rollout Chain Hook (Phase 10, disabled by default)
+    # ------------------------------------------------------------------
+    if _FLEET_ROLLOUT_CHAIN_ENABLED:
+        print("\n[FLEET ROLLOUT CHAIN] Hook enabled — invoking chain runner...")
+        try:
+            from si_v2.rollout.fleet_rollout_chain_runner import (
+                maybe_run_fleet_rollout_chain_from_active_cycle,
+            )
+
+            chain_result = maybe_run_fleet_rollout_chain_from_active_cycle(
+                decision_pack_path="",
+                fleet_bots=(),
+                allowed_target_bots=(),
+                target_runtime_specs=(),
+                source_overlay_path="",
+                source_overlay_sha256="",
+                expected_parameter="",
+                expected_value=0,
+                fleet_rollout_chain_enabled=True,
+            )
+            if chain_result is not None:
+                print(
+                    f"  chain status:          "
+                    f"{chain_result.status}"
+                )
+                print(
+                    f"  chain audit:           "
+                    f"{chain_result.chain_audit_path}"
+                )
+        except Exception as exc:
+            print(
+                f"  WARNING: fleet rollout chain failed — "
+                f"{str(exc)[:200]}"
+            )
+    else:
+        print("\n[FLEET ROLLOUT CHAIN] Hook disabled (default).")
 
     return fleet_exit_code
 
