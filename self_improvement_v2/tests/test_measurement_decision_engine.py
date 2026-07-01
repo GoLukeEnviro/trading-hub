@@ -465,7 +465,9 @@ class TestDecideFinalMeasurement:
         d = decide_final_measurement(canary_points=canary_points, control_points=control_points)
         assert d.decision == "KEEP_CANARY_OVERLAY"
 
-    def test_final_decision_keeps_when_only_historical_noncritical_warnings_and_canary_outperforms_control(self) -> None:
+    def test_final_decision_keeps_when_only_historical_noncritical_warnings_and_canary_outperforms_control(
+        self,
+    ) -> None:
         canary_points = [
             _make_point("T0", closed_trades=59, total_profit_abs=3.98),
             _make_point("T1", closed_trades=59, total_profit_abs=3.98, warnings_since_last=3),

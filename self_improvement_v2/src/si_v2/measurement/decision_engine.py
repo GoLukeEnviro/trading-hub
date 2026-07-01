@@ -579,12 +579,18 @@ def decide_final_measurement(
     summary_reasons.extend(soft_reasons)
     summary_reasons.extend(reasons)
     if not control_comparison_available:
-        summary_reasons.append("comparison: control baseline unavailable; KEEP based on canary-only safety and progression")
+        summary_reasons.append(
+            "comparison: control baseline unavailable; KEEP based on canary-only safety "
+            "and progression"
+        )
 
     return MeasurementDecision(
         verdict="GREEN",
         decision="KEEP_CANARY_OVERLAY",
         confidence="MEDIUM" if soft_reasons or not control_comparison_available else "HIGH",
         reasons=tuple(summary_reasons),
-        next_step="Final safety and measurement evidence are sufficient. Keep canary overlay and prepare the next candidate review.",
+        next_step=(
+            "Final safety and measurement evidence are sufficient. Keep canary overlay "
+            "and prepare the next candidate review."
+        ),
     )
