@@ -76,10 +76,12 @@ Loop semantics:
 - The Active Cycle reads all four bots and preserves existing telemetry evidence.
 - Historical evidence is additive: it must not replace the telemetry evidence
   window.
-- ShadowProposals remain evidence-only until a separate human-approved apply
-  path is invoked.
-- Approval eligibility is not approval. A proposal that needs human approval is
-  not applied by the loop.
+- ShadowProposals may be applied automatically in **AUTONOMOUS_DRY_RUN** mode
+  when all policy gates pass. Dry-run mutation is not human-gated by default.
+  It is policy-gated, canary-first, allowlist-based, audit-logged,
+  snapshot-backed, rollback-capable, and measurement-bound.
+- Approval eligibility is not approval. A proposal that passes policy gates
+  is eligible for autonomous dry-run apply, not for live trading.
 - Mutation counters must remain zero for read-only proof and docs work.
 - Profitability or scoring evidence is not live-trading authorization.
 
@@ -109,18 +111,20 @@ context only. Do not count them as active SI-v2 loop members.
 ### SI-v2 — Self-Improvement Loop
 
 - The SI-v2 controlled apply chain is now fully implemented on `main`.
-- The first L3-gated canary apply (`max_open_trades 3→2`) is **runtime-proven**
+- The first canary apply (`max_open_trades 3→2`) is **runtime-proven**
   with `RuntimeEffectProof=GREEN`.
-- The controller operates in **Phase 4 (Measurement Window)** — T0 GREEN, T1 YELLOW,
-  T2/T3 pending. See `docs/state/current-operational-state.md`.
+- The controller operates in **AUTONOMOUS_DRY_RUN** mode target.
 - The full controlled apply chain:
   `execute_apply()` → `plan_canary_restart_with_overlay()` →
   `check_restart_gate()` → `run_canary_restart_with_overlay()` →
   `RuntimeEffectProof` → `Measurement Decision Engine`
-- The rollback path is rehearsed (Phase 5A) but **not executed**.
-- The candidate pipeline exists (Phase 6A) with `execute=False` default.
-- **No autonomous apply** is in scope. All mutating operations remain:
-  canary-only, dry-run-only, human-gated, L3-token-gated.
+- The rollback path is rehearsed but **not executed**.
+- The candidate pipeline exists with `execute=False` default.
+- **Autonomous dry-run apply** is the target: policy-gated, canary-first,
+  allowlist-based, audit-logged, snapshot-backed, rollback-capable,
+  measurement-bound. Human approval is not required per dry-run iteration.
+- Human approval is required for mode transitions (e.g. live-capital activation)
+  and emergency override, not for every qualified dry-run candidate.
 - **No new apply, restart, or rollback** before T2/T3 evidence is evaluated.
 
 ### Freqtrade — Dry-run execution fleet

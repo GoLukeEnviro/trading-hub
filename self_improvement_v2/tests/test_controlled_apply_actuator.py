@@ -276,6 +276,10 @@ class TestDryRun:
         """Unconditional: no config must block (HIGH-1)."""
         assert not check_dry_run(None).passed
 
+    def test_block_missing_key(self) -> None:
+        """Missing dry_run key must block — fail-closed."""
+        assert not check_dry_run({"max_open_trades": 3}).passed
+
 
 # -- 2. Cooldown fail-closed (BLOCKER-5) --------------------------------------
 

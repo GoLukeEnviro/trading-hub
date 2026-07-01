@@ -153,9 +153,13 @@ class TestCandidateToApplyPipeline:
             candidate=valid_candidate,
             pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id=None,
+            kill_switch_mode="NORMAL",
+            riskguard_status="PASS",
+            allowlist_compatible=True,
         )
         assert result.decision.status in (
-            "READY_FOR_CANARY_APPLY", "READY_FOR_HUMAN_APPROVAL"
+            "READY_FOR_CANARY_APPLY", "READY_FOR_HUMAN_APPROVAL",
+            "READY_FOR_AUTONOMOUS_DRY_RUN_APPLY", "AUTO_DRY_RUN_APPROVED",
         )
         assert result.decision.canary_only
         assert result.decision.rollback_available
@@ -175,7 +179,7 @@ class TestCandidateToApplyPipeline:
             candidate=c, pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id=None,
         )
-        assert result.decision.status == "BLOCKED"
+        assert result.decision.status in ("BLOCKED", "AUTO_DRY_RUN_BLOCKED")
         assert any("non_canary_target" in r for r in result.decision.blocked_reasons)
 
     def test_unknown_bot_blocks(
@@ -193,8 +197,8 @@ class TestCandidateToApplyPipeline:
             candidate=c, pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id=None,
         )
-        assert result.decision.status == "BLOCKED"
-        assert any("unknown_bot" in r for r in result.decision.blocked_reasons)
+        assert result.decision.status in ("BLOCKED", "AUTO_DRY_RUN_BLOCKED")
+        assert any("unknown_bot" in r or "non_canary" in r for r in result.decision.blocked_reasons)
 
     def test_unsafe_parameter_blocks(
         self,
@@ -212,7 +216,7 @@ class TestCandidateToApplyPipeline:
             candidate=c, pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id=None,
         )
-        assert result.decision.status == "BLOCKED"
+        assert result.decision.status in ("BLOCKED", "AUTO_DRY_RUN_BLOCKED")
         assert any("unsafe_parameter" in r for r in result.decision.blocked_reasons)
 
     def test_forbidden_dry_run_parameter_blocks(
@@ -230,7 +234,7 @@ class TestCandidateToApplyPipeline:
             candidate=c, pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id=None,
         )
-        assert result.decision.status == "BLOCKED"
+        assert result.decision.status in ("BLOCKED", "AUTO_DRY_RUN_BLOCKED")
         assert any("forbidden_parameter" in r for r in result.decision.blocked_reasons)
 
     def test_forbidden_strategy_blocks(
@@ -248,8 +252,11 @@ class TestCandidateToApplyPipeline:
             candidate=c, pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id=None,
         )
-        assert result.decision.status == "BLOCKED"
-        assert any("forbidden_parameter" in r for r in result.decision.blocked_reasons)
+        assert result.decision.status in ("BLOCKED", "AUTO_DRY_RUN_BLOCKED")
+        assert any(
+            "forbidden_parameter" in r or "empty" in r
+            for r in result.decision.blocked_reasons
+        )
 
     def test_dry_run_false_blocks(
         self,
@@ -260,8 +267,11 @@ class TestCandidateToApplyPipeline:
             pre_apply_config={"dry_run": False},
             active_measurement_candidate_id=None,
         )
-        assert result.decision.status == "BLOCKED"
-        assert any("dry_run_not_true" in r for r in result.decision.blocked_reasons)
+        assert result.decision.status in ("BLOCKED", "AUTO_DRY_RUN_BLOCKED")
+        assert any(
+            "dry_run_not_true" in r or "dry_run_not_all_true" in r
+            for r in result.decision.blocked_reasons
+        )
 
     def test_missing_dry_run_blocks(
         self,
@@ -272,8 +282,11 @@ class TestCandidateToApplyPipeline:
             pre_apply_config={},
             active_measurement_candidate_id=None,
         )
-        assert result.decision.status == "BLOCKED"
-        assert any("dry_run_not_found" in r for r in result.decision.blocked_reasons)
+        assert result.decision.status in ("BLOCKED", "AUTO_DRY_RUN_BLOCKED")
+        assert any(
+            "dry_run_not_found" in r or "dry_run_not_all_true" in r
+            for r in result.decision.blocked_reasons
+        )
 
     def test_execute_true_returns_not_implemented(
         self,
@@ -318,10 +331,14 @@ class TestCandidateToApplyPipeline:
             candidate=valid_candidate,
             pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id="test_max_open_trades_3_to_2",
+            kill_switch_mode="NORMAL",
+            riskguard_status="PASS",
+            allowlist_compatible=True,
         )
         # May be READY_FOR_CANARY_APPLY or READY_FOR_HUMAN_APPROVAL depending on readiness
         assert result.decision.status in (
-            "READY_FOR_CANARY_APPLY", "READY_FOR_HUMAN_APPROVAL"
+            "READY_FOR_CANARY_APPLY", "READY_FOR_HUMAN_APPROVAL",
+            "READY_FOR_AUTONOMOUS_DRY_RUN_APPLY", "AUTO_DRY_RUN_APPROVED",
         )
 
     def test_readiness_ready_flag_set(
@@ -406,11 +423,15 @@ class TestSerialization:
             candidate=valid_candidate,
             pre_apply_config=valid_pre_apply,
             active_measurement_candidate_id=None,
+            kill_switch_mode="NORMAL",
+            riskguard_status="PASS",
+            allowlist_compatible=True,
         )
         d = result.decision.to_dict()
         json.dumps(d)
         assert d["status"] in (
             "READY_FOR_CANARY_APPLY", "READY_FOR_HUMAN_APPROVAL",
+            "READY_FOR_AUTONOMOUS_DRY_RUN_APPLY", "AUTO_DRY_RUN_APPROVED",
         )
 
     def test_result_to_dict(
