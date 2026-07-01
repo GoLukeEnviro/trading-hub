@@ -12,12 +12,27 @@ policy gates pass — no per-iteration human approval required.
 Active Cycle
   → Candidate Selection
   → Autonomy Policy (policy-gated)
-  → Canary Dry-run Apply
+  → Phase 6B Executor (prepares overlay, rollback, audit, measurement plan)
+  → Runtime Ceremony (separate task — Docker restart, compose)
   → Runtime Proof
   → Measurement
   → Final Decision (KEEP / EXTEND / ROLLBACK)
   → Auto next iteration
 ```
+
+## Phase 6B Executor
+
+The executor (`self_improvement_v2/src/si_v2/pipeline/autonomous_dry_run_executor.py`)
+converts `AUTO_DRY_RUN_APPROVED` policy decisions into prepared canary dry-run
+apply artifacts:
+
+- **Overlay** — parameter change JSON file
+- **Rollback plan** — snapshot of pre-apply config with restore instructions
+- **Audit event** — append-only JSONL audit trail
+- **Measurement start plan** — T0 timestamp, baseline snapshot, expected policy
+
+The executor does NOT execute runtime actions (Docker restart, compose,
+scheduler jobs). Runtime activation remains a separate ceremony/enablement step.
 
 ## Data Sources (Real Data Only)
 
