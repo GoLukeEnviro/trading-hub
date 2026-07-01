@@ -4,8 +4,8 @@ Connects AUTO_DRY_RUN_APPROVED policy decisions to controlled canary
 dry-run apply artifacts: overlay, rollback plan, audit event, and
 measurement start plan.
 
-This module does NOT execute runtime actions (Docker restart, compose,
-scheduler jobs). It prepares the artifacts so a future runtime ceremony
+This module does NOT execute external runtime actions or scheduler changes.
+It prepares the artifacts so a future runtime ceremony
 can apply them.
 
 Safety invariants
@@ -211,7 +211,7 @@ def prepare_autonomous_dry_run_apply(
     - Evaluates the candidate through the policy pipeline.
     - If approved, writes overlay, rollback plan, audit event, and
       measurement start plan.
-    - Does NOT execute any runtime action (Docker restart, compose, etc.).
+    - Does NOT execute any external runtime action or scheduler change.
 
     With ``execute_runtime=True``:
     - Returns ``EXECUTOR_RUNTIME_ACTION_NOT_ENABLED`` in Phase 6B.
