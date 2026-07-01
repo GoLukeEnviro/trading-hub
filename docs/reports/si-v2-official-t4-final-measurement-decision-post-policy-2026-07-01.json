@@ -1,0 +1,450 @@
+{
+  "timestamp_utc": "2026-07-01T07:41:52Z",
+  "candidate_id": "max_open_trades_3_to_2",
+  "target_bot": "freqtrade-freqforge-canary",
+  "decision_mode": "read_only",
+  "policy_version": {
+    "description": "post PR #406 final decision policy calibration for non-critical historical warnings",
+    "merge_commit_short": "599df69",
+    "merge_commit": "599df696d639fb05503d3aa0ebe2039551c1fae1"
+  },
+  "t3_reference_utc": "2026-06-28T18:27:00Z",
+  "watcher_reconfirm": {
+    "status": "MEASUREMENT_READY",
+    "measurement_decision_engine_allowed": true,
+    "wrapper_exit": 0,
+    "next_step": "run_measurement_decision_engine_read_only",
+    "t3_reference_utc": "2026-06-28T18:27:00Z",
+    "canary_closed_since_t3": 2,
+    "control_closed_since_t3": 3,
+    "canary_open_trades": 1,
+    "dry_run_all_true": true,
+    "dry_run_by_bot": {
+      "canary": true,
+      "control": true,
+      "freqai_rebel": true,
+      "regime_hybrid": true
+    },
+    "kill_switch_status": "NORMAL",
+    "alert_file": "/opt/data/logs/si-v2-t4-watcher/alerts/measurement_ready-20260701T073326Z.log",
+    "run_log": "/opt/data/logs/si-v2-t4-watcher/runs/t4-watcher-20260701T073326Z.log"
+  },
+  "config_evidence": {
+    "canary_config_path": "freqforge-canary/config/config_canary_dryrun.json",
+    "control_config_path": "freqforge/config/config_freqforge_dryrun.json",
+    "canary_overlay_path": "freqforge-canary/user_data/overlay_max_open_trades_.json",
+    "canary_overlay_sha256": "922510976aa0d28324e88b52f6d0e92d51a3c858b2c4ce7c9b081b2efe29d99d",
+    "canary_dry_run": true,
+    "control_dry_run": true,
+    "canary_overlay_max_open_trades": 2,
+    "control_max_open_trades": 5,
+    "kill_switch_mode": "NORMAL",
+    "canary_db_url": "sqlite:////freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite",
+    "control_db_url": "sqlite:////freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite"
+  },
+  "historical_point_sources": {
+    "canary": {
+      "T0": "docs/reports/si-v2-phase-4-measurement-t0-2026-06-27.md",
+      "T1": "docs/reports/si-v2-phase-4-measurement-t1-2026-06-27.md",
+      "T2": "docs/reports/si-v2-phase-4-measurement-t2-2026-06-28.md",
+      "T3_guard_only": "docs/reports/si-v2-phase-4-measurement-t3-official-2026-06-30.md"
+    },
+    "control": {
+      "T0": "docs/reports/si-v2-phase-4-measurement-t0-2026-06-27.md",
+      "T1": "docs/reports/si-v2-phase-4-measurement-t1-2026-06-27.md",
+      "T2": "docs/reports/si-v2-phase-4-measurement-t2-2026-06-28.md",
+      "control_baseline_correction": "docs/reports/si-v2-phase-4l-control-baseline-drift-audit-2026-06-29.md"
+    }
+  },
+  "current_live_point_mapping": {
+    "source_label": "T4_live_followup",
+    "engine_label": "T3",
+    "reason": "decision_engine accepts only T0..T3 labels; the fresh live follow-up replaces the stale pre-policy final-slot live point while the official T3 report remains the guard artifact"
+  },
+  "official_t3_guard": {
+    "path": "docs/reports/si-v2-phase-4-measurement-t3-official-2026-06-30.md",
+    "exists": true,
+    "runtime_proof_status_from_report": "GREEN",
+    "scheduled_t3_utc": "2026-06-28T18:27:00Z",
+    "used_as_guard_only": true,
+    "note": "official T3 report remains present for the guard; its stale live figures are not reused for the current live follow-up point"
+  },
+  "canary_points": [
+    {
+      "label": "T0",
+      "timestamp_utc": "2026-06-27T18:27:58Z",
+      "bot_id": "freqtrade-freqforge-canary",
+      "candidate_id": "max_open_trades_3_to_2",
+      "runtime_proof_status": "GREEN",
+      "max_open_trades": 2,
+      "dry_run": true,
+      "container_healthy": true,
+      "open_trades": 0,
+      "closed_trades": 59,
+      "total_profit_abs": 3.98,
+      "realized_profit_abs": 3.98,
+      "win_rate": 0.898305,
+      "drawdown_abs": null,
+      "errors_since_last": 0,
+      "warnings_since_last": 3,
+      "unexpected_restart": false,
+      "rollback_required": false
+    },
+    {
+      "label": "T1",
+      "timestamp_utc": "2026-06-27T19:27:45Z",
+      "bot_id": "freqtrade-freqforge-canary",
+      "candidate_id": "max_open_trades_3_to_2",
+      "runtime_proof_status": "GREEN",
+      "max_open_trades": 2,
+      "dry_run": true,
+      "container_healthy": true,
+      "open_trades": 0,
+      "closed_trades": 59,
+      "total_profit_abs": 3.9798,
+      "realized_profit_abs": 3.9798,
+      "win_rate": 0.898305,
+      "drawdown_abs": null,
+      "errors_since_last": 0,
+      "warnings_since_last": 3,
+      "unexpected_restart": false,
+      "rollback_required": false
+    },
+    {
+      "label": "T2",
+      "timestamp_utc": "2026-06-27T21:10:51Z",
+      "bot_id": "freqtrade-freqforge-canary",
+      "candidate_id": "max_open_trades_3_to_2",
+      "runtime_proof_status": "GREEN",
+      "max_open_trades": 2,
+      "dry_run": true,
+      "container_healthy": true,
+      "open_trades": 0,
+      "closed_trades": 59,
+      "total_profit_abs": 3.98,
+      "realized_profit_abs": 3.98,
+      "win_rate": 0.898305,
+      "drawdown_abs": null,
+      "errors_since_last": 0,
+      "warnings_since_last": 12,
+      "unexpected_restart": false,
+      "rollback_required": false
+    },
+    {
+      "label": "T3",
+      "timestamp_utc": "2026-07-01T07:41:52Z",
+      "bot_id": "freqtrade-freqforge-canary",
+      "candidate_id": "max_open_trades_3_to_2",
+      "runtime_proof_status": "GREEN",
+      "max_open_trades": 2,
+      "dry_run": true,
+      "container_healthy": null,
+      "open_trades": 1,
+      "closed_trades": 61,
+      "total_profit_abs": 3.98311161,
+      "realized_profit_abs": 3.98311161,
+      "win_rate": 0.901639,
+      "drawdown_abs": null,
+      "errors_since_last": 0,
+      "warnings_since_last": 0,
+      "unexpected_restart": false,
+      "rollback_required": false
+    }
+  ],
+  "control_points": [
+    {
+      "label": "T0",
+      "timestamp_utc": "2026-06-27T18:27:58Z",
+      "bot_id": "freqtrade-freqforge",
+      "candidate_id": "max_open_trades_3_to_2",
+      "runtime_proof_status": "GREEN",
+      "max_open_trades": 5,
+      "dry_run": true,
+      "container_healthy": true,
+      "open_trades": 0,
+      "closed_trades": 78,
+      "total_profit_abs": 24.78,
+      "realized_profit_abs": 24.78,
+      "win_rate": 0.794872,
+      "drawdown_abs": null,
+      "errors_since_last": 0,
+      "warnings_since_last": 0,
+      "unexpected_restart": false,
+      "rollback_required": false
+    },
+    {
+      "label": "T1",
+      "timestamp_utc": "2026-06-27T19:27:45Z",
+      "bot_id": "freqtrade-freqforge",
+      "candidate_id": "max_open_trades_3_to_2",
+      "runtime_proof_status": "GREEN",
+      "max_open_trades": 5,
+      "dry_run": true,
+      "container_healthy": true,
+      "open_trades": 0,
+      "closed_trades": 78,
+      "total_profit_abs": 24.7841,
+      "realized_profit_abs": 24.7841,
+      "win_rate": 0.794872,
+      "drawdown_abs": null,
+      "errors_since_last": 0,
+      "warnings_since_last": 0,
+      "unexpected_restart": false,
+      "rollback_required": false
+    },
+    {
+      "label": "T2",
+      "timestamp_utc": "2026-06-27T21:10:51Z",
+      "bot_id": "freqtrade-freqforge",
+      "candidate_id": "max_open_trades_3_to_2",
+      "runtime_proof_status": "GREEN",
+      "max_open_trades": 5,
+      "dry_run": true,
+      "container_healthy": true,
+      "open_trades": 0,
+      "closed_trades": 78,
+      "total_profit_abs": 24.78,
+      "realized_profit_abs": 24.78,
+      "win_rate": 0.794872,
+      "drawdown_abs": null,
+      "errors_since_last": 0,
+      "warnings_since_last": 0,
+      "unexpected_restart": false,
+      "rollback_required": false
+    },
+    {
+      "label": "T3",
+      "timestamp_utc": "2026-07-01T07:41:52Z",
+      "bot_id": "freqtrade-freqforge",
+      "candidate_id": "max_open_trades_3_to_2",
+      "runtime_proof_status": "GREEN",
+      "max_open_trades": 5,
+      "dry_run": true,
+      "container_healthy": null,
+      "open_trades": 0,
+      "closed_trades": 81,
+      "total_profit_abs": 3.33600672,
+      "realized_profit_abs": 3.33600672,
+      "win_rate": 0.777778,
+      "drawdown_abs": null,
+      "errors_since_last": 0,
+      "warnings_since_last": 0,
+      "unexpected_restart": false,
+      "rollback_required": false
+    }
+  ],
+  "decision_pack": {
+    "candidate_id": "max_open_trades_3_to_2",
+    "target_bot": "freqtrade-freqforge-canary",
+    "reports": [
+      {
+        "label": "T0",
+        "path": "/home/hermes/projects/trading/docs/reports/si-v2-phase-4-measurement-t0-2026-06-27.md",
+        "exists": true,
+        "official": true,
+        "smoke": false,
+        "scheduled_timestamp_utc": null,
+        "actual_timestamp_utc": null,
+        "verdict": null,
+        "decision": null
+      },
+      {
+        "label": "T1",
+        "path": "/home/hermes/projects/trading/docs/reports/si-v2-phase-4-measurement-t1-decision-2026-06-27.md",
+        "exists": true,
+        "official": true,
+        "smoke": false,
+        "scheduled_timestamp_utc": null,
+        "actual_timestamp_utc": null,
+        "verdict": null,
+        "decision": null
+      },
+      {
+        "label": "T2",
+        "path": "/home/hermes/projects/trading/docs/reports/si-v2-phase-4-measurement-t2-decision-2026-06-28.md",
+        "exists": true,
+        "official": true,
+        "smoke": false,
+        "scheduled_timestamp_utc": null,
+        "actual_timestamp_utc": null,
+        "verdict": null,
+        "decision": null
+      },
+      {
+        "label": "T3",
+        "path": "/home/hermes/projects/trading/docs/reports/si-v2-phase-4-measurement-t3-official-2026-06-30.md",
+        "exists": true,
+        "official": true,
+        "smoke": false,
+        "scheduled_timestamp_utc": null,
+        "actual_timestamp_utc": null,
+        "verdict": null,
+        "decision": null
+      }
+    ],
+    "all_required_reports_present": true,
+    "official_t3_present": true,
+    "final_verdict": "GREEN",
+    "final_decision": "KEEP_CANARY_OVERLAY",
+    "confidence": "MEDIUM",
+    "reasons": [
+      "T0: GREEN_WITH_SOFT_WARNINGS",
+      "T1: GREEN_WITH_SOFT_WARNINGS",
+      "T2: GREEN_WITH_SOFT_WARNINGS",
+      "T3: GREEN_WITH_SOFT_WARNINGS",
+      "T0: SOFT_WARNING \u2014 3 warning(s) since last snapshot",
+      "T1: SOFT_WARNING \u2014 3 warning(s) since last snapshot",
+      "T2: SOFT_WARNING \u2014 12 warning(s) since last snapshot",
+      "T3: UNKNOWN \u2014 container health not collected in read-only mode",
+      "comparison: profit_gap: canary=+0.00 vs control=-21.44",
+      "comparison: trade_gap: canary=+2 vs control=+3"
+    ],
+    "next_step": "Final safety and measurement evidence are sufficient. Keep canary overlay and prepare the next candidate review.",
+    "blocked_reasons": []
+  },
+  "report_refs": [
+    {
+      "label": "T0",
+      "path": "/home/hermes/projects/trading/docs/reports/si-v2-phase-4-measurement-t0-2026-06-27.md",
+      "exists": true,
+      "official": true,
+      "smoke": false,
+      "scheduled_timestamp_utc": null,
+      "actual_timestamp_utc": null,
+      "verdict": null,
+      "decision": null
+    },
+    {
+      "label": "T1",
+      "path": "/home/hermes/projects/trading/docs/reports/si-v2-phase-4-measurement-t1-decision-2026-06-27.md",
+      "exists": true,
+      "official": true,
+      "smoke": false,
+      "scheduled_timestamp_utc": null,
+      "actual_timestamp_utc": null,
+      "verdict": null,
+      "decision": null
+    },
+    {
+      "label": "T2",
+      "path": "/home/hermes/projects/trading/docs/reports/si-v2-phase-4-measurement-t2-decision-2026-06-28.md",
+      "exists": true,
+      "official": true,
+      "smoke": false,
+      "scheduled_timestamp_utc": null,
+      "actual_timestamp_utc": null,
+      "verdict": null,
+      "decision": null
+    },
+    {
+      "label": "T3",
+      "path": "/home/hermes/projects/trading/docs/reports/si-v2-phase-4-measurement-t3-official-2026-06-30.md",
+      "exists": true,
+      "official": true,
+      "smoke": false,
+      "scheduled_timestamp_utc": null,
+      "actual_timestamp_utc": null,
+      "verdict": null,
+      "decision": null
+    }
+  ],
+  "live_db_evidence": {
+    "canary": {
+      "db_path": "freqforge-canary/user_data/tradesv3.freqforge_canary.dryrun.sqlite",
+      "closed_count": 61,
+      "open_count": 1,
+      "closed_since_t3": 2,
+      "closed_since_t3_rows": [
+        {
+          "id": 61,
+          "pair": "DOT/USDT:USDT",
+          "open_date": "2026-06-30 14:15:03.965332",
+          "close_date": "2026-07-01 01:11:02.473000",
+          "realized_profit": 0.00213071,
+          "close_profit": 8.730504477952947e-05
+        },
+        {
+          "id": 62,
+          "pair": "ATOM/USDT:USDT",
+          "open_date": "2026-07-01 02:30:03.966736",
+          "close_date": "2026-07-01 05:31:52.210000",
+          "realized_profit": 0.00119776,
+          "close_profit": 4.921804518416418e-05
+        }
+      ],
+      "open_rows": [
+        {
+          "id": 60,
+          "pair": "UNI/USDT:USDT",
+          "open_date": "2026-06-29 21:15:03.825896"
+        }
+      ],
+      "realized_total": 3.98311161,
+      "profit_since_t3": 0.00332847,
+      "wins": 55,
+      "losses": 6,
+      "win_rate": 0.901639,
+      "last_close": "2026-07-01 05:31:52.210000",
+      "dry_run": true,
+      "effective_max_open_trades": 2
+    },
+    "control": {
+      "db_path": "freqforge/user_data/tradesv3.freqforge.dryrun.sqlite",
+      "closed_count": 81,
+      "open_count": 0,
+      "closed_since_t3": 3,
+      "closed_since_t3_rows": [
+        {
+          "id": 82,
+          "pair": "SOL/USDT:USDT",
+          "open_date": "2026-06-29 04:45:04.616904",
+          "close_date": "2026-06-29 17:05:22.642000",
+          "realized_profit": -13.87612577,
+          "close_profit": -0.04110507693142605
+        },
+        {
+          "id": 81,
+          "pair": "ETH/USDT:USDT",
+          "open_date": "2026-06-29 04:45:03.443484",
+          "close_date": "2026-06-29 17:46:12.289000",
+          "realized_profit": -12.69750678,
+          "close_profit": -0.03837629851445447
+        },
+        {
+          "id": 80,
+          "pair": "BTC/USDT:USDT",
+          "open_date": "2026-06-29 04:45:02.286032",
+          "close_date": "2026-06-30 12:24:02.014000",
+          "realized_profit": 5.12554424,
+          "close_profit": 0.015312422186754129
+        }
+      ],
+      "open_rows": [],
+      "realized_total": 3.33600672,
+      "profit_since_t3": -21.44808831,
+      "wins": 63,
+      "losses": 18,
+      "win_rate": 0.777778,
+      "last_close": "2026-06-30 12:24:02.014000",
+      "dry_run": true,
+      "configured_max_open_trades": 5
+    }
+  },
+  "comparison_since_t3": {
+    "canary_closed_since_t3": 2,
+    "control_closed_since_t3": 3,
+    "canary_profit_since_t3": 0.00332847,
+    "control_profit_since_t3": -21.44808831,
+    "closed_trades_delta": -1,
+    "profit_delta_usdt": 21.45141678,
+    "canary_open_trades": 1,
+    "control_open_trades": 0
+  },
+  "previous_official_report": {
+    "path": "docs/reports/si-v2-official-t4-final-measurement-decision-2026-07-01.md",
+    "decision_before_policy_fix": "EXTEND_MEASUREMENT",
+    "verdict_before_policy_fix": "YELLOW",
+    "confidence_before_policy_fix": "MEDIUM"
+  },
+  "mutation_status": "NONE \u2014 read-only post-policy recompute/report only; no runtime mutation."
+}
