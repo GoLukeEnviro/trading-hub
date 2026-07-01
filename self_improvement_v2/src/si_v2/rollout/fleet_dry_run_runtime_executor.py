@@ -4,7 +4,7 @@ Executes the Fleet Rollout Chain in dry-run runtime mode for exactly one
 allowlisted target bot using an explicit runtime executor.
 
 This module wraps the Phase 9C ceremony with additional safety guards:
-- Refuses dry_run=false
+- Refuses non-dry-run bots
 - Refuses non-allowlisted targets
 - Refuses multiple targets (unless explicitly configured)
 - Blocks without rollback plan
@@ -133,7 +133,7 @@ def _validate_dry_run(
     for bot in chain_input.fleet_bots:
         if not bot.dry_run:
             reasons.append(
-                f"dry_run_required: bot {bot.bot_id} has dry_run=False"
+                f"dry_run_required: bot {bot.bot_id} has dry_run disabled"
             )
     if not reasons:
         return True, ()
