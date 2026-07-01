@@ -49,6 +49,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final, Literal
 
+from si_v2.apply_actuator.controlled_apply_actuator import ApplyMode
 from si_v2.apply_actuator.restart_with_overlay import CANARY_BOT_ID
 from si_v2.apply_actuator.runtime_binding import resolve_binding
 from si_v2.autonomy import (
@@ -605,13 +606,19 @@ def candidate_to_apply_pipeline(
             from si_v2.apply_actuator.controlled_apply_actuator import check_readiness
             overlay_val = candidate.proposed_value
             overlay_dict: dict[str, int | float] = {candidate.parameter: overlay_val}  # type: ignore[assignment]
+            # Use real evidence values; None means the check will fail-closed
             rr = check_readiness(
                 candidate_sha=candidate.candidate_id,
                 bot_id=candidate.target_bot,
                 parameter_overlay=overlay_dict,
                 requires_human_approval=(candidate.autonomy_mode != "DRY_RUN"),
                 pre_apply_config=dict(pre_apply_config),
-                riskguard_status="PASS",
+                riskguard_status=riskguard_status,
+                apply_mode=(
+                    ApplyMode.AUTONOMOUS_DRY_RUN
+                    if candidate.autonomy_mode == "DRY_RUN"
+                    else ApplyMode.MANUAL_L3
+                ),
             )
             readiness_ready = rr.ready
             readiness_report = rr

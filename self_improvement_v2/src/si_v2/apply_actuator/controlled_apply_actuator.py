@@ -471,14 +471,24 @@ def check_cooldown(
 def check_dry_run(
     pre_apply_config: dict[str, object] | None,
 ) -> GateResult:
-    """Gate 8: dry_run must be True in pre-apply config."""
+    """Gate 8: dry_run must be True in pre-apply config.
+
+    Fail-closed: missing ``dry_run`` key blocks. Only explicit
+    ``dry_run=True`` passes.
+    """
     if pre_apply_config is None:
         return GateResult(
             False,
             "pre_apply_config not provided - cannot verify dry_run. "
             "Supply pre_apply_config with dry_run=True.",
         )
-    dry_run_val = pre_apply_config.get("dry_run", True)
+    if "dry_run" not in pre_apply_config:
+        return GateResult(
+            False,
+            "dry_run_not_found: key 'dry_run' missing from pre_apply_config. "
+            "Fail-closed: missing dry_run key is not treated as True.",
+        )
+    dry_run_val = pre_apply_config["dry_run"]
     if dry_run_val is True:
         return GateResult(True, "dry_run is True")
     return GateResult(
