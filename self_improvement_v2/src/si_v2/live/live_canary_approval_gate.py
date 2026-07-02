@@ -6,7 +6,7 @@ is present, fresh, and correctly formatted.
 
 This module is **read-only and gate-only**. It does NOT:
 - Activate live canary
-- Set dry_run=false
+- Toggle dry_run to false
 - Create or modify exchange keys
 - Modify Freqtrade runtime config
 - Execute any runtime mutation
