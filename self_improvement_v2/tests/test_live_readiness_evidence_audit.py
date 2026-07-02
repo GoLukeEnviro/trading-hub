@@ -83,7 +83,7 @@ def _make_minimal_repo(tmp_path: Path) -> Path:
 
 
 def _make_repo_with_live_config(tmp_path: Path) -> Path:
-    """Create a repo with a live (dry_run=false) config."""
+    """Create a repo with a live (dry_run disabled) config."""
     repo = _make_minimal_repo(tmp_path)
     config_path = repo / "freqtrade" / "user_data" / "config.json"
     config_path.write_text(
@@ -178,7 +178,7 @@ def test_blocks_missing_track_a_module(tmp_path: Path) -> None:
 
 
 def test_blocks_live_config(tmp_path: Path) -> None:
-    """Blocks when a config has dry_run=false."""
+    """Blocks when a config has dry_run disabled."""
     repo = _make_repo_with_live_config(tmp_path)
     result = run_live_readiness_evidence_audit(
         repo_root=repo,

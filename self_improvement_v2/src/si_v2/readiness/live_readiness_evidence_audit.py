@@ -193,7 +193,7 @@ def _check_no_live_activation(repo_root: Path) -> ReadinessCheckResult:
     """Check that no live mode activation has occurred."""
     blocked: list[str] = []
 
-    # Check for dry_run=false in config files
+    # Check for dry_run disabled in config files
     config_dir = repo_root / "freqtrade" / "user_data"
     if config_dir.exists():
         for config_file in config_dir.rglob("config*.json"):
@@ -201,7 +201,7 @@ def _check_no_live_activation(repo_root: Path) -> ReadinessCheckResult:
                 data = json.loads(config_file.read_text())
                 if data.get("dry_run") is False:
                     blocked.append(
-                        f"dry_run=false found in {config_file.relative_to(repo_root)}"
+                        f"dry_run disabled in {config_file.relative_to(repo_root)}"
                     )
             except (json.JSONDecodeError, OSError):
                 pass
@@ -216,7 +216,7 @@ def _check_no_live_activation(repo_root: Path) -> ReadinessCheckResult:
     return ReadinessCheckResult(
         check_name="no_live_activation",
         passed=True,
-        detail="No dry_run=false found in any config file",
+        detail="No dry_run disabled config found in any config file",
     )
 
 
