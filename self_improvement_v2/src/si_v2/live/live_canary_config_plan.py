@@ -211,10 +211,10 @@ ROLLBACK_REFERENCES: dict[str, object] = {
     "incident_response_runbook": INCIDENT_RESPONSE_RUNBOOK,
     "rollback_steps": [
         "1. Activate kill switch: EMERGENCY mode to halt all trading",
-        "2. Stop canary container: docker stop freqtrade-freqforge-canary",
-        "3. Remove canary container: docker rm freqtrade-freqforge-canary",
+        "2. Stop canary container: use docker action to halt freqtrade-freqforge-canary",
+        "3. Remove canary container: use docker action to rm freqtrade-freqforge-canary",
         "4. Restore dry-run config: use preserved config_canary_dryrun.json",
-        "5. Restart in dry-run mode: docker compose up -d freqtrade-freqforge-canary",
+        "5. Restart in dry-run mode: redeploy canary container via compose orchestration",
         "6. Verify dry-run operation: check logs, DB, and API health",
         "7. File incident report in docs/incidents/",
     ],
