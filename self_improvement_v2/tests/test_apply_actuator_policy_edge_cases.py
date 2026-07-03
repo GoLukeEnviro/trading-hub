@@ -29,25 +29,20 @@ Covers the missing lines in policy.py (73% → target 90%+):
 
 from __future__ import annotations
 
-import pytest
-
 from si_v2.apply_actuator.models import (
     ApplyActuatorResult,
     ApplyStatus,
     BotRuntimeBinding,
-    EffectiveConfigDraft,
     OverlayProposal,
     ProofStatus,
     RuntimeEffectProof,
 )
 from si_v2.apply_actuator.policy import (
-    compute_apply_result,
+    _determine_apply_status,
     compute_measurement_rule,
     compute_mutation_counter_rule,
-    _determine_apply_status,
 )
 from si_v2.apply_actuator.runtime_binding import (
-    BOT_RUNTIME_BINDINGS,
     resolve_binding,
     validate_fleet_bindings,
 )
@@ -55,29 +50,6 @@ from si_v2.apply_actuator.runtime_binding import (
 # ---------------------------------------------------------------------------
 # Test data
 # ---------------------------------------------------------------------------
-
-SAFE_PROPOSAL = OverlayProposal(
-    proposal_id="test-edge-001",
-    bot_id="freqtrade-freqforge",
-    policy="safe_parameter_overlay_only",
-    parameters={
-        "max_open_trades": 3,
-        "stake_amount": "unlimited",
-        "tradable_balance_ratio": 0.99,
-    },
-)
-
-GREEN_PROOF = RuntimeEffectProof(
-    proposal_id="test",
-    bot_id="test",
-    file_visible_to_bot=True,
-    effective_config_contains_expected_values=True,
-    loaded_config_contains_expected_values=True,
-    dry_run_true=True,
-    live_trading_false=True,
-    strategy_unchanged=True,
-    proof_status=ProofStatus.GREEN,
-)
 
 
 # ---------------------------------------------------------------------------
