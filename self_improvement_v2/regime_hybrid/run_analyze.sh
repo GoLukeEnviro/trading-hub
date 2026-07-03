@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
-# Regime-Hybrid Analyze — SI v2
-# Runs the performance analysis pipeline for the regime_hybrid bot.
-# Triggered every 30 min by si_regime_hybrid_analyze.sh via Hermes cron.
+# Regime-Hybrid Analyze — SI v2 (VESTIGIAL)
+#
+# VESTIGIAL / HISTORICAL — Issue #463
+# ------------------------------------
+# This script is NOT triggered by any active cron job and has no active caller
+# in the codebase. The cron trigger claim ("si_regime_hybrid_analyze.sh") was
+# removed during the SI-v1→SI-v2 transition. The SI-v2 Active Cycle Runner
+# (si_v2_active_cycle_cron.sh) has replaced this script's function.
+#
+# The script is retained as a standalone debug/diagnostic tool that can be run
+# manually. It fetches trades from the regime-hybrid container via REST API
+# and runs the SI-v2 PerformanceAnalyzer.
+#
+# Last verified: 2026-07-03 (grep audit: zero active callers)
 set -euo pipefail
 
 BOT_ID="regime_hybrid"
