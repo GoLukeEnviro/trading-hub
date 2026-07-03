@@ -6,6 +6,7 @@ FIX: 2026-06-05 — Ersetzt hardcoded Werte in:
 USAGE:
   from freqtrade.shared.SHARED_CONSTANTS import SIGNAL_MAX_AGE_SECONDS
 """
+import os
 
 # ── Signal Staleness ──────────────────────────────────────────
 SIGNAL_MAX_AGE_SECONDS   = 1200   # 20 min — konservativster Wert (war: 25/30/45 min überall anders)
