@@ -41,10 +41,7 @@ jobs:
       - name: Compile check (critical Python paths)
         run: |
           python -m compileall -x '(support|fixtures|__pycache__)' \
-            bridge \
-            primo \
             shadowlock \
-            intelligence \
             orchestrator \
             tests \
             scripts \

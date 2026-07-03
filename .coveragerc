@@ -5,9 +5,6 @@ source =
     orchestrator/scripts
     orchestrator/control
     freqtrade/shared
-    primo
-    bridge
-    intelligence
     tools
 omit =
     */tests/*

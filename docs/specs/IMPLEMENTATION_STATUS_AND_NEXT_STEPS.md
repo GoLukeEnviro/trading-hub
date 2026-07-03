@@ -1,4 +1,9 @@
-# Self-Improvement System — Implementation Status & Next Steps
+# SUPERSEDED — Self-Improvement System Implementation Status
+
+> **⚠️ SUPERSEDED** — This document is from 2026-06-10 and all listed
+> components are now implemented. For the current capability matrix,
+> see `docs/state/si-v2-capability-matrix.md`. For the current SI-v2
+> architecture, see `docs/ARCHITECTURE.md`.
 
 **Date:** 2026-06-10  
 **Current Branch:** main  

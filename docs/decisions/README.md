@@ -11,6 +11,18 @@ choices made in the Trading Hub project.
 |------|-------|--------|
 | 2026-05-14 | [SOUL.md / AGENTS.md Sync](2026-05-14-soul-agents-sync.md) | ✅ Final |
 | 2026-06-10 | [Watchdog Ownership Boundary](ADR-2026-06-10-watchdog-ownership.md) | ✅ Final |
+| 2026-06-27 | [Controlled Self-Improvement — Human-Gated Apply](ADR-2026-06-27-controlled-self-improvement-human-gated-apply.md) | ✅ Superseded by ADR-2026-07-01 |
+| 2026-06-27 | [SI-v2 Restart with Overlay — Runtime Proof](ADR-2026-06-27-si-v2-restart-with-overlay-runtime-proof.md) | ✅ Final |
+| 2026-07-01 | [SI-v2 Autonomous Dry-Run Loop — Live Target](ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target.md) | ✅ Final — current SI-v2 policy |
+
+## Approval Markers
+
+| Marker | Scope | Status | Location |
+|--------|-------|--------|----------|
+| `APPROVED_EXECUTE_LIVE_CANARY` | Execute live canary activation ceremony | ✅ Used (C3) | `APPROVED_EXECUTE_LIVE_CANARY.md` |
+| `APPROVED_LIVE_CANARY_TRANSITION` | Authorize live canary transition | ✅ Used (C1–C3) | `APPROVED_LIVE_CANARY_TRANSITION.md` |
+| `APPROVED_LIVE_CANARY_ROLLBACK` | Authorize live canary rollback | ✅ Used (C4) | `APPROVED_LIVE_CANARY_ROLLBACK.md` |
+| `APPROVED_LIVE_FLEET_ROLLOUT` | Authorize live fleet rollout (D1) | ❌ Missing — D1 BLOCKED | — |
 
 ## Format
 

@@ -1,4 +1,8 @@
-# Issues #55–#61 — Evidence Matrix
+# SUPERSEDED — Issues #55–#61 Evidence Matrix
+
+> **⚠️ SUPERSEDED** — All issues #55–#61 are CLOSED and merged.
+> This matrix is preserved as historical evidence. For current capability
+> status, see `docs/state/si-v2-capability-matrix.md`.
 
 > **Updated at commit `0557b70`** (PR #169 merge — Issue #60 cache maintenance merged).
 >

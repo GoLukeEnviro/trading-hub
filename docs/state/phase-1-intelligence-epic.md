@@ -1,15 +1,18 @@
-# Phase 1 Real-Data Intelligence Epic — Dependency-Ordered Issues
+# SUPERSEDED — Phase 1 Intelligence Epic
+
+> **⚠️ SUPERSEDED** — All issues #55–#61 are CLOSED and merged (2026-06-11).
+> The controller is no longer PAUSED — see ADR-2026-07-01 for the current
+> AUTONOMOUS_DRY_RUN mode. For current capability status, see
+> `docs/state/si-v2-capability-matrix.md`.
 
 > **Target:** Enable real-data intelligence pipeline — regime detection,
 > performance attribution, and automated reporting against live Freqtrade
 > trade data.
 >
-> **Status:** 🟡 **Active** — #55 completed (merged PR #161), #56 in development.
+> **Status (historical):** 🟡 **Active** — #55 completed (merged PR #161), #56 in development.
 > Issues #57–#61 remain open and depend on #56.
 >
-> **Current controller state:** PAUSED (AWAITING_NEXT_APPROVED_EPIC).
-> Activation of this epic requires human approval and a dedicated controller
-> session.
+> **Current controller state (historical):** PAUSED (AWAITING_NEXT_APPROVED_EPIC).
 
 ---
 

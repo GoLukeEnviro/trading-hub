@@ -1,9 +1,13 @@
-# Post-PR-160 Architecture — Simplified Overview
+# SUPERSEDED — Post-PR-160 Architecture
+
+> **⚠️ SUPERSEDED** — This architecture snapshot is from 2026-06-11 (commit `fdac27c`).
+> The controller is no longer PAUSED (see ADR-2026-07-01). All Phase 1 issues
+> are completed. For the current architecture, see `docs/ARCHITECTURE.md`.
 
 > **Canonical at commit `fdac27c`** — controller contract layer is now merged.
 >
-> This diagram describes the architecture **after** PR #160. The controller is
-> PAUSED. All SI v2 intelligence runs on fixtures only.
+> This diagram describes the architecture **after** PR #160. The controller was
+> PAUSED at this point. All SI v2 intelligence ran on fixtures only.
 
 ---
 

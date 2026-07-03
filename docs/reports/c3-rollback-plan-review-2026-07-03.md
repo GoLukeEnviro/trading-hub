@@ -45,13 +45,13 @@
 |-----------|------|:-------:|
 | Kill switch module | `freqtrade/shared/kill_switch.py` | ✅ — current mode: **NORMAL** |
 | Kill switch runbook | `docs/runbooks/kill-switch.md` | ✅ |
-| Kill switch procedure doc | `docs/references/freqtrade-kill-switch-procedure.md` | ❌ **MISSING** |
+| Kill switch procedure doc | `docs/references/freqtrade-kill-switch-procedure.md` | ✅ *(created in PR #446)* |
 | B2 risk limits spec | `docs/specs/production-risk-limits-spec.md` | ✅ |
 | B3 incident response runbooks | `docs/specs/incident-response-runbooks.md` | ✅ |
 | B4 alerting gate report | `docs/reports/production-alerting-readiness-gate.md` | ✅ |
-| Emergency stop script | `orchestrator/scripts/emergency_stop.sh` | ❌ **MISSING** |
-| Emergency audit directory | `var/si_v2/emergency/` | ❌ **MISSING** |
-| Incident report directory | `docs/incidents/` | ❌ **MISSING** |
+| Emergency stop script | `orchestrator/scripts/emergency_stop.sh` | ✅ *(created in PR #446)* |
+| Emergency audit directory | `var/si_v2/emergency/` | ✅ *(created during C4 execution)* |
+| Incident report directory | `docs/incidents/` | ✅ *(created during C4 execution)* |
 
 ## 5. C3 Rollback Plan — Step-by-Step Review
 
@@ -79,14 +79,14 @@ The C3 ceremony defines this 7-step rollback plan:
 
 ## 7. Gaps and Risks
 
-| # | Gap | Severity | Mitigation |
-|---|-----|:--------:|------------|
-| 1 | `orchestrator/scripts/emergency_stop.sh` does not exist | MEDIUM | Use manual `docker stop` or create script before rollback |
-| 2 | `docs/references/freqtrade-kill-switch-procedure.md` missing | LOW | Kill switch runbook at `docs/runbooks/kill-switch.md` covers usage |
-| 3 | `var/si_v2/emergency/` directory does not exist | LOW | Create on first emergency event |
-| 4 | `docs/incidents/` directory does not exist | LOW | Create on first post-mortem |
-| 5 | No `APPROVED_LIVE_CANARY_ROLLBACK` marker defined | MEDIUM | Must be created before rollback execution |
-| 6 | No live rollback executor module exists | MEDIUM | `fleet_dry_run_rollback_executor.py` exists for dry-run; live rollback needs separate executor or manual steps |
+| # | Gap | Severity | Status |
+|---|-----|:--------:|--------|
+| 1 | `orchestrator/scripts/emergency_stop.sh` does not exist | MEDIUM | ✅ Resolved — created in PR #446 |
+| 2 | `docs/references/freqtrade-kill-switch-procedure.md` missing | LOW | ✅ Resolved — created in PR #446 |
+| 3 | `var/si_v2/emergency/` directory does not exist | LOW | ✅ Resolved — created during C4 execution |
+| 4 | `docs/incidents/` directory does not exist | LOW | ✅ Resolved — created during C4 execution |
+| 5 | No `APPROVED_LIVE_CANARY_ROLLBACK` marker defined | MEDIUM | ✅ Resolved — `docs/decisions/APPROVED_LIVE_CANARY_ROLLBACK.md` exists |
+| 6 | No live rollback executor module exists | MEDIUM | OPEN — dry-run executor exists; live rollback needs manual steps |
 
 ## 8. Next Gate Status
 

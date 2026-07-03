@@ -163,10 +163,15 @@ context only. Do not count them as active SI-v2 loop members.
 - Never places, modifies, cancels, or overrides trades.
 - Runs against read-only Freqtrade data and the latest signal evidence.
 
-### Primo and Bridge endpoints
+### Primo and Bridge endpoints (historical)
 
-- Primo and Bridge endpoints may require API-key headers depending on runtime
-  environment.
+> **Historical note:** Primo and Bridge are decommissioned (Phase 44-45).
+> The SI-v2 autonomous dry-run loop (ADR-2026-07-01) replaces the Primo/Bridge
+> signal pipeline. `primo_signal.py` remains in `freqtrade/shared/` as a legacy
+> signal filter and kill-switch integration boundary.
+
+- Primo and Bridge endpoints may have required API-key headers depending on
+  runtime environment (historical).
 - Never print, copy, persist, or expose endpoint credentials.
 - Health endpoints are not proof that the SI-v2 loop is safe; validate the loop
   evidence artifacts instead.
