@@ -25,10 +25,11 @@ PR-specific proof details — belong in `docs/state/`, `docs/reports/`, and
 For the canonical current operational snapshot, read:
 `docs/state/current-operational-state.md`.
 
-> [📋 Roadmap v2 (current) →](docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md)
+> [📋 Live Roadmap — GitHub Issue #423](https://github.com/GoLukeEnviro/trading-hub/issues/423)
+> [📋 Roadmap v2 (historical) →](docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md)
 > [📋 Implementation Roadmap (historical) →](docs/roadmap/implementation-roadmap.md)
-> Phase overview, completed issues, next priorities. `roadmap-v2` is the
-> forward-looking roadmap; the state file is the current runtime snapshot.
+> Phase overview, completed issues, next priorities. Issue #423 is the canonical
+> live roadmap; `roadmap-v2` is historical context.
 
 ## Proven SI-v2 loop orientation
 
@@ -71,10 +72,10 @@ blocker evidence or explicit approval.
 | `freqforge/` | FreqForge bot | Baseline / override bot and supporting config. |
 | `freqforge-canary/` | Canary bot | Independent FreqForge instance for canary testing. |
 | `freqtrade/shared/` | FleetRisk + shared state | Shared coordination layer, watcher, fleet-risk artifacts, and kill switch (`kill_switch.py`). |
-| `bridge/` | Bridge code | Hermes/Primo bridge logic. |
-| `primo/` | Primo agent code | Signal-filter and integration helpers. |
+| `bridge/` | Bridge code (decommissioned) | Hermes/Primo bridge logic — replaced by SI-v2 autonomous loop (ADR-2026-07-01). |
+| `primo/` | Primo agent (decommissioned) | Signal-filter and integration helpers — replaced by SI-v2 autonomous loop. |
 | `shadowlock/` | ShadowLock service | Read-only evidence trail and decision logging. |
-| `intelligence/` | Intelligence layer | Market intelligence and analysis modules. |
+| `intelligence/` | Intelligence layer (vestigial) | Market intelligence and analysis modules — no active code. |
 | `tools/freqforge/` | Shadow evaluator | Passive observer and report generator. |
 | `orchestrator/scripts/` | Operation scripts | Approved automation entry points and helper scripts. |
 | `dashboard.py` | Read-only observability | Single-file Flask dashboard; server-side rendered, no caches or websockets, live request-time reads only. |

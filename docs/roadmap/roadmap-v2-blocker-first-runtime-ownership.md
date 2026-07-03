@@ -1,7 +1,17 @@
 # trading-hub Roadmap v2 – Blocker-First Runtime Ownership
 
-> **Canonical forward-looking roadmap.** Replaces
-> `docs/roadmap/implementation-roadmap.md` as the source of truth for
+> **⚠️ SUPERSEDED — Historical reference only.**
+>
+> This roadmap was grounded at commit `4dd4d5c` (2026-06-16) and is no longer
+> the canonical forward-looking roadmap. GitHub Issue **#423** is the current
+> live roadmap source-of-truth. ADR-2026-07-01 defines the current SI-v2 policy
+> as AUTONOMOUS_DRY_RUN.
+>
+> For the current operational snapshot, see `docs/state/current-operational-state.md`.
+> For the current live roadmap, see [GitHub Issue #423](https://github.com/GoLukeEnviro/trading-hub/issues/423).
+> For the SI-v2 capability matrix, see `docs/state/si-v2-capability-matrix.md`.
+>
+> Replaces `docs/roadmap/implementation-roadmap.md` as the source of truth for
 > implementation phases, current state, and next priorities. The older
 > roadmap is preserved as historical context and marked superseded.
 >

@@ -12,16 +12,13 @@ context trail for Trading Hub.
 - `CHANGELOG.md` (root) — Keep-a-Changelog change history.
 - `ARCHITECTURE.md` — System architecture with Mermaid diagrams.
 - `state/current-operational-state.md` — current validated operational snapshot.
-- `context/trading-dashboard-surface-audit-20260603.md` — dashboard surface audit and operator-view notes.
-- `context/trading-dashboard-external-access-20260602.md` — dashboard external access / Docker socket notes.
+- `decisions/ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target.md` — Current SI-v2 policy (AUTONOMOUS_DRY_RUN).
 - `specs/runtime-safety-contract.md` — RiskGuard and ShadowLogger runtime safety contract (issue #22).
-- `decisions/ADR-2026-06-10-watchdog-ownership.md` — Watchdog ownership boundary ADR (issue #23).
-- `self_improvement_v2/docs/README.md` — SI v2 documentation index (issue #32).
+- `specs/production-risk-limits-spec.md` — Production risk limits (Track B).
+- `specs/incident-response-runbooks.md` — Incident response and go-live runbooks (Track B).
 - `runbooks/kill-switch.md` — Kill-Switch operational runbook (PR #220).
-- `GAP-REPORT-2026-06-15-TRADING-HUB.md` — Current gap register (TD-01 through TD-10).
-- `roadmap/roadmap-v2-blocker-first-runtime-ownership.md` — Canonical forward-looking roadmap.
-- `roadmap/implementation-roadmap.md` — Historical implementation roadmap (superseded by roadmap-v2).
-- `roadmaps/SI_V2_CONTINUOUS_IMPLEMENTATION_ROADMAP.md` — SI v2 Continuous Implementation control plane (separate document about the controller queue).
+- `self_improvement_v2/README.md` — SI v2 subsystem overview, module map, and entry points.
+- `references/freqtrade-kill-switch-procedure.md` — Kill-switch operational procedure reference.
 
 ### Canon vs. historical documents
 
@@ -30,15 +27,29 @@ Treat the following as canonical sources of truth for the current system:
 - Root README.md and AGENTS.md for architecture and safety rules.
 - docs/ARCHITECTURE.md for the system architecture.
 - docs/state/current-operational-state.md for the current validated runtime snapshot.
-- docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md for forward-looking phases and priorities.
+- GitHub Issue #423 for the live roadmap.
 
-Everything under docs/context/ and historical GAP reports under docs/archive/
-or older GAP-REPORT-*.md files are audit history and must not override
+**Historical / superseded documents:**
+
+- `roadmap/roadmap-v2-blocker-first-runtime-ownership.md` — Historical roadmap (superseded by #423).
+- `roadmap/implementation-roadmap.md` — Original implementation roadmap (superseded).
+- `state/canonical-trading-status.md` — Fleet snapshot from 2026-06-15 (superseded by current-operational-state.md).
+- `state/si-v2-capability-matrix.md` — SI-v2 capability matrix (active, current).
+- `state/issues-55-61-evidence-matrix.md` — Phase 1 evidence (all issues closed).
+- `state/phase-1-intelligence-epic.md` — Phase 1 epic (all issues closed).
+- `state/post-pr-160-architecture.md` — Pre-Phase 2 architecture (superseded).
+- `state/autopilot/` — Autopilot system snapshots (replaced by SI-v2 Active Cycle Runner).
+- `specs/IMPLEMENTATION_STATUS_AND_NEXT_STEPS.md` — 2026-06-10 status (all items now implemented).
+- `GAP-REPORT-2026-06-15-TRADING-HUB.md` — Gap register (superseded by #423 and ADR-2026-07-01).
+- `roadmaps/SI_V2_CONTINUOUS_IMPLEMENTATION_ROADMAP.md` — Controller queue document (historical).
+
+Everything under docs/context/ and docs/archive/ is audit history and must not override
 the canonical state documents.
 
 ### Additional entry points (outside `docs/`)
 
 - `self_improvement_v2/README.md` — SI v2 subsystem overview, module map, and entry points.
+- `docs/architecture/si-v2-autonomous-dry-run-loop.md` — SI-v2 detailed architecture.
 
 ## Subdirectories
 
@@ -53,28 +64,37 @@ Canonical specifications and safety contracts for the SI v2 system.
 
 ### `state/`
 Current or near-current snapshots of the fleet and repo state.
+`current-operational-state.md` is the canonical runtime snapshot.
+Older state files are marked SUPERSEDED and reference the current file.
 
 ### `decisions/`
-Decision records and policy sync notes.
+Decision records (ADRs) and approval markers. Index in `decisions/README.md`.
 
 ### `runbooks/`
 Operational procedures and response playbooks.
 
+### `reports/`
+Proof reports, validation results, and alignment reports.
+
 ### `roadmap/`
-Canonical roadmap documents. `roadmap-v2-blocker-first-runtime-ownership.md` is the
-current forward-looking roadmap. `implementation-roadmap.md` is historical.
+Roadmap documents. Issue #423 is the current live roadmap.
+Both `roadmap-v2` and `implementation-roadmap` are historical.
 
 ### `roadmaps/`
-⚠️ **Not a duplicate.** Contains `SI_V2_CONTINUOUS_IMPLEMENTATION_ROADMAP.md` — a
+Historical directory. Contains `SI_V2_CONTINUOUS_IMPLEMENTATION_ROADMAP.md` — a
 separate document about the SI v2 controller's continuous implementation queue.
 Distinct from `roadmap/`. Both directories remain; the naming collision is a known
-cosmetic issue. See `docs/roadmaps/` for the controller control-plane document.
+cosmetic issue.
+
+### `references/`
+Operational reference documents (kill-switch procedure, etc.).
+
+### `incidents/`
+Incident reports for post-mortem documentation.
 
 ### `archive/`
 Historical documents that have been superseded. Currently contains:
 - `gap-reports/` — Pre-2026-06-05 GAP reports and deprecated plans.
-  Includes `GAP_ANALYSE.md`, `GAP-REPORT-2026-05-16.md`, `gap-report-20260516.md`,
-  `bridge-plan-v0.1.md`, `hermes-integration-plan.md`.
 
 ### `plans/`
 Implementation plans and scoped work proposals.
@@ -83,5 +103,5 @@ Implementation plans and scoped work proposals.
 
 - Read the canonical docs first when onboarding or before changing behavior.
 - Use `context/` when you need the history behind a change.
-- Use `state/` when you need the latest validated snapshot.
+- Use `state/current-operational-state.md` when you need the latest validated snapshot.
 - Keep new context entries date-stamped and concise.

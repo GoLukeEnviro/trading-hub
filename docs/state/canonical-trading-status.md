@@ -1,4 +1,10 @@
-# Canonical Trading Status
+# SUPERSEDED — Canonical Trading Status
+
+> **⚠️ SUPERSEDED** — This snapshot is from 2026-06-15 and does not reflect
+> the current system state. For the canonical runtime snapshot, see:
+> `docs/state/current-operational-state.md`
+>
+> Historical reference only. Do not use for operational decisions.
 
 Generated at: 2026-06-15T09:04:22.315820+00:00
 
