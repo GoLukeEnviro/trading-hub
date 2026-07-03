@@ -252,6 +252,143 @@ class TestComputeApplyResult:
         assert result.status == ApplyStatus.BLOCKED
         assert not result.mutation_counter_should_increment
 
+    def test_mutation_counter_file_not_visible_blocks(self) -> None:
+        """file_visible_to_bot=False → mutation counter blocked."""
+        proof = RuntimeEffectProof(
+            proposal_id="test", bot_id="test",
+            proof_status=ProofStatus.GREEN,
+            file_visible_to_bot=False,
+        )
+        ok, reason = compute_mutation_counter_rule(proof)
+        assert ok is False
+        assert "file not visible" in reason
+
+    def test_mutation_counter_effective_config_mismatch_blocks(self) -> None:
+        """effective_config_contains_expected_values=False → blocked."""
+        proof = RuntimeEffectProof(
+            proposal_id="test", bot_id="test",
+            proof_status=ProofStatus.GREEN,
+            file_visible_to_bot=True,
+            effective_config_contains_expected_values=False,
+        )
+        ok, reason = compute_mutation_counter_rule(proof)
+        assert ok is False
+        assert "effective config mismatch" in reason
+
+    def test_mutation_counter_loaded_config_mismatch_blocks(self) -> None:
+        """loaded_config_contains_expected_values=False → blocked."""
+        proof = RuntimeEffectProof(
+            proposal_id="test", bot_id="test",
+            proof_status=ProofStatus.GREEN,
+            file_visible_to_bot=True,
+            effective_config_contains_expected_values=True,
+            loaded_config_contains_expected_values=False,
+        )
+        ok, reason = compute_mutation_counter_rule(proof)
+        assert ok is False
+        assert "loaded config mismatch" in reason
+
+    def test_measurement_blocked_when_mutation_not_incremented(self) -> None:
+        """APPLIED_WITH_RUNTIME_PROOF but mutation not incremented → blocked."""
+        result = ApplyActuatorResult(
+            status=ApplyStatus.APPLIED_WITH_RUNTIME_PROOF,
+            mutation_counter_should_increment=False,
+        )
+        ok, reason = compute_measurement_rule(result)
+        assert ok is False
+        assert "mutation counter not incremented" in reason
+
+    def test_apply_result_runtime_not_visible_has_error(self) -> None:
+        """Bot runtime not visible → error in result."""
+        # We can't easily mock resolve_binding here, so test via the existing
+        # nonexistent-bot path which also hits the BLOCKED path
+        result = compute_apply_result(
+            OverlayProposal(proposal_id="test", bot_id="nonexistent-bot-123"),
+            docker_available=False,
+        )
+        assert result.status == ApplyStatus.BLOCKED
+        assert len(result.errors) > 0
+
+    def test_determine_apply_status_yellow_file_visible_not_loaded(self) -> None:
+        """YELLOW proof + file visible + not loaded → RUNTIME_PROOF_REQUIRED."""
+        from si_v2.apply_actuator.policy import _determine_apply_status
+        from si_v2.apply_actuator.runtime_binding import resolve_binding
+        binding = resolve_binding("freqtrade-freqforge")
+        assert binding is not None
+        proof = RuntimeEffectProof(
+            proposal_id="test", bot_id="freqtrade-freqforge",
+            proof_status=ProofStatus.YELLOW,
+            file_visible_to_bot=True,
+            loaded_config_contains_expected_values=False,
+        )
+        status = _determine_apply_status(
+            SAFE_PROPOSAL, binding, proof, [],
+        )
+        assert status == ApplyStatus.RUNTIME_PROOF_REQUIRED
+
+    def test_determine_apply_status_yellow_file_not_visible_blocked(self) -> None:
+        """YELLOW proof + file not visible → BLOCKED."""
+        from si_v2.apply_actuator.policy import _determine_apply_status
+        from si_v2.apply_actuator.runtime_binding import resolve_binding
+        binding = resolve_binding("freqtrade-freqforge")
+        assert binding is not None
+        proof = RuntimeEffectProof(
+            proposal_id="test", bot_id="freqtrade-freqforge",
+            proof_status=ProofStatus.YELLOW,
+            file_visible_to_bot=False,
+        )
+        status = _determine_apply_status(
+            SAFE_PROPOSAL, binding, proof, [],
+        )
+        assert status == ApplyStatus.BLOCKED
+
+    def test_determine_apply_status_red_file_not_visible_no_effect(self) -> None:
+        """RED proof + file not visible → NO_RUNTIME_EFFECT."""
+        from si_v2.apply_actuator.policy import _determine_apply_status
+        from si_v2.apply_actuator.runtime_binding import resolve_binding
+        binding = resolve_binding("freqtrade-freqforge")
+        assert binding is not None
+        proof = RuntimeEffectProof(
+            proposal_id="test", bot_id="freqtrade-freqforge",
+            proof_status=ProofStatus.RED,
+            file_visible_to_bot=False,
+        )
+        status = _determine_apply_status(
+            SAFE_PROPOSAL, binding, proof, [],
+        )
+        assert status == ApplyStatus.NO_RUNTIME_EFFECT
+
+    def test_determine_apply_status_red_file_visible_blocked(self) -> None:
+        """RED proof + file visible → BLOCKED."""
+        from si_v2.apply_actuator.policy import _determine_apply_status
+        from si_v2.apply_actuator.runtime_binding import resolve_binding
+        binding = resolve_binding("freqtrade-freqforge")
+        assert binding is not None
+        proof = RuntimeEffectProof(
+            proposal_id="test", bot_id="freqtrade-freqforge",
+            proof_status=ProofStatus.RED,
+            file_visible_to_bot=True,
+        )
+        status = _determine_apply_status(
+            SAFE_PROPOSAL, binding, proof, [],
+        )
+        assert status == ApplyStatus.BLOCKED
+
+    def test_determine_apply_status_not_checked_drafted(self) -> None:
+        """NOT_CHECKED proof → DRAFTED_NOT_APPLIED."""
+        from si_v2.apply_actuator.policy import _determine_apply_status
+        from si_v2.apply_actuator.runtime_binding import resolve_binding
+        binding = resolve_binding("freqtrade-freqforge")
+        assert binding is not None
+        proof = RuntimeEffectProof(
+            proposal_id="test", bot_id="freqtrade-freqforge",
+            proof_status=ProofStatus.NOT_CHECKED,
+        )
+        status = _determine_apply_status(
+            SAFE_PROPOSAL, binding, proof, [],
+        )
+        assert status == ApplyStatus.DRAFTED_NOT_APPLIED
+
 
 # ---------------------------------------------------------------------------
 # Proof model tests
