@@ -138,6 +138,23 @@ docker exec trading-freqtrade-freqforge-1 \
 The Forensics Agent (spec at `docs/specs/profitability-forensics-agent-spec.md`)
 expects `{output}_summary.json` as the P0 evidence tier `trade_history` source.
 
+---
+
+## 2. freqforge/
+
+Shadow evaluator for the FreqForge bot. Passive observer and report generator.
+Evaluates whether Freqtrade decisions would be approved, vetoed, reduced, or
+uncertain. Runs against read-only Freqtrade data and the latest signal evidence.
+
+See `tools/freqforge/README.md` for details (if present).
+
+## 3. riskguard/
+
+RiskGuard risk assessment utilities. Provides safety gate definitions and
+risk limit calculations for the trading fleet.
+
+See `tools/riskguard/README.md` for details (if present).
+
 - Run `export_trade_history.py` for each bot before starting a Forensics run.
 - The Forensics Agent reads the summary JSON to populate:
   - `total_trades`, `winning_trades`, `losing_trades`
