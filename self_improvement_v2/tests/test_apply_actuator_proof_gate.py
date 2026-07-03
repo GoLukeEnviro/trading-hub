@@ -300,12 +300,6 @@ class TestComputeApplyResult:
 
     def test_apply_result_runtime_not_visible_has_error(self) -> None:
         """Bot runtime not visible → error in result."""
-        proposal = OverlayProposal(
-            proposal_id="test",
-            bot_id="freqtrade-freqforge",
-            policy="safe_parameter_overlay_only",
-        )
-        # Mock: simulate by passing a bot_id that resolves but has runtime_visible=False
         # We can't easily mock resolve_binding here, so test via the existing
         # nonexistent-bot path which also hits the BLOCKED path
         result = compute_apply_result(
