@@ -3,7 +3,7 @@
 > **Package:** `si_v2` (under `self_improvement_v2/src/`)
 > **Python:** >=3.11, `pydantic>=2.0`
 > **Lint:** Ruff (line-length 120)
-> **Status:** Active development — see `docs/state/current-operational-state.md` for phase status
+> **Status:** Active — see `docs/state/current-operational-state.md` for current snapshot
 
 ---
 
@@ -20,17 +20,30 @@ Freqtrade REST  →  ActiveCycleRunner  →  CycleState  →  Measurement Ledger
      └─────────────────────────── apply ────────────────────────────────────────────┘
 ```
 
-The loop operates in **observation-first** mode with a **human-gated Phase 1 controlled apply**
-path available for the canary bot (`freqtrade-freqforge-canary`). All mutation counters
-remain zero unless a human-gated, token-gated apply is explicitly approved.
+The loop operates in **AUTONOMOUS_DRY_RUN** mode (see ADR-2026-07-01).
+Dry-run apply is policy-gated, canary-first, allowlist-based, audit-logged,
+snapshot-backed, rollback-capable, and measurement-bound. Human approval
+is required for live-mode transitions and emergency overrides, not for
+every qualified dry-run candidate.
+
+**Historical note:** The prior human-gated phase
+(`HUMAN_GATED_CANARY_APPLY_PHASE_1` / `HUMAN_GATED_CANARY_APPLY_PHASE_3C`)
+proved the controlled apply chain and is superseded for dry-run by
+ADR-2026-07-01.
 
 The core loop remains read-only (ActiveCycleRunner → CycleState → ShadowProposal).
-The Phase 1 actuator (`controlled_apply_actuator.py`) adds:
-- `check_readiness()` — read-only gate evaluation (all 8 gates, no side effects)
-- `execute_apply()` — human-gated overlay write (canary-only, safe parameters only)
+The controlled apply chain adds:
+- `check_readiness()` — policy gate evaluation (all gates, no side effects)
+- `execute_apply()` — policy-gated overlay write (canary-only, safe parameters only)
+- `plan_canary_restart_with_overlay()` — restart planning with overlay
+- `check_restart_gate()` — restart safety gate
+- `run_canary_restart_with_overlay()` — canary restart execution
+- `RuntimeEffectProof` — post-restart verification
+- `Measurement Decision Engine` — post-apply measurement and KEEP/EXTEND/ROLLBACK decision
 
-Autonomous apply is **not** in scope. Runtime apply (Docker-visible overlay) is
-**L3-gated** and requires separate explicit approval.
+Live trading remains **target architecture**, not enabled. No `dry_run=false`
+without explicit human approval and all live-readiness gates passing.
+D1 (Live Fleet Rollout) is blocked — see #423.
 
 ---
 
@@ -54,6 +67,7 @@ Autonomous apply is **not** in scope. Runtime apply (Docker-visible overlay) is
 | `models.py` | Pydantic models for measurement data |
 | `report.py` | Generate human-readable reports from ledger data |
 | `attribution.py` | Attribute measurements to sources |
+| `decision_engine.py` | Post-apply measurement decision (KEEP / EXTEND / ROLLBACK) |
 
 ### Rainbow Integration (`src/si_v2/rainbow/`)
 
@@ -76,6 +90,35 @@ Autonomous apply is **not** in scope. Runtime apply (Docker-visible overlay) is
 | `proposal_scoring/` | Score proposals (scoring, policy, rejection) |
 | `similarity_checker.py` | Detect similar/duplicate proposals |
 
+### Apply Chain (`src/si_v2/apply_actuator/`)
+
+| Module | Purpose |
+|--------|---------|
+| `controlled_apply_actuator.py` | Readiness check + overlay apply (historical human-gated phase) |
+| `policy.py` | Autonomy policy — L3 token bypass, G10 bypass, allowlist enforcement |
+
+### Rollout (`src/si_v2/rollout/`)
+
+| Module | Purpose |
+|--------|---------|
+| `fleet_rollout_input_resolver.py` | Phase 10.1 — Fleet rollout input resolution |
+| `fleet_rollout_ready_evidence_runner.py` | Phase 10.2 — READY-only fleet chain evidence runner |
+| `fleet_dry_run_runtime_executor.py` | Phase 10.3 — Controlled dry-run fleet runtime executor |
+| `fleet_post_fleet_measurement_watcher.py` | Phase 10.4 — Post-fleet measurement watcher |
+| `fleet_dry_run_rollback_executor.py` | Phase 10.5 — Dry-run fleet rollback executor |
+| `next_iteration_selector.py` | Phase 10.6 — Next iteration selector |
+
+### Live Canary (`src/si_v2/live/`)
+
+| Module | Purpose |
+|--------|---------|
+| `live_readiness_evidence_audit.py` | Track B — Live readiness evidence audit (7 checks) |
+| `production_alerting_gate.py` | Track B — Production alerting readiness gate |
+| `live_canary_approval_gate.py` | Track C — Human approval gate for live canary |
+| `live_canary_config_plan.py` | Track C — Live canary config plan (no activation) |
+| `live_canary_activation_ceremony.py` | Track C — Live canary activation ceremony |
+| `live_canary_measurement_decision.py` | Track C — Live canary measurement & decision |
+
 ### Adapters (`src/si_v2/adapters/`)
 
 | Module | Purpose |
@@ -97,7 +140,7 @@ Autonomous apply is **not** in scope. Runtime apply (Docker-visible overlay) is
 |--------|---------|
 | `market_data.py` | Market data observation |
 | `trade_exporter.py` | Export trade history from Freqtrade |
-| `telemetry_history.py` | Append-only JSONL telemetry history store, reader, and trend analyzer for multi-bot telemetry. Enables trend-based ShadowProposals with evidence windows |
+| `telemetry_history.py` | Append-only JSONL telemetry history store, reader, and trend analyzer |
 
 ### Deploy (`src/si_v2/deploy/`)
 
@@ -143,23 +186,23 @@ Autonomous apply is **not** in scope. Runtime apply (Docker-visible overlay) is
 ```mermaid
 flowchart TD
     FT[Freqtrade REST API] --> CR[ActiveCycleRunner]
-    RB[Rainbow Stub Server] --> CR
+    RB[Rainbow §5<br/>read_only] --> CR
     CR --> CS[CycleState]
     CS --> ML[Measurement Ledger]
-    ML --> FA[FleetAnalyzer]
+    ML --> FA[Fleet Analyzer]
     FA --> SP[ShadowProposal]
     SP -->|Observation only| LOG[ShadowLogger JSONL]
-    SP -.->|PENDING| DEP[Deploy]
-    DEP -.->|IF APPROVED| FT
+    SP -->|Policy-gated<br/>AUTONOMOUS_DRY_RUN| DEP[Deploy Gate]
+    DEP -->|Canary overlay apply| CANARY[Canary Bot]
+    CANARY -->|RuntimeEffectProof| PROOF[Proof Verification]
+    PROOF -->|Measurement| DEC[Decision Engine<br/>KEEP/EXTEND/ROLLBACK]
 
     style CR fill:#1a1a2e,color:#fff
     style ML fill:#16213e,color:#fff
     style SP fill:#0f3460,color:#fff
     style LOG fill:#533483,color:#fff
+    style DEC fill:#dc2626,color:#fff
 ```
-
-Dashed lines represent paths that are **available in Phase 1** (human-gated apply, not
-autonomous). Solid lines represent fully operational read-only paths.
 
 ---
 
@@ -206,18 +249,25 @@ ruff check src/
 | `SI_V2_RAINBOW_ENABLED` | Enable Rainbow read-only source (default: false — disabled unless env override set) |
 | `SI_V2_RAINBOW_MODE` | `fixture` or `read_only` (NOT `live`) |
 | `FREQTRADE_API_KEY_*` | FT API credentials (see `freqtrade_auth_resolver.py`) |
+| `SI_V2_L3_TOKEN` | L3 activation token for apply/restart (AUTONOMOUS_DRY_RUN bypass) |
+| `SI_V2_G10_BYPASS` | G10 scoring gate bypass flag |
 
 ---
 
 ## 6. Safety Constraints
 
-1. **Controller is HUMAN_GATED_CANARY_APPLY_PHASE_1** — human-gated apply available
-   for canary via `check_readiness()` / `execute_apply()`; no autonomous mutations.
-2. **All mutation counters are zero** — verified every cycle.
+1. **Controller target is AUTONOMOUS_DRY_RUN** — policy-gated, canary-first,
+   allowlist-based. See ADR-2026-07-01.
+2. **Dry-run invariant** — all active bots run `dry_run=true`.
 3. **Rainbow is read_only** — scored but never applied, never executed.
 4. **Ledger is append-only JSONL** — no modification, no deletion.
 5. **ShadowLogger is required** for all decision/write operations.
 6. **RiskGuard is the preferred risk authority** — loop respects its verdicts.
+7. **Live trading is not enabled** — `LIVE_FORBIDDEN` state machine position.
+   D1 (Live Fleet Rollout) is blocked by C4 `ROLLBACK_RECOMMENDED` and
+   missing `APPROVED_LIVE_FLEET_ROLLOUT` marker. See #423.
+8. **Human approval** is required for live-mode transitions and emergency
+   overrides, not for every qualified dry-run candidate.
 
 ---
 
@@ -226,9 +276,11 @@ ruff check src/
 | Document | Location |
 |----------|----------|
 | Current Operational State | `docs/state/current-operational-state.md` |
+| Live Roadmap (#423) | GitHub Issue #423 |
 | SI v2 Capability Matrix | `docs/state/si-v2-capability-matrix.md` |
-| Roadmap v2 | `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md` |
-| Architecture | `docs/ARCHITECTURE.md` (planned) |
+| Architecture | `docs/ARCHITECTURE.md` |
+| SI-v2 Detail Architecture | `docs/architecture/si-v2-autonomous-dry-run-loop.md` |
+| ADR: Autonomous Dry-Run | `docs/decisions/ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target.md` |
 | SI v2 Docs | `self_improvement_v2/docs/` (ADR-style per-issue docs) |
 | CI Offline Smoke | `self_improvement_v2/docs/CI_OFFLINE_SMOKE.md` |
 
@@ -303,13 +355,13 @@ The enforcement status is visible in:
 
 ## 9. Controlled Apply Chain
 
-The controlled SI-v2 apply path now consists of the following modules on `main`:
+The controlled SI-v2 apply path consists of the following modules on `main`:
 
 | Step | Module | Phase | File |
 |------|--------|-------|------|
 | 1 | Candidate Pipeline | 6A | `pipeline/candidate_to_apply.py` |
-| 2 | Readiness / Human Gate | 1 | `controlled_apply_actuator.py` |
-| 3 | Overlay Apply | 1 | `controlled_apply_actuator.py` |
+| 2 | Readiness / Policy Gate | — | `apply_actuator/policy.py` |
+| 3 | Overlay Apply | 1 (historical) | `controlled_apply_actuator.py` |
 | 4 | Restart Plan | 3B-A | `restart_with_overlay.py` |
 | 5 | Restart Gate | 3B-B | `restart_gate.py` |
 | 6 | Runtime Executor | 3C-A | `runtime_executor.py` |
@@ -317,17 +369,58 @@ The controlled SI-v2 apply path now consists of the following modules on `main`:
 | 8 | Measurement Decision | 4A | `measurement/decision_engine.py` |
 | 9 | Rollback Rehearsal | 5A | `rollback_rehearsal.py` |
 
-All mutating operations remain:
-- **Canary-only** — only `freqtrade-freqforge-canary`
-- **Dry-run-only** — `dry_run=true` invariant
-- **Human-gated** — requires explicit approval
-- **L3-token-gated** — requires activation environment variable
+### Fleet Rollout Chain (Track A, Phase 10.1–10.6)
 
-The current measurement status:
-- T0 (2026-06-27T18:27Z): GREEN
-- T1 (2026-06-27T19:27Z): YELLOW / CONTINUE
-- T2 (2026-06-28T00:27Z): PENDING
-- T3 (2026-06-28T18:27Z): PENDING
-- Final Decision: PENDING after T3
+| Step | Module | PR |
+|------|--------|----|
+| 10.1 | Fleet Rollout Input Resolver | #421 |
+| 10.2 | READY-only Fleet Chain Evidence Runner | #422 |
+| 10.3 | Controlled Dry-Run Fleet Runtime Executor | #424 |
+| 10.4 | Post-Fleet Measurement Watcher | #425 |
+| 10.5 | Dry-Run Fleet Rollback Executor | #427 |
+| 10.6 | Next Iteration Selector | #428 |
 
-See `docs/state/current-operational-state.md` for the full current snapshot.
+### Live Readiness Chain (Track B)
+
+| Step | Module | PR |
+|------|--------|----|
+| B1 | Live Readiness Evidence Audit | #429 |
+| B2 | Production Risk Limits Spec | #430 |
+| B3 | Incident Response & Go-Live Runbooks | #431 |
+| B4 | Production Alerting Gate | #432 |
+
+### Live Canary Chain (Track C)
+
+| Step | Module | PR |
+|------|--------|----|
+| C1 | Human Approval Gate | #433 |
+| C2 | Live Canary Config Plan | #434 |
+| C3 | Live Canary Activation Ceremony | #436 |
+| C4 | Live Canary Measurement & Decision | #437 |
+
+### C4 Outcome (2026-07-03)
+
+C4 was executed against real C3 ceremony artifacts. **Decision: ROLLBACK_RECOMMENDED**
+(max_drawdown_pct = 82.79% breach). Validated by #438 triage.
+Human selected rollback path (#442). Canary baseline return completed (#447).
+Post-return verification passed (#449).
+
+### D1 Status (Live Fleet Rollout)
+
+**BLOCKED.** Requires:
+1. C4 `KEEP` decision (current: `ROLLBACK_RECOMMENDED`)
+2. `APPROVED_LIVE_FLEET_ROLLOUT` marker (does not exist)
+
+See GitHub Issue #423 for the canonical live roadmap.
+
+---
+
+## 10. Canary Apply History
+
+The first canary dry-run apply was proven with `RuntimeEffectProof=GREEN`:
+
+| Date | Change | Target | Proof | Decision |
+|------|--------|--------|-------|----------|
+| 2026-06-27 | `max_open_trades` 3→2 | freqtrade-freqforge-canary | GREEN | KEEP_CANARY_OVERLAY (YELLOW/MEDIUM) |
+
+See `docs/state/current-operational-state.md` for the full measurement timeline.
