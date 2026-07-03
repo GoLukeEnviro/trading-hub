@@ -1,5 +1,12 @@
 """Tests for bridge/hermes_primo_bridge.py — signal validation and helpers.
 
+DECOMMISSIONED — Issue #465
+---------------------------
+Bridge was decommissioned in Phase 44-45 (replaced by SI-v2 autonomous loop).
+These tests are retained as regression coverage for the still-existing
+``bridge/hermes_primo_bridge.py`` module, but are SKIPPED by default.
+They will be removed when the bridge/ directory is cleaned up.
+
 Covers validate_signal() edge cases and pure helper functions.
 No HTTP, no real filesystem outside tmp_path.
 """
@@ -11,6 +18,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+pytestmark = pytest.mark.skip(reason="Bridge decommissioned (Phase 44-45, ADR-2026-07-01) — Issue #465")
 
 
 # =========================================================================
