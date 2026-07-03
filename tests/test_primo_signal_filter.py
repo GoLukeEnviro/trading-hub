@@ -1,5 +1,13 @@
 """Tests for primo/llm_signal_filter.py — context building and signal combination.
 
+DECOMMISSIONED — Issue #465
+---------------------------
+Primo was decommissioned in Phase 44-45 (replaced by SI-v2 autonomous loop).
+These tests cover ``primo/llm_signal_filter.py`` (decommissioned), NOT the
+retained ``freqtrade/shared/primo_signal.py`` kill-switch integration boundary.
+Tests are SKIPPED by default and will be removed when the primo/ directory
+is cleaned up.
+
 Covers build_llm_context, _fmt, combine_technical_and_llm_signal.
 No LLM calls, no HTTP, no real filesystem outside tmp_path.
 """
@@ -8,6 +16,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+
+pytestmark = pytest.mark.skip(reason="Primo decommissioned (Phase 44-45, ADR-2026-07-01) — Issue #465")
 
 
 # =========================================================================
