@@ -77,7 +77,7 @@ services:
     - /opt/hermes/ssh:/home/hermes/.ssh:ro
     - /home/hermes/projects:/home/hermes/projects:rw
     - /home/hermes/projects/trading/weatherhermes_persistent/weatherbot_master:/home/hermes/weatherbot_master:ro
-    - /var/run/docker.sock:/var/run/docker.sock:ro
+#    - /var/run/docker.sock:/var/run/docker.sock:ro
     - /opt/hermes-green/scripts/99-telegram-settle-delay:/etc/cont-init.d/99-telegram-settle-delay:ro
     # NOTE 2026-06-10: mem0/__init__.py explicit mount removed — file is delivered
     # via the /opt/hermes-green/config:/opt/data tree mount. Duplicate explicit
