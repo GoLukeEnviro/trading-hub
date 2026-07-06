@@ -329,3 +329,6 @@ htmlcov/
 # ── SI-v2 runtime telemetry (real bot metrics, never commit) ──
 # Contains per-cycle profit/trade data for the four active SI-v2 bots.
 self_improvement_v2/state/
+
+# SEC-2: orchestrator.env contains plaintext API keys
+orchestrator.env
