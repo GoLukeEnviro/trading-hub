@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "orchestrator" / "scripts"))
 import kill_switch_proof as ksp  # noqa: E402
@@ -40,7 +41,7 @@ def normal_state() -> dict:
     return {
         "mode": "NORMAL",
         "reason": "normal operation",
-        "triggered_at": "2026-07-03T05:00:00+00:00",
+        "triggered_at": "2026-07-06T14:14:23.270420+00:00",
         "triggered_by": "operator",
         "auto_clear_at": "",
     }
@@ -51,7 +52,7 @@ def halt_state() -> dict:
     return {
         "mode": "HALT_NEW",
         "reason": "manual halt",
-        "triggered_at": "2026-07-03T05:00:00+00:00",
+        "triggered_at": "2026-07-06T14:14:23.270420+00:00",
         "triggered_by": "operator",
         "auto_clear_at": "",
     }
@@ -62,7 +63,7 @@ def emergency_state() -> dict:
     return {
         "mode": "EMERGENCY",
         "reason": "drawdown breach",
-        "triggered_at": "2026-07-03T05:00:00+00:00",
+        "triggered_at": "2026-07-06T14:14:23.270420+00:00",
         "triggered_by": "operator",
         "auto_clear_at": "",
     }
@@ -73,7 +74,7 @@ def stale_halt_state() -> dict:
     return {
         "mode": "HALT_NEW",
         "reason": "old halt",
-        "triggered_at": "2026-06-01T00:00:00+00:00",  # > 24h ago
+        "triggered_at": "2026-07-04T15:14:23.270420+00:00",
         "triggered_by": "operator",
         "auto_clear_at": "",
     }
@@ -84,9 +85,9 @@ def auto_clear_expired_state() -> dict:
     return {
         "mode": "EMERGENCY",
         "reason": "emergency with auto-clear",
-        "triggered_at": "2026-07-03T05:00:00+00:00",
+        "triggered_at": "2026-07-06T14:14:23.270420+00:00",
         "triggered_by": "operator",
-        "auto_clear_at": "2026-07-03T04:00:00+00:00",  # already past
+        "auto_clear_at": "2026-07-06T14:14:23.270420+00:00",
     }
 
 
