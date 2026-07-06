@@ -100,7 +100,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Provenance assessment
 
-The canary was stopped during the 2026-07-03 rollback ceremony (Kill Switch EMERGENCY → container stop → Kill Switch NORMAL). The `unless-stopped` restart policy in `docker-compose.yml` caused the container to restart automatically. The restart **retained the overlay command** (`--config overlay_max_open_trades_.json`) because the container was recreated from the same `docker-compose.yml` definition — but the compose file itself does **not** specify the overlay config. The overlay was injected by the SI-v2 controlled apply chain before the rollback and persisted in the container's command.
+The canary was stopped during the 2026-07-03 rollback ceremony (Kill Switch EMERGENCY → container stop → Kill Switch NORMAL). The `unless-stopped` restart policy in `docker-compose.yml` caused the container to restart automatically. The restart **retained the overlay command** (`--config overlay_max_open_trades_.json`) because the same existing container was restarted under the `unless-stopped` policy, not because a Compose recreate was verified. The compose file itself does **not** specify the overlay config. The overlay was injected by the SI-v2 controlled apply chain before the rollback and persisted in the container's command.
 
 **Impact:** T4 measurement data collected since 2026-07-05 is **measurement-contaminated** — the canary is running with `max_open_trades=2` overlay but without formal re-activation or measurement window reset. The 71 closed trades include both pre-rollback and post-restart data.
 
@@ -245,7 +245,7 @@ All bots: `dry_run=True`, all pings OK.
 | Issue | Status | Detail |
 |-------|--------|--------|
 | **#476** | 🔴 **OPEN** | Host-level env fix + API_SERVER_KEY rotation — not addressed by PR #481 |
-| **Hermes runtime** | ⚠️ **PARTIAL ROOT** | Some Hermes scripts/state files owned by root (UID 0) instead of hermes (UID 1337). Separate SEC/OPS issue needed for systematic fix. |
+| **Hermes runtime** | ⚠️ **PARTIAL ROOT** | Some Hermes scripts/state files owned by root (UID 0) instead of the configured Hermes runtime ownership (`10000:10000`). Separate SEC/OPS issue needed for systematic fix. |
 | **Docker socket** | ✅ **CLOSED** | #475 — raw docker socket removed from hermes-green |
 
 ---
