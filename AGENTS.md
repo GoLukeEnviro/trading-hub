@@ -106,7 +106,10 @@ context only. Do not count them as active SI-v2 loop members.
 - Boundaries: does not decide trades directly, place orders, enable live
   trading, modify Freqtrade configs without approval, or restart containers
   without approval.
-- Working directory: `/home/hermes/projects/trading`.
+- Working directory:
+  - Host path: `/opt/data/projects/trading-hub` (canonical, HermesTrader)
+  - Hermes container (read-only mount): `/workspace/projects/trading-hub`
+  - `/home/hermes/projects/trading` is historical (agent0) and must NOT be used as canonical HermesTrader path.
 
 ### SI-v2 — Self-Improvement Loop
 
