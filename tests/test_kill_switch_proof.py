@@ -49,10 +49,15 @@ def normal_state() -> dict:
 
 @pytest.fixture
 def halt_state() -> dict:
+    # Relative timestamp (now - 10 min): state is always "fresh" (within any
+    # realistic threshold) regardless of test-run date. Replaces the fixed
+    # 2026-07-06 timestamp which became >48h stale and time-bombed the
+    # within-threshold assertions. Production _is_stale is unchanged.
+    triggered_at = (datetime.now(tz=timezone.utc) - timedelta(minutes=10)).isoformat()
     return {
         "mode": "HALT_NEW",
         "reason": "manual halt",
-        "triggered_at": "2026-07-06T14:14:23.270420+00:00",
+        "triggered_at": triggered_at,
         "triggered_by": "operator",
         "auto_clear_at": "",
     }
