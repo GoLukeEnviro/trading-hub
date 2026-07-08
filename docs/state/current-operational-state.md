@@ -158,3 +158,12 @@ context only.
 - `docs/state/current-operational-state.md` — this canonical state snapshot.
 - `docs/reports/si-v2-phase-*` — phase-specific evidence reports.
 - `docs/decisions/ADR-*` — architecture decision records.
+
+---
+
+## C1 planning note (2026-07-09)
+
+- Repository HEAD at C1 planning: `c897c01` (main). Source snapshot referenced elsewhere: `20aee88`.
+- Post-snapshot security hardening includes #475 (raw docker socket removed from hermes-green) and #476 (SEC-2 partial fix).
+- **Runtime posture remains `AUTONOMOUS_DRY_RUN`** — no fresh runtime measurement performed in C1; runtime re-baseline is a separate, explicitly-gated step (Phase F).
+- Workspace bridge (Phase C1A): HermesTrader Hermes container sees this repo read-only at `/workspace/projects/trading-hub`; host path `/opt/data/projects/trading-hub`.
