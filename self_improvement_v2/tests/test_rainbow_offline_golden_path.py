@@ -113,7 +113,7 @@ class TestStep3FixtureReview:
             fixture_dir=_FIXTURE_DIR
         )
         report = gen.generate()
-        assert report.total_fixtures == 7
+        assert report.total_fixtures == 8
 
     def test_report_file_exists(self) -> None:
         assert _FIXTURE_REVIEW_REPORT.exists()
@@ -151,7 +151,7 @@ class TestStep4ShadowlockEvents:
         events = RainbowShadowlockEventMapper.map_fixture_batch(
             envelopes, vrs
         )
-        assert len(events) == 7
+        assert len(events) == 8
 
     def test_preview_report_exists(self) -> None:
         preview_path = (
@@ -183,7 +183,7 @@ class TestStep5ClientFixtureHarness:
             fixture_dir=_FIXTURE_DIR
         )
         result = harness.run()
-        assert result.total_fixtures == 7
+        assert result.total_fixtures == 8
         assert result.valid_signals >= 1
 
 

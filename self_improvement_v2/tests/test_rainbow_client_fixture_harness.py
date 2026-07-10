@@ -29,7 +29,7 @@ class TestHarness:
     def test_run_loads_all_fixtures(self) -> None:
         harness = RainbowClientFixtureHarness(_FIXTURE_DIR)
         result = harness.run()
-        assert result.total_fixtures == 7
+        assert result.total_fixtures == 8
         assert result.valid_signals >= 1  # at least valid ones
 
     def test_run_returns_signals(self) -> None:
