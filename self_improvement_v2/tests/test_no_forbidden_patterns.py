@@ -30,6 +30,10 @@ FORBIDDEN_PATTERNS: list[str] = [
     r"cron disable",
     r"cron delete",
     r"cron reactivate",
+    r"primo_signal_state\.json",
+    r"execute_apply\b",
+    r"run_canary_restart",
+    r"execute_canary_rollback",
 ]
 
 # Patterns that are forbidden in *source* (src/) but allowed in tests.
