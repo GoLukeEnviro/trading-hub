@@ -111,6 +111,19 @@ context only. Do not count them as active SI-v2 loop members.
   - Hermes container (read-only mount): `/workspace/projects/trading-hub`
   - `/home/hermes/projects/trading` is historical (agent0) and must NOT be used as canonical HermesTrader path.
 
+### VPS Operator Console — human CLI access (non-trading)
+
+- A dedicated `operator` system user exists on HermesTrader for human VPS-wide
+  work (Claude Code CLI, OpenAI Codex CLI) via OAuth login and `tmux` sessions.
+- `operator` is separate from `deploy` (repo/deployment) and `hermes` (agent
+  container). It has no `docker` group access and no `sudo` group membership;
+  the only permitted `sudo` action is a logged breakglass wrapper
+  (`operator-breakglass-root`) for occasional full-root sessions.
+- This is host-level tooling for human maintenance and has no bearing on the
+  SI-v2 loop, Freqtrade, or trading safety boundaries. Hermes does not gain any
+  new access through this change.
+- Full detail: `docs/context/hermestrader-operator-console-20260710.md`.
+
 ### SI-v2 — Self-Improvement Loop
 
 - The SI-v2 controlled apply chain is now fully implemented on `main`.

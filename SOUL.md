@@ -83,3 +83,6 @@ Bis dahin gilt: kein Live-Geld, keine Exchange-Keys in Git, kein
 - Never force-push, rewrite history, or use destructive cleanup commands.
 - Keep `README.md`, `AGENTS.md`, `SOUL.md`, and the docs aligned with the
   current repo state.
+- Host-level operator tooling (Claude Code CLI / Codex CLI for human VPS
+  maintenance, see `AGENTS.md`) is documented in `docs/context/`; it does not
+  change trading identity, safety, or Hermes's own access boundaries.
