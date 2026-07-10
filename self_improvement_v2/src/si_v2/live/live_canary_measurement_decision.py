@@ -137,6 +137,9 @@ class CanaryMetrics:
     daily_loss_count: int | None
     avg_profit_per_trade: float | None
     notional_exposure: float | None
+    window_trade_count: int | None = None
+    """Number of trades within the measurement window (vs lifetime).
+    When None, defaults to total_trades for backward compatibility."""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -148,6 +151,7 @@ class CanaryMetrics:
             "daily_loss_count": self.daily_loss_count,
             "avg_profit_per_trade": self.avg_profit_per_trade,
             "notional_exposure": self.notional_exposure,
+            "window_trade_count": self.window_trade_count,
         }
 
 
@@ -699,6 +703,7 @@ def run_live_canary_measurement_decision(
         "metric_evaluations": [m.to_dict() for m in evaluations],
         "blocked_reasons": blocked,
         "total_trades_observed": total_trades,
+        "window_trade_count": resolved_metrics.window_trade_count,
         "data_points_available": resolved_data_points,
         "measurement_window_days": MEASUREMENT_WINDOW_DAYS,
         "created_at_utc": resolved_now,
