@@ -452,7 +452,12 @@ class RainbowSignalProviderClient:
             return None, errors
 
         metadata = self._coerce_object(payload.get("metadata"))
-        raw_data = self._coerce_object(payload.get("raw_data"))
+
+        canonical_symbol = metadata.get("canonical_symbol")
+        raw_symbol = canonical_symbol if isinstance(canonical_symbol, str) else asset
+        symbol = normalize_symbol(raw_symbol)
+        if symbol.startswith("UNMAPPED:"):
+            return None, ["unknown canonical symbol"]
 
         timeframe_raw = metadata.get("timeframe")
         timeframe = timeframe_raw if isinstance(timeframe_raw, str) else None
@@ -470,7 +475,7 @@ class RainbowSignalProviderClient:
             "source_id": signal_id,
             "strategy_id": source,
             "model_id": None,
-            "symbol": normalize_symbol(asset),
+            "symbol": symbol,
             "timeframe": timeframe,
             "timestamp_utc": normalized_timestamp,
             "emitted_at_utc": emitted_at,
@@ -491,9 +496,8 @@ class RainbowSignalProviderClient:
                     "rainbow_score": payload.get("rainbow_score"),
                     "ai_evaluation": payload.get("ai_evaluation"),
                 },
-                "raw_data": raw_data,
             },
-            "redaction_status": "clean",
+            "redaction_status": "unchecked" if payload.get("raw_data") is not None else "clean",
         }
         return envelope, []
 

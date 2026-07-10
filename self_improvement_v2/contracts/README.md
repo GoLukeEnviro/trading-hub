@@ -18,6 +18,11 @@ This directory holds local contract snapshots derived from upstream sources.
 
 The JSON schema defines the **trading-hub Signal Envelope** format — the canonical cross-system signal container used by the Rainbow validator (#79), fixtures (#56), and all downstream Rainbow consumers.
 
+For the raw `GET /signals/latest` producer surface, the client maps the upstream
+`metadata.canonical_symbol` field to this schema's required `symbol` field. The
+base `asset` (`BTC`, `ETH`, `SOL`) is not a cross-system trading symbol; an
+unmapped asset must fail closed.
+
 ### What This Snapshot Does NOT Cover
 
 - The upstream `CanonicalSignalEnvelope` from ai4trade-bot (richer model with `Actionability`, `InvalidationRule`, `DataQuality`, etc.)
