@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `20aee88` (PR #425 squash-merge).
+> commit `75384e1` (PR #501 squash-merge).
 >
-> **Last updated:** 2026-07-01 after Phase 10.4 (Post-Fleet Measurement Watcher)
-> **Previous update:** 2026-07-01 after Phase 10.3 (Controlled Dry-Run Fleet Runtime Executor)
+> **Last updated:** 2026-07-10 after Rainbow R1–R6
+> **Previous update:** 2026-07-01 after Phase 10.4
 
 ---
 
@@ -24,6 +24,18 @@
 | Rollback Rehearsal | ✅ Implemented (execution hard-blocked) |
 | Candidate Pipeline | ✅ Implemented (execution hard-blocked in Phase 6A) |
 | Runtime mutation by this repo update | **NONE** |
+
+### Rainbow Integration Status
+
+| Task | Status | PR | Merge SHA |
+|------|--------|----|-----------|
+| R1 — Contract reconciliation | ✅ MERGED | #497 | `8c167c8` |
+| R2 — Read-only provider | ✅ MERGED | #498 | `dc15f6d` |
+| R3 — Attribution producer | ✅ MERGED | #499 | `4ec1b18` |
+| R4 — Window-scoped C4 fix | ✅ MERGED | #500 | `a70a058` |
+| R6 — Candidate quality | ✅ MERGED | #501 | `75384e1` |
+| R5 — Runtime preflight audit | ⏳ IN_PROGRESS | — | — |
+| R7 — Dry-run measurement | BLOCKED | — | — |
 
 ### Historical note
 
@@ -48,20 +60,12 @@ The following modules exist on `main` and form the complete controlled apply cha
 | **10.2 Evidence Runner** | `fleet_rollout_ready_evidence_runner.py` | #422 | 12 | ✅ |
 | **10.3 Dry-Run Executor** | `fleet_dry_run_runtime_executor.py` | #424 | 18 | ✅ |
 | **10.4 Post-Fleet Measurement** | `fleet_post_fleet_measurement_watcher.py` | #425 | 20 | ✅ |
-| **Total** | **11 modules** | **11 PRs** | **+ tests** | **All GREEN** |
-
-### Control flow (autonomous dry-run)
-
-```
-Active Cycle
-  → Candidate Selection
-  → Autonomy Policy (policy-gated)
-  → Canary Dry-run Apply
-  → Runtime Proof
-  → Measurement
-  → Final Decision (KEEP / EXTEND / ROLLBACK)
-  → Auto next iteration
-```
+| **Rainbow R1** | Contract reconciliation | #497 | + | ✅ |
+| **Rainbow R2** | Read-only provider | #498 | + | ✅ |
+| **Rainbow R3** | Attribution producer | #499 | + | ✅ |
+| **Rainbow R4** | Window-scoped C4 fix | #500 | + | ✅ |
+| **Rainbow R6** | Candidate quality | #501 | + | ✅ |
+| **Total** | **16 modules** | **16 PRs** | **+ tests** | **All GREEN** |
 
 ### Active bot identities
 
@@ -72,8 +76,7 @@ Active Cycle
 | `freqtrade-regime-hybrid` | Regime-hybrid | Active |
 | `freqai-rebel` | FreqAI/Rebel | Active |
 
-Momentum is decommissioned and MVS is not deployed. They are historical
-context only.
+Momentum is decommissioned and MVS is not deployed. They are historical context only.
 
 ---
 
@@ -101,7 +104,7 @@ context only.
 
 ## 4. Operational priority for agents
 
-### Active priority: Extended Measurement (T4 pending)
+### Active priority: Rainbow R5 (read-only audit)
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -110,11 +113,12 @@ context only.
 - pair expansion
 - live readiness
 - next candidate research
+- runtime remediation from R5 findings
 
 **Allowed:**
 - read-only audits and reports
 - documentation updates
-- extended measurement collection (T4+)
+- Rainbow R5 read-only audit (current task)
 - monitoring for trade activity under Kill Switch NORMAL
 
 ### Next runtime action
@@ -134,6 +138,7 @@ context only.
 | Restart path | Canary-only, L3-token-gated via runtime executor |
 | Rollback path | Rehearsed but execution hard-blocked |
 | Measurement path | Read-only decision engine on `main` |
+| Rainbow advisory | Read-only, fail-closed, disabled by default |
 
 ---
 
@@ -158,6 +163,7 @@ context only.
 - `docs/state/current-operational-state.md` — this canonical state snapshot.
 - `docs/reports/si-v2-phase-*` — phase-specific evidence reports.
 - `docs/decisions/ADR-*` — architecture decision records.
+- `docs/reports/rainbow-r*-*-2026-07-10.md` — Rainbow R1–R6 reports.
 
 ---
 
@@ -167,3 +173,11 @@ context only.
 - Post-snapshot security hardening includes #475 (raw docker socket removed from hermes-green) and #476 (SEC-2 partial fix).
 - **Runtime posture remains `AUTONOMOUS_DRY_RUN`** — no fresh runtime measurement performed in C1; runtime re-baseline is a separate, explicitly-gated step (Phase F).
 - Workspace bridge (Phase C1A): HermesTrader Hermes container sees this repo read-only at `/workspace/projects/trading-hub`; host path `/opt/data/projects/trading-hub`.
+
+## Rainbow R5 note (2026-07-10)
+
+- Rainbow R1–R6 merged (PRs #497–#501).
+- R5 read-only audit in progress.
+- R7 blocked until R5 complete and runtime preflight approved.
+- No runtime mutation performed during Rainbow integration.
+- All Rainbow modules are read-only, fail-closed, disabled by default.
