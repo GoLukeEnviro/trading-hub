@@ -35,6 +35,7 @@ exclude = [
     "venv",
     "**/__pycache__",
     "self_improvement_v2/tests/fixtures/strategies/invalid_python_strategy.py",
+    "self_improvement_v2/fixtures/",
 ]
 
 [tool.ruff.lint]

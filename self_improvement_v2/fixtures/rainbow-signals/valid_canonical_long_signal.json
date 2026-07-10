@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "event_type": "signal",
+  "source_system": "rainbow",
+  "source_id": "rainbow:canonical",
+  "strategy_id": "rainbow_canonical_v1",
+  "model_id": null,
+  "symbol": "BTC/USDT:USDT",
+  "timeframe": "1h",
+  "timestamp_utc": "2026-06-10T12:00:00Z",
+  "emitted_at_utc": "2026-06-10T12:00:02Z",
+  "direction": "long",
+  "confidence": 0.85,
+  "signal_strength": 0.72,
+  "regime_hint": "bullish",
+  "metadata": {
+    "reason_codes": ["ta_rsi_oversold", "trend_reversal"],
+    "data_quality": {"status": "ok", "freshness_seconds": 30},
+    "features": {"rsi_14": 28.5, "macd_histogram": 12.3},
+    "raw_refs": ["canonical:btc:20260610120000"]
+  },
+  "redaction_status": "clean"
+}
