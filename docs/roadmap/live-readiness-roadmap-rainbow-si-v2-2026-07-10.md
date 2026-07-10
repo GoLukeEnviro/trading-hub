@@ -9,6 +9,13 @@
 > `dry_run=false`, kein Exchange-Key-Deployment und keine Bot-/Strategie-Mutation.
 > Jede solche Aktion braucht den jeweils benannten Approval-Marker und Task-Scope.
 
+## Roadmap Ownership
+
+- **Issue #423 bleibt die kanonische SI-v2-to-Live-Roadmap.** Sie kontrolliert C4, D1, D2 und die Live-Fleet-Autorisierung.
+- **Rainbow erhält nach Merge dieses PRs einen separaten, aus #423 verlinkten Tracker** (`[Rainbow][SI-v2] Tracker — Read-only advisory signal integration`). Der Rainbow-Tracker ergänzt #423 als advisory/read-only Integration. Er ersetzt #423 nicht.
+- **Nur #423 autorisiert Live-Rollout.** Rainbow-Messungen, -Signale oder Tracker-Abschlüsse können D1/D2 oder Live-Trading nicht eigenständig freigeben.
+- **PR-Abhängigkeitsreihenfolge:** PR #487 (dieses Dokument) → Merge → Rainbow-Tracker + Issues anlegen → R1 starten. PR #66 (ai4trade-bot) und PR #488 (Contract-Patch) bleiben Drafts, bis ihre jeweiligen Architektur-Blocker gelöst sind. D1/D2 bleiben blockiert bis gültiger KEEP-Entscheidung und `APPROVED_LIVE_FLEET_ROLLOUT`-Marker.
+
 ---
 
 ## Einschätzung
@@ -110,10 +117,12 @@ Die bestehende `si_v2/rainbow/`-Infrastruktur **promoten statt neu bauen**: Cont
 
 **Ziel:** Eine messfähige Runtime herstellen — ohne laufende Fleet und laufenden Producer sind Tracks C–F Theorie.
 
+**⚠️ Track 0 ist nicht automatisch ausführbar.** Jede 0.x-Aktion ist einzeln human-gated (L3). Docker-Operationen, Container-Start/Stopp, Producer-Startup, Secrets-Handling, Scheduler-Änderungen und Canary-Redeployment benötigen jeweils eigenen expliziten Scope und Freigabe. Dieses Dokument autorisiert keine Track-0-Aktion.
+
 | Task | Inhalt | Gate |
 |---|---|---|
-| 0.1 | VPS-Rebuild-Stabilisierung abschließen (#483 P0: Secrets in `/opt/secrets/trading.env`, freqforge GREEN, Restic-Backup + Restore-Drill) | L3, explizite Freigabe |
-| 0.2 | Canary-Dry-Run-Redeploy (#478): Container-Restart-Ursache klären, Restart-Policy prüfen, Redeploy mit `config_canary_dryrun.json` | L3, explizite Freigabe |
+| 0.1 | VPS-Rebuild-Stabilisierung abschließen (#483 P0: Secrets in `/opt/secrets/trading.env`, freqforge GREEN, Restic-Backup + Restore-Drill) — #483 ist ~3 Tage alt (erstellt 2026-07-07) und enthält Exchange-Key-Deployment und Runtime-Aktionen; darf nicht ungeprüft als ausführbare Rainbow-Dependency importiert werden | L3, explizite Freigabe |
+| 0.2 | Canary-Dry-Run-Redeploy: Geplante Wiederinbetriebnahme des Canary nach C4-ROLLBACK. Der Canary-Stopp war intentional (Baseline Return, #423 C4e/C4f). Ein Redeploy ist eine separate L3 Dry-run-Redeployment-Ceremony — kein Routine-Fix für #478. Erfordert aktuelle Evidence, explizites Approval, Snapshot, Rollback-Plan und Verifikation | L3, explizite Freigabe |
 | 0.3 | Rainbow-Producer kontrolliert starten (`rainbow_producer_manager.sh start` + `rainbow_producer_readiness_check.py` GREEN); Boot-Persistence bleibt separat gated | L3, explizite Freigabe |
 | 0.4 | Doku-Drift schließen: PR #482 mergen, `docs/state/current-operational-state.md` auf Post-C4-Stand bringen, fehlenden Incident-Report `incident-2026-07-03-canary-baseline-return.md` nachreichen | L2 |
 
@@ -220,32 +229,71 @@ Die bestehende `si_v2/rainbow/`-Infrastruktur **promoten statt neu bauen**: Cont
 
 ## Erste Issues
 
-> Vorschläge — werden erst nach Freigabe angelegt. Aufwand: S ≤ 0,5 Tag, M ≤ 2 Tage, L > 2 Tage. Jedes Issue = ein Branch, ein PR, ein Report.
+> Vorschläge — werden erst nach Freigabe als Issues im Rainbow-Tracker angelegt. Aufwand: S ≤ 0,5 Tag, M ≤ 2 Tage, L > 2 Tage. Jedes Issue = ein Branch, ein PR, ein Report.
 
-### 1. `feat(rainbow): re-sync signal provider contract snapshot with upstream f6c42c6`
+### R1. `feat(rainbow): re-sync signal provider contract snapshot with upstream f6c42c6`
 - **Ziel:** Contract-Snapshot, Fixtures und Validator gegen ai4trade-bot HEAD `f6c42c6` re-validieren (inkl. `/signals/canonical/latest`-Surface); Drift dokumentieren und ggf. Snapshot/Fixtures nachziehen.
 - **Akzeptanzkriterien:** Drift-Guard-Lauf dokumentiert; Snapshot-Tests grün; `contracts/README.md`-Prozedur befolgt; Report unter `docs/reports/`.
-- **Aufwand:** S. **Abhängigkeiten:** keine. **Loop-Bezug:** ShadowProposal Quality / Historical Evidence — verhindert, dass Evidence auf veraltetem Vertrag aufbaut.
+- **Aufwand:** S. **Abhängigkeiten:** keine. **Stop conditions:** PR-Head-Drift, CI rot, unerwartete Contract-Änderungen. **Expected PR title:** `feat(rainbow): re-sync signal provider contract snapshot with upstream f6c42c6`. **Loop-Bezug:** ShadowProposal Quality / Historical Evidence — verhindert, dass Evidence auf veraltetem Vertrag aufbaut.
 
-### 2. `feat(rainbow): read-only mode enablement path, status CONFIGURED, freshness evidence`
+### R2. `feat(rainbow): read-only mode enablement path, status CONFIGURED, freshness evidence`
 - **Ziel:** `RainbowStatusResolver` um CONFIGURED-Promotion erweitern (erreichbar + fresh), Env-Gate-Doku, Health/Freshness-Check als read-only Evidence-Artefakt je Active Cycle.
 - **Akzeptanzkriterien:** Status DISABLED/FIXTURE_ONLY/CONFIGURED/DEGRADED korrekt aufgelöst (Stub-Server-Tests); unavailable ≥3 Checks → Source UNAVAILABLE; kein Auth-Header, GET-only, NetworkGuard unverändert.
-- **Aufwand:** M. **Abhängigkeiten:** Issue 1; End-to-End-Verifikation braucht Track 0.3. **Loop-Bezug:** SI-v2 Loop — Evidence-Input-Qualität.
+- **Aufwand:** M. **Abhängigkeiten:** R1; End-to-End-Verifikation braucht Track 0.3. **Stop conditions:** Producer nicht erreichbar, CI rot, Auth-Header-Leak. **Expected PR title:** `feat(rainbow): read-only mode enablement path, status CONFIGURED, freshness evidence`. **Loop-Bezug:** SI-v2 Loop — Evidence-Input-Qualität.
 
-### 3. `feat(attribution): rainbow signal→trade attribution producer`
+### R3. `feat(attribution): rainbow signal→trade attribution producer`
 - **Ziel:** Producer, der aus geschlossenen Dry-Run-Trades + validierten Rainbow-Envelopes `AttributionInput` mit `SignalContribution(source_id="rainbow:*")` erzeugt und via `source_regime_stats/update.py` einspeist.
 - **Akzeptanzkriterien:** Facts mit `rainbow:*` im Cache; `input_pipeline` emittiert entsprechende `ProposalEvidenceRecord`s; keine Attribution ohne freshes, validiertes Signal im Fenster; Unit-Tests nach `test_evidence_input_pipeline.py`-Muster.
-- **Aufwand:** M/L. **Abhängigkeiten:** Issues 1–2. **Loop-Bezug:** Measurement Attribution — Provenance Signal→Bot→Trade.
+- **Aufwand:** M/L. **Abhängigkeiten:** R1–R2. **Stop conditions:** Contribution-Summen ≠ 1.0, CI rot, Kausalitäts-Überzeichnung. **Expected PR title:** `feat(attribution): rainbow signal→trade attribution producer`. **Loop-Bezug:** Measurement Attribution — Provenance Signal→Bot→Trade.
 
-### 4. `fix(live): window-scoped trade filter in canary measurement decision`
+### R4. `fix(live): window-scoped trade filter in canary measurement decision`
 - **Ziel:** C4-Messengine erhält nur Trades innerhalb des Messfensters (Fix des Data-Scope-Mismatch aus `docs/reports/c4-decision-triage-2026-07-03.md` §3).
 - **Akzeptanzkriterien:** Regressionstest mit den Triage-Zahlen (Lifetime 82.79 % / Window 75.08 % / Continuation); Engine-Output weist Fenster + Trade-Count aus; kein Verhalten außerhalb des Moduls geändert.
-- **Aufwand:** S/M. **Abhängigkeiten:** keine. **Loop-Bezug:** Runtime Safety / Measurement Attribution — Entscheidungsqualität künftiger C4-Läufe.
+- **Aufwand:** S/M. **Abhängigkeiten:** keine. **Stop conditions:** Regression bricht ab, CI rot. **Expected PR title:** `fix(live): window-scoped trade filter in canary measurement decision`. **Loop-Bezug:** Runtime Safety / Measurement Attribution — Entscheidungsqualität künftiger C4-Läufe.
 
-### 5. `ops: runtime preflight for measurement readiness (canary redeploy, producer start, state refresh)`
+### R5. `ops: runtime preflight for measurement readiness (canary redeploy, producer start, state refresh)`
 - **Ziel:** Umbrella für Track 0 — referenziert #478, #483, PR #482; jede Runtime-Aktion einzeln approval-gated.
 - **Akzeptanzkriterien:** 4 Bots GREEN dry-run; Rainbow-Producer healthy + fresh; `current-operational-state.md` aktuell; Incident-Report 2026-07-03 nachgereicht.
-- **Aufwand:** L (Ops). **Abhängigkeiten:** menschliche Freigabe je Schritt. **Loop-Bezug:** Runtime Safety — ohne laufende Runtime keine Evidence.
+- **Aufwand:** L (Ops). **Abhängigkeiten:** menschliche Freigabe je Schritt. **Stop conditions:** Fehlende Freigabe, Runtime-Fehler, CI rot. **Expected PR title:** `ops: runtime preflight for measurement readiness`. **Loop-Bezug:** Runtime Safety — ohne laufende Runtime keine Evidence.
+
+### R6. `feat(rainbow): SI-v2 candidate quality with signal context`
+- **Ziel:** Rainbow-Kontext (direction/confidence/freshness/reason_codes) in Candidate Selection und ShadowProposal-Qualität integrieren; advisory-only-Invariante als Guard-Test.
+- **Akzeptanzkriterien:** Candidate-Ranking nutzt Signal-Evidence; Autonomy-Gates unverändert; Guard-Test „kein Codepfad Rainbow→Order“ grün.
+- **Aufwand:** M. **Abhängigkeiten:** R3. **Stop conditions:** Gate-Lockerung, CI rot. **Expected PR title:** `feat(rainbow): SI-v2 candidate quality with signal context`. **Loop-Bezug:** ShadowProposal Quality.
+
+### R7. `feat(rainbow): new dry-run measurement with signal attribution`
+- **Ziel:** Volles Dry-Run-Messfenster (≥14 Tage) mit Signal-Attribution, Backtest, Walk-Forward und Shadow-Mode-Beleg.
+- **Akzeptanzkriterien:** Measurement-Report mit Signal-Attribution; reproduzierbarer Backtest + Walk-Forward; KPIs als Evidence gelabelt, nicht als Live-Freigabe.
+- **Aufwand:** L. **Abhängigkeiten:** R5, R6, Track 0. **Stop conditions:** Zu wenig geschlossene Trades, CI rot. **Expected PR title:** `feat(rainbow): new dry-run measurement with signal attribution`. **Loop-Bezug:** Dry-run Proof / Measurement.
+
+## Status offener operativer Issues
+
+> Diese Issues werden in diesem PR nicht editiert. Die Klassifizierung dient als Orientierung für den Rainbow-Tracker.
+
+| Issue | Status | Klassifizierung |
+|---|---|---|
+| **#476** (SEC-2) | OPEN | Teilweise adressiert durch PR #481 (merged 2026-07-06). Issue-Body enthält sensitiven Wert (`API_SERVER_KEY=...`) — muss separat redigiert werden. Status-Reconciliation erforderlich. |
+| **#477** (MEM-1) | OPEN | Historischer Qdrant/Ollama-Fund vom 2026-07-03. Empfiehlt `ollama pull` und Qdrant-Rebuild (L3-Aktionen). Benötigt frischen Read-only-Recheck vor jeglicher Remediation. |
+| **#478** (OPS-1) | OPEN | **Vier getrennte Findings:** (1) Canary `Exited 130` → superseded durch intentionalen Baseline Return (#423 C4e/C4f). (2) Agent Zero `Exited 0` → ungeklärt, braucht Read-only-Recheck. (3) Pipeline-State leer → ungeklärt, braucht Read-only-Recheck. (4) Caddy 502 → ungeklärt, braucht Read-only-Recheck. Issue darf nicht geschlossen werden, bis Findings 2–4 einen aktuellen Read-only-Audit erhalten haben. |
+| **#483** (OPS) | OPEN | Erstellt 2026-07-07 (~3 Tage alt). Enthält Exchange-Key-Deployment und Runtime-Aktionen. Darf nicht ungeprüft als ausführbare Rainbow-Dependency importiert werden. Benötigt aktuelle Evidence und separate Freigabe. |
+
+## Post-Merge-Sequenz
+
+```
+PR #487 amended + reviewed
+    ↓
+PR #487 merged
+    ↓
+Separater Rainbow-Tracker ([Rainbow][SI-v2]) erstellt
+    ↓
+Tracker aus Issue #423 verlinkt
+    ↓
+Einzel-Issues R1–R7 im Tracker angelegt
+    ↓
+Erster unblocked Task R1 (Contract-Re-Sync) ausgewählt
+    ↓
+Ein Task, ein Branch, ein PR, ein Report
+```
 
 ## Validierung
 
