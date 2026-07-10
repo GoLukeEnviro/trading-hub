@@ -64,6 +64,9 @@ class RainbowClientConfig:
     endpoint_path: str = "/signals/latest"
     """Path appended to ``base_url`` for read-only signal fetches."""
 
+    canonical_endpoint_path: str = "/signals/canonical/latest"
+    """Path for the upstream canonical envelope endpoint."""
+
     source_type: str = "http"
     """Allowed source type. v1 only supports ``http``."""
 
@@ -211,6 +214,11 @@ class RainbowSignalProviderClient:
                 results.append(result)
         return results
 
+    @property
+    def is_canonical_endpoint(self) -> bool:
+        """True when the configured endpoint is the canonical envelope endpoint."""
+        return self._config.endpoint_path == self._config.canonical_endpoint_path
+
     def _get_latest_read_only_signals(self) -> RainbowClientResult:
         if self._config.source_type != "http":
             return RainbowClientResult(
@@ -237,7 +245,10 @@ class RainbowSignalProviderClient:
         mapped_signals: list[Envelope] = []
         errors: list[str] = []
         for index, payload in enumerate(payload_result.signals):
-            envelope, map_errors = self._map_crypto_signal_to_envelope(payload)
+            if self.is_canonical_endpoint:
+                envelope, map_errors = self._map_canonical_signal_to_envelope(payload)
+            else:
+                envelope, map_errors = self._map_crypto_signal_to_envelope(payload)
             if map_errors:
                 errors.extend(
                     f"payload[{index}]: {error}"
@@ -492,6 +503,109 @@ class RainbowSignalProviderClient:
                     "ai_evaluation": payload.get("ai_evaluation"),
                 },
                 "raw_data": raw_data,
+            },
+            "redaction_status": "clean",
+        }
+        return envelope, []
+
+    @staticmethod
+    def _canonical_direction_to_hub(direction: str | None) -> str:
+        """Map upstream canonical SignalDirection to trading-hub direction."""
+        if direction is None:
+            return "unknown"
+        mapping = {
+            "bullish": "long",
+            "bearish": "short",
+            "neutral": "flat",
+        }
+        return mapping.get(direction.lower(), "unknown")
+
+    def _map_canonical_signal_to_envelope(
+        self,
+        payload: Envelope,
+    ) -> tuple[Envelope | None, list[str]]:
+        """Convert an upstream canonical envelope into a trading-hub envelope.
+
+        This path is used when the client is configured to consume the
+        ``/signals/canonical/latest`` endpoint. It does NOT import upstream
+        code or merge unmerged PR #66 behaviour; it only maps already-public
+        canonical fields into the local contract.
+        """
+        signal_id = self._coerce_str(payload.get("id"))
+        source = self._coerce_str(payload.get("source"))
+        asset = self._coerce_str(payload.get("asset"))
+        direction_raw = self._coerce_str(payload.get("direction"))
+        timestamp = self._coerce_str(payload.get("created_at"))
+        confidence = self._coerce_float(payload.get("confidence"))
+        features = payload.get("features", {})
+        if not isinstance(features, dict):
+            features = {}
+        strength = self._coerce_float(features.get("strength"))
+        timeframe = self._coerce_str(payload.get("timeframe"))
+
+        errors: list[str] = []
+        if signal_id is None:
+            errors.append("missing id")
+        if source is None:
+            errors.append("missing source")
+        if asset is None:
+            errors.append("missing asset")
+        if direction_raw is None:
+            errors.append("missing direction")
+        if timestamp is None:
+            errors.append("missing created_at")
+        if confidence is None:
+            errors.append("missing confidence")
+
+        if errors:
+            return None, errors
+
+        direction = self._canonical_direction_to_hub(direction_raw)
+        if direction == "unknown":
+            return None, [f"unknown direction: {direction_raw}"]
+
+        metadata = self._coerce_object(features)
+        # Preserve upstream actionability stamp if present; otherwise default fail-closed.
+        upstream_actionability = payload.get("actionability", {})
+        if isinstance(upstream_actionability, dict):
+            can_execute = upstream_actionability.get("can_execute", False)
+            dry_run_only = upstream_actionability.get("dry_run_only", True)
+            if can_execute is not False or dry_run_only is not True:
+                return None, [
+                    "upstream actionability violates read-only contract: "
+                    f"can_execute={can_execute}, dry_run_only={dry_run_only}"
+                ]
+
+        normalized_timestamp = self._normalize_timestamp(timestamp)
+        emitted_at = datetime.now(UTC).isoformat()
+
+        envelope: Envelope = {
+            "event_type": "signal",
+            "schema_version": 1,
+            "source_system": self._config.provider_id,
+            "source_id": source,
+            "strategy_id": metadata.get("strategy", source),
+            "model_id": metadata.get("model_id"),
+            "symbol": normalize_symbol(asset),
+            "timeframe": timeframe,
+            "timestamp_utc": normalized_timestamp,
+            "emitted_at_utc": emitted_at,
+            "direction": direction,
+            "confidence": confidence,
+            "signal_strength": strength,
+            "regime_hint": metadata.get("regime"),
+            "metadata": {
+                **metadata,
+                "provider_mode": "read_only",
+                "actionability": {
+                    "can_execute": False,
+                    "dry_run_only": True,
+                },
+                "upstream_canonical": {
+                    "signal_class": payload.get("signal_class"),
+                    "subtype": payload.get("subtype"),
+                    "valid_until": payload.get("valid_until"),
+                },
             },
             "redaction_status": "clean",
         }
