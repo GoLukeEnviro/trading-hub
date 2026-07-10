@@ -38,7 +38,7 @@ class TestReportGenerator:
 
     def test_report_contains_all_fixtures(self) -> None:
         report = _generator().generate()
-        assert report.total_fixtures == 7
+        assert report.total_fixtures == 8
         names = {e.file_name for e in report.entries}
         expected = {
             "valid_long_signal.json",
@@ -48,6 +48,7 @@ class TestReportGenerator:
             "stale_signal.json",
             "partial_metadata_signal.json",
             "malformed_missing_required_fields.json",
+            "valid_canonical_long_signal.json",
         }
         assert names == expected
 
@@ -73,9 +74,9 @@ class TestOutcomeCounts:
 
     def test_warn_count(self) -> None:
         report = _generator().generate()
-        # no_signal, heartbeat, stale_signal should warn
-        assert report.warn_count == 3, (
-            f"Expected 3 warn, got {report.warn_count}"
+        # no_signal, heartbeat, stale_signal, valid_canonical_long_signal should warn
+        assert report.warn_count == 4, (
+            f"Expected 4 warn, got {report.warn_count}"
         )
 
     def test_fail_count(self) -> None:

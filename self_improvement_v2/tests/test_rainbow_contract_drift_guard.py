@@ -67,9 +67,9 @@ class TestDriftGuardLoads:
 class TestFixtureLoading:
     def test_all_fixtures_loaded(self, guard: RainbowContractDriftGuard) -> None:
         report = guard.run()
-        # 7 fixture files exist
-        assert report.total_fixtures == 7, (
-            f"Expected 7 fixtures, got {report.total_fixtures}"
+        # 8 fixture files exist (7 original + 1 canonical fixture added in R1)
+        assert report.total_fixtures == 8, (
+            f"Expected 8 fixtures, got {report.total_fixtures}"
         )
 
     def test_fixture_names_present(self, guard: RainbowContractDriftGuard) -> None:
@@ -83,6 +83,7 @@ class TestFixtureLoading:
             "stale_signal.json",
             "partial_metadata_signal.json",
             "malformed_missing_required_fields.json",
+            "valid_canonical_long_signal.json",
         }
         assert names == expected, f"Fixture name mismatch: {names ^ expected}"
 
