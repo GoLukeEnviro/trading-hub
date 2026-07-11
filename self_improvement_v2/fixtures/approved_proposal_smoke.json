@@ -1,0 +1,25 @@
+{
+  "bot_id": "freqtrade-freqforge",
+  "decision_type": "SHADOW_PROPOSAL",
+  "approval_status": "APPROVED",
+  "approval_eligible": true,
+  "requires_human_approval": true,
+  "base_mode": "proposal_only",
+  "candidate_sha256": "abcd1234test",
+  "hypothesis": "reinforce_profitable_pair_cluster_v1",
+  "no_proposal_reason": null,
+  "dry_run": true,
+  "parameters": {},
+  "cycle_id": "smoke-test-20260622",
+  "promotion_block_reason_codes": [
+    "positive_profit_hypothesis"
+  ],
+  "walk_forward_net_metrics": {
+    "metrics_source": "walk_forward_net_metrics",
+    "evaluation_status": "PASS_REVIEW",
+    "total_net_pnl": 10.5,
+    "profit_factor": 2.1,
+    "total_trades": 15,
+    "max_drawdown_pct": 5.0
+  }
+}
