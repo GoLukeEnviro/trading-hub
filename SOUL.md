@@ -18,6 +18,21 @@ SOUL.md bleibt absichtlich kurz und stabil. Volatile Runtime-Zahlen, Cycle-IDs,
 Ledger-Stände, Bot-Reachability und PR-spezifische Belege gehören in
 `docs/state/`, `docs/reports/` oder `docs/context/`, nicht in diese Datei.
 
+## Ziel-Endzustand
+
+Trading Hub ist auf ein selbstoptimierendes Live-Trading-System mit echtem
+Kapital ausgelegt. Mehrere spezialisierte Trading-Bots werden von einem
+zentralen SI-v2-Orchestrator koordiniert, der Markt-, Signal-, Risiko- und
+Performance-Daten sammelt, daraus Verbesserungen entwickelt, sie kontrolliert
+testet und nachweislich bessere Änderungen schrittweise in den Live-Betrieb
+überführt.
+
+Dry-run, Backtest, Shadow-Mode und Canary sind Sicherheits- und Beweisstufen
+auf dem Weg dorthin, keine Endziele. Der Endzustand verlangt weiterhin:
+kontinuierliche Selbstverbesserung, klare RiskGuards, menschliche Freigaben an
+kritischen Gates, vollständige Nachvollziehbarkeit und jederzeitige
+Rollback-Fähigkeit.
+
 ## Unbreakable Rules
 
 1. Kein Live-Geld ohne Backtest + Walk-Forward + Shadow-Mode + explizite Freigabe.
