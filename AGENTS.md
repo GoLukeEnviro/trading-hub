@@ -119,9 +119,10 @@ context only. Do not count them as active SI-v2 loop members.
   container). It has no `docker` group access and no `sudo` group membership;
   the only permitted `sudo` action is a logged breakglass wrapper
   (`operator-breakglass-root`) for occasional full-root sessions.
-- This is host-level tooling for human maintenance and has no bearing on the
-  SI-v2 loop, Freqtrade, or trading safety boundaries. Hermes does not gain any
-  new access through this change.
+- This is host-level tooling for human maintenance, separate from Hermes's own
+  runtime authority. Hermes's own access model is defined by the Root-Runtime-
+  Authority decision (see the R0 governance ADR), not by this operator user --
+  this change does not itself alter it.
 - Full detail: `docs/context/hermestrader-operator-console-20260710.md`.
 
 ### SI-v2 — Self-Improvement Loop

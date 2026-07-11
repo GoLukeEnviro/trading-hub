@@ -44,7 +44,7 @@ Beide Tools authentifizieren ausschliesslich per OAuth/Browser-Login als `operat
 
 ## 6. Auswirkung auf Trading-Hub / Hermes
 
-- **Keine.** Hermes-Container unveraendert (kein docker.sock, Bridge weiterhin ALLOWED getestet).
+- Keine direkte Auswirkung durch den operator-User selbst (separater Mensch-Zugang, kein Bezug zu Hermes' eigenen Rechten). Hinweis: der zum Zeitpunkt dieser PR gueltige Stand "Hermes ohne docker.sock" wurde durch die Root-Runtime-Authority-Entscheidung (siehe R0-ADR) abgeloest -- fuer Hermes' aktuellen Zugriffsstand ist dieses Dokument NICHT mehr die Quelle der Wahrheit, nur fuer den operator-User weiterhin gueltig.
 - `deploy`-User und Trading-Hub-Repo-Zugriff unveraendert.
 - SI-v2-Loop, Freqtrade, RiskGuard, ShadowLogger, Kill-Switch: keine Beruehrung.
 - Diese Aenderung ist reine Host-Infrastruktur fuer menschliche VPS-Wartung, keine Runtime-/Trading-Mutation.

@@ -85,4 +85,6 @@ Bis dahin gilt: kein Live-Geld, keine Exchange-Keys in Git, kein
   current repo state.
 - Host-level operator tooling (Claude Code CLI / Codex CLI for human VPS
   maintenance, see `AGENTS.md`) is documented in `docs/context/`; it does not
-  change trading identity, safety, or Hermes's own access boundaries.
+  change trading identity or safety. Hermes's own access boundaries are
+  governed separately by the Root-Runtime-Authority decision (R0), not by
+  this operator user.
