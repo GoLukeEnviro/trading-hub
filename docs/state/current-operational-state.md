@@ -1,262 +1,36 @@
-# Trading Hub — Current Operational State
+# Current Operational State
 
-> **Canonical current-state snapshot** — validated against `main` at
-> commit `8013cfd`; R3 Fleet Reproducibility Decision merged.
->
-> **Last updated:** 2026-07-11 after R3 Fleet Reproducibility Decision (Root-Runtime-Rollout)
-> **Previous update:** 2026-07-10 (PR #502)
+> **Letzte Aktualisierung:** 2026-07-11  
+> **Warnung:** Diese Datei kann stale sein — agent0 läuft live auf dem Legacy-Stack.
 
----
+## ⚠️ NOTE: R7A Status (2026-07-11)
 
-## 1. System posture
+- **agent0** läuft live auf Legacy `docker-compose.yml`; dieser State kann von der tatsächlichen VPS-Realität abweichen (R3 §2.8)
+- **R7** ist weiterhin **BLOCKED** bis:
+  1. `docker-compose.hermestrader-dryrun.yml` (Greenfield-Compose) gemergt ist (PR-2)
+  2. Explizite User-Freigabe + `BACKUP_GATE_GREEN` auf HermesTrader
+- **Rebel** (`freqai-rebel`) ist auf `profiles: ["rebel"]` gesetzt und startet **nicht** im Default-Deploy (NOT_REPRODUCIBLE, R3-Befund)
+- **Rainbow** läuft standalone auf HermesTrader (:18080); Integration in trading-hub Stack erfolgt via PR-2
 
-| Property | Value |
-|----------|-------|
-| Live trading | `TARGET_ARCHITECTURE_NOT_ENABLED` — live is a future mode, not currently active |
-| Execution mode | Dry-run only |
-| SI-v2 controller target | **AUTONOMOUS_DRY_RUN** — policy-gated, canary-first, allowlist-based |
-| Current official C4 decision | **ROLLBACK_RECOMMENDED** (max_drawdown 82.79%, validated in all three calculation methods) |
-| Canary state | **Stopped** — intentional baseline return after C4 ROLLBACK (#423 C4e) |
-| Kill switch | **NORMAL** |
-| Dry-run config | **Preserved** at `freqforge-canary/config/config_canary_dryrun.json` |
-| Human approval | required for live-mode transition, not every dry-run candidate |
-| Runtime mutation by this repo update | **NONE** |
+## Laufende Services (Stand: Legacy-Stack)
 
-### Rainbow Integration Status
-
-| Task | Status | PR | Merge SHA |
-|------|--------|----|-----------|
-| R1 — Contract reconciliation | ✅ COMPLETED | #497 | `8c167c8` |
-| R2 — Read-only provider | ✅ COMPLETED | #498 | `dc15f6d` |
-| R3 — Attribution producer | ✅ COMPLETED | #499 | `4ec1b18` |
-| R4 — Window-scoped C4 fix | ✅ COMPLETED | #500 | `a70a058` |
-| R5 — Runtime preflight audit | ✅ COMPLETED | #502 | `78979a7` |
-| R6 — Candidate quality | ✅ COMPLETED | #501 | `75384e1` |
-| R7 — Dry-run measurement | ⏳ BLOCKED | — | — |
-
-### Historical note
-
-The previous human-gated phase (`HUMAN_GATED_CANARY_APPLY_PHASE_3C`) was a necessary historical step that proved the controlled apply chain. It is superseded for dry-run by ADR-2026-07-01 (Autonomous Dry-Run Loop with Live-Target Architecture).
-
----
-
-## 2. SI-v2 Architecture (Complete Chain)
-
-The following modules exist on `main` and form the complete controlled apply chain:
-
-| Phase | Module | PR | Tests | Status |
-|-------|--------|----|-------|--------|
-| 3B-A | `restart_with_overlay.py` | #379 | 45 | ✅ |
-| 3B-B | `restart_gate.py` | #380 | 23 | ✅ |
-| 3C-A | `runtime_executor.py` | #381 | 23 | ✅ |
-| 4A | `measurement/decision_engine.py` | #382 | 37 | ✅ |
-| 5A | `rollback_rehearsal.py` | #383 | 24 | ✅ |
-| 6A | `pipeline/candidate_to_apply.py` | #384 | 36 | ✅ |
-| **Autonomy Policy** | `autonomy/autonomy_policy.py` | **NEW** | **NEW** | ✅ |
-| **10.1 Resolver** | `fleet_rollout_input_resolver.py` | #421 | 24 | ✅ |
-| **10.2 Evidence Runner** | `fleet_rollout_ready_evidence_runner.py` | #422 | 12 | ✅ |
-| **10.3 Dry-Run Executor** | `fleet_dry_run_runtime_executor.py` | #424 | 18 | ✅ |
-| **10.4 Post-Fleet Measurement** | `fleet_post_fleet_measurement_watcher.py` | #425 | 20 | ✅ |
-| **Rainbow R1** | Contract reconciliation | #497 | + | ✅ |
-| **Rainbow R2** | Read-only provider | #498 | + | ✅ |
-| **Rainbow R3** | Attribution producer | #499 | + | ✅ |
-| **Rainbow R4** | Window-scoped C4 fix | #500 | + | ✅ |
-| **Rainbow R5** | Runtime preflight audit | #502 | + | ✅ |
-| **Rainbow R6** | Candidate quality | #501 | + | ✅ |
-| **Total** | **16 modules** | **16 PRs** | **+ tests** | **All GREEN** |
-
-### Active bot identities
-
-| Bot id | Role | Current state |
-|--------|------|---------------|
-| `freqtrade-freqforge` | FreqForge baseline/override | **Not running** — requires explicit approval to restart |
-| `freqtrade-freqforge-canary` | FreqForge canary | **Stopped** — intentional baseline return after C4 ROLLBACK |
-| `freqtrade-regime-hybrid` | Regime-hybrid | **Not running** — requires explicit approval to restart |
-| `freqai-rebel` | FreqAI/Rebel | **Not running** — requires explicit approval to restart |
-
-Momentum is decommissioned and MVS is not deployed. They are historical context only.
-
----
-
-## 3. Measurement Status
-
-| Point | Time | Status |
-|-------|------|--------|
-| **T0** | 2026-06-27T18:27Z | ✅ **GREEN** |
-| **T1** | 2026-06-27T19:27Z | 🟡 **YELLOW / CONTINUE** — Bitget 429 warnings |
-| **T2** | 2026-06-28T00:27Z | 🟡 **YELLOW / CONTINUE** — Bitget 429 warnings, 0 new trades |
-| **T3** | 2026-06-28T18:27Z | 🟡 **YELLOW / EXTEND_MEASUREMENT** — Bitget 429, Kill Switch HALT_NEW compromised window |
-| **T4 Readiness** | 2026-06-30 | ⏳ **NOT_ENOUGH_DATA** — 0 new closed canary trades since T3 |
-| **T4 Follow-up** | 2026-06-30 | ⏳ **STILL_NOT_ENOUGH_DATA** — UNI/USDT still open, no change since T4 Readiness |
-| **C4 Final Decision** | 2026-06-30 | 🟡 **ROLLBACK_RECOMMENDED** — max_drawdown 82.79% breach |
-
-### Why ROLLBACK_RECOMMENDED
-
-- **Kill Switch was HALT_NEW** from T1 through most of the measurement window (2026-06-27T19:27Z to 2026-06-29T04:15Z), blocking ALL new trades fleet-wide
-- Only 1 new canary trade (UNI/USDT, still open) and 3 new control trades (BTC open, ETH/SOL closed with losses) since T0
-- Insufficient trade data for a meaningful canary-vs-control comparison
-- Max drawdown 82.79% breached critical threshold in all three calculation methods
-- Baseline return executed, canary container stopped, incident report filed
-
----
-
-## 4. Operational priority for agents
-
-### Active priority: None — all code-complete tasks merged
-
-**Do NOT start** without explicit approval:
-- new apply
-- restart
-- rollback
-- pair expansion
-- live readiness
-- next candidate research
-- canary redeployment
-- Rainbow producer start
-- R7 measurement
-
-**Allowed:**
-- read-only audits and reports
-- documentation updates
-
-### Next runtime action
-**Requires explicit human approval.** No runtime action is currently authorized. The following are all blocked:
-
-- Canary dry-run redeploy → human approval + ceremony
-- Rainbow producer start → human approval
-- Freqtrade bot restart → human approval
-- C4 re-execution → new measurement window + human gate
-- D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
-- R7 measurement → R5 complete + runtime preflight approved
-
----
-
-## 5. Safety layer status
-
-| Component | Current status |
-|-----------|----------------|
-| Dry-run posture | ✅ Required for all active bots |
-| Live trading | `TARGET_ARCHITECTURE_NOT_ENABLED` |
-| RiskGuard | Required for trading-affecting decisions; currently PASS |
-| Kill switch | **NORMAL** (set 2026-06-29T04:15Z, approved by Luke) |
-| Apply path | Policy-gated autonomous dry-run (AUTONOMOUS_DRY_RUN mode) |
-| Restart path | Canary-only, L3-token-gated via runtime executor |
-| Rollback path | Rehearsed but execution hard-blocked |
-| Measurement path | Read-only decision engine on `main` |
-| Rainbow advisory | Read-only, fail-closed, disabled by default |
-
----
-
-## 6. Architecture decisions
-
-| ADR | Status | Summary |
-|-----|--------|---------|
-| ADR-2026-06-10-watchdog-ownership | Active | Watchdog ownership and lifecycle |
-| ADR-2026-06-27-controlled-self-improvement-human-gated-apply | **Superseded for dry-run** | Human-gated apply (historical) |
-| ADR-2026-06-27-si-v2-restart-with-overlay-runtime-proof | Active | Restart-with-overlay runtime proof |
-| ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target | **Active** | Policy-gated autonomous dry-run, live as target architecture |
-| ADR-2026-07-11-hermes-root-runtime-authority | **Active** | Hermes Root-Runtime-Authority (R0): UID-separated root executor supersedes D1/D2/D3 narrow-slice access; live trading stays externally signature-gated |
-
-### Access model (current)
-
-- **Previous model (SEC-1, superseded as primary path):** Hermes had no
-  `docker.sock`; access was limited to a read-only Docker proxy (D1), a
-  fixed-command allowlisted host runner (D2), and an audited operator bridge
-  (D3).
-- **Current model (R0 governance-decided; executor shipped in R1, PR #508, active):** Hermes stays unprivileged (UID 10000). A dedicated
-  `hermes-root-executor.service` (UID 0) provides full host/Docker runtime
-  authority over HermesTrader, reachable only via a local Unix socket with
-  peer-credential (`SO_PEERCRED`) authentication, exclusive locks, command
-  timeouts, full audit logging, secret redaction, and a kill switch. See
-  [`docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md`](../decisions/ADR-2026-07-11-hermes-root-runtime-authority.md)
-  for the full decision, including the External Live Authority Boundary
-  (root authority ≠ live-trading authority; live actions require an
-  externally signed, time-limited approval whose private key never resides
-  on HermesTrader).
-- D1/D2/D3 are not deleted and may keep running as a fallback path during
-  the R1–R2 transition; they are superseded as the primary access path.
-- **Bot fleet location is unchanged by this decision:** all four active bots
-  (`freqtrade-freqforge`, `freqtrade-freqforge-canary`,
-  `freqtrade-regime-hybrid`, `freqai-rebel`) continue to run exclusively on
-  the old `agent0` VPS. Migrating them to HermesTrader is a later step
-  (Root-Runtime-Roadmap phases R3–R5b) and is explicitly out of scope for
-  this decision.
-
----
-
-## 7. Documentation ownership
-
-- `AGENTS.md` — primary operational agent instruction.
-- `SOUL.md` — stable project identity and non-negotiable safety principles.
-- `CLAUDE.md` — thin Claude Code handoff that defers to `AGENTS.md`.
-- `ORCHESTRATOR_CHARTER.md` — durable charter rules.
-- `README.md` — repository orientation.
-- `docs/state/current-operational-state.md` — this canonical state snapshot.
-- `docs/reports/si-v2-phase-*` — phase-specific evidence reports.
-- `docs/decisions/ADR-*` — architecture decision records.
-- `docs/reports/rainbow-r*-*-2026-07-10.md` — Rainbow R1–R6 reports.
-- `docs/reports/rainbow-r5-runtime-preflight-reconciliation-2026-07-11.md` — R5 reconciliation report.
-
----
-
-## C1 planning note (2026-07-09)
-
-- Repository HEAD at C1 planning: `c897c01` (main). Source snapshot referenced elsewhere: `20aee88`.
-- Post-snapshot security hardening includes #475 (raw docker socket removed from hermes-green) and #476 (SEC-2 partial fix).
-- **Runtime posture remains `AUTONOMOUS_DRY_RUN`** — no fresh runtime measurement performed in C1; runtime re-baseline is a separate, explicitly-gated step (Phase F).
-- Workspace bridge (Phase C1A): HermesTrader Hermes container sees this repo read-only at `/workspace/projects/trading-hub`; host path `/opt/data/projects/trading-hub`.
-
-## Rainbow R5 reconciliation note (2026-07-11)
-
-- R5 reopened and reconciled against #423.
-- C4 decision corrected to `ROLLBACK_RECOMMENDED`.
-- Canary state corrected to `Stopped` (intentional baseline return).
-- Fleet state corrected: no bots currently running.
-- Rainbow producer: UNAVAILABLE (not running).
-- All runtime actions mapped to explicit human approval requirements.
-- R7 remains blocked pending runtime preflight approval.
-- D1/D2 remain blocked per #423.
-
----
-
-## Root-Runtime Roadmap Status (R3 update, 2026-07-11)
-
-> Appended by R3 (Fleet Reproducibility Decision). Supersedes prior stale claims
-> above where they conflict.
-
-| Phase | Status | PR |
+| Service | Status | Compose |
 |---|---|---|
-| R0 — Governance / Root-Authority | COMPLETE | #506 |
-| R0.5 — Secret Exposure Architecture Closure | COMPLETE | #507 |
-| R1 — Root Executor Service | COMPLETE (shipped + active) | #508 |
-| R2 — Audit, Locking, Mutation Evidence | COMPLETE | #509 |
-| R3 — Fleet Reproducibility Decision | COMPLETE (this update) | (this PR) |
-| R4 — Greenfield Compose + Rainbow Runtime | NEXT | — |
-| R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
-| R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
-| R6 — Permanent Reconciliation (systemd) | — | — |
-| R7 — SI-v2 Runtime Integration (shadow) | — (real Hermes client integration of root-executor still open) | — |
-| C5 — New Dry-Run Canary Measurement Window | — (replaces C4 ROLLBACK_RECOMMENDED) | — |
-| Rainbow R7 / #496 | BLOCKED | — |
+| freqtrade-freqforge | live (agent0) | `docker-compose.yml` |
+| freqtrade-freqforge-canary | live (agent0) | `docker-compose.yml` |
+| freqtrade-regime-hybrid | live (agent0) | `docker-compose.yml` |
+| freqai-rebel | live (agent0) | `docker-compose.yml` |
+| rainbow | standalone | `ai4trade-bot/docs/r4/standalone-rainbow.yml` |
 
-### R3 Fleet Decision
+## Geplante Änderungen (R7A)
 
-- `SELECTED_FLEET_MODEL = OPTION_C`
-- `CANONICAL_MEASUREMENT_FLEET = [freqforge, regime-hybrid, canary]` (+ webserver support)
-- rebel = `NOT_REPRODUCIBLE` (1.2 GB trained FreqAI models not in repo; FreqAI deps + `directory_operations.py` patch missing; base unpinned).
-- freqforge / canary / regime-hybrid = `REPRODUCIBLE_NOW` (verified via greenfield test build from `Dockerfile.hermes10000` + repo strategies + `freqtrade/shared/` modules).
-- Full evidence: `docs/reports/r3-fleet-reproducibility-decision-2026-07-11.md`.
+| Aktion | Gate | Branch |
+|---|---|---|
+| Greenfield-Compose einführen | PR-2 merge | `feat/r7a-hermestrader-dryrun-topology` |
+| Host-Deploy | BACKUP_GATE_GREEN + User-Freigabe | nach PR-1+2 merge |
+| Live-Trading | #423 explizit | separates Gate |
 
-### D1/D2 Naming (collision clarified)
+## Dry-Run-Schutz
 
-- **SEC-1 access paths D1/D2/D3** (Docker-proxy / fixed-command-runner / bridge): `SUPERSEDED_AS_PRIMARY_PATH` by the root-executor (R0/R1); retirement pending. NOT deleted.
-- **Live-Roadmap Track D1/D2** (Live Fleet Approval / Rollout): `BLOCKED_BY_C4_KEEP_AND_EXTERNAL_LIVE_APPROVAL`. NOT superseded by the root-executor — these are live-trading gates.
-
-### Bot-Runtime State Discrepancy (flagged, NOT resolved in R3)
-
-R3 live verification (2026-07-11) found all 4 bots + webserver **running** in dry-run on
-agent0 (freqforge Up/healthy, canary Up, regime-hybrid Up, rebel Up 40h, webserver Up 8d).
-This **contradicts** the prior snapshot above ("no bots currently running" / all "Not running —
-requires explicit approval to restart"). The discrepancy's cause (approved restart vs.
-auto-restart vs. unauthorized) is **not investigated in R3** — flagged for separate governance
-review. R3 did not mutate any runtime state.
+`dry_run: true` ist in allen Greenfield-Bot-Configs gesetzt.  
+`dry_run=false` ist **verboten** ohne explizite Freigabe von Issue #423.
