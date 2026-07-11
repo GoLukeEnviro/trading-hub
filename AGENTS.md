@@ -110,6 +110,21 @@ context only. Do not count them as active SI-v2 loop members.
   - Host path: `/opt/data/projects/trading-hub` (canonical, HermesTrader)
   - Hermes container (read-only mount): `/workspace/projects/trading-hub`
   - `/home/hermes/projects/trading` is historical (agent0) and must NOT be used as canonical HermesTrader path.
+- **Docker/host access model (historical → current):** Hermes previously
+  operated under the SEC-1 "no `docker.sock`" model: a read-only Docker proxy
+  (D1), a fixed-command allowlisted host runner (D2), and an audited operator
+  bridge (D3) — see `hermestrader-d1-readonly-docker-visibility.md`,
+  `hermestrader-d2-impl.md`, and the D3 bridge series in memory for the
+  implementation history. That narrow-slice model is superseded as of the
+  **Root-Runtime-Authority decision (R0)** — see
+  [`docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md`](docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md).
+  Hermes now moves toward full root-level runtime authority via a dedicated,
+  UID-separated `hermes-root-executor.service` (implementation: Phase R1, not
+  yet shipped) rather than an ever-growing fixed-command allowlist. D1/D2/D3
+  remain documented and may keep running as a fallback path during the R1–R2
+  transition. Live-capital trading authority remains separate and externally
+  signature-gated regardless of root runtime authority — see the ADR's
+  External Live Authority Boundary section.
 
 ### VPS Operator Console — human CLI access (non-trading)
 
@@ -121,8 +136,9 @@ context only. Do not count them as active SI-v2 loop members.
   (`operator-breakglass-root`) for occasional full-root sessions.
 - This is host-level tooling for human maintenance, separate from Hermes's own
   runtime authority. Hermes's own access model is defined by the Root-Runtime-
-  Authority decision (see the R0 governance ADR), not by this operator user --
-  this change does not itself alter it.
+  Authority decision (see the R0 governance ADR,
+  [`docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md`](docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md)),
+  not by this operator user -- this change does not itself alter it.
 - Full detail: `docs/context/hermestrader-operator-console-20260710.md`.
 
 ### SI-v2 — Self-Improvement Loop

@@ -101,5 +101,10 @@ Bis dahin gilt: kein Live-Geld, keine Exchange-Keys in Git, kein
 - Host-level operator tooling (Claude Code CLI / Codex CLI for human VPS
   maintenance, see `AGENTS.md`) is documented in `docs/context/`; it does not
   change trading identity or safety. Hermes's own access boundaries are
-  governed separately by the Root-Runtime-Authority decision (R0), not by
-  this operator user.
+  governed separately by the Root-Runtime-Authority decision
+  ([R0 ADR](docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md)),
+  not by this operator user.
+- Root runtime authority is infrastructure authority, not live-trading
+  authority: `dry_run=false` and real-capital live trading always require a
+  separate, externally signed, time-limited approval (private signing key
+  never on HermesTrader) — see the R0 ADR's External Live Authority Boundary.
