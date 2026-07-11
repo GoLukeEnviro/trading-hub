@@ -155,6 +155,33 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 | ADR-2026-06-27-controlled-self-improvement-human-gated-apply | **Superseded for dry-run** | Human-gated apply (historical) |
 | ADR-2026-06-27-si-v2-restart-with-overlay-runtime-proof | Active | Restart-with-overlay runtime proof |
 | ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target | **Active** | Policy-gated autonomous dry-run, live as target architecture |
+| ADR-2026-07-11-hermes-root-runtime-authority | **Active** | Hermes Root-Runtime-Authority (R0): UID-separated root executor supersedes D1/D2/D3 narrow-slice access; live trading stays externally signature-gated |
+
+### Access model (current)
+
+- **Previous model (SEC-1, superseded as primary path):** Hermes had no
+  `docker.sock`; access was limited to a read-only Docker proxy (D1), a
+  fixed-command allowlisted host runner (D2), and an audited operator bridge
+  (D3).
+- **Current model (R0, governance-decided; executor implementation is Phase
+  R1, not yet shipped):** Hermes stays unprivileged (UID 10000). A dedicated
+  `hermes-root-executor.service` (UID 0) provides full host/Docker runtime
+  authority over HermesTrader, reachable only via a local Unix socket with
+  peer-credential (`SO_PEERCRED`) authentication, exclusive locks, command
+  timeouts, full audit logging, secret redaction, and a kill switch. See
+  [`docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md`](../decisions/ADR-2026-07-11-hermes-root-runtime-authority.md)
+  for the full decision, including the External Live Authority Boundary
+  (root authority ≠ live-trading authority; live actions require an
+  externally signed, time-limited approval whose private key never resides
+  on HermesTrader).
+- D1/D2/D3 are not deleted and may keep running as a fallback path during
+  the R1–R2 transition; they are superseded as the primary access path.
+- **Bot fleet location is unchanged by this decision:** all four active bots
+  (`freqtrade-freqforge`, `freqtrade-freqforge-canary`,
+  `freqtrade-regime-hybrid`, `freqai-rebel`) continue to run exclusively on
+  the old `agent0` VPS. Migrating them to HermesTrader is a later step
+  (Root-Runtime-Roadmap phases R3–R5b) and is explicitly out of scope for
+  this decision.
 
 ---
 
