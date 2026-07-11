@@ -1,9 +1,9 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `78979a7` (PR #502 squash-merge).
+> commit `8013cfd`; R3 Fleet Reproducibility Decision merged.
 >
-> **Last updated:** 2026-07-11 after Rainbow R5 reconciliation
+> **Last updated:** 2026-07-11 after R3 Fleet Reproducibility Decision (Root-Runtime-Rollout)
 > **Previous update:** 2026-07-10 (PR #502)
 
 ---
@@ -163,8 +163,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
   `docker.sock`; access was limited to a read-only Docker proxy (D1), a
   fixed-command allowlisted host runner (D2), and an audited operator bridge
   (D3).
-- **Current model (R0, governance-decided; executor implementation is Phase
-  R1, not yet shipped):** Hermes stays unprivileged (UID 10000). A dedicated
+- **Current model (R0 governance-decided; executor shipped in R1, PR #508, active):** Hermes stays unprivileged (UID 10000). A dedicated
   `hermes-root-executor.service` (UID 0) provides full host/Docker runtime
   authority over HermesTrader, reachable only via a local Unix socket with
   peer-credential (`SO_PEERCRED`) authentication, exclusive locks, command
@@ -217,3 +216,47 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 - All runtime actions mapped to explicit human approval requirements.
 - R7 remains blocked pending runtime preflight approval.
 - D1/D2 remain blocked per #423.
+
+---
+
+## Root-Runtime Roadmap Status (R3 update, 2026-07-11)
+
+> Appended by R3 (Fleet Reproducibility Decision). Supersedes prior stale claims
+> above where they conflict.
+
+| Phase | Status | PR |
+|---|---|---|
+| R0 — Governance / Root-Authority | COMPLETE | #506 |
+| R0.5 — Secret Exposure Architecture Closure | COMPLETE | #507 |
+| R1 — Root Executor Service | COMPLETE (shipped + active) | #508 |
+| R2 — Audit, Locking, Mutation Evidence | COMPLETE | #509 |
+| R3 — Fleet Reproducibility Decision | COMPLETE (this update) | (this PR) |
+| R4 — Greenfield Compose + Rainbow Runtime | NEXT | — |
+| R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
+| R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
+| R6 — Permanent Reconciliation (systemd) | — | — |
+| R7 — SI-v2 Runtime Integration (shadow) | — (real Hermes client integration of root-executor still open) | — |
+| C5 — New Dry-Run Canary Measurement Window | — (replaces C4 ROLLBACK_RECOMMENDED) | — |
+| Rainbow R7 / #496 | BLOCKED | — |
+
+### R3 Fleet Decision
+
+- `SELECTED_FLEET_MODEL = OPTION_C`
+- `CANONICAL_MEASUREMENT_FLEET = [freqforge, regime-hybrid, canary]` (+ webserver support)
+- rebel = `NOT_REPRODUCIBLE` (1.2 GB trained FreqAI models not in repo; FreqAI deps + `directory_operations.py` patch missing; base unpinned).
+- freqforge / canary / regime-hybrid = `REPRODUCIBLE_NOW` (verified via greenfield test build from `Dockerfile.hermes10000` + repo strategies + `freqtrade/shared/` modules).
+- Full evidence: `docs/reports/r3-fleet-reproducibility-decision-2026-07-11.md`.
+
+### D1/D2 Naming (collision clarified)
+
+- **SEC-1 access paths D1/D2/D3** (Docker-proxy / fixed-command-runner / bridge): `SUPERSEDED_AS_PRIMARY_PATH` by the root-executor (R0/R1); retirement pending. NOT deleted.
+- **Live-Roadmap Track D1/D2** (Live Fleet Approval / Rollout): `BLOCKED_BY_C4_KEEP_AND_EXTERNAL_LIVE_APPROVAL`. NOT superseded by the root-executor — these are live-trading gates.
+
+### Bot-Runtime State Discrepancy (flagged, NOT resolved in R3)
+
+R3 live verification (2026-07-11) found all 4 bots + webserver **running** in dry-run on
+agent0 (freqforge Up/healthy, canary Up, regime-hybrid Up, rebel Up 40h, webserver Up 8d).
+This **contradicts** the prior snapshot above ("no bots currently running" / all "Not running —
+requires explicit approval to restart"). The discrepancy's cause (approved restart vs.
+auto-restart vs. unauthorized) is **not investigated in R3** — flagged for separate governance
+review. R3 did not mutate any runtime state.
