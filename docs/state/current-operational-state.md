@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `75384e1` (PR #501 squash-merge).
+> commit `78979a7` (PR #502 squash-merge).
 >
-> **Last updated:** 2026-07-10 after Rainbow R1–R6
-> **Previous update:** 2026-07-01 after Phase 10.4
+> **Last updated:** 2026-07-11 after Rainbow R5 reconciliation
+> **Previous update:** 2026-07-10 (PR #502)
 
 ---
 
@@ -15,27 +15,24 @@
 | Live trading | `TARGET_ARCHITECTURE_NOT_ENABLED` — live is a future mode, not currently active |
 | Execution mode | Dry-run only |
 | SI-v2 controller target | **AUTONOMOUS_DRY_RUN** — policy-gated, canary-first, allowlist-based |
-| Current official decision | **KEEP_CANARY_OVERLAY** (from T3 Final Decision) |
-| Dry-run apply gating | policy-gated, not per-apply human-gated |
+| Current official C4 decision | **ROLLBACK_RECOMMENDED** (max_drawdown 82.79%, validated in all three calculation methods) |
+| Canary state | **Stopped** — intentional baseline return after C4 ROLLBACK (#423 C4e) |
+| Kill switch | **NORMAL** |
+| Dry-run config | **Preserved** at `freqforge-canary/config/config_canary_dryrun.json` |
 | Human approval | required for live-mode transition, not every dry-run candidate |
-| First Canary Apply | ✅ `APPLIED_WITH_RUNTIME_PROOF` — `max_open_trades 3→2` on `freqtrade-freqforge-canary` |
-| RuntimeEffectProof | **GREEN** |
-| Measurement | **COMPLETED** — Final Decision: **KEEP_CANARY_OVERLAY** (YELLOW/MEDIUM) |
-| Rollback Rehearsal | ✅ Implemented (execution hard-blocked) |
-| Candidate Pipeline | ✅ Implemented (execution hard-blocked in Phase 6A) |
 | Runtime mutation by this repo update | **NONE** |
 
 ### Rainbow Integration Status
 
 | Task | Status | PR | Merge SHA |
 |------|--------|----|-----------|
-| R1 — Contract reconciliation | ✅ MERGED | #497 | `8c167c8` |
-| R2 — Read-only provider | ✅ MERGED | #498 | `dc15f6d` |
-| R3 — Attribution producer | ✅ MERGED | #499 | `4ec1b18` |
-| R4 — Window-scoped C4 fix | ✅ MERGED | #500 | `a70a058` |
-| R6 — Candidate quality | ✅ MERGED | #501 | `75384e1` |
-| R5 — Runtime preflight audit | ⏳ IN_PROGRESS | — | — |
-| R7 — Dry-run measurement | BLOCKED | — | — |
+| R1 — Contract reconciliation | ✅ COMPLETED | #497 | `8c167c8` |
+| R2 — Read-only provider | ✅ COMPLETED | #498 | `dc15f6d` |
+| R3 — Attribution producer | ✅ COMPLETED | #499 | `4ec1b18` |
+| R4 — Window-scoped C4 fix | ✅ COMPLETED | #500 | `a70a058` |
+| R5 — Runtime preflight audit | ✅ COMPLETED | #502 | `78979a7` |
+| R6 — Candidate quality | ✅ COMPLETED | #501 | `75384e1` |
+| R7 — Dry-run measurement | ⏳ BLOCKED | — | — |
 
 ### Historical note
 
@@ -64,17 +61,18 @@ The following modules exist on `main` and form the complete controlled apply cha
 | **Rainbow R2** | Read-only provider | #498 | + | ✅ |
 | **Rainbow R3** | Attribution producer | #499 | + | ✅ |
 | **Rainbow R4** | Window-scoped C4 fix | #500 | + | ✅ |
+| **Rainbow R5** | Runtime preflight audit | #502 | + | ✅ |
 | **Rainbow R6** | Candidate quality | #501 | + | ✅ |
 | **Total** | **16 modules** | **16 PRs** | **+ tests** | **All GREEN** |
 
 ### Active bot identities
 
-| Bot id | Role | Status in current loop |
-|--------|------|------------------------|
-| `freqtrade-freqforge` | FreqForge baseline/override | Active (control bot) |
-| `freqtrade-freqforge-canary` | FreqForge canary | **Active — apply target** |
-| `freqtrade-regime-hybrid` | Regime-hybrid | Active |
-| `freqai-rebel` | FreqAI/Rebel | Active |
+| Bot id | Role | Current state |
+|--------|------|---------------|
+| `freqtrade-freqforge` | FreqForge baseline/override | **Not running** — requires explicit approval to restart |
+| `freqtrade-freqforge-canary` | FreqForge canary | **Stopped** — intentional baseline return after C4 ROLLBACK |
+| `freqtrade-regime-hybrid` | Regime-hybrid | **Not running** — requires explicit approval to restart |
+| `freqai-rebel` | FreqAI/Rebel | **Not running** — requires explicit approval to restart |
 
 Momentum is decommissioned and MVS is not deployed. They are historical context only.
 
@@ -90,21 +88,21 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 | **T3** | 2026-06-28T18:27Z | 🟡 **YELLOW / EXTEND_MEASUREMENT** — Bitget 429, Kill Switch HALT_NEW compromised window |
 | **T4 Readiness** | 2026-06-30 | ⏳ **NOT_ENOUGH_DATA** — 0 new closed canary trades since T3 |
 | **T4 Follow-up** | 2026-06-30 | ⏳ **STILL_NOT_ENOUGH_DATA** — UNI/USDT still open, no change since T4 Readiness |
-| **Final Decision** | 2026-06-30 | 🟡 **KEEP_CANARY_OVERLAY** — MEDIUM confidence |
+| **C4 Final Decision** | 2026-06-30 | 🟡 **ROLLBACK_RECOMMENDED** — max_drawdown 82.79% breach |
 
-### Why KEEP_CANARY_OVERLAY
+### Why ROLLBACK_RECOMMENDED
 
 - **Kill Switch was HALT_NEW** from T1 through most of the measurement window (2026-06-27T19:27Z to 2026-06-29T04:15Z), blocking ALL new trades fleet-wide
 - Only 1 new canary trade (UNI/USDT, still open) and 3 new control trades (BTC open, ETH/SOL closed with losses) since T0
 - Insufficient trade data for a meaningful canary-vs-control comparison
-- RuntimeProof GREEN, no safety RED triggers — ROLLBACK not justified
-- No evidence that `max_open_trades=2` caused harm — KEEP is the correct decision
+- Max drawdown 82.79% breached critical threshold in all three calculation methods
+- Baseline return executed, canary container stopped, incident report filed
 
 ---
 
 ## 4. Operational priority for agents
 
-### Active priority: Rainbow R5 (read-only audit)
+### Active priority: None — all code-complete tasks merged
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -113,16 +111,23 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 - pair expansion
 - live readiness
 - next candidate research
-- runtime remediation from R5 findings
+- canary redeployment
+- Rainbow producer start
+- R7 measurement
 
 **Allowed:**
 - read-only audits and reports
 - documentation updates
-- Rainbow R5 read-only audit (current task)
-- monitoring for trade activity under Kill Switch NORMAL
 
 ### Next runtime action
-**Re-check after canary UNI/USDT trade closes. Minimum: 1 new closed canary trade + 1 new closed control trade for official T4.**
+**Requires explicit human approval.** No runtime action is currently authorized. The following are all blocked:
+
+- Canary dry-run redeploy → human approval + ceremony
+- Rainbow producer start → human approval
+- Freqtrade bot restart → human approval
+- C4 re-execution → new measurement window + human gate
+- D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
+- R7 measurement → R5 complete + runtime preflight approved
 
 ---
 
@@ -164,6 +169,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 - `docs/reports/si-v2-phase-*` — phase-specific evidence reports.
 - `docs/decisions/ADR-*` — architecture decision records.
 - `docs/reports/rainbow-r*-*-2026-07-10.md` — Rainbow R1–R6 reports.
+- `docs/reports/rainbow-r5-runtime-preflight-reconciliation-2026-07-11.md` — R5 reconciliation report.
 
 ---
 
@@ -174,10 +180,13 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 - **Runtime posture remains `AUTONOMOUS_DRY_RUN`** — no fresh runtime measurement performed in C1; runtime re-baseline is a separate, explicitly-gated step (Phase F).
 - Workspace bridge (Phase C1A): HermesTrader Hermes container sees this repo read-only at `/workspace/projects/trading-hub`; host path `/opt/data/projects/trading-hub`.
 
-## Rainbow R5 note (2026-07-10)
+## Rainbow R5 reconciliation note (2026-07-11)
 
-- Rainbow R1–R6 merged (PRs #497–#501).
-- R5 read-only audit in progress.
-- R7 blocked until R5 complete and runtime preflight approved.
-- No runtime mutation performed during Rainbow integration.
-- All Rainbow modules are read-only, fail-closed, disabled by default.
+- R5 reopened and reconciled against #423.
+- C4 decision corrected to `ROLLBACK_RECOMMENDED`.
+- Canary state corrected to `Stopped` (intentional baseline return).
+- Fleet state corrected: no bots currently running.
+- Rainbow producer: UNAVAILABLE (not running).
+- All runtime actions mapped to explicit human approval requirements.
+- R7 remains blocked pending runtime preflight approval.
+- D1/D2 remain blocked per #423.
