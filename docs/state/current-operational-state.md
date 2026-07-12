@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `bce86a1`; PR #539 merged (state header reconciliation), H3B remains blocked.
+> PR #540 (state header reconciliation), H3B remains blocked.
 >
-> **Last updated:** 2026-07-12 after PR #539 merge (state header reconciliation)
-> **Previous update:** 2026-07-12 after PR #538 merge (state header reconciliation)
+> **Last updated:** 2026-07-12 after PR #540 merge (state header reconciliation)
+> **Previous update:** 2026-07-12 after PR #539 merge (state header reconciliation)
 
 ---
 
