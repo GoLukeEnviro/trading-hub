@@ -169,7 +169,9 @@ Every autonomous agent session acting on the roadmap MUST:
   **Root-Runtime-Authority decision (R0)** — see
   [`docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md`](docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md).
   The dedicated, UID-separated `hermes-root-executor.service` is
-  **shipped and active** (PR #508, R1) and provides full host/Docker runtime
+  **shipped but currently DOWN** (H3B rollout failed 2026-07-12; daemon crashed,
+  socket dead; manual host recovery required; incident reconciled in PR #557).
+  When active, it provides full host/Docker runtime
   authority over HermesTrader via a local Unix socket with peer-credential
   authentication. D1/D2/D3 remain documented and may keep running as a
   fallback path. Live-capital trading authority remains separate and
