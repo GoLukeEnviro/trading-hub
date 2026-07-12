@@ -1,17 +1,17 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #551 (H3B CLI + checkpoint), H3B closed as BLOCKED_BY_BOOTSTRAP_CONTROL_PATH.
-> Host-side bootstrap has since been completed: the executor socket is now
-> bind-mounted into the Hermes container (`/opt/stacks/hermes/compose.override.yaml`).
-> A live `executor_health` v1 request now reaches the daemon but is BLOCKED
-> with `unknown_category`, because the production daemon still only speaks
-> the legacy protocol — this is the real, current blocker, and it is what the
-> H3B daemon source-migration (this change, Issue #531) addresses.
+> PR #553 (H3B daemon source merged, `34b39f0`).
+> The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is now
+> on `main` with 33 passing tests. The production host daemon
+> (`/usr/local/sbin/hermes-root-executor`, 8521 B, deployed 2026-07-11) still
+> runs the legacy-only R1 artifact and has **not** been replaced.
+> A live `executor_health` v1 request still returns `BLOCKED: unknown_category`.
+> The source-of-truth proof confirms the production daemon was authored directly
+> on the host (R1, PR #508) and is not derived from this repository.
 >
-> **Last updated:** 2026-07-12 after H3B daemon source migration (repository
-> daemon added; issue #531 remains open, no host rollout performed)
-> **Previous update:** 2026-07-12 after H3B reconciliation (issue #531 closed)
+> **Last updated:** 2026-07-12 after PR #553 merge (H3B_DAEMON_SOURCE_MERGED)
+> **Previous update:** 2026-07-12 after H3B daemon source migration (repository daemon added)
 
 ---
 
@@ -258,7 +258,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as B
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
-| H3B — Root-Executor Client Activation | 🟡 H3B_DAEMON_SOURCE_READY (socket mounted; repository daemon source added, not deployed) | #531 → #549, #550, #551, daemon-migration PR |
+| H3B — Root-Executor Client Activation | 🟡 H3B_DAEMON_SOURCE_MERGED (PR #553 merged `34b39f0`; dual-protocol daemon on `main`, 33 tests; production host daemon still legacy-only, not deployed) | #531 → #549, #550, #551, #553 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
