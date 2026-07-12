@@ -1,0 +1,35 @@
+# Rainbow Internal Configuration — HermesTrader R7A
+#
+# TA-collector mode only. No evaluation, no delivery worker.
+# Rainbow is an evidence source, never an order/apply/runtime authority.
+
+mode: ta_collector
+evaluation:
+  enabled: false
+delivery_worker:
+  enabled: false
+
+# Storage paths (container-internal)
+storage:
+  path: /app/rainbow/storage
+  heartbeat_file: /app/rainbow/storage/heartbeat_rainbow.json
+
+# Exchange configuration (read-only market data, no credentials)
+exchange:
+  name: bitget
+  sandbox: true
+
+# Health endpoint
+health:
+  endpoint: /health
+  port: 8000
+  host: 0.0.0.0
+
+# Freshness / fail-closed behavior
+freshness:
+  max_age_seconds: 300
+  fail_closed: true
+
+# No exchange credentials — read-only market data only
+# Credentials are injected at deploy time via environment or secrets file,
+# never committed to the repository.

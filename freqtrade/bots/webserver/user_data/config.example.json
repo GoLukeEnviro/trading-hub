@@ -1,0 +1,78 @@
+{
+  "api_server": {
+    "CORS_origins": [],
+    "enable_openapi": false,
+    "enabled": true,
+    "jwt_secret_key": "CHANGE_ME_LOCAL_ONLY_SECRET",
+    "listen_ip_address": "127.0.0.1",
+    "listen_port": 8080,
+    "password": "CHANGE_ME",
+    "username": "webserver",
+    "verbosity": "info"
+  },
+  "bot_name": "webserver_support",
+  "cancel_open_orders_on_exit": false,
+  "db_url": "sqlite:////freqtrade/user_data/tradesv3.webserver.sqlite",
+  "dry_run": true,
+  "dry_run_wallet": 1000,
+  "entry_pricing": {
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "price_side": "other",
+    "use_order_book": true
+  },
+  "exchange": {
+    "name": "bitget",
+    "pair_blacklist": [
+      "UST/USDT",
+      "LUNA/USDT",
+      "LUNC/USDT",
+      "TUSD/USDT",
+      "USDC/USDT",
+      "DAI/USDT"
+    ],
+    "pair_whitelist": [
+      "BTC/USDT:USDT",
+      "ETH/USDT:USDT",
+      "SOL/USDT:USDT"
+    ]
+  },
+  "exit_pricing": {
+    "order_book_top": 1,
+    "price_side": "other",
+    "use_order_book": true
+  },
+  "fiat_display_currency": "USD",
+  "force_entry_enable": false,
+  "initial_state": "running",
+  "internals": {
+    "process_throttle_secs": 5
+  },
+  "last_stake_amount_min_ratio": 0.5,
+  "margin_mode": "isolated",
+  "max_open_trades": 5,
+  "order_types": {
+    "entry": "limit",
+    "exit": "limit",
+    "stoploss": "market",
+    "stoploss_on_exchange": false
+  },
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  "process_only_new_candles": true,
+  "stake_amount": 50,
+  "stake_currency": "USDT",
+  "stoploss": -0.09,
+  "tradable_balance_ratio": 0.95,
+  "trading_mode": "futures",
+  "unfilledtimeout": {
+    "entry": 30,
+    "exit": 30,
+    "exit_timeout_count": 0,
+    "unit": "minutes"
+  },
+  "user_data_dir": "/freqtrade/user_data"
+}
