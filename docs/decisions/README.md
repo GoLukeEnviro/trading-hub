@@ -1,25 +1,39 @@
-# Architecture Decision Records (ADRs)
+# Architecture Decision Records
 
-Dieses Verzeichnis enthält alle Architekturentscheidungen für trading-hub.
+This directory contains decision records (ADRs) for significant architectural
+choices made in the Trading Hub project.
+
+---
 
 ## Index
 
-| Datei | Datum | Thema | Status |
-|---|---|---|---|
-| [2026-05-14-soul-agents-sync.md](2026-05-14-soul-agents-sync.md) | 2026-05-14 | SOUL/AGENTS Sync | ACCEPTED |
-| [ADR-2026-06-10-watchdog-ownership.md](ADR-2026-06-10-watchdog-ownership.md) | 2026-06-10 | Watchdog Ownership | ACCEPTED |
-| [ADR-2026-06-27-controlled-self-improvement-human-gated-apply.md](ADR-2026-06-27-controlled-self-improvement-human-gated-apply.md) | 2026-06-27 | SI v2 Human-Gated Apply | ACCEPTED |
-| [ADR-2026-06-27-si-v2-restart-with-overlay-runtime-proof.md](ADR-2026-06-27-si-v2-restart-with-overlay-runtime-proof.md) | 2026-06-27 | SI v2 Restart + Overlay Runtime Proof | ACCEPTED |
-| [ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target.md](ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target.md) | 2026-07-01 | SI v2 Autonomous Dry-Run Loop | ACCEPTED |
-| [ADR-2026-07-11-hermes-root-runtime-authority.md](ADR-2026-07-11-hermes-root-runtime-authority.md) | 2026-07-11 | Hermes Root Runtime Authority | ACCEPTED |
-| [ADR-2026-07-11-hermes-r7a-dryrun-topology.md](ADR-2026-07-11-hermes-r7a-dryrun-topology.md) | 2026-07-11 | HermesTrader R7A Dry-Run-Topology | ACCEPTED |
-| [APPROVED_EXECUTE_LIVE_CANARY.md](APPROVED_EXECUTE_LIVE_CANARY.md) | — | Approved: Live Canary Execute | APPROVED |
-| [APPROVED_LIVE_CANARY_ROLLBACK.md](APPROVED_LIVE_CANARY_ROLLBACK.md) | — | Approved: Live Canary Rollback | APPROVED |
-| [APPROVED_LIVE_CANARY_TRANSITION.md](APPROVED_LIVE_CANARY_TRANSITION.md) | — | Approved: Live Canary Transition | APPROVED |
+| Date | Title | Status |
+|------|-------|--------|
+| 2026-05-14 | [SOUL.md / AGENTS.md Sync](2026-05-14-soul-agents-sync.md) | ✅ Final |
+| 2026-06-10 | [Watchdog Ownership Boundary](ADR-2026-06-10-watchdog-ownership.md) | ✅ Final |
+| 2026-06-27 | [Controlled Self-Improvement — Human-Gated Apply](ADR-2026-06-27-controlled-self-improvement-human-gated-apply.md) | ✅ Superseded by ADR-2026-07-01 |
+| 2026-06-27 | [SI-v2 Restart with Overlay — Runtime Proof](ADR-2026-06-27-si-v2-restart-with-overlay-runtime-proof.md) | ✅ Final |
+| 2026-07-01 | [SI-v2 Autonomous Dry-Run Loop — Live Target](ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target.md) | ✅ Final — current SI-v2 policy |
+| 2026-07-11 | [Hermes Root Runtime Authority](ADR-2026-07-11-hermes-root-runtime-authority.md) | ✅ Active |
+| 2026-07-11 | [HermesTrader R7A Dry-Run-Topology](ADR-2026-07-11-hermes-r7a-dryrun-topology.md) | ✅ Accepted |
 
-## Konventionen
+## Approval Markers
 
-- Format: `ADR-YYYY-MM-DD-kurzbeschreibung.md`
-- Status: `DRAFT` → `ACCEPTED` → (`SUPERSEDED` / `DEPRECATED`)
-- Jedes ADR verweist auf zugehörige Issues
-- Keine rückwirkenden Änderungen — bei Änderung neues ADR mit `SUPERSEDES: <altes ADR>`
+| Marker | Scope | Status | Location |
+|--------|-------|--------|----------|
+| `APPROVED_EXECUTE_LIVE_CANARY` | Execute live canary activation ceremony | ✅ Used (C3) | `APPROVED_EXECUTE_LIVE_CANARY.md` |
+| `APPROVED_LIVE_CANARY_TRANSITION` | Authorize live canary transition | ✅ Used (C1–C3) | `APPROVED_LIVE_CANARY_TRANSITION.md` |
+| `APPROVED_LIVE_CANARY_ROLLBACK` | Authorize live canary rollback | ✅ Used (C4) | `APPROVED_LIVE_CANARY_ROLLBACK.md` |
+| `APPROVED_LIVE_FLEET_ROLLOUT` | Authorize live fleet rollout (D1) | ❌ Missing — D1 BLOCKED | — |
+
+## Format
+
+Each ADR follows this structure:
+
+- **Title** — What was decided
+- **Date** — When the decision was made
+- **Status** — Final, Superseded, or Deprecated
+- **Context** — Why the decision was needed
+- **Decision** — What was decided
+- **Consequences** — What this decision implies
+- **Related** — Links to related ADRs or issues

@@ -6,6 +6,14 @@
 **Issues:** #504 (R7A), #496 (R7-Messung), #423 (Live-Gate)  
 **Verweis:** R3-Report → `docs/reports/r3-fleet-reproducibility-decision-2026-07-11.md`
 
+**Roadmap-Mapping:** Root-Runtime Roadmap
+`R4 — Greenfield Compose + Rainbow Runtime`
+entspricht `R7A` / Issue #504.
+
+**PR-Split:** PR #519 dokumentiert die Architekturentscheidung.
+`docker-compose.hermestrader-dryrun.yml`, Rainbow-Wiring und Tests
+werden erst durch PR-2 eingeführt.
+
 ---
 
 ## Kontext
@@ -16,7 +24,7 @@ R3-Entscheidung (OPTION_C): freqforge + canary + regime-hybrid als reproduzierba
 
 ## Entscheidung
 
-**Kanonische Datei:** `docker-compose.hermestrader-dryrun.yml`
+**Geplante kanonische Datei ab PR-2:** `docker-compose.hermestrader-dryrun.yml`
 
 Diese Datei ist das einzige offizielle Compose für den HermesTrader-Stack ab R7A. Sie ersetzt keine Legacy-Dateien (kein Löschen), sondern ist ein Greenfield-Compose parallel zum Altbestand.
 
@@ -43,6 +51,9 @@ Diese Datei ist das einzige offizielle Compose für den HermesTrader-Stack ab R7
 - Include via `services/rainbow/rainbow.include.yml`
 - Config vendored aus ai4trade-bot @ **b65510a** (PR #76, Dashboard + TA-Fix)
   - **Achtung:** Pin bei Host-Deploy aktualisieren falls ai4trade-bot weitergewachsen ist
+  - > `bbcaf25` bleibt der dokumentierte Rainbow-R1-Contract-Baseline-Pin.
+    > `b65510a` ist der für PR-2 vorgeschlagene Runtime-/Vendoring-Pin.
+    > PR-2 muss den Versionssprung gegen ai4trade-bot verifizieren und belegen.
 - `config/rainbow.internal.yml`: TA-Collector aktiv, `evaluation.enabled: false`, kein `delivery_worker`
 - Healthcheck: HTTP `/health` (nicht Heartbeat-Datei — DB liegt unter `/app/rainbow/storage/`, nicht `/app/storage/`)
 - Build-Context: `${AI4TRADE_CONTEXT:-../ai4trade-bot}`
