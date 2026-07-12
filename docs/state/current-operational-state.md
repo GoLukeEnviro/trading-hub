@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `edcb3ef`; H3A Root-Executor Client Contract merged, H3B blocked.
+> commit `d58f26b`; post-PR #536 state header reconciliation committed, H3B remains blocked.
 >
-> **Last updated:** 2026-07-12 after H3A state reconciliation (#534/#535)
-> **Previous update:** 2026-07-12 after H1 Governance Reconciliation (#525)
+> **Last updated:** 2026-07-12 after post-PR #536 state header reconciliation
+> **Previous update:** 2026-07-12 after PR #536 merge (state header refresh)
 
 ---
 
