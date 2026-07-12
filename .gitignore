@@ -319,6 +319,9 @@ polymarket-fadi/
 # ── Local Claude Code artifacts (plans, prompts, agent-local) ──
 # Agent-generated scratch files, never shared with the team.
 .claude/
+.omo/
+mcps/
+terminals/
 
 # ── pytest-cov outputs (regenerable, local-only) ──────────────
 .coverage
