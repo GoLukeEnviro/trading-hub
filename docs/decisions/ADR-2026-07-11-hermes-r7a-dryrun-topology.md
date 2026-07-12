@@ -33,8 +33,8 @@ Diese Datei ist das einzige offizielle Compose für den HermesTrader-Stack ab R7
 - OPTION_C: `freqtrade-freqforge` + `freqtrade-freqforge-canary` + `freqtrade-regime-hybrid` im Default
 - `freqai-rebel` ausschließlich via `profiles: ["rebel"]` (opt-in, default aus)
 - Rainbow als `internal-only` Service ohne `ports:`-Mapping, TA-only
-- Netzwerk: `trading_internal` (bridge)
-- Build via `freqtrade/Dockerfile.hermes10000` (kein `freqtradeorg/freqtrade:stable`)
+- Netzwerk: `trading_internal` (bridge, internal, service-zu-service) + `trading_egress` (bridge, outbound-fähig, kein Ports-Mapping) - alle Fleet-Services + Rainbow haengen an beiden, da Freqtrade und Rainbow auch im Dry-Run/TA-Collector-Modus Read-only-Marktdaten vom Exchange brauchen
+- Build via `freqtrade/Dockerfile.hermes10000`, Basis-Image per Digest gepinnt (nicht mehr `freqtradeorg/freqtrade:stable` als mutable Tag)
 - User: `10000:10000` für alle Bot-Services
 - `dry_run: true` in allen Config-JSONs — `dry_run=false` ist **verboten** (Live-Gate #423)
 
@@ -49,11 +49,12 @@ Diese Datei ist das einzige offizielle Compose für den HermesTrader-Stack ab R7
 ### Rainbow Integration
 
 - Include via `services/rainbow/rainbow.include.yml`
-- Config vendored aus ai4trade-bot @ **b65510a** (PR #76, Dashboard + TA-Fix)
+- Config vendored aus ai4trade-bot @ **cd63051545e9b27235f47a3bbb5de858782fcd20** (PR #78 + #79, read-only/fail-closed Runtime-Contract-Fix + CanonicalSignalRegistry-Pfad-Nachzug)
   - **Achtung:** Pin bei Host-Deploy aktualisieren falls ai4trade-bot weitergewachsen ist
   - > `bbcaf25` bleibt der dokumentierte Rainbow-R1-Contract-Baseline-Pin.
-    > `b65510a` ist der für PR-2 vorgeschlagene Runtime-/Vendoring-Pin.
-    > PR-2 muss den Versionssprung gegen ai4trade-bot verifizieren und belegen.
+    > `b65510a` war der für PR-2 vorgeschlagene, aber noch nicht read-only/fail-closed Runtime-Pin.
+    > `cd63051545e9b27235f47a3bbb5de858782fcd20` (ai4trade-bot#78, schließt ai4trade-bot#77, plus ai4trade-bot#79 für den beim Smoke-Test entdeckten CanonicalSignalRegistry-Pfad) ist der aktuelle Pin: `read_only`-Guard auf mutierenden Routen, `/health` fail-closed mit Startup-Grace-Periode, `RAINBOW_CONFIG` wird respektiert, Heartbeat-Pfad vereinheitlicht.
+    > Vor Host-Deploy verifizieren: `git -C ../ai4trade-bot merge-base --is-ancestor cd63051545e9b27235f47a3bbb5de858782fcd20 HEAD`
 - `config/rainbow.internal.yml`: TA-Collector aktiv, `evaluation.enabled: false`, kein `delivery_worker`
 - Healthcheck: HTTP `/health` (nicht Heartbeat-Datei — DB liegt unter `/app/rainbow/storage/`, nicht `/app/storage/`)
 - Build-Context: `${AI4TRADE_CONTEXT:-../ai4trade-bot}`

@@ -1,0 +1,21 @@
+# Rainbow Internal Configuration — HermesTrader R7A
+#
+# TA-collector only. No evaluation. Rainbow is an evidence source, never
+# an order/apply/runtime authority.
+#
+# Only keys that RainbowSettings (ai4trade-bot rainbow/config/settings.py,
+# extra="forbid") actually accepts belong here — anything else fails
+# Rainbow's own startup instead of silently doing nothing. See
+# ai4trade-bot@a43a80cf66c7fb77e07b25a650a72c3303d26791 (ai4trade-bot#78).
+
+# The real read-only/fail-closed enforcement: blocks POST/DELETE on
+# webhooks + ingest with HTTP 405, and /health checks heartbeat freshness,
+# store readiness and collector status instead of always reporting healthy.
+read_only: true
+
+evaluation:
+  enabled: false
+
+# No exchange credentials configured here — the relevant setting defaults
+# to empty. Real credentials, if ever needed, are injected at deploy time
+# via environment, never committed to the repository.

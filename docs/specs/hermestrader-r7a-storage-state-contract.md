@@ -1,0 +1,139 @@
+# HermesTrader R7A Storage and State Contract
+
+**ADR:** [ADR-2026-07-11-hermes-r7a-dryrun-topology.md](../decisions/ADR-2026-07-11-hermes-r7a-dryrun-topology.md)
+**Compose:** `docker-compose.hermestrader-dryrun.yml`
+
+---
+
+## Principle
+
+Every persistence path in the HermesTrader dry-run stack must be documented with
+owner, mode, read/write semantics, backup coverage, and secret classification.
+
+No path may be ambiguous. No writable path may overlap with a read-only mount.
+
+---
+
+## Bot Configurations
+
+| Service | Host Path | Container Path | Owner | UID/GID | Mode | R/W | Managed | Backup | Snapshot | Rollback | Secret |
+|---------|-----------|----------------|-------|---------|------|-----|---------|--------|----------|----------|--------|
+| freqforge | `freqforge/user_data/config.example.json` | `/freqtrade/user_data/config.example.json` | deploy | 10000:10000 | 0644 | ro | repo | git | N/A | git revert | sanitized |
+| canary | `freqforge-canary/user_data/config.example.json` | `/freqtrade/user_data/config.example.json` | deploy | 10000:10000 | 0644 | ro | repo | git | N/A | git revert | sanitized |
+| regime-hybrid | `freqtrade/bots/regime-hybrid/user_data/config.example.json` | `/freqtrade/user_data/config.example.json` | deploy | 10000:10000 | 0644 | ro | repo | git | N/A | git revert | sanitized |
+| webserver | `freqtrade/bots/webserver/user_data/config.example.json` | `/freqtrade/user_data/config.example.json` | deploy | 10000:10000 | 0644 | ro | repo | git | N/A | git revert | sanitized |
+| rebel | `freqtrade/bots/freqai-rebel/user_data/config.example.json` | `/freqtrade/user_data/config.example.json` | deploy | 10000:10000 | 0644 | ro | repo | git | N/A | git revert | sanitized |
+
+**Active configs** (`config.json`) are gitignored, host-side only, deployed via secrets injection. They contain real `api_key`/`api_secret` and must never be committed.
+
+---
+
+## Strategies
+
+| Service | Host Path | Container Path | R/W | Managed | Secret |
+|---------|-----------|----------------|-----|---------|--------|
+| freqforge | `freqforge/user_data/strategies/` | `/freqtrade/user_data/strategies/` | ro | repo | none |
+| canary | `freqforge-canary/user_data/strategies/` | `/freqtrade/user_data/strategies/` | ro | repo | none |
+| regime-hybrid | `freqtrade/bots/regime-hybrid/user_data/strategies/` | `/freqtrade/user_data/strategies/` | ro | repo | none |
+| rebel | `freqtrade/bots/freqai-rebel/user_data/strategies/` | `/freqtrade/user_data/strategies/` | ro | repo | none |
+
+---
+
+## Shared Code
+
+| Host Path | Container Path | R/W | Managed | Secret |
+|-----------|----------------|-----|---------|--------|
+| `freqtrade/shared/` | `/freqtrade/shared/` | ro | repo | none |
+
+Includes: `kill_switch.py`, `primo_signal.py`, `fleet_risk_manager.py`, etc.
+
+**Note:** `primo_signal_state.json` and `kill_switch.json` are runtime-managed (gitignored), not repo-managed.
+
+---
+
+## SQLite Databases (writable)
+
+| Service | Container Path | Docker Volume | Backup | Rollback |
+|---------|----------------|---------------|--------|----------|
+| freqforge | `/freqtrade/user_data/tradesv3.freqforge.dryrun.sqlite` | `freqforge-db` | restic snapshot | volume restore |
+| canary | `/freqtrade/user_data/tradesv3.freqforge_canary.dryrun.sqlite` | `canary-db` | restic snapshot | volume restore |
+| regime-hybrid | `/freqtrade/user_data/tradesv3.regime_hybrid.dryrun.sqlite` | `regime-hybrid-db` | restic snapshot | volume restore |
+| webserver | `/freqtrade/user_data/tradesv3.webserver.sqlite` | `webserver-db` | restic snapshot | volume restore |
+| rebel | `/freqtrade/user_data/tradesv3.rebel.dryrun.sqlite` | `rebel-db` | restic snapshot | volume restore |
+
+---
+
+## Logs (writable)
+
+| Service | Container Path | Docker Volume | Rotation |
+|---------|----------------|---------------|----------|
+| freqforge | `/freqtrade/user_data/logs/` | `freqforge-logs` | 10m × 3 files |
+| canary | `/freqtrade/user_data/logs/` | `canary-logs` | 10m × 3 files |
+| regime-hybrid | `/freqtrade/user_data/logs/` | `regime-hybrid-logs` | 10m × 3 files |
+| rebel | `/freqtrade/user_data/logs/` | `rebel-logs` | 10m × 3 files |
+
+---
+
+## Rainbow Storage
+
+| Container Path | Docker Volume | R/W | Managed | Secret |
+|----------------|---------------|-----|---------|--------|
+| `/app/rainbow/storage/` | `rainbow-storage` | rw | runtime | none (TA data only) |
+| `/app/rainbow/storage/heartbeat_rainbow.json` | `rainbow-storage` | rw | runtime | none |
+
+---
+
+## Kill Switch
+
+| Host Path | Container Path | R/W | Managed | Secret |
+|-----------|----------------|-----|---------|--------|
+| `freqtrade/shared/kill_switch.json` | N/A (runtime) | rw | runtime | none |
+
+Kill switch state is runtime-managed and gitignored.
+
+---
+
+## Overlay Files (Apply Actuator)
+
+| Container Path | R/W | Managed | Lifecycle |
+|----------------|-----|---------|-----------|
+| `/freqtrade/user_data/overlay_*.json` | rw | SI-v2 apply actuator | per-cycle, gitignored |
+
+Overlays are generated by the SI-v2 controlled apply chain and are ephemeral.
+
+---
+
+## Measurement Ledger / Start Records
+
+| Location | Managed | Backup |
+|----------|---------|--------|
+| `self_improvement_v2/reports/` | repo | git |
+| `docs/reports/` | repo | git |
+
+---
+
+## Incident Reports
+
+| Location | Managed | Backup |
+|----------|---------|--------|
+| `docs/reports/incident-*.md` | repo | git |
+| `docs/reports/si-v2-phase-*` | repo | git |
+
+---
+
+## Snapshots
+
+| Type | Tool | Scope | Frequency |
+|------|------|-------|-----------|
+| Git | `git` | repo-managed files | per-commit |
+| Restic | `restic` | host: `/opt/data/projects/trading-hub` + volumes | pre-deploy |
+| Volume | `docker volume` | DB/log volumes | pre-deploy + post-measurement |
+
+---
+
+## Summary: No-Overlap Guarantee
+
+Config and strategy mounts are `:ro`. DB, log, and storage paths are Docker volumes.
+No path is both read-only mounted and writable. The entrypoint script in
+`Dockerfile.hermes10000` sets group permissions on `/freqtrade/user_data` but
+does not override volume semantics.

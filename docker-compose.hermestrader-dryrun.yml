@@ -1,0 +1,281 @@
+# HermesTrader R7A Greenfield Dry-Run Compose
+#
+# Canonical compose for the HermesTrader dry-run stack.
+# See: docs/decisions/ADR-2026-07-11-hermes-r7a-dryrun-topology.md
+#
+# PR-2 of R7A (Issue #504).  PR-1 (docs only) merged as 7aec717.
+#
+# Safety invariants:
+#   - dry_run=true in all configs
+#   - internal-only network (no external Rainbow ports)
+#   - non-root (10000:10000)
+#   - no docker.sock mount
+#   - no privileged containers
+#   - healthchecks use python3 (no curl dependency)
+
+services:
+  freqtrade-freqforge:
+    build:
+      context: ./freqtrade
+      dockerfile: Dockerfile.hermes10000
+    user: "10000:10000"
+    command: >-
+      trade
+      --config /freqtrade/user_data/config.example.json
+      --strategy FreqForge_Override
+    environment:
+      - PYTHONPATH=/freqtrade/shared
+    volumes:
+      # Configs and strategies: read-only
+      - ./freqforge/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
+      - ./freqforge/user_data/strategies:/freqtrade/user_data/strategies:ro
+      # Shared modules: read-only
+      - ./freqtrade/shared:/freqtrade/shared:ro
+      # Writable paths: DB, logs
+      - freqforge-db:/freqtrade/user_data
+      - freqforge-logs:/freqtrade/user_data/logs
+    ports:
+      - "127.0.0.1:8086:8080"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/ping')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - trading_internal
+      - trading_egress
+
+  freqtrade-freqforge-canary:
+    build:
+      context: ./freqtrade
+      dockerfile: Dockerfile.hermes10000
+    user: "10000:10000"
+    command: >-
+      trade
+      --config /freqtrade/user_data/config.example.json
+      --strategy FreqForge_Override
+    environment:
+      - PYTHONPATH=/freqtrade/shared
+    volumes:
+      - ./freqforge-canary/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
+      - ./freqforge-canary/user_data/strategies:/freqtrade/user_data/strategies:ro
+      - ./freqtrade/shared:/freqtrade/shared:ro
+      - canary-db:/freqtrade/user_data
+      - canary-logs:/freqtrade/user_data/logs
+    ports:
+      - "127.0.0.1:8081:8080"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/ping')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - trading_internal
+      - trading_egress
+
+  freqtrade-regime-hybrid:
+    build:
+      context: ./freqtrade
+      dockerfile: Dockerfile.hermes10000
+    user: "10000:10000"
+    command: >-
+      trade
+      --config /freqtrade/user_data/config.example.json
+      --strategy RegimeSwitchingHybrid_v7_v04_Integration
+    environment:
+      - PYTHONPATH=/freqtrade/shared
+    volumes:
+      - ./freqtrade/bots/regime-hybrid/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
+      - ./freqtrade/bots/regime-hybrid/user_data/strategies:/freqtrade/user_data/strategies:ro
+      - ./freqtrade/shared:/freqtrade/shared:ro
+      - regime-hybrid-db:/freqtrade/user_data
+      - regime-hybrid-logs:/freqtrade/user_data/logs
+    ports:
+      - "127.0.0.1:8085:8080"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/ping')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - trading_internal
+      - trading_egress
+
+  freqtrade-webserver:
+    build:
+      context: ./freqtrade
+      dockerfile: Dockerfile.hermes10000
+    user: "10000:10000"
+    command: >-
+      webserver
+      --config /freqtrade/user_data/config.example.json
+    environment:
+      - PYTHONPATH=/freqtrade/shared
+    volumes:
+      - ./freqtrade/bots/webserver/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
+      - ./freqforge/user_data/strategies:/freqtrade/user_data/strategies:ro
+      - ./freqtrade/shared:/freqtrade/shared:ro
+      - webserver-db:/freqtrade/user_data
+    ports:
+      - "127.0.0.1:8180:8080"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/ping')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - trading_internal
+      - trading_egress
+
+  freqai-rebel:
+    profiles: ["rebel"]
+    build:
+      context: ./freqtrade
+      dockerfile: Dockerfile.hermes10000
+    user: "10000:10000"
+    command: >-
+      trade
+      --config /freqtrade/user_data/config.example.json
+      --strategy RebelLiquidation
+    environment:
+      - PYTHONPATH=/freqtrade/shared
+    volumes:
+      - ./freqtrade/bots/freqai-rebel/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
+      - ./freqtrade/bots/freqai-rebel/user_data/strategies:/freqtrade/user_data/strategies:ro
+      - ./freqtrade/shared:/freqtrade/shared:ro
+      - rebel-db:/freqtrade/user_data
+      - rebel-logs:/freqtrade/user_data/logs
+    ports:
+      - "127.0.0.1:8087:8080"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    cpus: "2.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/ping')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - trading_internal
+      - trading_egress
+
+  # Rainbow: TA-collector, internal-only, no published ports.
+  # Build pinned to ai4trade-bot@cd63051545e9b27235f47a3bbb5de858782fcd20
+  # (ai4trade-bot#78 + #79) - read-only/fail-closed runtime contract fix
+  # plus the CanonicalSignalRegistry storage-path follow-up.
+  # Verify before deploy: git -C ../ai4trade-bot merge-base --is-ancestor
+  # cd63051545e9b27235f47a3bbb5de858782fcd20 HEAD
+  rainbow:
+    build:
+      context: ${AI4TRADE_CONTEXT:-../ai4trade-bot}
+      dockerfile: rainbow.Dockerfile
+    user: "10000:10000"
+    environment:
+      - RAINBOW_CONFIG=/app/config/rainbow.internal.yml
+      - RAINBOW_READ_ONLY=true
+    volumes:
+      - ./config/rainbow.internal.yml:/app/config/rainbow.internal.yml:ro
+      - rainbow-storage:/app/rainbow/storage
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    restart: unless-stopped
+    networks:
+      - trading_internal
+      - trading_egress
+
+networks:
+  trading_internal:
+    driver: bridge
+    internal: true
+
+  trading_egress:
+    driver: bridge
+
+volumes:
+  freqforge-db:
+  freqforge-logs:
+  canary-db:
+  canary-logs:
+  regime-hybrid-db:
+  regime-hybrid-logs:
+  webserver-db:
+  rebel-db:
+  rebel-logs:
+  rainbow-storage:

@@ -1,0 +1,58 @@
+# Rainbow include file for HermesTrader R7A greenfield compose.
+#
+# This file defines the Rainbow service fragment that can be included
+# into docker-compose.hermestrader-dryrun.yml via:
+#
+#   docker compose -f docker-compose.hermestrader-dryrun.yml \
+#                 -f services/rainbow/rainbow.include.yml up
+#
+# Alternatively the service is already inlined in the main compose.
+# This file exists for standalone Rainbow testing and contract verification.
+
+services:
+  # Build pinned to ai4trade-bot@cd63051545e9b27235f47a3bbb5de858782fcd20
+  # (ai4trade-bot#78 + #79) - read-only/fail-closed runtime contract fix
+  # plus the CanonicalSignalRegistry storage-path follow-up.
+  rainbow:
+    build:
+      context: ${AI4TRADE_CONTEXT:-../ai4trade-bot}
+      dockerfile: rainbow.Dockerfile
+    user: "10000:10000"
+    environment:
+      - RAINBOW_CONFIG=/app/config/rainbow.internal.yml
+      - RAINBOW_READ_ONLY=true
+    volumes:
+      - ./config/rainbow.internal.yml:/app/config/rainbow.internal.yml:ro
+      - rainbow-storage:/app/rainbow/storage
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    restart: unless-stopped
+    networks:
+      - trading_internal
+      - trading_egress
+
+networks:
+  trading_internal:
+    driver: bridge
+    internal: true
+
+  trading_egress:
+    driver: bridge
+
+volumes:
+  rainbow-storage:
