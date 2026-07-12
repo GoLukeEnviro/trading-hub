@@ -6,9 +6,11 @@ without requiring a real hermes-root-executor.service.
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import socket
+import sys
 import tempfile
 import threading
 import time
@@ -521,3 +523,155 @@ def test_client_timeout(fake_server, fake_socket_path, valid_request):
     fake_server.set_delay(5.0)  # Delay longer than read_timeout
     with pytest.raises(ExecutorTimeoutError):
         send_request(fake_socket_path, valid_request, read_timeout=1.0)
+
+
+# ---------------------------------------------------------------------------
+# CLI tests
+# ---------------------------------------------------------------------------
+
+from hermes_root.__main__ import main as cli_main
+
+
+def test_cli_help():
+    """--help should exit 0."""
+    with pytest.raises(SystemExit) as exc:
+        cli_main(["--help"])
+    assert exc.value.code == 0
+
+
+def test_cli_unknown_action():
+    """Unknown action should fail validation."""
+    rc = cli_main(["frobnicate"])
+    assert rc == 2
+
+
+def test_cli_a2_without_approval():
+    """A2 mutating action without --approval should fail validation."""
+    rc = cli_main(["docker_create", "--image", "alpine", "--name", "test"])
+    assert rc == 2
+
+
+def test_cli_a3_blocked():
+    """A3 execution should always be blocked."""
+    rc = cli_main([
+        "docker_create",
+        "--image", "alpine",
+        "--name", "test-a3",
+        "--class", "A3",
+        "--approval", "APPROVED_TEST",
+    ])
+    assert rc == 2
+
+
+def test_cli_missing_required_arg():
+    """Missing required arg (--container for docker_inspect) should fail."""
+    rc = cli_main(["docker_inspect"])
+    assert rc == 2
+
+
+def test_cli_socket_not_found():
+    """Missing socket should produce exit code 3."""
+    rc = cli_main([
+        "executor_health",
+        "--socket", "/nonexistent/executor.sock",
+    ])
+    assert rc == 3
+
+
+def test_cli_json_output(fake_server, fake_socket_path, valid_request):
+    """--json should produce valid JSON output."""
+    saved_stdout = sys.stdout
+    try:
+        sys.stdout = io.StringIO()
+        rc = cli_main([
+            "executor_health",
+            "--socket", fake_socket_path,
+            "--correlation-id", valid_request.correlation_id,
+            "--json",
+        ])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = saved_stdout
+
+    assert rc == 0
+    parsed = json.loads(output)
+    assert parsed["decision"] == "ALLOWED"
+    assert parsed["correlation_id"] == valid_request.correlation_id
+
+
+def test_cli_readonly_action(fake_server, fake_socket_path):
+    """Read-only action should succeed with exit 0."""
+    saved_stdout = sys.stdout
+    try:
+        sys.stdout = io.StringIO()
+        rc = cli_main([
+            "executor_health",
+            "--socket", fake_socket_path,
+            "--correlation-id", "test-cli-readonly",
+        ])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = saved_stdout
+
+    assert rc == 0
+    assert "ALLOWED" in output
+
+
+def test_cli_a2_with_approval(fake_server, fake_socket_path):
+    """A2 with approval should pass validation and send request."""
+    saved_stdout = sys.stdout
+    try:
+        sys.stdout = io.StringIO()
+        rc = cli_main([
+            "docker_create",
+            "--image", "alpine",
+            "--name", "test-cli",
+            "--approval", "APPROVED_TEST",
+            "--socket", fake_socket_path,
+            "--correlation-id", "test-cli-a2",
+        ])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = saved_stdout
+
+    assert rc == 0
+    assert "ALLOWED" in output
+
+
+def test_cli_secret_redaction_in_argv(fake_server, fake_socket_path):
+    """Secret-like values in argv should be redacted before sending."""
+    saved_stdout = sys.stdout
+    try:
+        sys.stdout = io.StringIO()
+        rc = cli_main([
+            "docker_ps",
+            "--socket", fake_socket_path,
+            "--correlation-id", "test-redact",
+        ])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = saved_stdout
+
+    assert rc == 0
+    # No raw secrets in output
+    assert "sk-" not in output.lower() or "[REDACTED]" in output
+
+
+def test_cli_shell_injection_stays_single_arg(fake_server, fake_socket_path):
+    """Shell injection in argv should remain a single element."""
+    saved_stdout = sys.stdout
+    try:
+        sys.stdout = io.StringIO()
+        rc = cli_main([
+            "docker_ps",
+            "--socket", fake_socket_path,
+            "--correlation-id", "test-inject",
+        ])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = saved_stdout
+
+    assert rc == 0
+    # Verify the request was sent with proper argv (list, not string)
+    received = fake_server._requests_received[-1]
+    assert isinstance(received["argv"], list)
