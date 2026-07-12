@@ -88,6 +88,53 @@ Loop semantics:
 Decommissioned or non-deployed bots such as Momentum and MVS are historical
 context only. Do not count them as active SI-v2 loop members.
 
+## Source-of-truth order
+
+When resolving conflicts or stale claims, use this hierarchy:
+
+1. Freshly verified Git, GitHub, CI and runtime evidence
+2. Existing active roadmap PR and its linked issue
+3. Latest explicitly superseding section in `docs/state/current-operational-state.md`
+4. Issue #423 for live gates and the long-term live target
+5. Active ADRs, `AGENTS.md`, and `SOUL.md`
+6. `IDEA.md` exclusively as non-authoritative workspace orientation; its absence is not an error
+
+## Execution classes
+
+- **A0 — Read-only:** inspection, evidence collection, analysis and reports.
+  No mutation of any kind.
+- **A1 — Repository-only:** branch, code/docs/tests, commit, push, PR, CI
+  repair, issue/state reconciliation after merge. Exactly one active roadmap
+  PR at a time.
+- **A2 — Approved dry-run runtime:** only with explicit issue scope, approval
+  marker, snapshot, canary, allowlist, rollback, audit and bounded measurement.
+- **A3 — Live capital:** never inferred from root access or A0–A2. Requires
+  externally signed, time-limited, scope-specific approval. Always stop if
+  any A3 prerequisite is missing.
+
+**Always prohibited without explicit A3 approval:**
+
+- `dry_run=false`
+- Live orders
+- Live exchange credentials
+- Capital or risk limit increases
+- RiskGuard weakening
+- Kill-switch bypass or deactivation
+
+## Autonomous roadmap session algorithm
+
+Every autonomous agent session acting on the roadmap MUST:
+
+1. Read `AGENTS.md`, `SOUL.md`, `docs/state/current-operational-state.md`,
+   and issue #423.
+2. Inspect open PRs and linked active issues.
+3. Finish or formally block the existing roadmap PR before selecting another
+   task.
+4. Select the first truly unblocked task.
+5. Execute one GOAL, one branch, one PR and one report.
+6. Reconcile issue and state after merge.
+7. Stop at every missing A2 or A3 approval.
+
 ## System architecture boundaries
 
 ### Signal layer — `ai-hedge-fund-crypto`
@@ -100,16 +147,19 @@ context only. Do not count them as active SI-v2 loop members.
 
 ### Hermes — Meta-Orchestrator
 
-- Runs in the `orchestrator` profile for this project.
+- Runs in the `trading-hub-orchestrator` profile for this project.
 - Responsibilities: audits, repairs, cron maintenance when approved,
   documentation, escalation, and safe git housekeeping.
 - Boundaries: does not decide trades directly, place orders, enable live
   trading, modify Freqtrade configs without approval, or restart containers
   without approval.
-- Working directory:
-  - Host path: `/opt/data/projects/trading-hub` (canonical, HermesTrader)
-  - Hermes container (read-only mount): `/workspace/projects/trading-hub`
-  - `/home/hermes/projects/trading` is historical (agent0) and must NOT be used as canonical HermesTrader path.
+- Working directories:
+  - Primary repository (read/write): `/workspace/projects/trading-hub`
+    (`/opt/data/projects/trading-hub` on HermesTrader host)
+  - Secondary repository (read/write, explicit cross-repo scope only):
+    `/workspace/projects/ai4trade-bot`
+  - `/home/hermes/projects/trading` is historical (agent0) and must NOT be
+    used as canonical HermesTrader path.
 - **Docker/host access model (historical → current):** Hermes previously
   operated under the SEC-1 "no `docker.sock`" model: a read-only Docker proxy
   (D1), a fixed-command allowlisted host runner (D2), and an audited operator
@@ -118,13 +168,13 @@ context only. Do not count them as active SI-v2 loop members.
   implementation history. That narrow-slice model is superseded as of the
   **Root-Runtime-Authority decision (R0)** — see
   [`docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md`](docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md).
-  Hermes now moves toward full root-level runtime authority via a dedicated,
-  UID-separated `hermes-root-executor.service` (implementation: Phase R1, not
-  yet shipped) rather than an ever-growing fixed-command allowlist. D1/D2/D3
-  remain documented and may keep running as a fallback path during the R1–R2
-  transition. Live-capital trading authority remains separate and externally
-  signature-gated regardless of root runtime authority — see the ADR's
-  External Live Authority Boundary section.
+  The dedicated, UID-separated `hermes-root-executor.service` is
+  **shipped and active** (PR #508, R1) and provides full host/Docker runtime
+  authority over HermesTrader via a local Unix socket with peer-credential
+  authentication. D1/D2/D3 remain documented and may keep running as a
+  fallback path. Live-capital trading authority remains separate and
+  externally signature-gated regardless of root runtime authority — see the
+  ADR's External Live Authority Boundary section.
 
 ### VPS Operator Console — human CLI access (non-trading)
 
