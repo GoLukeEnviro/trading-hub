@@ -284,6 +284,8 @@ review. R3 did not mutate any runtime state.
 - R5a / HermesTrader-Deployment bleibt bis
   `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT`,
   `BACKUP_GATE_GREEN` und expliziter User-Freigabe blockiert.
-- Live-Fleet-Rollout bleibt durch C4 `KEEP` und
-  `APPROVED_LIVE_FLEET_ROLLOUT` blockiert.
+- Live-Fleet-Rollout bleibt blockiert, solange die aktuelle
+  C4-Entscheidung `ROLLBACK_RECOMMENDED` gilt.
+  Eine Freigabe erfordert eine neue C4-Entscheidung `KEEP`
+  sowie `APPROVED_LIVE_FLEET_ROLLOUT`.
 - Diese Dokumentationsänderung führt keine Runtime- oder Host-Mutation aus.
