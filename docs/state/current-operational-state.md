@@ -1,7 +1,7 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #553 (H3B daemon source merged, `34b39f0`).
+> PR #554 (source-of-truth proof and post-merge state reconciliation).
 > The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is now
 > on `main` with 33 passing tests. The production host daemon
 > (`/usr/local/sbin/hermes-root-executor`, 8521 B, deployed 2026-07-11) still
@@ -10,8 +10,8 @@
 > The source-of-truth proof confirms the production daemon was authored directly
 > on the host (R1, PR #508) and is not derived from this repository.
 >
-> **Last updated:** 2026-07-12 after PR #553 merge (H3B_DAEMON_SOURCE_MERGED)
-> **Previous update:** 2026-07-12 after H3B daemon source migration (repository daemon added)
+> **Last updated:** 2026-07-12 after PR #554 merge (source-of-truth proof and reconciliation)
+> **Previous update:** 2026-07-12 after PR #553 merge (H3B_DAEMON_SOURCE_MERGED)
 
 ---
 
