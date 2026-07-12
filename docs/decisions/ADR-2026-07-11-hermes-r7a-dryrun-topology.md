@@ -49,12 +49,12 @@ Diese Datei ist das einzige offizielle Compose für den HermesTrader-Stack ab R7
 ### Rainbow Integration
 
 - Include via `services/rainbow/rainbow.include.yml`
-- Config vendored aus ai4trade-bot @ **a43a80cf66c7fb77e07b25a650a72c3303d26791** (PR #78, read-only/fail-closed Runtime-Contract-Fix)
+- Config vendored aus ai4trade-bot @ **cd63051545e9b27235f47a3bbb5de858782fcd20** (PR #78 + #79, read-only/fail-closed Runtime-Contract-Fix + CanonicalSignalRegistry-Pfad-Nachzug)
   - **Achtung:** Pin bei Host-Deploy aktualisieren falls ai4trade-bot weitergewachsen ist
   - > `bbcaf25` bleibt der dokumentierte Rainbow-R1-Contract-Baseline-Pin.
     > `b65510a` war der für PR-2 vorgeschlagene, aber noch nicht read-only/fail-closed Runtime-Pin.
-    > `a43a80cf66c7fb77e07b25a650a72c3303d26791` (ai4trade-bot#78, schließt ai4trade-bot#77) ist der aktuelle Pin: `read_only`-Guard auf mutierenden Routen, `/health` fail-closed mit Startup-Grace-Periode, `RAINBOW_CONFIG` wird respektiert, Heartbeat-Pfad vereinheitlicht.
-    > Vor Host-Deploy verifizieren: `git -C ../ai4trade-bot merge-base --is-ancestor a43a80cf66c7fb77e07b25a650a72c3303d26791 HEAD`
+    > `cd63051545e9b27235f47a3bbb5de858782fcd20` (ai4trade-bot#78, schließt ai4trade-bot#77, plus ai4trade-bot#79 für den beim Smoke-Test entdeckten CanonicalSignalRegistry-Pfad) ist der aktuelle Pin: `read_only`-Guard auf mutierenden Routen, `/health` fail-closed mit Startup-Grace-Periode, `RAINBOW_CONFIG` wird respektiert, Heartbeat-Pfad vereinheitlicht.
+    > Vor Host-Deploy verifizieren: `git -C ../ai4trade-bot merge-base --is-ancestor cd63051545e9b27235f47a3bbb5de858782fcd20 HEAD`
 - `config/rainbow.internal.yml`: TA-Collector aktiv, `evaluation.enabled: false`, kein `delivery_worker`
 - Healthcheck: HTTP `/health` (nicht Heartbeat-Datei — DB liegt unter `/app/rainbow/storage/`, nicht `/app/storage/`)
 - Build-Context: `${AI4TRADE_CONTEXT:-../ai4trade-bot}`

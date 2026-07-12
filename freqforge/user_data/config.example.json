@@ -3,7 +3,7 @@
     "CORS_origins": [],
     "enable_openapi": false,
     "enabled": true,
-    "jwt_secret_key": "CHANGE_ME_LOCAL_ONLY_SECRET",
+    "jwt_secret_key": "CHANGE_ME_LOCAL_ONLY_SECRET_PLACEHOLDER",
     "listen_ip_address": "127.0.0.1",
     "listen_port": 8080,
     "password": "CHANGE_ME_LOCAL_ONLY_PASSWORD",

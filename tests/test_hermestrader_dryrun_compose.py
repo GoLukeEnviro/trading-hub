@@ -547,9 +547,9 @@ class TestAi4tradeBotPinDocumented:
     def test_adr_references_current_pin(self) -> None:
         adr = ROOT / "docs" / "decisions" / "ADR-2026-07-11-hermes-r7a-dryrun-topology.md"
         content = adr.read_text(encoding="utf-8")
-        assert "a43a80cf66c7fb77e07b25a650a72c3303d26791" in content, (
-            "ADR must reference the ai4trade-bot commit that fixed the "
-            "read-only/fail-closed contract (ai4trade-bot#78)"
+        assert "cd63051545e9b27235f47a3bbb5de858782fcd20" in content, (
+            "ADR must reference the current pinned ai4trade-bot commit "
+            "(ai4trade-bot#78 + #79)"
         )
 
 
@@ -588,3 +588,65 @@ class TestEntrypointErrorVisibility:
         content = entrypoint.read_text(encoding="utf-8")
         assert "2>/dev/null" not in content, "must not discard stderr from permission fixes"
         assert "WARN" in content, "permission-fix failures must be logged, not just || true'd away"
+
+
+
+# ─── 23. Freqtrade user_data ownership fixed at build time ────────────
+
+class TestFreqtradeUserDataOwnership:
+    """Live smoke test discovered: freqtradeorg/freqtrade ships
+    /freqtrade/user_data owned by the pre-remap UID (1000), not the
+    remapped ftuser (10000). Named volumes inherit ownership from the
+    image on first creation, so this must be fixed at build time -
+    the runtime entrypoint (running as UID 10000, never root) cannot
+    chgrp/chown a directory it does not own.
+    """
+
+    def test_dockerfile_chowns_user_data(self) -> None:
+        dockerfile = ROOT / "freqtrade" / "Dockerfile.hermes10000"
+        content = dockerfile.read_text(encoding="utf-8")
+        assert "chown -R 10000:10000 /freqtrade/user_data" in content
+
+    def test_dockerfile_precreates_logs_dir(self) -> None:
+        """logs/ doesn't exist in the base image, so it must be created
+        before the chown, or the fresh named volume inherits root
+        ownership instead (mkdir -p must precede the chown line).
+        """
+        dockerfile = ROOT / "freqtrade" / "Dockerfile.hermes10000"
+        content = dockerfile.read_text(encoding="utf-8")
+        mkdir_idx = content.find("mkdir -p /freqtrade/user_data/logs")
+        chown_idx = content.find("chown -R 10000:10000 /freqtrade/user_data")
+        assert mkdir_idx != -1 and chown_idx != -1 and mkdir_idx < chown_idx
+
+
+# ─── 24. No per-bot Telegram token (routed via Hermes instead) ────────
+
+class TestNoPerBotTelegramEnv:
+    """FREQTRADE__TELEGRAM__ENABLED=false injected a partial telegram
+    config that failed Freqtrade's own schema (requires token+chat_id
+    once the key exists at all). The configs never had a telegram
+    section to begin with, so the env var was both redundant and
+    actively broken - removed rather than patched, since these bots
+    are meant to route notifications through the shared Hermes Telegram
+    bot rather than getting their own token (architecture TBD separately).
+    """
+
+    @pytest.mark.parametrize("svc_name", list(DEFAULT_FLEET) + [REBEL_SERVICE])
+    def test_no_telegram_env_var(self, services: dict[str, dict[str, object]], svc_name: str) -> None:
+        if svc_name not in services or svc_name == "rainbow":
+            pytest.skip(f"{svc_name} not applicable")
+        svc = services[svc_name]
+        env = cast(list[str], svc.get("environment", []))
+        env_keys = {e.split("=", 1)[0].strip() for e in env}
+        assert "FREQTRADE__TELEGRAM__ENABLED" not in env_keys
+
+
+# ─── 25. jwt_secret_key placeholders satisfy Freqtrade's own schema ───
+
+class TestJwtSecretPlaceholderLength:
+    @pytest.mark.parametrize("config_path", CONFIG_FILES, ids=lambda p: p.parent.parent.name)
+    def test_jwt_secret_key_min_length(self, config_path: Path) -> None:
+        with config_path.open() as f:
+            cfg = json.load(f)
+        key = cfg.get("api_server", {}).get("jwt_secret_key", "")
+        assert len(key) >= 32, f"{config_path.name}: jwt_secret_key too short ({len(key)} chars)"

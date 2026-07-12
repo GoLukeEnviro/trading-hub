@@ -24,7 +24,6 @@ services:
       --config /freqtrade/user_data/config.example.json
       --strategy FreqForge_Override
     environment:
-      - FREQTRADE__TELEGRAM__ENABLED=false
       - PYTHONPATH=/freqtrade/shared
     volumes:
       # Configs and strategies: read-only
@@ -69,7 +68,6 @@ services:
       --config /freqtrade/user_data/config.example.json
       --strategy FreqForge_Override
     environment:
-      - FREQTRADE__TELEGRAM__ENABLED=false
       - PYTHONPATH=/freqtrade/shared
     volumes:
       - ./freqforge-canary/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
@@ -111,7 +109,6 @@ services:
       --config /freqtrade/user_data/config.example.json
       --strategy RegimeSwitchingHybrid_v7_v04_Integration
     environment:
-      - FREQTRADE__TELEGRAM__ENABLED=false
       - PYTHONPATH=/freqtrade/shared
     volumes:
       - ./freqtrade/bots/regime-hybrid/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
@@ -152,7 +149,6 @@ services:
       webserver
       --config /freqtrade/user_data/config.example.json
     environment:
-      - FREQTRADE__TELEGRAM__ENABLED=false
       - PYTHONPATH=/freqtrade/shared
     volumes:
       - ./freqtrade/bots/webserver/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
@@ -194,7 +190,6 @@ services:
       --config /freqtrade/user_data/config.example.json
       --strategy RebelLiquidation
     environment:
-      - FREQTRADE__TELEGRAM__ENABLED=false
       - PYTHONPATH=/freqtrade/shared
     volumes:
       - ./freqtrade/bots/freqai-rebel/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
@@ -227,10 +222,11 @@ services:
       - trading_egress
 
   # Rainbow: TA-collector, internal-only, no published ports.
-  # Build pinned to ai4trade-bot@a43a80cf66c7fb77e07b25a650a72c3303d26791
-  # (ai4trade-bot#78) - the read-only/fail-closed runtime contract fix.
+  # Build pinned to ai4trade-bot@cd63051545e9b27235f47a3bbb5de858782fcd20
+  # (ai4trade-bot#78 + #79) - read-only/fail-closed runtime contract fix
+  # plus the CanonicalSignalRegistry storage-path follow-up.
   # Verify before deploy: git -C ../ai4trade-bot merge-base --is-ancestor
-  # a43a80cf66c7fb77e07b25a650a72c3303d26791 HEAD
+  # cd63051545e9b27235f47a3bbb5de858782fcd20 HEAD
   rainbow:
     build:
       context: ${AI4TRADE_CONTEXT:-../ai4trade-bot}

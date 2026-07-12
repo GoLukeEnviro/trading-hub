@@ -10,8 +10,9 @@
 # This file exists for standalone Rainbow testing and contract verification.
 
 services:
-  # Build pinned to ai4trade-bot@a43a80cf66c7fb77e07b25a650a72c3303d26791
-  # (ai4trade-bot#78) - the read-only/fail-closed runtime contract fix.
+  # Build pinned to ai4trade-bot@cd63051545e9b27235f47a3bbb5de858782fcd20
+  # (ai4trade-bot#78 + #79) - read-only/fail-closed runtime contract fix
+  # plus the CanonicalSignalRegistry storage-path follow-up.
   rainbow:
     build:
       context: ${AI4TRADE_CONTEXT:-../ai4trade-bot}

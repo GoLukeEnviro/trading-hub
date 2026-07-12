@@ -3,7 +3,9 @@ FROM freqtradeorg/freqtrade@sha256:87aa5c6d65359b34e9d99a0bb260a38c0efe031525381
 USER root
 RUN groupmod -g 10000 ftuser \
  && usermod -u 10000 -g 10000 ftuser \
- && chown -R 10000:10000 /home/ftuser
+ && chown -R 10000:10000 /home/ftuser \
+ && mkdir -p /freqtrade/user_data/logs \
+ && chown -R 10000:10000 /freqtrade/user_data
 
 # Wrapper entrypoint: fix permissions on mounted volumes then exec original.
 # Failures are logged to stderr (not silently swallowed) so a real
