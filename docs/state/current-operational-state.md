@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `ee767a10`; R7A/R4 Greenfield Compose + Rainbow Runtime merged.
+> commit `edcb3ef`; H3A Root-Executor Client Contract merged, H3B blocked.
 >
-> **Last updated:** 2026-07-12 after H1 Governance Reconciliation (#525)
-> **Previous update:** 2026-07-11 after R3 Fleet Reproducibility Decision
+> **Last updated:** 2026-07-12 after H3A state reconciliation (#534/#535)
+> **Previous update:** 2026-07-12 after H1 Governance Reconciliation (#525)
 
 ---
 
