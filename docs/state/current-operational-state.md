@@ -250,7 +250,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — BLOCKED (ne
 | R4 / R7A — Greenfield Compose + Rainbow Runtime | ✅ COMPLETE | #524 (`ee767a10`) |
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
-| H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
+| H3A — Root-Executor Client Contract | ✅ COMPLETE | #530 (`38203a7`) |
 | H3B — Root-Executor Client Activation | ⬜ BLOCKED (needs APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION) | #531 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
