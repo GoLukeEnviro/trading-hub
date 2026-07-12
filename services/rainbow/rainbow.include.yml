@@ -43,11 +43,15 @@ services:
     restart: unless-stopped
     networks:
       - trading_internal
+      - trading_egress
 
 networks:
   trading_internal:
     driver: bridge
     internal: true
+
+  trading_egress:
+    driver: bridge
 
 volumes:
   rainbow-storage:

@@ -33,8 +33,8 @@ Diese Datei ist das einzige offizielle Compose für den HermesTrader-Stack ab R7
 - OPTION_C: `freqtrade-freqforge` + `freqtrade-freqforge-canary` + `freqtrade-regime-hybrid` im Default
 - `freqai-rebel` ausschließlich via `profiles: ["rebel"]` (opt-in, default aus)
 - Rainbow als `internal-only` Service ohne `ports:`-Mapping, TA-only
-- Netzwerk: `trading_internal` (bridge)
-- Build via `freqtrade/Dockerfile.hermes10000` (kein `freqtradeorg/freqtrade:stable`)
+- Netzwerk: `trading_internal` (bridge, internal, service-zu-service) + `trading_egress` (bridge, outbound-fähig, kein Ports-Mapping) - alle Fleet-Services + Rainbow haengen an beiden, da Freqtrade und Rainbow auch im Dry-Run/TA-Collector-Modus Read-only-Marktdaten vom Exchange brauchen
+- Build via `freqtrade/Dockerfile.hermes10000`, Basis-Image per Digest gepinnt (nicht mehr `freqtradeorg/freqtrade:stable` als mutable Tag)
 - User: `10000:10000` für alle Bot-Services
 - `dry_run: true` in allen Config-JSONs — `dry_run=false` ist **verboten** (Live-Gate #423)
 

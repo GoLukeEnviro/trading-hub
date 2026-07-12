@@ -1,22 +1,15 @@
-FROM freqtradeorg/freqtrade:stable
+FROM freqtradeorg/freqtrade@sha256:87aa5c6d65359b34e9d99a0bb260a38c0efe0315253811e6f48c2afe8f278a6a
 
 USER root
 RUN groupmod -g 10000 ftuser \
  && usermod -u 10000 -g 10000 ftuser \
  && chown -R 10000:10000 /home/ftuser
 
-# Wrapper entrypoint: fix permissions on mounted volumes then exec original
-RUN printf '#!/bin/sh\n\
-set -e\n\
-GID=10000\n\
-for d in /freqtrade/user_data /freqtrade/user_data/logs; do\n\
-    [ -d "$d" ] && chgrp "$GID" "$d" 2>/dev/null && chmod 2775 "$d" 2>/dev/null || true\n\
-done\n\
-for f in /freqtrade/user_data/*.json /freqtrade/user_data/*.log; do\n\
-    [ -f "$f" ] && chgrp "$GID" "$f" 2>/dev/null && chmod 664 "$f" 2>/dev/null || true\n\
-done\n\
-exec freqtrade "$@"\n' > /usr/local/bin/entrypoint.sh \
- && chmod +x /usr/local/bin/entrypoint.sh
+# Wrapper entrypoint: fix permissions on mounted volumes then exec original.
+# Failures are logged to stderr (not silently swallowed) so a real
+# permission problem surfaces in container logs instead of hiding.
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 USER ftuser
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

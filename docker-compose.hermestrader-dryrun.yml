@@ -57,6 +57,7 @@ services:
     restart: unless-stopped
     networks:
       - trading_internal
+      - trading_egress
 
   freqtrade-freqforge-canary:
     build:
@@ -98,6 +99,7 @@ services:
     restart: unless-stopped
     networks:
       - trading_internal
+      - trading_egress
 
   freqtrade-regime-hybrid:
     build:
@@ -139,6 +141,7 @@ services:
     restart: unless-stopped
     networks:
       - trading_internal
+      - trading_egress
 
   freqtrade-webserver:
     build:
@@ -178,6 +181,7 @@ services:
     restart: unless-stopped
     networks:
       - trading_internal
+      - trading_egress
 
   freqai-rebel:
     profiles: ["rebel"]
@@ -220,6 +224,7 @@ services:
     restart: unless-stopped
     networks:
       - trading_internal
+      - trading_egress
 
   # Rainbow: TA-collector, internal-only, no published ports.
   # Build pinned to ai4trade-bot@a43a80cf66c7fb77e07b25a650a72c3303d26791
@@ -257,11 +262,15 @@ services:
     restart: unless-stopped
     networks:
       - trading_internal
+      - trading_egress
 
 networks:
   trading_internal:
     driver: bridge
     internal: true
+
+  trading_egress:
+    driver: bridge
 
 volumes:
   freqforge-db:

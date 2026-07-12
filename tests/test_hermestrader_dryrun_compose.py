@@ -370,6 +370,39 @@ class TestNetworkInternal:
         assert net.get("driver") == "bridge"
         assert net.get("internal") is True
 
+    def test_trading_egress_exists_and_is_not_internal(self, compose: dict[str, object]) -> None:
+        """Freqtrade and Rainbow need outbound market-data access even in
+        dry-run/ta_collector mode. trading_internal alone (internal=true)
+        blocks ALL external routing, so a separate, non-internal egress
+        network is required alongside it - see ADR network topology note.
+        """
+        networks = cast(dict[str, dict[str, object]], compose.get("networks", {}))
+        assert "trading_egress" in networks
+        egress = networks["trading_egress"]
+        assert egress.get("driver") == "bridge"
+        assert not egress.get("internal"), "trading_egress must NOT be internal"
+
+    @pytest.mark.parametrize("svc_name", list(DEFAULT_FLEET) + [REBEL_SERVICE])
+    def test_fleet_service_has_both_networks(
+        self, services: dict[str, dict[str, object]], svc_name: str
+    ) -> None:
+        if svc_name not in services:
+            pytest.skip(f"{svc_name} not in compose")
+        svc = services[svc_name]
+        nets = cast(list[str], svc.get("networks", []))
+        assert "trading_internal" in nets, f"{svc_name}: must stay on trading_internal"
+        assert "trading_egress" in nets, f"{svc_name}: needs trading_egress for market-data access"
+
+    def test_include_file_has_egress_network(self) -> None:
+        with RAINBOW_INCLUDE.open() as f:
+            inc = cast(dict[str, object], yaml.safe_load(f))
+        networks = cast(dict[str, dict[str, object]], inc.get("networks", {}))
+        assert "trading_egress" in networks
+        assert not networks["trading_egress"].get("internal")
+        rainbow = cast(dict[str, dict[str, object]], inc["services"])["rainbow"]
+        nets = cast(list[str], rainbow.get("networks", []))
+        assert "trading_egress" in nets
+
 
 # ─── 14. Build context files exist ────────────────────────────────────
 
@@ -518,3 +551,40 @@ class TestAi4tradeBotPinDocumented:
             "ADR must reference the ai4trade-bot commit that fixed the "
             "read-only/fail-closed contract (ai4trade-bot#78)"
         )
+
+
+
+# ─── 21. Freqtrade base image is pinned by digest ─────────────────────
+
+class TestFreqtradeImagePinned:
+    def test_dockerfile_pins_base_image_by_digest(self) -> None:
+        dockerfile = ROOT / "freqtrade" / "Dockerfile.hermes10000"
+        content = dockerfile.read_text(encoding="utf-8")
+        from_lines = [line for line in content.splitlines() if line.startswith("FROM ")]
+        assert from_lines, "Dockerfile must have a FROM line"
+        assert "@sha256:" in from_lines[0], (
+            f"base image must be pinned by digest, not a mutable tag: {from_lines[0]}"
+        )
+
+
+# ─── 22. Entrypoint permission fixes are not silently swallowed ───────
+
+class TestEntrypointErrorVisibility:
+    def test_entrypoint_script_exists(self) -> None:
+        entrypoint = ROOT / "freqtrade" / "entrypoint.sh"
+        assert entrypoint.exists(), "freqtrade/entrypoint.sh must exist"
+
+    def test_dockerfile_copies_entrypoint_script(self) -> None:
+        dockerfile = ROOT / "freqtrade" / "Dockerfile.hermes10000"
+        content = dockerfile.read_text(encoding="utf-8")
+        assert "COPY entrypoint.sh" in content
+
+    def test_entrypoint_does_not_silently_swallow_failures(self) -> None:
+        """The old inline entrypoint used `2>/dev/null && ... || true`,
+        which hides a real permission problem entirely. Failures must at
+        least be logged (stderr) instead of vanishing.
+        """
+        entrypoint = ROOT / "freqtrade" / "entrypoint.sh"
+        content = entrypoint.read_text(encoding="utf-8")
+        assert "2>/dev/null" not in content, "must not discard stderr from permission fixes"
+        assert "WARN" in content, "permission-fix failures must be logged, not just || true'd away"
