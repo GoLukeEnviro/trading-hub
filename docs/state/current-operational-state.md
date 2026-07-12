@@ -109,7 +109,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3A — Root-Executor Client Contract (#530)** — next.
+Current task: **H3B — Root-Executor Client Activation (#531)** — BLOCKED (needs APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION).
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -250,8 +250,8 @@ Current task: **H3A — Root-Executor Client Contract (#530)** — next.
 | R4 / R7A — Greenfield Compose + Rainbow Runtime | ✅ COMPLETE | #524 (`ee767a10`) |
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
-| H3A — Root-Executor Client Contract | ⬜ NEXT | #530 |
-| H3B — Root-Executor Client Activation | ⬜ BLOCKED (needs H3A merge + APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION) | #531 |
+| H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
+| H3B — Root-Executor Client Activation | ⬜ BLOCKED (needs APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION) | #531 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
