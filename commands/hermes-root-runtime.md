@@ -34,7 +34,7 @@ socket (`/run/hermes-root-executor/executor.sock`) using a JSON-line protocol.
   "schema_version": "hermes-root-executor.v1",
   "request_id": "<uuid>",
   "correlation_id": "<uuid>",
-  "issue_number": 530,
+  "issue_number": 531,
   "task_name": "H3A",
   "execution_class": "A1",
   "resource_key": "docker_ps",
@@ -101,13 +101,43 @@ socket (`/run/hermes-root-executor/executor.sock`) using a JSON-line protocol.
 ## Testing
 
 ```bash
-uv run python -m pytest tests/test_hermes_root_client.py -v
+uv run python -m pytest tests/test_hermes_root_client.py tests/test_hermes_root_daemon.py -v
 ```
 
-Tests use a fake AF_UNIX socket server — no real executor required.
+Client tests use a fake AF_UNIX socket server — no real executor required.
+Daemon tests run the repository daemon (`hermes_root/daemon.py`) itself
+against a temporary socket/lock-dir/audit-path — also no real executor
+required, and they never touch the production socket, kill-switch, or
+audit file.
+
+## Repository daemon (source of truth)
+
+The daemon that used to exist only as an unversioned host artifact
+(`/usr/local/sbin/hermes-root-executor`) is now versioned in this repository
+as `hermes_root/daemon.py`, composed from:
+
+| Module | Responsibility |
+|--------|-----------------|
+| `hermes_root/protocol.py` | Normalizes both the legacy protocol (`{category, args, resource_key}`) and this `hermes-root-executor.v1` protocol into one internal request model. Fail-closed on unknown fields, types, or schema_version. |
+| `hermes_root/policy.py` | Execution-class gates (A0-A3). Server-side and authoritative — the client-side validation above is defense-in-depth only. |
+| `hermes_root/actions.py` | Explicit argv builders for every v1 action (the same `READONLY_ACTIONS`/`MUTATING_ACTIONS` from `hermes_root/schema.py`). No generic shell execution. |
+| `hermes_root/audit.py` | Appends structured v2 audit entries to the same append-only `runtime-actions.jsonl` the legacy daemon has always written to. |
+
+The daemon serves **both** protocols on the same socket: legacy requests get
+byte-for-byte identical behaviour to the production host daemon (same
+categories, same locking, same 30s timeout, same kill-switch), while v1
+requests get the full gate/action/audit pipeline above. Legacy requests never
+gain new capabilities through this change.
+
+**This repository daemon is not yet deployed.** The production host still
+runs the original unversioned script. `scripts/install-hermes-root-executor.sh`
+documents the deployment contract (backup, syntax-check, atomic move,
+restart-with-rollback) but is intentionally not executed as part of adding
+it — deployment is a separate, explicitly-gated rollout decision.
 
 ## References
 
 - ADR-2026-07-11-hermes-root-runtime-authority (R0)
 - docs/reports/r1-hermes-root-executor-implementation-2026-07-11.md
 - docs/reports/r2-audit-locking-mutation-evidence-2026-07-11.md
+- docs/reports/h3b-root-executor-source-migration-2026-07-12.md

@@ -2,9 +2,16 @@
 
 > **Canonical current-state snapshot** — validated against `main` at
 > PR #551 (H3B CLI + checkpoint), H3B closed as BLOCKED_BY_BOOTSTRAP_CONTROL_PATH.
+> Host-side bootstrap has since been completed: the executor socket is now
+> bind-mounted into the Hermes container (`/opt/stacks/hermes/compose.override.yaml`).
+> A live `executor_health` v1 request now reaches the daemon but is BLOCKED
+> with `unknown_category`, because the production daemon still only speaks
+> the legacy protocol — this is the real, current blocker, and it is what the
+> H3B daemon source-migration (this change, Issue #531) addresses.
 >
-> **Last updated:** 2026-07-12 after H3B reconciliation (issue #531 closed)
-> **Previous update:** 2026-07-12 after PR #551 (H3B CLI + checkpoint)
+> **Last updated:** 2026-07-12 after H3B daemon source migration (repository
+> daemon added; issue #531 remains open, no host rollout performed)
+> **Previous update:** 2026-07-12 after H3B reconciliation (issue #531 closed)
 
 ---
 
@@ -109,7 +116,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as BLOCKED_BY_BOOTSTRAP_CONTROL_PATH. All code merged (PRs #549, #550, #551). Remaining blocker is host-side: executor socket bind-mount. Next task: R5A (HermesTrader Deployment) — BLOCKED by H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT.
+Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as BLOCKED_BY_BOOTSTRAP_CONTROL_PATH. All code merged (PRs #549, #550, #551). The socket bind-mount has since been completed; the remaining blocker is that the production daemon only speaks the legacy protocol. A repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) now exists (`H3B_DAEMON_SOURCE_READY`), but has **not** been deployed to the host. Next task after review/rollout approval: R5A (HermesTrader Deployment) — BLOCKED by H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -137,7 +144,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as B
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
 - R7 measurement → R5A complete + runtime preflight approved
-- H3B root-executor client activation → BLOCKED_BY_BOOTSTRAP_CONTROL_PATH (socket not mounted; PRs #549, #550, #551 merged, issue #531 closed; requires host-side operator to bind-mount /run/hermes-root-executor/)
+- H3B root-executor client activation → socket bind-mount complete; blocked on production daemon still speaking only the legacy protocol. Repository daemon source now exists (`H3B_DAEMON_SOURCE_READY`, PR pending review) but is not deployed — deployment requires a separate, explicitly-gated rollout approval.
 - R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
 
 ---
@@ -250,8 +257,8 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as B
 | R4 / R7A — Greenfield Compose + Rainbow Runtime | ✅ COMPLETE | #524 (`ee767a10`) |
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
-| H3A — Root-Executor Client Contract | ✅ COMPLETE | #530 (`38203a7`) |
-| H3B — Root-Executor Client Activation | ⬜ BLOCKED_BY_BOOTSTRAP_CONTROL_PATH (socket not mounted; CLI ready in PR #551, issue #531 closed) | #531 → #549, #550, #551 |
+| H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
+| H3B — Root-Executor Client Activation | 🟡 H3B_DAEMON_SOURCE_READY (socket mounted; repository daemon source added, not deployed) | #531 → #549, #550, #551, daemon-migration PR |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
