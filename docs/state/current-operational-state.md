@@ -260,3 +260,32 @@ This **contradicts** the prior snapshot above ("no bots currently running" / all
 requires explicit approval to restart"). The discrepancy's cause (approved restart vs.
 auto-restart vs. unauthorized) is **not investigated in R3** — flagged for separate governance
 review. R3 did not mutate any runtime state.
+
+---
+
+## R7A / Root-Runtime R4 reconciliation note (2026-07-11)
+
+> **Roadmap-Mapping:** Root-Runtime Roadmap
+> `R4 — Greenfield Compose + Rainbow Runtime`
+> entspricht `R7A` / Issue #504.
+>
+> PR #519 ist der Docs-only-Architektur-PR (PR-1).
+> Compose, Rainbow-Wiring und Tests werden separat in PR-2 eingeführt.
+
+- Der durch R3 dokumentierte Runtime-Widerspruch bleibt offen:
+  Vier Freqtrade-Bots und der Webserver wurden auf agent0 im Dry-Run
+  als laufend verifiziert, während ältere State-Abschnitte sie als
+  gestoppt beziehungsweise nicht laufend ausweisen.
+- `docker-compose.hermestrader-dryrun.yml` ist die beschlossene
+  kanonische Zieldatei, wird jedoch erst durch PR-2 angelegt.
+- `freqai-rebel` bleibt wegen `NOT_REPRODUCIBLE` aus dem
+  Greenfield-Default-Deploy ausgeschlossen und wird nur über
+  `profiles: ["rebel"]` aktiviert.
+- R5a / HermesTrader-Deployment bleibt bis
+  `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT`,
+  `BACKUP_GATE_GREEN` und expliziter User-Freigabe blockiert.
+- Live-Fleet-Rollout bleibt blockiert, solange die aktuelle
+  C4-Entscheidung `ROLLBACK_RECOMMENDED` gilt.
+  Eine Freigabe erfordert eine neue C4-Entscheidung `KEEP`
+  sowie `APPROVED_LIVE_FLEET_ROLLOUT`.
+- Diese Dokumentationsänderung führt keine Runtime- oder Host-Mutation aus.

@@ -14,6 +14,8 @@ choices made in the Trading Hub project.
 | 2026-06-27 | [Controlled Self-Improvement — Human-Gated Apply](ADR-2026-06-27-controlled-self-improvement-human-gated-apply.md) | ✅ Superseded by ADR-2026-07-01 |
 | 2026-06-27 | [SI-v2 Restart with Overlay — Runtime Proof](ADR-2026-06-27-si-v2-restart-with-overlay-runtime-proof.md) | ✅ Final |
 | 2026-07-01 | [SI-v2 Autonomous Dry-Run Loop — Live Target](ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target.md) | ✅ Final — current SI-v2 policy |
+| 2026-07-11 | [Hermes Root Runtime Authority](ADR-2026-07-11-hermes-root-runtime-authority.md) | ✅ Active |
+| 2026-07-11 | [HermesTrader R7A Dry-Run-Topology](ADR-2026-07-11-hermes-r7a-dryrun-topology.md) | ✅ Accepted |
 
 ## Approval Markers
 
