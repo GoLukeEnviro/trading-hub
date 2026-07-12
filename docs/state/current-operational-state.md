@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #549 (H3B docs checkpoint merged), H3B closed as BLOCKED_BY_BOOTSTRAP_CONTROL_PATH.
+> PR #551 (H3B CLI + checkpoint), H3B blocked at BLOCKED_BY_BOOTSTRAP_CONTROL_PATH.
 >
-> **Last updated:** 2026-07-12 after PR #549 merge (H3B docs checkpoint)
-> **Previous update:** 2026-07-12 after PR #547 merge (header reconciliation)
+> **Last updated:** 2026-07-12 after PR #551 (H3B CLI + checkpoint)
+> **Previous update:** 2026-07-12 after PR #549 merge (H3B docs checkpoint)
 
 ---
 
@@ -251,7 +251,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — BLOCKED (ne
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #530 (`38203a7`) |
-| H3B — Root-Executor Client Activation | ⬜ BLOCKED_BY_BOOTSTRAP_CONTROL_PATH (socket not mounted; PR #549 merged, issue #531 closed) | #531 → #549 |
+| H3B — Root-Executor Client Activation | ⬜ BLOCKED_BY_BOOTSTRAP_CONTROL_PATH (socket not mounted; CLI ready in PR #551, issue #531 open) | #531 → #551 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
