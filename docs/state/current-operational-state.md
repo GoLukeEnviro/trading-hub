@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> commit `8013cfd`; R3 Fleet Reproducibility Decision merged.
+> commit `ee767a10`; R7A/R4 Greenfield Compose + Rainbow Runtime merged.
 >
-> **Last updated:** 2026-07-11 after R3 Fleet Reproducibility Decision (Root-Runtime-Rollout)
-> **Previous update:** 2026-07-10 (PR #502)
+> **Last updated:** 2026-07-12 after H1 Governance Reconciliation (#525)
+> **Previous update:** 2026-07-11 after R3 Fleet Reproducibility Decision
 
 ---
 
@@ -21,6 +21,9 @@
 | Dry-run config | **Preserved** at `freqforge-canary/config/config_canary_dryrun.json` |
 | Human approval | required for live-mode transition, not every dry-run candidate |
 | Runtime mutation by this repo update | **NONE** |
+| Active Hermes profile | `trading-hub-orchestrator` |
+| Primary repo (read/write) | `/workspace/projects/trading-hub` (`/opt/data/projects/trading-hub` on host) |
+| Secondary repo (read/write, cross-repo scope only) | `/workspace/projects/ai4trade-bot` |
 
 ### Rainbow Integration Status
 
@@ -32,6 +35,7 @@
 | R4 — Window-scoped C4 fix | ✅ COMPLETED | #500 | `a70a058` |
 | R5 — Runtime preflight audit | ✅ COMPLETED | #502 | `78979a7` |
 | R6 — Candidate quality | ✅ COMPLETED | #501 | `75384e1` |
+| R7A — Greenfield Compose + Rainbow Runtime | ✅ COMPLETED | #524 | `ee767a10` |
 | R7 — Dry-run measurement | ⏳ BLOCKED | — | — |
 
 ### Historical note
@@ -63,7 +67,8 @@ The following modules exist on `main` and form the complete controlled apply cha
 | **Rainbow R4** | Window-scoped C4 fix | #500 | + | ✅ |
 | **Rainbow R5** | Runtime preflight audit | #502 | + | ✅ |
 | **Rainbow R6** | Candidate quality | #501 | + | ✅ |
-| **Total** | **16 modules** | **16 PRs** | **+ tests** | **All GREEN** |
+| **Rainbow R7A** | Greenfield Compose + Rainbow Runtime | #524 | + | ✅ |
+| **Total** | **17 modules** | **17 PRs** | **+ tests** | **All GREEN** |
 
 ### Active bot identities
 
@@ -102,7 +107,9 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ## 4. Operational priority for agents
 
-### Active priority: None — all code-complete tasks merged
+### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
+
+Current task: **H1 — Governance Reconciliation (#525)** — in progress.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -118,6 +125,8 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 **Allowed:**
 - read-only audits and reports
 - documentation updates
+- A1 repository-only roadmap tasks (branch, code/docs/tests, PR, CI, merge)
+- A2 dry-run runtime only with full approval gates
 
 ### Next runtime action
 **Requires explicit human approval.** No runtime action is currently authorized. The following are all blocked:
@@ -127,7 +136,9 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 - Freqtrade bot restart → human approval
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
-- R7 measurement → R5 complete + runtime preflight approved
+- R7 measurement → R5A complete + runtime preflight approved
+- H3B root-executor client activation → H3A merge + APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION
+- R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
 
 ---
 
@@ -144,6 +155,8 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 | Rollback path | Rehearsed but execution hard-blocked |
 | Measurement path | Read-only decision engine on `main` |
 | Rainbow advisory | Read-only, fail-closed, disabled by default |
+| Root Executor | `hermes-root-executor.service` shipped and active (PR #508, R1) |
+| Autonomous roadmap loop | Contract defined in `AGENTS.md` and `commands/trading-hub-roadmap-tick.md` |
 
 ---
 
@@ -156,6 +169,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 | ADR-2026-06-27-si-v2-restart-with-overlay-runtime-proof | Active | Restart-with-overlay runtime proof |
 | ADR-2026-07-01-si-v2-autonomous-dry-run-loop-live-target | **Active** | Policy-gated autonomous dry-run, live as target architecture |
 | ADR-2026-07-11-hermes-root-runtime-authority | **Active** | Hermes Root-Runtime-Authority (R0): UID-separated root executor supersedes D1/D2/D3 narrow-slice access; live trading stays externally signature-gated |
+| ADR-2026-07-12-hermes-autonomous-repository-loop | **Active** | Autonomous repository loop contract: source-of-truth order, execution classes A0–A3, session algorithm, audit closure |
 
 ### Access model (current)
 
@@ -191,11 +205,13 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 - `CLAUDE.md` — thin Claude Code handoff that defers to `AGENTS.md`.
 - `ORCHESTRATOR_CHARTER.md` — durable charter rules.
 - `README.md` — repository orientation.
+- `commands/trading-hub-roadmap-tick.md` — bounded autonomous roadmap iteration command.
 - `docs/state/current-operational-state.md` — this canonical state snapshot.
 - `docs/reports/si-v2-phase-*` — phase-specific evidence reports.
 - `docs/decisions/ADR-*` — architecture decision records.
 - `docs/reports/rainbow-r*-*-2026-07-10.md` — Rainbow R1–R6 reports.
 - `docs/reports/rainbow-r5-runtime-preflight-reconciliation-2026-07-11.md` — R5 reconciliation report.
+- `docs/reports/hermes-orchestrator-governance-reconciliation-2026-07-12.md` — H1 governance reconciliation report.
 
 ---
 
@@ -204,7 +220,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 - Repository HEAD at C1 planning: `c897c01` (main). Source snapshot referenced elsewhere: `20aee88`.
 - Post-snapshot security hardening includes #475 (raw docker socket removed from hermes-green) and #476 (SEC-2 partial fix).
 - **Runtime posture remains `AUTONOMOUS_DRY_RUN`** — no fresh runtime measurement performed in C1; runtime re-baseline is a separate, explicitly-gated step (Phase F).
-- Workspace bridge (Phase C1A): HermesTrader Hermes container sees this repo read-only at `/workspace/projects/trading-hub`; host path `/opt/data/projects/trading-hub`.
+- Workspace bridge (Phase C1A): HermesTrader Hermes container sees this repo at `/workspace/projects/trading-hub` (now read/write); host path `/opt/data/projects/trading-hub`.
 
 ## Rainbow R5 reconciliation note (2026-07-11)
 
@@ -219,10 +235,10 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ---
 
-## Root-Runtime Roadmap Status (R3 update, 2026-07-11)
+## Root-Runtime Roadmap Status (H1 update, 2026-07-12)
 
-> Appended by R3 (Fleet Reproducibility Decision). Supersedes prior stale claims
-> above where they conflict.
+> Supersedes prior R3 update. Reflects merged R7A/R4 via PR #524 and
+> H1 governance reconciliation via #525.
 
 | Phase | Status | PR |
 |---|---|---|
@@ -230,12 +246,13 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 | R0.5 — Secret Exposure Architecture Closure | COMPLETE | #507 |
 | R1 — Root Executor Service | COMPLETE (shipped + active) | #508 |
 | R2 — Audit, Locking, Mutation Evidence | COMPLETE | #509 |
-| R3 — Fleet Reproducibility Decision | COMPLETE (this update) | (this PR) |
-| R4 — Greenfield Compose + Rainbow Runtime | NEXT | — |
+| R3 — Fleet Reproducibility Decision | COMPLETE | (R3 PR) |
+| R4 / R7A — Greenfield Compose + Rainbow Runtime | ✅ COMPLETE | #524 (`ee767a10`) |
+| H1 — Governance Reconciliation | 🔄 IN PROGRESS | (this PR) |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
-| R7 — SI-v2 Runtime Integration (shadow) | — (real Hermes client integration of root-executor still open) | — |
+| R7 — SI-v2 Runtime Integration (shadow) | — | — |
 | C5 — New Dry-Run Canary Measurement Window | — (replaces C4 ROLLBACK_RECOMMENDED) | — |
 | Rainbow R7 / #496 | BLOCKED | — |
 
@@ -263,21 +280,42 @@ review. R3 did not mutate any runtime state.
 
 ---
 
-## R7A / Root-Runtime R4 reconciliation note (2026-07-11)
+## H1 Governance Reconciliation note (2026-07-12)
+
+> Completed as part of Issue #525. This section supersedes the prior
+> R7A/R4 reconciliation note below.
+
+- Profile corrected to `trading-hub-orchestrator` in `AGENTS.md` and `SOUL.md`.
+- Primary repository workspace corrected to read/write.
+- Secondary repository `ai4trade-bot` documented with explicit cross-repo scope.
+- Root Executor R1 corrected to shipped and active (was "not yet shipped").
+- R4 / R7A marked COMPLETE via PR #524 (`ee767a10`).
+- Source-of-truth order, execution classes A0–A3, and autonomous session
+  algorithm defined in `AGENTS.md`.
+- `commands/trading-hub-roadmap-tick.md` created for bounded autonomous
+  iterations.
+- ADR-2026-07-12-hermes-autonomous-repository-loop.md created.
+- All stale claims removed: no more "workspace read-only", "profile orchestrator",
+  "R1 not shipped", "R4 NEXT".
+
+---
+
+## R7A / Root-Runtime R4 reconciliation note (2026-07-11 — superseded by H1 above)
 
 > **Roadmap-Mapping:** Root-Runtime Roadmap
 > `R4 — Greenfield Compose + Rainbow Runtime`
 > entspricht `R7A` / Issue #504.
 >
 > PR #519 ist der Docs-only-Architektur-PR (PR-1).
-> Compose, Rainbow-Wiring und Tests werden separat in PR-2 eingeführt.
+> Compose, Rainbow-Wiring und Tests wurden in PR #524 (PR-2) eingeführt.
+> Merge-SHA: `ee767a10ca7cae09485755101048b2ea0f4b5e06`.
 
 - Der durch R3 dokumentierte Runtime-Widerspruch bleibt offen:
   Vier Freqtrade-Bots und der Webserver wurden auf agent0 im Dry-Run
   als laufend verifiziert, während ältere State-Abschnitte sie als
   gestoppt beziehungsweise nicht laufend ausweisen.
 - `docker-compose.hermestrader-dryrun.yml` ist die beschlossene
-  kanonische Zieldatei, wird jedoch erst durch PR-2 angelegt.
+  kanonische Zieldatei und wurde durch PR #524 angelegt.
 - `freqai-rebel` bleibt wegen `NOT_REPRODUCIBLE` aus dem
   Greenfield-Default-Deploy ausgeschlossen und wird nur über
   `profiles: ["rebel"]` aktiviert.

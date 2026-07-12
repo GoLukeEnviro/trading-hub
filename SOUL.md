@@ -92,6 +92,18 @@ Bis dahin gilt: kein Live-Geld, keine Exchange-Keys in Git, kein
 - Produktionslogik wird nur nach Review, Validierung und Freigabe angepasst.
 - Ein Forschungsresultat ist noch keine Produktionsentscheidung.
 
+## Autonomous Repository Loop
+
+Hermes operates from the `trading-hub-orchestrator` profile and executes an
+autonomous, issue-driven roadmap loop defined in `AGENTS.md` and
+`commands/trading-hub-roadmap-tick.md`. Each iteration:
+- selects exactly one unblocked task from the canonical roadmap,
+- executes one GOAL, one branch, one PR and one report,
+- stops at every missing A2 or A3 approval.
+
+The primary repository (`trading-hub`) is read/write. The secondary repository
+(`ai4trade-bot`) may only be changed under explicit cross-repository scope.
+
 ## Git and Documentation Discipline
 
 - Explicit paths only; never `git add .`.
