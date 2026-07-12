@@ -327,15 +327,16 @@ class TestLogRotation:
 
 class TestRainbowProperties:
     def test_rainbow_config_internal_only(self) -> None:
+        """The real enforcement is RainbowSettings.read_only (see
+        TestRainbowConfigSchema) - "mode" and "delivery_worker" were never
+        fields Rainbow's settings schema recognized and have been removed.
+        """
         with RAINBOW_CONFIG.open() as f:
             cfg = cast(dict[str, object], yaml.safe_load(f))
-        assert cfg.get("mode") == "ta_collector"
+        assert cfg.get("read_only") is True
 
         evaluation = cast(dict[str, object], cfg.get("evaluation", {}))
         assert evaluation.get("enabled") is False
-
-        delivery = cast(dict[str, object], cfg.get("delivery_worker", {}))
-        assert delivery.get("enabled") is False
 
     def test_rainbow_no_exchange_credentials(self) -> None:
         with RAINBOW_CONFIG.open() as f:
@@ -412,3 +413,108 @@ class TestNoSecrets:
             f"{config_path.name}: exchange must not have real API key"
         assert "secret" not in exchange or "CHANGE" in str(exchange.get("secret", "")).upper(), \
             f"{config_path.name}: exchange must not have real API secret"
+
+
+# ─── 16. Rainbow builds with rainbow.Dockerfile, not the default one ──
+
+class TestRainbowDockerfilePinned:
+    def test_main_compose_uses_rainbow_dockerfile(self, services: dict[str, dict[str, object]]) -> None:
+        rainbow = services["rainbow"]
+        build = cast(dict[str, object], rainbow.get("build", {}))
+        assert build.get("dockerfile") == "rainbow.Dockerfile", \
+            "rainbow service must build with rainbow.Dockerfile (port 8000, uvicorn), " \
+            "not the default Dockerfile (port 9090, python main.py)"
+
+    def test_include_file_uses_rainbow_dockerfile(self) -> None:
+        with RAINBOW_INCLUDE.open() as f:
+            inc = cast(dict[str, object], yaml.safe_load(f))
+        rainbow = cast(dict[str, dict[str, object]], inc["services"])["rainbow"]
+        build = cast(dict[str, object], rainbow.get("build", {}))
+        assert build.get("dockerfile") == "rainbow.Dockerfile"
+
+
+# ─── 17. Rainbow read_only enforcement (real mechanism, not dead env vars) ─
+
+class TestRainbowReadOnlyEnv:
+    def test_main_compose_sets_read_only(self, services: dict[str, dict[str, object]]) -> None:
+        rainbow = services["rainbow"]
+        env = cast(list[str], rainbow.get("environment", []))
+        assert any(e.strip() == "RAINBOW_READ_ONLY=true" for e in env), \
+            f"rainbow service must set RAINBOW_READ_ONLY=true, got: {env}"
+
+    def test_main_compose_has_no_dead_env_vars(self, services: dict[str, dict[str, object]]) -> None:
+        """RAINBOW_MODE / RAINBOW_EVALUATION_ENABLED / RAINBOW_DELIVERY_WORKER_ENABLED
+        don't map to any RainbowSettings field or nested env delimiter and were
+        never read - they gave a false impression of enforcement.
+        """
+        rainbow = services["rainbow"]
+        env = cast(list[str], rainbow.get("environment", []))
+        env_keys = {e.split("=", 1)[0].strip() for e in env}
+        dead_vars = {"RAINBOW_MODE", "RAINBOW_EVALUATION_ENABLED", "RAINBOW_DELIVERY_WORKER_ENABLED"}
+        present_dead = env_keys & dead_vars
+        assert not present_dead, f"these env vars are never read by RainbowSettings: {present_dead}"
+
+
+# ─── 18. Rainbow config only uses fields RainbowSettings actually accepts ──
+
+# Top-level keys RainbowSettings accepts, verified against
+# ai4trade-bot@a43a80cf66c7fb77e07b25a650a72c3303d26791 (rainbow/config/settings.py).
+# extra="forbid" means anything outside this set fails Rainbow's startup.
+RAINBOW_SETTINGS_FIELDS = {
+    "log_level", "log_format", "market_data", "bitget_api_key", "claude_api_key",
+    "llm_api_key", "twitter_bearer_token", "api", "scorer", "evaluation",
+    "collectors", "db_path", "read_only",
+    "health_grace_period_seconds", "health_max_heartbeat_age_seconds",
+}
+
+
+class TestRainbowConfigSchema:
+    def test_config_only_uses_known_fields(self) -> None:
+        with RAINBOW_CONFIG.open() as f:
+            cfg = cast(dict[str, object], yaml.safe_load(f))
+        unknown = set(cfg.keys()) - RAINBOW_SETTINGS_FIELDS
+        assert not unknown, (
+            f"config/rainbow.internal.yml has keys RainbowSettings doesn't accept "
+            f'(extra="forbid" -> startup failure): {unknown}'
+        )
+
+    def test_config_no_legacy_invented_keys(self) -> None:
+        with RAINBOW_CONFIG.open() as f:
+            cfg = cast(dict[str, object], yaml.safe_load(f))
+        for legacy_key in ("mode", "delivery_worker", "storage", "health", "freshness"):
+            assert legacy_key not in cfg, f"'{legacy_key}' is not a RainbowSettings field"
+
+
+# ─── 19. Heartbeat volume mount matches the canonical runtime path ────
+
+class TestHeartbeatVolumeMatchesCanonicalPath:
+    """Rainbow writes to rainbow/storage/heartbeat_rainbow.json relative to
+    /app (see ai4trade-bot rainbow/paths.py). The mounted volume must cover
+    that exact directory, or the heartbeat never lands in persistent storage.
+    """
+
+    def test_main_compose_storage_mount_is_canonical(self, services: dict[str, dict[str, object]]) -> None:
+        rainbow = services["rainbow"]
+        volumes = cast(list[str], rainbow.get("volumes", []))
+        storage_mounts = [v for v in volumes if v.split(":")[0] == "rainbow-storage"]
+        assert storage_mounts == ["rainbow-storage:/app/rainbow/storage"], storage_mounts
+
+    def test_include_file_storage_mount_is_canonical(self) -> None:
+        with RAINBOW_INCLUDE.open() as f:
+            inc = cast(dict[str, object], yaml.safe_load(f))
+        rainbow = cast(dict[str, dict[str, object]], inc["services"])["rainbow"]
+        volumes = cast(list[str], rainbow.get("volumes", []))
+        storage_mounts = [v for v in volumes if v.split(":")[0] == "rainbow-storage"]
+        assert storage_mounts == ["rainbow-storage:/app/rainbow/storage"], storage_mounts
+
+
+# ─── 20. ai4trade-bot pin is documented and current ───────────────────
+
+class TestAi4tradeBotPinDocumented:
+    def test_adr_references_current_pin(self) -> None:
+        adr = ROOT / "docs" / "decisions" / "ADR-2026-07-11-hermes-r7a-dryrun-topology.md"
+        content = adr.read_text(encoding="utf-8")
+        assert "a43a80cf66c7fb77e07b25a650a72c3303d26791" in content, (
+            "ADR must reference the ai4trade-bot commit that fixed the "
+            "read-only/fail-closed contract (ai4trade-bot#78)"
+        )

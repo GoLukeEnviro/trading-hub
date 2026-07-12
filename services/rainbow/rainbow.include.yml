@@ -10,15 +10,16 @@
 # This file exists for standalone Rainbow testing and contract verification.
 
 services:
+  # Build pinned to ai4trade-bot@a43a80cf66c7fb77e07b25a650a72c3303d26791
+  # (ai4trade-bot#78) - the read-only/fail-closed runtime contract fix.
   rainbow:
     build:
       context: ${AI4TRADE_CONTEXT:-../ai4trade-bot}
+      dockerfile: rainbow.Dockerfile
     user: "10000:10000"
     environment:
       - RAINBOW_CONFIG=/app/config/rainbow.internal.yml
-      - RAINBOW_MODE=ta_collector
-      - RAINBOW_EVALUATION_ENABLED=false
-      - RAINBOW_DELIVERY_WORKER_ENABLED=false
+      - RAINBOW_READ_ONLY=true
     volumes:
       - ./config/rainbow.internal.yml:/app/config/rainbow.internal.yml:ro
       - rainbow-storage:/app/rainbow/storage
