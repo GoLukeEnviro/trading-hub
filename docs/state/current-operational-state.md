@@ -1,10 +1,10 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #551 (H3B CLI + checkpoint), H3B blocked at BLOCKED_BY_BOOTSTRAP_CONTROL_PATH.
+> PR #551 (H3B CLI + checkpoint), H3B closed as BLOCKED_BY_BOOTSTRAP_CONTROL_PATH.
 >
-> **Last updated:** 2026-07-12 after PR #551 (H3B CLI + checkpoint)
-> **Previous update:** 2026-07-12 after PR #549 merge (H3B docs checkpoint)
+> **Last updated:** 2026-07-12 after H3B reconciliation (issue #531 closed)
+> **Previous update:** 2026-07-12 after PR #551 (H3B CLI + checkpoint)
 
 ---
 
@@ -109,7 +109,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — BLOCKED (needs APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION).
+Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as BLOCKED_BY_BOOTSTRAP_CONTROL_PATH. All code merged (PRs #549, #550, #551). Remaining blocker is host-side: executor socket bind-mount. Next task: R5A (HermesTrader Deployment) — BLOCKED by H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -137,7 +137,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — BLOCKED (ne
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
 - R7 measurement → R5A complete + runtime preflight approved
-- H3B root-executor client activation → BLOCKED_BY_BOOTSTRAP_CONTROL_PATH (socket not mounted; PR #549 merged, issue #531 closed; requires host-side operator to bind-mount /run/hermes-root-executor/)
+- H3B root-executor client activation → BLOCKED_BY_BOOTSTRAP_CONTROL_PATH (socket not mounted; PRs #549, #550, #551 merged, issue #531 closed; requires host-side operator to bind-mount /run/hermes-root-executor/)
 - R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
 
 ---
@@ -251,7 +251,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — BLOCKED (ne
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #530 (`38203a7`) |
-| H3B — Root-Executor Client Activation | ⬜ BLOCKED_BY_BOOTSTRAP_CONTROL_PATH (socket not mounted; CLI ready in PR #551, issue #531 open) | #531 → #551 |
+| H3B — Root-Executor Client Activation | ⬜ BLOCKED_BY_BOOTSTRAP_CONTROL_PATH (socket not mounted; CLI ready in PR #551, issue #531 closed) | #531 → #549, #550, #551 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
