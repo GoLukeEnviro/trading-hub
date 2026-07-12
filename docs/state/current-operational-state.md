@@ -109,7 +109,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H1 — Governance Reconciliation (#525)** — in progress.
+Current task: **H2 — Autonomous Roadmap Tick (#526)** — in progress.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -248,7 +248,8 @@ Current task: **H1 — Governance Reconciliation (#525)** — in progress.
 | R2 — Audit, Locking, Mutation Evidence | COMPLETE | #509 |
 | R3 — Fleet Reproducibility Decision | COMPLETE | (R3 PR) |
 | R4 / R7A — Greenfield Compose + Rainbow Runtime | ✅ COMPLETE | #524 (`ee767a10`) |
-| H1 — Governance Reconciliation | 🔄 IN PROGRESS | (this PR) |
+| H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
+| H2 — Autonomous Roadmap Tick | 🔄 IN PROGRESS | (this PR) |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
