@@ -523,6 +523,7 @@ class TestSafetyAndSerialization:
             ),
             evidence_reader=CapturingReader(),
             decision_pack_dir=tmp_path / "packs",
+            now_utc="2026-07-01T13:00:00Z",
         )
         assert received.get("change_id") == "test-change-abc"
         assert received.get("t0_timestamp_utc") == "2026-07-01T12:00:00Z"
