@@ -1,45 +1,20 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #557 (H3B protocol rollout incident reconciliation, host-verified) plus
-> the 2026-07-13 runtime-control proof run (systemd permission fix + full
-> Issue #531 proof matrix + secret-redaction hardening).
-> The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is on
-> `main` **and is the daemon currently running on the host**, host-verified
-> (active, `NRestarts=0`, `repository_commit` now correctly tracked —
-> previously always logged `"unknown"`, fixed via a required, fail-closed
-> `HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT` environment variable).
-> The stale Hermes bind mount (PR #557) and the runtime-directory
-> permission gap (`0750 root:root` denying UID 10000) are both fixed and
-> now codified as transactional installer scripts under `ops/systemd/`.
-> **Hermes has full, verified runtime control**: the complete Issue #531
-> proof matrix passes — positive v1 proof, **5 of 5** read-only actions
-> (an earlier report of `docker_compose_config` being blocked by a missing
-> Hermes-image Docker Compose plugin was a misdiagnosis of the wrong
-> execution boundary — the action runs on the *host* via the daemon's
-> `subprocess.run()`, not inside the Hermes container; the real defect was
-> an undeployed daemon-side fix, now deployed and verified), the complete
-> security-proof matrix (wrong UID, missing/invalid A2 approval client- and
-> server-side, A3 always blocked, kill switch, locking, a non-mocked
-> real-subprocess timeout proof, isolated mutation lifecycle
-> create/inspect/stop/remove), and audit correlation with a clean secret
-> scan. `docker_compose_config` was also hardened to run `config --quiet`
-> (data minimization — it validates, it does not need to render resolved
-> secrets) with defense-in-depth redaction at both the daemon and client
-> boundaries, after a live proof run briefly exposed a repository
-> credential through unredacted stdout; the credential was revoked and
-> replaced outside the agent context, and a leak-spread scan found zero
-> matches anywhere in the repository, PR/issue history, audit log, or
-> shell history. The credential rotation has been **human-attested** by
-> the repository owner on 2026-07-13 (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`,
-> `confirmed_by=Luke`, `scope=H3B_PR559_INCIDENT`) — the required A2
-> human-confirmation gate. The agent did not independently verify the
-> GitHub-side revocation event; the attestation itself is the gate.
-> `H3B_RUNTIME_CONTROL_GREEN` is now active (PR #559 squash-merge).
+> PR #560 (R5A HermesTrader dry-run deployment and parity proof, merge
+> `80f9733`). R5A is **complete and parity-proven**: the canonical
+> HermesTrader dry-run fleet (freqforge, freqforge-canary, regime-hybrid,
+> webserver, rainbow) is persistently deployed with 5/5 health, full
+> `dry_run=true` parity, and a clean secret scan. ai4trade runtime
+> dependency is locked to `6e850c8f8ba1d8a0ad45250f130280e4171c001d`.
+> H3B_RUNTIME_CONTROL_GREEN (PR #559) and the full Issue #531 proof
+> matrix remain valid. The R5A executor extension was deployed at
+> commit `782d2c04f59ee96151581de436b069095d28b019` (ratified by
+> repository owner after installer bug-fix arc).
 >
-> **Last updated:** 2026-07-13 after H3B GREEN promotion (human-attested credential rotation, PR #559 squash-merge)
-> **Previous update:** 2026-07-13 after the secret-redaction hardening + full proof matrix run
-> **Earlier update:** 2026-07-13 after the systemd permission fix + full proof matrix run
+> **Last updated:** 2026-07-13 post-R5A reconciliation (PR #560 merge `80f9733`, Issue #527 closed with R5A_PARITY_GREEN)
+> **Previous update:** 2026-07-13 after H3B GREEN promotion (PR #559)
+> **Earlier update:** 2026-07-13 after secret-redaction hardening + full proof matrix run
 
 ---
 
@@ -142,9 +117,17 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ## 4. Operational priority for agents
 
-### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
+### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A ✅)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — **CLOSED and `H3B_RUNTIME_CONTROL_GREEN`**. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed, healthy, and reachable from Hermes (host-verified). All three blockers found on 2026-07-12/13 (stale bind mount, `RuntimeDirectoryMode=0750 root:root` permission gap, undeployed `docker_compose_config` fix) are fixed and verified. The complete Issue #531 proof matrix passes: positive v1 proof, 5/5 read-only actions, the complete security-proof matrix (wrong UID, missing/invalid A2 approval, A3, kill switch, locking, a non-mocked real-subprocess timeout proof, isolated mutation lifecycle), and audit correlation with a clean secret scan. A secret-exposure incident during proof re-verification (rendered Compose config, unredacted stdout) was contained (credential revoked/replaced outside the agent context, zero leak-spread found) and root-caused (data minimization via `config --quiet`, defense-in-depth redaction at both daemon and client boundaries, both regression-tested with canary secrets). The credential rotation was **human-attested** by the repository owner on 2026-07-13 (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`, `confirmed_by=Luke`, `scope=H3B_PR559_INCIDENT`) — the required A2 human-confirmation gate. PR #559 squash-merged. Next task: R5A (HermesTrader Deployment) -- **root-executor extension deployed and H3B-revalidated** (PR #560, commit `782d2c04f59ee96151581de436b069095d28b019`, ratified by the repository owner after a same-branch installer bug-fix arc; see `docs/reports/r5a-hermestrader-dryrun-deployment-2026-07-13.md`). Fleet build/up and the dry-run parity matrix are next.
+**Current state: R5A COMPLETE (PR #560, merge `80f9733`, Issue #527 closed with R5A_PARITY_GREEN).**
+
+The canonical HermesTrader dry-run fleet is persistently deployed and parity-proven (5/5 health, `dry_run=true` validated, Rainbow read-only, kill-switch cycle proven, secret scan clean). ai4trade runtime is locked to `6e850c8f8ba1d8a0ad45250f130280e4171c001d`.
+
+**Next automatic Hermes action (post-reconciliation):** R5B gate — HermesTrader cutover gate and agent0 retirement plan. Inventory/plan/evidence only; no agent0 mutation. Requires separate A2 approval before any host mutation.
+
+**Blocked pending action (after R5B):**
+- R6 — Permanent reconciliation (systemd)
+- R7 / Issue #496 — Rainbow dry-run measurement
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -156,6 +139,8 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — **CLOSED an
 - canary redeployment
 - Rainbow producer start
 - R7 measurement
+- R5B execution / agent0 mutation
+- Docker/Compose mutation
 
 **Allowed:**
 - read-only audits and reports
@@ -171,9 +156,10 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — **CLOSED an
 - Freqtrade bot restart → human approval
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
-- R7 measurement → R5A complete + runtime preflight approved
-- H3B root-executor client activation → **CLOSED — `H3B_RUNTIME_CONTROL_GREEN`** (PR #559 squash-merged 2026-07-13). Host daemon is healthy, dual-protocol, and reachable from Hermes. Complete Issue #531 proof matrix passes. Secret-exposure incident contained; credential rotation human-attested by the repository owner (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`).
-- R5A HermesTrader deployment → executor extension deployed + H3B revalidated (commit `782d2c04f59ee96151581de436b069095d28b019`, ratified); fleet build/up + parity matrix still require explicit human approval before execution
+- R7 measurement → R5B gate + R6 reconciliation + runtime preflight approved
+- H3B root-executor client activation → **CLOSED — `H3B_RUNTIME_CONTROL_GREEN`** (PR #559 squash-merged 2026-07-13). Host daemon is healthy, dual-protocol, and reachable from Hermes.
+- R5A HermesTrader deployment → **COMPLETE and `R5A_PARITY_GREEN`** (PR #560 merged at `80f9733`, Issue #527 closed). Canonical dry-run fleet deployed with 5/5 parity; Rainbow storage fixed; kill-switch provisioned. ai4trade locked to `6e850c8`.
+- R5B agent0 cutover gate → **Next task.** Inventory/plan/evidence only until A2 approval. No agent0 mutation.
 
 ---
 
@@ -287,7 +273,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — **CLOSED an
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
 | H3B — Root-Executor Client Activation | 🟢 **H3B_RUNTIME_CONTROL_GREEN** (PR #559 squash-merged 2026-07-13; complete Issue #531 proof matrix passes 5/5; secret exposure contained; credential rotation human-attested) | #531 → #549, #550, #551, #553, #554, #555, #557, #558, #559 |
-| R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
+| R5a — HermesTrader Deployment | ✅ COMPLETE (PR #560, `80f9733`, 5/5 parity) | #527 → #560 |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
 | R7 — SI-v2 Runtime Integration (shadow) | — | — |
@@ -394,3 +380,22 @@ deployed and has passed full 5/5 dry-run parity.
 - **Rollback point:** Restic snapshot `252e9711` (parent `ff6b7dbc`).
 - **Measurement gate #496** remains blocked pending its own separate
   prerequisites; R5A proves only the persistent dry-run deployment and parity.
+
+---
+
+## Post-R5A Hermes Orchestrator Reconciliation (2026-07-13)
+
+Post-R5A source-of-truth reconciliation. No runtime mutation (A1 only).
+
+- **Main HEAD:** `80f9733e1cbba9f2408852edfd4741f4188ccf8b` (PR #560 squash-merge)
+- **Issue #527:** CLOSED with `R5A_PARITY_GREEN`
+- **ai4trade lock:** `6e850c8f8ba1d8a0ad45250f130280e4171c001d` (Rainbow storage-ownership fix #102)
+- **Fleet:** 5/5 healthy, persistent dry-run on HermesTrader
+- **Roadmap ownership:** Hermes restored as sole orchestrator
+- **Cron:** `trading-hub-roadmap-tick` active (every 30 min, `ollama-cloud/nemotron-3-ultra`); gateway not running for this profile (PID 153 on `default` profile only)
+- **Next sequence:** R5B cutover gate → R6 permanent reconciliation → R7/#496 measurement
+- **C4:** `ROLLBACK_RECOMMENDED` preserved
+- **D1/D2:** Blocked (C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT` required)
+- **Cross-repo drift (recorded, not deployed):** ai4trade-bot `master` has newer commits beyond `6e850c8`. Lock remains at `6e850c8`; moving branch not pulled.
+- **R5B issue:** Created as `[Root-Runtime][R5b] HermesTrader cutover gate and agent0 retirement plan` — inventory/plan/evidence only until A2 approval
+- Full report: `docs/reports/post-r5a-hermes-orchestrator-reconciliation-2026-07-13.md`
