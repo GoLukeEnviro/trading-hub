@@ -232,6 +232,7 @@ def test_keep_when_target_outperforms(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     assert result.status == "FINAL_DECISION_EMITTED"
     assert result.final_decision == "KEEP_FLEET_OVERLAY"
@@ -249,6 +250,7 @@ def test_keep_when_target_matches(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     assert result.status == "FINAL_DECISION_EMITTED"
     assert result.final_decision == "KEEP_FLEET_OVERLAY"
@@ -270,6 +272,7 @@ def test_rollback_when_target_underperforms(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     assert result.status == "FINAL_DECISION_EMITTED"
     assert result.final_decision == "ROLLBACK_FLEET_OVERLAY"
@@ -292,6 +295,7 @@ def test_extend_when_ambiguous(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     assert result.status == "FINAL_DECISION_EMITTED"
     assert result.final_decision == "EXTEND_MEASUREMENT"
@@ -309,6 +313,7 @@ def test_rollback_when_ambiguous_and_no_extend(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     assert result.status == "FINAL_DECISION_EMITTED"
     assert result.final_decision == "ROLLBACK_FLEET_OVERLAY"
@@ -327,6 +332,7 @@ def test_writes_decision_pack(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     assert result.status == "FINAL_DECISION_EMITTED"
     assert result.decision_pack_path
@@ -346,6 +352,7 @@ def test_decision_pack_has_measurement_points(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     pack = json.loads(Path(result.decision_pack_path).read_text())
     points = pack.get("measurement_points", [])
@@ -368,6 +375,7 @@ def test_result_serializable(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     serialized = json.dumps(result.to_dict())
     assert isinstance(serialized, str)
@@ -409,6 +417,7 @@ def test_runtime_mutation_always_none(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     pack = json.loads(Path(result.decision_pack_path).read_text())
     assert pack["runtime_mutation"] == "NONE"
@@ -430,6 +439,7 @@ def test_keep_without_profit_factor(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     assert result.status == "FINAL_DECISION_EMITTED"
     assert result.final_decision == "KEEP_FLEET_OVERLAY"
@@ -448,6 +458,7 @@ def test_preserves_snapshot_label(tmp_path: Path) -> None:
         input_,
         evidence_snapshot=snapshot,
         decision_pack_dir=tmp_path,
+        now_utc="2026-07-02T12:00:00Z",
     )
     pack = json.loads(Path(result.decision_pack_path).read_text())
     points = pack.get("measurement_points", [])
