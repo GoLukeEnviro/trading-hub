@@ -152,3 +152,81 @@ Per the explicit rule for this run, `H3B_RUNTIME_CONTROL_GREEN` requires the com
 - PR #558 (`091ea22`) — bind mount fixed, runtime-directory permission blocker found
 - This run — permission blocker fixed, full proof matrix executed, one new environmental blocker found and precisely isolated
 - Backups: Restic snapshot `377258fd`; `/root/backups/h3b-systemd-permission-fix-20260713/`
+## Addendum — 2026-07-13 (Same-Branch Follow-Up): Execution-Boundary Correction, Secret-Exposure Incident, and Full Resolution
+
+**Supersedes:** the `BLOCKED_BY_MISSING_DOCKER_COMPOSE_PLUGIN_IN_HERMES_IMAGE` verdict earlier in this report.
+
+### Execution-boundary misdiagnosis, corrected
+
+The earlier verdict tested `docker compose` availability **inside the Hermes container**. That is not where `docker_compose_config` executes. `hermes_root/actions.py` builds a `docker compose ...` argv; `hermes-root-executor.service` runs it via `subprocess.run()` on the **host**, as `User=root`. The host has Docker Compose v5.3.1 fully installed (`/usr/libexec/docker/cli-plugins/docker-compose`), confirmed via `systemctl show ... -p ExecStart -p Environment -p User -p Group` and a direct host-side `docker compose version` call.
+
+The real defect: the earlier `-f`-ordering fix in `hermes_root/actions.py` was committed to the repository but **never deployed** to `/usr/local/sbin/hermes_root/actions.py` (the file the running daemon actually imports) — client and daemon fixes had silently diverged. Confirmed via `diff` and fixed with a verified, backed-up, syntax-checked atomic package deploy.
+
+`BLOCKED_BY_MISSING_DOCKER_COMPOSE_PLUGIN_IN_HERMES_IMAGE` is retracted everywhere it appears in this report, the PR body, and `current-operational-state.md`.
+
+### Secret-exposure incident
+
+While re-verifying `docker_compose_config` after the deploy fix, a live-rendered Compose configuration exposed a repository credential through unredacted executor stdout. The credential was revoked and replaced outside the agent context. No credential value is retained in repository evidence, chat-adjacent artifacts, or this report.
+
+A leak-spread scan (generic secret patterns only — `github_pat_`, `ghp_`, `GH_TOKEN=`, `GITHUB_TOKEN=`, `Authorization: Bearer` — no content ever printed) found **zero** matches across: the git working tree and this branch's full diff/log, PR #559 body and comments, Issue #531 comments, this repository's `docs/reports/h3b-*.md` files, the executor audit log, and both `root`/`deploy` shell histories on the host.
+
+### Root-cause fixes (this branch, same PR)
+
+1. **Data minimization** — `docker_compose_config` now runs `config --quiet` instead of `config`. This action validates a configuration; it has no legitimate reason to render and return a fully resolved document (including plaintext environment values) at all. `--quiet` reports the same validation errors via exit code, prints nothing on success.
+2. **Defense-in-depth redaction** — a new `redact_text_output()` in `hermes_root/redact.py` catches known credential shapes (GitHub PAT/token prefixes, Bearer headers) and `key=value` / `"key": value` / `key: value` patterns for TOKEN/SECRET/PASSWORD/API_KEY/PRIVATE_KEY/ACCESS_KEY/AUTH/CREDENTIAL-named fields. Applied unconditionally at both daemon response-construction points (`_finish_v1`, `_handle_legacy`) and again at the client boundary. No debug bypass, no raw-output flag.
+3. **Multi-file Compose contract** — `--file` now repeats (1–4), matching the real Hermes stack (`compose.yaml` + `compose.override.yaml`). Each path is independently validated: absolute, no `..`, `realpath`-resolved inside an allowlisted `/opt/stacks` root, must exist as a regular file.
+
+### Regression tests (canary secrets only — no real credentials in any test)
+
+- Daemon boundary: v1 and legacy response payloads redact env-style, YAML-style, JSON-style, and Bearer-style canary secrets; normal output is unaffected; audit log confirmed clean.
+- Client/CLI boundary: `ExecutorResponse.stdout`/`.stderr`, CLI `--json` output, and CLI human-readable output all redact the same canary secrets independently (defense in depth).
+- Multi-file contract: valid 1–4 file cases, >4 rejected, path traversal rejected, symlink escape rejected, missing file rejected, outside-allowlisted-root rejected — all daemon-side, all backed by the real `hermes_root.actions.build_argv`.
+
+### Live re-verification (post-fix, metadata only — stdout/stderr never printed to chat or report)
+
+Multi-file `docker_compose_config` against the canonical Hermes stack (`compose.yaml` + `compose.override.yaml`), as Hermes UID/GID 10000, via the canonical client:
+
+```
+decision: ALLOWED
+reason: ok
+returncode: 0
+action: docker_compose_config
+execution_class: A0
+correlation_id: <exact match>
+audit_id: <present>
+duration_ms: 70
+stdout_len: 0
+stderr_len: 0
+secret_pattern_hits: []
+```
+
+### repository_commit traceability fix
+
+Every audit entry previously logged `repository_commit="unknown"` — nothing ever told the running daemon what commit was deployed. `hermes_root/daemon.py::main()` now requires `HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT` from the environment (a valid 7–40 hex character SHA) and fails closed (`SystemExit`) if it is missing or malformed.
+
+Deployed and verified: a fresh `executor_health` request's audit entry now shows `repository_commit=ea26ff7a9899f4af7e462bcd8ef288c203cb4ff9` (the exact commit deployed), `daemon_version=2.0.0-repo`.
+
+### Repository-managed systemd fixes
+
+Both host-side systemd changes applied during this H3B effort are now codified as transactional, idempotent installer scripts under `ops/systemd/`:
+
+- `install-hermes-executor-permissions-fix.sh` — the `Group=hermes` / `RuntimeDirectoryMode=0750` / `RuntimeDirectoryPreserve=restart` drop-in (root/GID preconditions, timestamped backup, atomic install, merged-unit verification, ownership verification, restart, automatic rollback with health check on failure, `--check` mode for precondition-only validation).
+- `install-repository-commit-env.sh` — the `EnvironmentFile=` drop-in and the commit env file itself (same transactional pattern).
+
+Both scripts were used for the final live deploy in this run (not just written and left untested) — this is the actual mechanism that produced the current running state, not a parallel manual path.
+
+### Non-mocked timeout proof
+
+The original `test_timeout_blocks` only mocked `subprocess.run` entirely — it proved the daemon *would* handle a `TimeoutExpired` exception, not that a real, long-running subprocess is actually bounded and cleaned up. A new `test_real_timeout_with_real_subprocess` forces `actions.build_argv` to return a real `sleep` command for one test only (never added to the production action registry — no permanent generic-shell or sleep capability introduced), sends it through the real `AF_UNIX` socket server with `timeout=1`, and verifies: genuine `subprocess.TimeoutExpired` handling, bounded wall-clock duration (~1s, not the full 5.417s sleep), correct `decision`/`reason`/`correlation_id`, a matching audit entry, and — via `pgrep` on a duration-specific marker — no orphaned child process.
+
+### Final validation
+
+- `git diff --check`: clean
+- `bash -n` on both new installer scripts: clean
+- `pytest tests/test_hermes_root_client.py tests/test_hermes_root_daemon.py tests/test_ops_systemd_installers.py -q`: **122 passed**
+- Full repo suite: **812 passed, 52 skipped**
+- Live re-verification: positive v1 proof, all 5/5 read-only actions (including the now-fixed `docker_compose_config`), full 7/7 security-proof matrix, isolated mutation lifecycle, audit correlation — all re-confirmed after the final restart
+
+### Outstanding gate (external, not code)
+
+**`H3B_RUNTIME_CONTROL_GREEN` is withheld pending explicit confirmation that the exposed credential has been revoked and replaced.** That confirmation is a human action outside this repository and this agent's reach — it cannot be verified from within the H3B proof matrix. Everything else required for GREEN (complete Issue #531 proof matrix, redacted/data-minimized Compose validation, zero known leak-spread, all tests green) is satisfied as of this commit.

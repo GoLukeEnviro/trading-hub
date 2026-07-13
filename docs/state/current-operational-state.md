@@ -3,30 +3,39 @@
 > **Canonical current-state snapshot** — validated against `main` at
 > PR #557 (H3B protocol rollout incident reconciliation, host-verified) plus
 > the 2026-07-13 runtime-control proof run (systemd permission fix + full
-> Issue #531 proof matrix).
+> Issue #531 proof matrix + secret-redaction hardening).
 > The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is on
 > `main` **and is the daemon currently running on the host**, host-verified
-> (SHA-256 `c89768b6…`, active since 2026-07-12 23:08:19 UTC, `NRestarts=0`).
-> The stale Hermes bind mount from PR #557 is fixed. The
-> `/run/hermes-root-executor` runtime-directory permission blocker
-> (`0750 root:root` denying UID 10000) is **fixed**: the unit now runs with
-> a `Group=hermes` + `RuntimeDirectoryPreserve=restart` drop-in, producing
-> `root:hermes 0750`/`0660` ownership that Hermes (UID/GID 10000) can use.
-> **Hermes now has working runtime control**: a full Issue #531 proof
-> matrix passed — positive v1 proof, 4 of 5 read-only actions, the complete
+> (active, `NRestarts=0`, `repository_commit` now correctly tracked —
+> previously always logged `"unknown"`, fixed via a required, fail-closed
+> `HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT` environment variable).
+> The stale Hermes bind mount (PR #557) and the runtime-directory
+> permission gap (`0750 root:root` denying UID 10000) are both fixed and
+> now codified as transactional installer scripts under `ops/systemd/`.
+> **Hermes has full, verified runtime control**: the complete Issue #531
+> proof matrix passes — positive v1 proof, **5 of 5** read-only actions
+> (an earlier report of `docker_compose_config` being blocked by a missing
+> Hermes-image Docker Compose plugin was a misdiagnosis of the wrong
+> execution boundary — the action runs on the *host* via the daemon's
+> `subprocess.run()`, not inside the Hermes container; the real defect was
+> an undeployed daemon-side fix, now deployed and verified), the complete
 > security-proof matrix (wrong UID, missing/invalid A2 approval client- and
-> server-side, A3 always blocked, kill switch, locking, timeout, isolated
-> mutation lifecycle create/inspect/stop/remove), and audit correlation with
-> a clean secret scan. The sole remaining gap is `docker_compose_config`:
-> the daemon/client code is now correct, but the `docker compose` CLI
-> plugin is entirely absent from the Hermes container image
-> (`nousresearch/hermes-agent:latest`, confirmed `Plugins: []`) — an
-> image-packaging gap, not a code defect, and out of scope for this run
-> (no image changes authorized). `H3B_RUNTIME_CONTROL_GREEN` requires this
-> one action re-verified after the plugin gap is closed in a separate run.
+> server-side, A3 always blocked, kill switch, locking, a non-mocked
+> real-subprocess timeout proof, isolated mutation lifecycle
+> create/inspect/stop/remove), and audit correlation with a clean secret
+> scan. `docker_compose_config` was also hardened to run `config --quiet`
+> (data minimization — it validates, it does not need to render resolved
+> secrets) with defense-in-depth redaction at both the daemon and client
+> boundaries, after a live proof run briefly exposed a repository
+> credential through unredacted stdout; the credential was revoked and
+> replaced outside the agent context, and a leak-spread scan found zero
+> matches anywhere in the repository, PR/issue history, audit log, or
+> shell history. `H3B_RUNTIME_CONTROL_GREEN` is withheld pending explicit
+> human confirmation that the credential rotation is complete — the only
+> remaining gate, and not verifiable from within the repository.
 >
-> **Last updated:** 2026-07-13 after the systemd permission fix + full proof matrix run
-> **Previous update:** 2026-07-13 after the runtime-control proof run (mount fixed, permission blocker found)
+> **Last updated:** 2026-07-13 after the secret-redaction hardening + full proof matrix run
+> **Previous update:** 2026-07-13 after the systemd permission fix + full proof matrix run
 
 ---
 
@@ -131,7 +140,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H3B_RUNTIME_CONTROL_DEGRADED`. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed, healthy, and reachable from Hermes (host-verified). Both blockers found on 2026-07-12/13 (stale bind mount, then a `RuntimeDirectoryMode=0750 root:root` permission gap) are fixed. The full Issue #531 proof matrix now passes: positive v1 proof, 4/5 read-only actions, the complete security-proof matrix (wrong UID, missing/invalid A2 approval, A3, kill switch, locking, timeout, isolated mutation lifecycle), and audit correlation with a clean secret scan. The one remaining gap, `docker_compose_config`, is blocked by a missing `docker compose` CLI plugin in the Hermes container image — an image-packaging gap requiring a separate, explicitly-approved run (install the plugin or an equivalent capability, then re-verify). Next task after `H3B_RUNTIME_CONTROL_GREEN`: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
+Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H3B_RUNTIME_CONTROL_DEGRADED`. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed, healthy, and reachable from Hermes (host-verified). All three blockers found on 2026-07-12/13 (stale bind mount, `RuntimeDirectoryMode=0750 root:root` permission gap, undeployed `docker_compose_config` fix) are fixed and verified. The complete Issue #531 proof matrix now passes: positive v1 proof, 5/5 read-only actions, the complete security-proof matrix (wrong UID, missing/invalid A2 approval, A3, kill switch, locking, a non-mocked real-subprocess timeout proof, isolated mutation lifecycle), and audit correlation with a clean secret scan. A secret-exposure incident during proof re-verification (rendered Compose config, unredacted stdout) was contained (credential revoked/replaced outside the agent context, zero leak-spread found) and root-caused (data minimization via `config --quiet`, defense-in-depth redaction at both daemon and client boundaries, both regression-tested with canary secrets). `H3B_RUNTIME_CONTROL_GREEN` is withheld pending explicit human confirmation that the credential rotation is complete. Next task after `H3B_RUNTIME_CONTROL_GREEN`: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -159,7 +168,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
 - R7 measurement → R5A complete + runtime preflight approved
-- H3B root-executor client activation → host daemon is healthy, dual-protocol, and reachable from Hermes; the full Issue #531 proof matrix passes except `docker_compose_config`. Requires an explicitly approved run to install the `docker compose` CLI plugin (or equivalent) into the Hermes container image, then re-verify that one action, before `H3B_RUNTIME_CONTROL_GREEN`.
+- H3B root-executor client activation → host daemon is healthy, dual-protocol, and reachable from Hermes; the complete Issue #531 proof matrix passes. The only remaining gate before `H3B_RUNTIME_CONTROL_GREEN` is human confirmation that a credential exposed during proof re-verification has been revoked and replaced — not a code or infrastructure blocker.
 - R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
 
 ---
@@ -273,7 +282,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
-| H3B — Root-Executor Client Activation | 🟡 H3B_RUNTIME_CONTROL_DEGRADED (permission blocker fixed 2026-07-13; full Issue #531 proof matrix passes except `docker_compose_config`, blocked by `BLOCKED_BY_MISSING_DOCKER_COMPOSE_PLUGIN_IN_HERMES_IMAGE` — image-packaging gap, not a code defect) | #531 → #549, #550, #551, #553, #554, #555, #557, #558 |
+| H3B — Root-Executor Client Activation | 🟡 H3B_RUNTIME_CONTROL_DEGRADED (all fixes verified 2026-07-13; complete Issue #531 proof matrix passes 5/5; sole remaining gate is human confirmation of an unrelated credential rotation, not code) | #531 → #549, #550, #551, #553, #554, #555, #557, #558, #559 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
