@@ -120,3 +120,84 @@ approval.
 - Restic snapshot `ff6b7dbc170ed64cf3d14941c0f3b3190e2d0f7069cb954311abe115add13368`
   and a root-only local backup with SHA-256 manifest remain available as the
   pre-R5A-deployment rollback point.
+
+---
+
+## R5A Fleet Deployment and Parity Proof (update — 2026-07-13, later same day)
+
+The "Current state at time of writing" section above was captured *before* the
+canonical dry-run fleet was actually brought up (it stated zero R5A containers
+and volumes existed). The fleet was subsequently deployed and, after a Rainbow
+storage-ownership fix, full 5/5 dry-run parity was proven. This section is the
+authoritative, superseding record.
+
+### Rainbow storage-ownership defect and fix
+
+The first Rainbow container crashed on startup with
+`sqlite3.OperationalError: attempt to write a readonly database` during
+`PRAGMA journal_mode=WAL`. Root cause: the storage volume
+`hermestrader-dryrun_rainbow-storage` was initialised owner `999:999` by the
+previous Rainbow image (whose `rainbow` user was UID 999) while the container
+runs as `10000:10000`. Docker copies image directory contents into a fresh
+named volume only on first mount, so the wrong ownership persisted across image
+rebuilds; the volume also carried a baked `signals.db` (owner 999).
+
+Fix — ai4trade-bot PR #102, commit
+`6e850c8f8ba1d8a0ad45250f130280e4171c001d` (master): `rainbow.Dockerfile` now
+creates `rainbow` as UID/GID 10000, `chown -R 10000:10000 /app`, and bakes an
+empty `storage/` owned by 10000 with no `signals.db`. The image was rebuilt on
+HermesTrader from an immutable detached checkout of exactly that SHA
+(`AI4TRADE_CONTEXT=/opt/data/projects/ai4trade-bot-r5a-6e850c8`), not a moving
+branch. Canonical dependency lock recorded in `ops/ai4trade-rainbow.lock.yml`:
+
+- repo `GoLukeEnviro/ai4trade-bot`, branch `master`
+- locked_sha `6e850c8f8ba1d8a0ad45250f130280e4171c001d` (PR #102)
+- rainbow.Dockerfile sha256 `faa2e3d8c351dc50adc4af21093811587c2f49caaa8827e138fee8c0d0796405`
+- resulting image `sha256:f49ceccb724727f4a702c0de0f01d5bb2f2c302018790417bd19aeb09cb611e2`, `Config.User=10000:10000`
+
+Only the defective volume `hermestrader-dryrun_rainbow-storage` was deleted
+(human approval `APPROVED_DELETE_R5A_RAINBOW_TEST_VOLUME`, issue #527,
+confirmed_by=Luke, execution_class A2). The other rainbow-named volumes
+(`trading-hub_rainbow-storage`, `rainbow-live_rainbow_data`) were left intact;
+no `down -v`, prune, or bulk cleanup was used. A fresh pre-mutation Restic
+snapshot `252e9711` (parent `ff6b7dbc`) was taken first. After recreation the
+fresh volume is owned `10000:10000`; Rainbow creates
+`signals.db`/`canonical_signals.db` with WAL files owned 10000 and reaches
+`/health` healthy with `read_only:true`.
+
+### Parity matrix — all five default services
+
+| Check | Result |
+|-------|--------|
+| all 5 services healthy | PASS (freqforge, freqforge-canary, regime-hybrid, webserver, rainbow) |
+| effective configs dry_run=true | PASS (4 Freqtrade bots) |
+| expected strategies load | PASS (FreqForge_Override x2, RegimeSwitchingHybrid_v7_v04_Integration; webserver API) |
+| market-data egress works | PASS (Bitget API reachable from freqtrade egress network) |
+| Rainbow /health read-only/fail-closed | PASS (read_only:true) |
+| Rainbow write methods rejected | PASS (POST ingest + webhook subscribe -> HTTP 405 "read-only mode") |
+| DB/WAL written by UID 10000 | PASS (freqtrade tradesv3 dryrun sqlite + rainbow storage all 10000:10000) |
+| kill switch HALT_NEW blocks new entries | PASS (all 4 bots read HALT_NEW, is_kill_active=True) |
+| kill switch restored to NORMAL | PASS (all 4 bots read NORMAL, is_kill_active=False) |
+| no live orders / exchange mutations | PASS (dry_run=true, dry-run DBs only) |
+| no foreign container/volume/network mutation | PASS (hermes, rainbow-live, socket-proxy untouched; agent0 not accessed) |
+| Rebel excluded | PASS (freqai-rebel absent from dryrun project) |
+| restart/persistence | PASS (rainbow restart; signals.db inode stable, data persisted) |
+| rollback rehearsal (non-destructive) | PASS (compose stop rainbow -> volumes preserved -> start -> healthy) |
+| no secrets | PASS (scripts/secret_scan.py --tracked clean; Main Gate secret scan pass) |
+
+### Kill-switch provisioning finding
+
+Before this run no `kill_switch.json` state file existed and
+`/freqtrade/shared` is mounted read-only, so `kill_switch.py` fail-closed to
+`HALT_NEW` ("unable to read kill switch state") fleet-wide. A NORMAL state file
+was provisioned host-side (git-ignored — `.gitignore` line 284) via the
+canonical `kill_switch.py` CLI, leaving the resting posture at NORMAL so the
+dry-run fleet can operate for later #496 measurement. The full
+HALT_NEW -> NORMAL cycle was exercised and verified across all four Freqtrade
+bots.
+
+### Outcome
+
+`R5A_PARITY_GREEN`. No `dry_run=false`, no live authority, no agent0 mutation;
+Rebel remains excluded. Issue #496 stays blocked pending its own separate
+prerequisites.

@@ -365,3 +365,32 @@ review. R3 did not mutate any runtime state.
   Eine Freigabe erfordert eine neue C4-Entscheidung `KEEP`
   sowie `APPROVED_LIVE_FLEET_ROLLOUT`.
 - Diese Dokumentationsänderung führt keine Runtime- oder Host-Mutation aus.
+
+---
+
+## R5A Dry-Run Fleet — Deployed and Parity-Green (2026-07-13)
+
+The canonical HermesTrader dry-run fleet (Issue #527, PR #560) is persistently
+deployed and has passed full 5/5 dry-run parity.
+
+- **Services (all healthy):** `freqforge`, `freqforge-canary`, `regime-hybrid`,
+  `webserver` (Freqtrade, all `dry_run=true`) and `rainbow` (advisory,
+  read-only/fail-closed). `freqai-rebel` remains profile-gated and excluded.
+- **Rainbow storage fix:** the read-only-database startup crash was caused by a
+  `999:999`-owned storage volume against a `10000:10000` container. Fixed by
+  ai4trade-bot@`6e850c8` (#102): image now `Config.User=10000:10000` and bakes
+  an empty 10000-owned `storage/`. Build pinned via
+  `ops/ai4trade-rainbow.lock.yml` (immutable checkout of the locked SHA, not a
+  moving branch). Only `hermestrader-dryrun_rainbow-storage` was recreated; no
+  other volume touched; no `down -v`/prune.
+- **Kill switch:** now provisioned at NORMAL (git-ignored
+  `freqtrade/shared/kill_switch.json`); it had been fail-closed to HALT_NEW due
+  to a missing state file on a read-only mount. HALT_NEW -> NORMAL cycle
+  verified across all four bots.
+- **Safety posture:** loopback/internal-only exposure, internal/egress network
+  split preserved, DB/WAL owned by UID 10000, Bitget market-data egress works,
+  restart/persistence and non-destructive rollback rehearsed, secret scan clean
+  (Main Gate green), agent0 untouched.
+- **Rollback point:** Restic snapshot `252e9711` (parent `ff6b7dbc`).
+- **Measurement gate #496** remains blocked pending its own separate
+  prerequisites; R5A proves only the persistent dry-run deployment and parity.
