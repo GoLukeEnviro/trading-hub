@@ -15,8 +15,30 @@ from hermes_root.schema import ALL_ACTIONS, MUTATING_ACTIONS
 # Compose files may only be referenced under these host directory roots
 # (resolved, symlink-following) — prevents docker_compose_config from being
 # used to read or execute against arbitrary host paths.
-ALLOWED_COMPOSE_STACK_ROOTS = ("/opt/stacks",)
+ALLOWED_COMPOSE_STACK_ROOTS = ("/opt/stacks", "/opt/data/projects")
 MAX_COMPOSE_FILES = 4
+
+# R5A HermesTrader dry-run deployment (Issue #527)
+# The canonical compose file and project are hardcoded — the client
+# cannot select an arbitrary compose file, project, or profile.
+R5A_CANONICAL_COMPOSE_FILE = (
+    "/opt/data/projects/trading-hub/docker-compose.hermestrader-dryrun.yml"
+)
+R5A_CANONICAL_PROJECT = "hermestrader-dryrun"
+
+# The five default (non-rebel-profile) services from the canonical compose.
+# Client-supplied service names are validated against this allowlist only.
+# freqai-rebel is explicitly excluded (profiles: ["rebel"]).
+R5A_SERVICE_ALLOWLIST = frozenset({
+    "freqtrade-freqforge",
+    "freqtrade-freqforge-canary",
+    "freqtrade-regime-hybrid",
+    "freqtrade-webserver",
+    "rainbow",
+})
+
+# Rebel service name — explicitly blocked even if present in the allowlist
+R5A_REBEL_SERVICE = "freqai-rebel"
 
 
 class ActionError(Exception):
@@ -50,6 +72,40 @@ def _validate_compose_file(path: str) -> str:
         raise ActionError("compose_file_not_found")
 
     return resolved
+
+
+def _validate_r5a_services(services: list[str]) -> None:
+    """Validate that every service name is in the allowlist and not rebel.
+
+    Raises ActionError with a specific reason on violation (invalid_service,
+    rebel_blocked). Empty list = all five default services.
+    """
+    for svc in services:
+        if svc == R5A_REBEL_SERVICE:
+            raise ActionError("rebel_blocked")
+        if svc not in R5A_SERVICE_ALLOWLIST:
+            raise ActionError("invalid_service")
+
+
+def _build_r5a_compose_cmd(subcommand: str, services: list[str]) -> list[str]:
+    """Build the docker compose command for an R5A action.
+
+    Validates the hardcoded canonical compose file on every call, builds
+    the common prefix (file + project), appends subcommand and optional
+    service filter. The caller is responsible for any subcommand-specific
+    flags (e.g. -d for up, --no-start for build).
+    """
+    _validate_compose_file(R5A_CANONICAL_COMPOSE_FILE)
+    _validate_r5a_services(services)
+    cmd = [
+        "docker", "compose",
+        "-f", R5A_CANONICAL_COMPOSE_FILE,
+        "-p", R5A_CANONICAL_PROJECT,
+        subcommand,
+    ]
+    if services:
+        cmd.extend(services)
+    return cmd
 
 
 def is_mutating(action: str) -> bool:
@@ -115,6 +171,26 @@ def build_argv(action: str, argv: list[str]) -> list[str]:
     if action == "systemctl_restart":
         _require_argv_len(argv, 1)
         return ["systemctl", "restart", argv[0]]
+
+    # R5A: HermesTrader dry-run compose fleet management (Issue #527)
+    # All four actions share the same argv semantics:
+    #   argv = list of service names (empty = all five default services)
+    # No arbitrary files, projects, profiles, or flags are accepted.
+    # down -v is explicitly blocked.
+
+    if action == "r5a_compose_build":
+        return _build_r5a_compose_cmd("build", argv)
+
+    if action == "r5a_compose_up":
+        return _build_r5a_compose_cmd("up", argv) + ["-d"]
+
+    if action == "r5a_compose_stop":
+        return _build_r5a_compose_cmd("stop", argv)
+
+    if action == "r5a_compose_down":
+        if "-v" in argv or "--volumes" in argv:
+            raise ActionError("down_volumes_flag_blocked")
+        return _build_r5a_compose_cmd("down", argv)
 
     raise ActionError("unknown_action")
 

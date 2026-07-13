@@ -16,6 +16,12 @@ Mutating actions (A2, requires --approval):
     docker_stop --container <name>
     docker_remove --container <name>
     systemctl_restart --unit <name>
+
+R5A compose fleet actions (A2, requires --approval):
+    r5a_compose_build [--service <svc>]...
+    r5a_compose_up [--service <svc>]...
+    r5a_compose_stop [--service <svc>]...
+    r5a_compose_down [--service <svc>]...
 """
 
 from __future__ import annotations
@@ -121,6 +127,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--cmd", default=None,
         help="Command to run in container (for docker_create)",
     )
+    parser.add_argument(
+        "--service", action="append", default=None,
+        help="Compose service name (for r5a_compose_*; repeat for multiple "
+             "services, omit for all five default services)",
+    )
 
     return parser
 
@@ -183,6 +194,11 @@ def _build_argv(action: str, args: argparse.Namespace) -> list[str]:
         if not unit:
             raise ValueError("--unit is required for systemctl_restart")
         return [unit]
+    elif action in ("r5a_compose_build", "r5a_compose_up",
+                    "r5a_compose_stop", "r5a_compose_down"):
+        # R5A compose actions: service names only, no flags.
+        # --service may be repeated; omit for all five default services.
+        return args.service if args.service else []
     else:
         raise ValueError(f"Unknown action: {action}")
 

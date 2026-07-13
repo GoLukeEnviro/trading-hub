@@ -52,6 +52,11 @@ MUTATING_ACTIONS = frozenset({
     "docker_stop",
     "docker_remove",
     "systemctl_restart",
+    # R5A — HermesTrader dry-run compose fleet management (Issue #527)
+    "r5a_compose_build",
+    "r5a_compose_up",
+    "r5a_compose_stop",
+    "r5a_compose_down",
 })
 
 # All known actions

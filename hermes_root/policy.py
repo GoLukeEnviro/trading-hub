@@ -7,6 +7,8 @@ defense-in-depth only and never a substitute for this check.
 from __future__ import annotations
 
 APPROVED_MARKER = "APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION"
+APPROVED_R5A_MARKER = "APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT"
+APPROVED_MARKERS = frozenset({APPROVED_MARKER, APPROVED_R5A_MARKER})
 VALID_CLASSES = frozenset({"A0", "A1", "A2", "A3"})
 
 
@@ -36,8 +38,9 @@ def evaluate_gate(
         return False, "mutation_not_authorized_for_class"
 
     # A2 mutating: allowlisted action (checked upstream by actions.build_argv),
-    # exact approval marker, and issue/task context required.
-    if approval_reference != APPROVED_MARKER:
+    # exact approval marker (one of the APPROVED_MARKERS set), and
+    # issue/task context required.
+    if approval_reference not in APPROVED_MARKERS:
         return False, "approval_reference_missing_or_invalid"
     if issue_number is None:
         return False, "issue_context_missing"

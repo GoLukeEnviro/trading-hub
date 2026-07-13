@@ -522,7 +522,7 @@ from hermes_root.actions import build_argv as daemon_build_argv
 def _namespace(**overrides):
     """Minimal argparse.Namespace stand-in with the fields _build_argv reads."""
     import argparse
-    defaults = dict(container=None, unit=None, file=None, image=None, name=None, cmd=None)
+    defaults = dict(container=None, unit=None, file=None, image=None, name=None, cmd=None, service=None)
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
 
@@ -979,3 +979,50 @@ def test_cli_shell_injection_stays_single_arg(fake_server, fake_socket_path):
     # Verify the request was sent with proper argv (list, not string)
     received = fake_server._requests_received[-1]
     assert isinstance(received["argv"], list)
+
+
+# ============================================================================
+# R5A — CLI argv contract tests (Issue #527)
+# ============================================================================
+
+class TestR5ACLIServiceExtras:
+    """R5A compose actions: --service becomes service-name argv extras."""
+
+    def test_build_no_services(self):
+        ns = _namespace()
+        extras = cli_build_argv("r5a_compose_build", ns)
+        assert extras == []
+
+    def test_build_one_service(self):
+        ns = _namespace(service=["freqtrade-freqforge"])
+        extras = cli_build_argv("r5a_compose_build", ns)
+        assert extras == ["freqtrade-freqforge"]
+
+    def test_build_multiple_services(self):
+        ns = _namespace(service=["freqtrade-freqforge", "rainbow"])
+        extras = cli_build_argv("r5a_compose_build", ns)
+        assert extras == ["freqtrade-freqforge", "rainbow"]
+
+    def test_up_forwards_services(self):
+        ns = _namespace(service=["freqtrade-freqforge-canary"])
+        extras = cli_build_argv("r5a_compose_up", ns)
+        assert extras == ["freqtrade-freqforge-canary"]
+
+    def test_stop_forwards_services(self):
+        ns = _namespace(service=["freqtrade-regime-hybrid"])
+        extras = cli_build_argv("r5a_compose_stop", ns)
+        assert extras == ["freqtrade-regime-hybrid"]
+
+    def test_down_forwards_services(self):
+        ns = _namespace(service=["freqtrade-webserver", "rainbow"])
+        extras = cli_build_argv("r5a_compose_down", ns)
+        assert extras == ["freqtrade-webserver", "rainbow"]
+
+
+class TestR5ACLIUnknownAction:
+    """Unknown R5A-like action is rejected by CLI."""
+
+    def test_r5a_compose_exec_rejected(self):
+        ns = _namespace()
+        with pytest.raises(ValueError, match="Unknown action"):
+            cli_build_argv("r5a_compose_exec", ns)
