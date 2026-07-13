@@ -1,8 +1,8 @@
 # H3B Protocol Rollout — Incident Reconciliation Report
 
-**Date:** 2026-07-12 23:13 UTC (initial observation) / 2026-07-12 23:33 UTC (reconciliation)
+**Date:** 2026-07-12 23:13 UTC (initial observation) / 2026-07-12 23:33 UTC (reconciliation 1, container-only) / 2026-07-12 23:58 UTC (reconciliation 2, host-verified)
 **Gate:** `H3B_RUNTIME_CONTROL_DEGRADED`
-**Classification:** A0 — Read-only reconciliation (no host mutation performed)
+**Classification:** A0 — Read-only reconciliation (no host or runtime mutation performed)
 
 ## Timeline
 
@@ -10,97 +10,118 @@
 |---|---|
 | ~22:20 | H3B rollout executed via `nsenter` on host (PR #555 installer) |
 | ~22:20 | `hermes-root-executor.service` restarted with new dual-protocol daemon |
-| ~22:20 | New daemon crashed — socket dead |
+| 21:00:07 | Old daemon: a single client sent malformed JSON; the resulting error response hit a `BrokenPipeError` in one connection thread. Non-fatal — the service kept running for 2+ hours afterward. |
+| 23:08:19 | `hermes-root-executor.service` stopped and restarted (matches backup timestamp `h3b-protocol-rollout-20260712/`) — the actual rollout activation |
 | 23:13 | Initial container observation: socket missing, `ROLLBACK_REQUIRED` declared |
-| 23:33 | Reconciliation: socket still missing, mount source deleted, no host access |
+| 23:33 | Reconciliation 1 (container-only): socket still missing, claimed "daemon crashed" / "tmpfs deleted" / service state "cannot verify" |
+| 23:57–23:58 | Reconciliation 2 (host-verified, this update): **directly verified from the host as root** — service healthy, daemon never crashed; root cause identified as a stale Docker bind mount, not a daemon failure |
 
-## Verified current state (2026-07-12 23:33 UTC)
+## Correction of Reconciliation 1
 
-All checks performed from Hermes container as UID 10000:
+Reconciliation 1 was written entirely from container-side inference, without host access, and reached two conclusions that direct host verification now disproves:
+
+| Reconciliation 1 claim | Host-verified reality |
+|---|---|
+| "New daemon crashed — socket dead" | **False.** No crash in the journal. `hermes-root-executor.service` is `active`/`running`, `MainPID=468055`, stable since `2026-07-12 23:08:19 UTC`, `NRestarts=0`, `ExecMainStatus=0`. |
+| "Mount source `tmpfs[.../deleted]` — host-side tmpfs unmounted or directory removed" | **False.** The host-side directory `/run/hermes-root-executor` is live: inode `99150`, `Links: 2`, contains `executor.sock` (`srw-rw---- root:root`), last modified `23:08:19` (the restart, not a deletion). |
+| "`hermes-root-executor.service` — Cannot verify, no host access path" | Verified directly via `ssh hermestrader-root` (a host access path that exists independently of the container). |
+| Root executor "DOWN" (`AGENTS.md`, `current-operational-state.md`) | **False.** The daemon is up, healthy, and enforces `SO_PEERCRED` correctly (see host-side probe below). What is actually broken is the **container's view of the socket**, not the daemon. |
+
+This is a repeat of a known failure mode: an advisory agent without host access inferred a host-side cause (daemon crash, tmpfs cleanup) from a container-side symptom (missing socket) that in fact has an entirely different, verifiable explanation. See "Root cause analysis" below.
+
+## Host-verified state (2026-07-12 23:57 UTC, via `ssh hermestrader-root`, read-only)
 
 | Check | Result |
 |---|---|
-| UID | `uid=10000(hermes) gid=10000(hermes)` |
-| `/run/hermes-root-executor/` | Directory exists, empty, read-only tmpfs mount |
-| `/run/hermes-root-executor/executor.sock` | **MISSING** (`FileNotFoundError` on connect) |
-| Mount source | `tmpfs[/hermes-root-executor//deleted]` — host-side tmpfs unmounted or directory removed |
-| `hermes-root-executor.service` | **Cannot verify** — no host access path available |
-| Docker proxy | Running, read-only (POST /exec → 403) |
-| Bridge | Running, read-only only (`runtime_status_read`) |
-| SSH to host | Not available (no keys, no hostname resolution, port 22 closed on gateway) |
-| `nsenter` | `Operation not permitted` (no CAP_SYS_ADMIN) |
+| `systemctl is-active` | `active` |
+| `ActiveState` / `SubState` | `active` / `running` |
+| `MainPID` | `468055`, stable since `Sun 2026-07-12 23:08:19 UTC` |
+| `NRestarts` | `0` |
+| `ExecMainStatus` | `0` |
+| Binary | `/usr/local/sbin/hermes-root-executor`, 14942 bytes, mode `0750`, owner `root:root`, mtime `23:08:18` |
+| Binary SHA-256 | `c89768b62fd12f38f4b02e933ea39cad98de2f4faf05143b947c9da6cc8812bf` (differs from the backed-up old daemon `ff228215…` — confirms the **new** daemon is the one running) |
+| `hermes_root/` package files | 9 files present (`__init__.py`, `policy.py`, `actions.py`, `audit.py`, `redact.py`, `schema.py`, `client.py`, `validate.py`, `protocol.py`), all `root:root` |
+| Journal | One non-fatal `BrokenPipeError` at `21:00:07` on the pre-rollout (old) daemon from a single malformed-JSON client request; no crash traceback at or after `23:08:19` |
+| Root-side functional probe (`executor_health`, raw socket, as `root`) | `{"decision": "BLOCKED", "reason": "peer_uid_not_allowed"}` — proves the daemon correctly parses v1 JSON and enforces `SO_PEERCRED`; `root` is correctly rejected because it is not the allowlisted peer UID |
 
-## Why Hermes cannot self-recover
+**Conclusion: the daemon rollout succeeded and the new dual-protocol daemon is healthy.**
 
-The executor socket is the **only** privileged host path from the container. With the socket dead:
+## Root cause analysis — why the container still cannot reach a healthy daemon
 
-- No `systemctl` access to check or restart the service
-- No `docker` exec/create access (proxy blocks mutations)
-- No SSH keys or network path to the host
-- No `nsenter` capability
+`/opt/stacks/hermes/compose.override.yaml` mounts the socket directory into the Hermes container as a **directory bind mount**:
 
-This is a **Catch-22**: the one service that could fix the problem is the one that's broken.
+```yaml
+- /run/hermes-root-executor:/run/hermes-root-executor:ro
+```
 
-## v1 Protocol Proof
+The systemd unit uses `RuntimeDirectory=hermes-root-executor` (tmpfs-backed `/run`), which means systemd **deletes and recreates** `/run/hermes-root-executor` as a fresh directory (new inode) on every service start/restart — it does not reuse the old directory in place.
 
-**BLOCKED** — cannot perform v1 `executor_health` request. Socket does not exist.
+Verified inode mismatch:
 
-## Legacy Protocol Proof
+| | Host (current) | Container (Hermes, uid 10000) |
+|---|---|---|
+| Inode | `99150` | `2475` |
+| Links | `2` (live) | `0` (orphaned — deleted-but-open reference) |
+| Birth | `23:08:19` (this restart) | `2026-07-11 15:13:28` (container's original mount setup) |
 
-**BLOCKED** — cannot perform legacy `fs_stat` request. Socket does not exist.
+Docker's bind mount was established against the directory instance that existed when the Hermes container's mount was last set up. The `23:08:19` host-side service restart recreated the directory with a new inode; the container's mount still points at the old, now-orphaned instance and never picks up the new one without a container recreate.
 
-## Audit Correlation
+**This is the same class of bug previously documented for the D3 bridge socket mount** (`compose.override.yaml` directory bind + daemon restart → stale container-side view, requiring `hermes` container recreate to refresh).
 
-**BLOCKED** — no requests could be sent, therefore no audit entries to correlate.
+**Fix (not applied in this session — out of scope, would be a runtime mutation):** recreate the Hermes container so its bind mount re-resolves to the current `/run/hermes-root-executor` directory.
 
-## Stability Window
+## v1 Protocol Proof — **BLOCKED**
 
-**BLOCKED** — cannot query `systemctl show` for PID or restart counter.
+Executed from inside the Hermes container as UID 10000, using the canonical client (`python3 -m hermes_root`, not a manual protocol reconstruction):
 
-## Root cause analysis
+```text
+$ id
+uid=10000(hermes) gid=10000(hermes) groups=10000(hermes)
 
-### What is known
+$ test -S /run/hermes-root-executor/executor.sock
+→ SOCKET_NOT_VISIBLE
 
-The mount source `tmpfs[/hermes-root-executor//deleted]` indicates the host-side tmpfs
-at `/run/hermes-root-executor` was either unmounted or the directory was removed after
-the container's bind-mount was established. This is consistent with the daemon crash:
-if the daemon process died, systemd's `RuntimeDirectory=` directive may have cleaned
-up the tmpfs, leaving the container with a stale, empty mount.
+$ python3 -m hermes_root executor_health --correlation-id h3b-reconcile-20260712T235758Z-5c2680c1 --class A0 --json
+Executor error: Executor socket not found at /run/hermes-root-executor/executor.sock
+(exit code 3)
+```
 
-### What is NOT known (requires host access)
+Stop condition hit: **connection error** (`ExecutorConnectionError` / socket not found), exactly as specified — proof aborted, no retry, no workaround attempted.
 
-- Actual crash reason (no `journalctl` output available)
-- Host Python version
-- Installed daemon file permissions and hash
-- Whether the new `hermes_root/` package was deployed correctly
-- Whether the systemd unit's `RuntimeDirectory=` directive caused the cleanup
-- Whether the daemon ever started successfully before crashing
+## Legacy / A0 Compatibility Check — **BLOCKED** (same transport failure)
 
-### Installer weaknesses identified (from code review of `main`)
+```text
+$ python3 -m hermes_root docker_ps --correlation-id h3b-reconcile-20260712T235849Z-488d8c2b --class A0 --json
+Executor error: Executor socket not found at /run/hermes-root-executor/executor.sock
+(exit code 3)
+```
 
-The installer at `scripts/install-hermes-root-executor.sh` has these gaps:
+Same failure mode as the v1 proof, confirming the block is at the **transport/mount layer**, not daemon-side protocol handling or action allowlisting.
 
-1. **Fake import test** — adds a path and prints "import check passed" without
-   actually importing any `hermes_root` module (lines ~130-135)
-2. **Non-atomic package switch** — `rm -rf` before `mv`, leaving a window with
-   no valid installation
-3. **Incomplete healthcheck** — only checks `systemctl is-active`, not socket
-   presence, protocol response, or restart-loop detection
-4. **Unvalidated rollback** — `systemctl restart ... || true` reports success
-   even when the service fails to start
+(Note: `fs_stat` from the original probe template is not a defined action in this daemon's schema — `Unknown action` on the CLI's own validation, before any socket attempt. `docker_ps` was used instead as a real, documented A0 action.)
 
-These weaknesses explain why a failed rollout could leave the system unrecovered,
-but do not by themselves identify the crash cause.
+## Audit Correlation — no entry (expected)
+
+`/opt/data/hermes/audit/runtime-actions.jsonl` exists (60 lines). Zero matches for either correlation ID (`h3b-reconcile-20260712T235758Z-5c2680c1`, `h3b-reconcile-20260712T235849Z-488d8c2b`) — consistent with both requests failing at the transport layer before ever reaching the daemon. No secrets or other audit content disclosed.
+
+## Stability Window — unaffected
+
+Rechecked after the failed proof attempts: `ActiveState=active`, `SubState=running`, `MainPID=468055` (unchanged), `NRestarts=0` (unchanged). The daemon was never touched by these read-only proof attempts.
+
+## Installer weaknesses (retained from Reconciliation 1, still valid, from code review of `main`)
+
+The installer at `scripts/install-hermes-root-executor.sh` has these gaps, independent of the current incident:
+
+1. **Fake import test** — adds a path and prints "import check passed" without actually importing any `hermes_root` module
+2. **Non-atomic package switch** — `rm -rf` before `mv`, leaving a window with no valid installation
+3. **Incomplete healthcheck** — only checks `systemctl is-active`, not socket presence, protocol response, or restart-loop detection
+4. **Unvalidated rollback** — `systemctl restart ... || true` reports success even when the service fails to start
+
+These remain real gaps worth fixing, but **did not cause this incident** — the daemon is healthy. The incident is a container-mount staleness issue.
 
 ## Recovery path
 
-Manual host recovery is required. The user must SSH into HermesTrader as root
-(or via `operator` breakglass) and:
-
-1. Capture failure evidence: `journalctl -u hermes-root-executor.service -b`
-2. Restore the old daemon from `/root/backups/h3b-protocol-rollout-20260712/`
-3. Verify socket, service stability, and protocol response
-4. Report `ROLLBACK_RECOVERY_GREEN` with evidence
+**No host or daemon recovery is required or should be attempted.** The daemon is healthy. The only outstanding fix is refreshing the Hermes container's stale bind mount (a container recreate), which is a runtime mutation and out of scope for this read-only reconciliation. `ROLLBACK_RECOVERY_GREEN` from the original incident report was never executed and should **not** be executed — it would replace a healthy, tested v1 daemon with the old legacy-only backup for no reason.
 
 ## Gate status
 
@@ -108,27 +129,9 @@ Manual host recovery is required. The user must SSH into HermesTrader as root
 H3B_RUNTIME_CONTROL_DEGRADED
 ```
 
-**Rationale:** The root executor is down. No v1 or legacy protocol proof is
-possible from the container. The repository daemon source (PRs #553, #554, #555)
-is on `main` but the deployment failed. Issue #531 remains open — all acceptance
-criteria (locking, timeout, kill-switch, approval gates, isolated mutating test)
-are unproven.
+**Rationale:** The root executor daemon on the host is healthy, running the new dual-protocol code, and verified functional via a host-side probe. However, Hermes (the only intended caller, from the container as UID 10000) still cannot reach it — v1 and A0/legacy-equivalent proof both fail with a connection error caused by a stale Docker bind mount. Runtime control from Hermes is therefore still **not** established, even though the underlying daemon is fine. Issue #531 remains open — none of its acceptance criteria (locking, timeout, kill-switch, approval gates, isolated mutating test) are proven from this session, and a **container recreate** (not attempted here) is required before a positive v1 proof is possible.
 
-`H3B_RUNTIME_CONTROL_GREEN` requires a successful host recovery followed by
-positive v1 proof, legacy proof, audit correlation, and stability verification
-from the Hermes container.
-
-## What this report corrects from the initial observation
-
-| Initial claim | Corrected |
-|---|---|
-| "production daemon is down" | **Retained** — verified from container |
-| "socket missing" | **Retained** — verified via `FileNotFoundError` on connect |
-| "manual rollback required" | **Retained** — no self-recovery path exists |
-| "repository code is correct and tested" | **Removed** — host parity not proven |
-| "failure is in the deployment mechanism" | **Removed** — root cause not yet proven |
-| `H3B_PROTOCOL_ROLLOUT_ROLLBACK_REQUIRED` | **Replaced** with `H3B_RUNTIME_CONTROL_DEGRADED` |
-| Hypothetical recovery commands | **Replaced** with verified mount-source analysis |
+`H3B_RUNTIME_CONTROL_GREEN` requires: container recreate to refresh the bind mount, followed by a successful positive v1 proof, legacy/A0 proof, audit correlation, and stability verification from the Hermes container — none of which this session was authorized to perform (no runtime mutation permitted).
 
 ## References
 
@@ -137,5 +140,6 @@ from the Hermes container.
 - PR #553 — daemon source (merged `34b39f0`)
 - PR #554 — state reconciliation (merged `f6be78f`)
 - PR #555 — installer package-deploy fix (merged `47dfa56`)
-- `scripts/install-hermes-root-executor.sh` — installer with identified weaknesses
-- `hermes_root/daemon.py` — dual-protocol daemon (on `main`, not deployed)
+- `scripts/install-hermes-root-executor.sh` — installer with identified weaknesses (unrelated to this incident)
+- `hermes_root/daemon.py` — dual-protocol daemon (on `main`, and confirmed **running** on the host)
+- `hermestrader-d3-bridge-wiring` incident (prior art) — same stale-bind-mount-after-restart failure mode on the D3 bridge socket mount

@@ -1,17 +1,20 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #557 (H3B protocol rollout incident reconciliation).
+> PR #557 (H3B protocol rollout incident reconciliation, host-verified).
 > The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is on
-> `main` with 33 passing tests (PRs #553, #554, #555 merged).
-> The H3B rollout to the production host **failed** on 2026-07-12:
-> `hermes-root-executor.service` crashed, the socket is dead, and the container
-> mount shows `tmpfs[/hermes-root-executor//deleted]` — the host-side tmpfs was
-> cleaned up after the daemon crash. Hermes cannot self-recover (Catch-22).
-> Manual host recovery is required. Until then, the root executor is **down**.
+> `main` with 33 passing tests (PRs #553, #554, #555 merged) **and is the
+> daemon currently running on the host** (SHA-256 `c89768b6…`, active since
+> 2026-07-12 23:08:19 UTC, `NRestarts=0`, host-verified via direct root probe).
+> The daemon itself is healthy. The H3B rollout is **not fully usable** because
+> the Hermes container cannot reach it: its `/run/hermes-root-executor` bind
+> mount went stale when systemd recreated the RuntimeDirectory on restart
+> (same failure mode previously seen on the D3 bridge socket mount). A
+> container recreate — not performed in this reconciliation — is required
+> before Hermes has runtime control again.
 >
-> **Last updated:** 2026-07-12 after PR #557 reconciliation (H3B incident)
-> **Previous update:** 2026-07-12 after PR #554 merge (source-of-truth proof and reconciliation)
+> **Last updated:** 2026-07-12 after PR #557 reconciliation 2 (host-verified)
+> **Previous update:** 2026-07-12 after PR #557 reconciliation 1 (container-only, since corrected)
 
 ---
 
@@ -162,7 +165,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as B
 | Rollback path | Rehearsed but execution hard-blocked |
 | Measurement path | Read-only decision engine on `main` |
 | Rainbow advisory | Read-only, fail-closed, disabled by default |
-| Root Executor | 🔴 **DOWN** — `hermes-root-executor.service` crashed during H3B rollout (2026-07-12); socket dead; manual host recovery required; incident reconciled in PR #557 |
+| Root Executor | 🟡 **Daemon healthy, unreachable from Hermes** — `hermes-root-executor.service` active/running (host-verified), but the Hermes container bind mount is stale after the 2026-07-12 restart; container recreate required; see PR #557 |
 | Autonomous roadmap loop | Contract defined in `AGENTS.md` and `commands/trading-hub-roadmap-tick.md` |
 
 ---
@@ -258,7 +261,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as B
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
-| H3B — Root-Executor Client Activation | 🔴 H3B_RUNTIME_CONTROL_DEGRADED (rollout failed 2026-07-12; daemon crashed, socket dead; manual host recovery required; incident reconciled in PR #557) | #531 → #549, #550, #551, #553, #554, #555, #557 |
+| H3B — Root-Executor Client Activation | 🟡 H3B_RUNTIME_CONTROL_DEGRADED (daemon healthy and host-verified since 2026-07-12 23:08 UTC; Hermes container mount stale, container recreate required for a positive v1 proof; incident reconciled in PR #557) | #531 → #549, #550, #551, #553, #554, #555, #557 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
