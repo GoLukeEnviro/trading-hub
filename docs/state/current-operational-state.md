@@ -1,20 +1,23 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #557 (H3B protocol rollout incident reconciliation, host-verified).
+> PR #557 (H3B protocol rollout incident reconciliation, host-verified) plus
+> the 2026-07-13 runtime-control proof run.
 > The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is on
 > `main` with 33 passing tests (PRs #553, #554, #555 merged) **and is the
 > daemon currently running on the host** (SHA-256 `c89768b6…`, active since
 > 2026-07-12 23:08:19 UTC, `NRestarts=0`, host-verified via direct root probe).
-> The daemon itself is healthy. The H3B rollout is **not fully usable** because
-> the Hermes container cannot reach it: its `/run/hermes-root-executor` bind
-> mount went stale when systemd recreated the RuntimeDirectory on restart
-> (same failure mode previously seen on the D3 bridge socket mount). A
-> container recreate — not performed in this reconciliation — is required
-> before Hermes has runtime control again.
+> The stale Hermes bind mount from PR #557 was fixed on 2026-07-13 via a
+> scoped Hermes container recreate (host inode now matches container inode).
+> Hermes still cannot reach the socket: `/run/hermes-root-executor` is
+> `0750 root:root` (systemd `RuntimeDirectoryMode=`/`Group=root`), which
+> denies UID 10000 (Hermes) OS-level traversal regardless of the daemon's own
+> correctly-configured allowlist (`DEFAULT_ALLOWED_UIDS = {10000}`). Fixing
+> this requires either an ACL grant or a systemd unit change + service
+> restart — neither performed yet, both out of scope for the 2026-07-13 run.
 >
-> **Last updated:** 2026-07-12 after PR #557 reconciliation 2 (host-verified)
-> **Previous update:** 2026-07-12 after PR #557 reconciliation 1 (container-only, since corrected)
+> **Last updated:** 2026-07-13 after the runtime-control proof run (mount fixed, new permission blocker found)
+> **Previous update:** 2026-07-12 after PR #557 reconciliation 2 (host-verified)
 
 ---
 
@@ -119,7 +122,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H3B_RUNTIME_CONTROL_DEGRADED`. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed and healthy on the host (host-verified). Hermes cannot reach the current socket because its directory bind mount became stale after the systemd `RuntimeDirectory=` restart on 2026-07-12. A targeted Hermes-container recreate and the remaining Issue #531 proof matrix (positive v1 proof, audit correlation, locking, timeout, kill-switch, approval gates, isolated mutating test) are required before `H3B_RUNTIME_CONTROL_GREEN`. Next task after that: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
+Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H3B_RUNTIME_CONTROL_DEGRADED`. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed and healthy on the host (host-verified). The Hermes container bind mount was fixed on 2026-07-13 (targeted container recreate; host and container inode now match). Hermes still cannot reach the socket: `/run/hermes-root-executor` is `0750 root:root` at the OS level (systemd `RuntimeDirectoryMode=`/`Group=root`), denying UID 10000 traversal even though the daemon's own allowlist already includes UID 10000. An ACL grant or a systemd unit fix (requiring a service restart) plus the full Issue #531 proof matrix (positive v1 proof, audit correlation, locking, timeout, kill-switch, approval gates, isolated mutating test) are required before `H3B_RUNTIME_CONTROL_GREEN`. Next task after that: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -147,7 +150,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
 - R7 measurement → R5A complete + runtime preflight approved
-- H3B root-executor client activation → host daemon is healthy and dual-protocol; blocked because the Hermes container has a stale bind mount. Requires an explicitly approved targeted Hermes-container recreate, followed by positive UID-10000 v1, audit-correlation, locking, timeout, kill-switch, approval-gate and isolated mutation proofs.
+- H3B root-executor client activation → host daemon is healthy and dual-protocol; the stale bind mount is fixed. Blocked now by `/run/hermes-root-executor` being `0750 root:root` (systemd RuntimeDirectoryMode/Group), denying UID 10000 OS-level access. Requires an explicitly approved ACL grant or systemd unit fix + service restart, followed by positive UID-10000 v1, audit-correlation, locking, timeout, kill-switch, approval-gate and isolated mutation proofs.
 - R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
 
 ---
@@ -165,7 +168,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 | Rollback path | Rehearsed but execution hard-blocked |
 | Measurement path | Read-only decision engine on `main` |
 | Rainbow advisory | Read-only, fail-closed, disabled by default |
-| Root Executor | 🟡 **Daemon healthy, unreachable from Hermes** — `hermes-root-executor.service` active/running (host-verified), but the Hermes container bind mount is stale after the 2026-07-12 restart; container recreate required; see PR #557 |
+| Root Executor | 🟡 **Daemon healthy, unreachable from Hermes** — `hermes-root-executor.service` active/running (host-verified); bind mount fixed 2026-07-13 via container recreate; blocked now by `RuntimeDirectoryMode=0750 root:root` denying UID 10000 OS-level traversal (ACL or systemd fix + restart required, not yet performed) |
 | Autonomous roadmap loop | Contract defined in `AGENTS.md` and `commands/trading-hub-roadmap-tick.md` |
 
 ---
@@ -261,7 +264,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
-| H3B — Root-Executor Client Activation | 🟡 H3B_RUNTIME_CONTROL_DEGRADED (daemon healthy and host-verified since 2026-07-12 23:08 UTC; Hermes container mount stale, container recreate required for a positive v1 proof; incident reconciled in PR #557) | #531 → #549, #550, #551, #553, #554, #555, #557 |
+| H3B — Root-Executor Client Activation | 🟡 H3B_RUNTIME_CONTROL_DEGRADED (bind mount fixed 2026-07-13; now blocked by `BLOCKED_BY_EXECUTOR_RUNTIME_DIRECTORY_PERMISSIONS` — RuntimeDirectoryMode=0750 root:root denies UID 10000 traversal; full Issue #531 proof matrix still unattempted) | #531 → #549, #550, #551, #553, #554, #555, #557 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
