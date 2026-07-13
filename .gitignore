@@ -84,7 +84,7 @@ temp/
 docs/context/git-cleanup-snapshots/
 docs/context/memory-migration-staging/
 events/
-proposals/
+/proposals/
 shared/hermes_signal.json
 orchestrator/config/cron_jobs_backup.json
 orchestrator/backups/
