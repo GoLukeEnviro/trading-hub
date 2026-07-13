@@ -69,7 +69,7 @@ REQUIRED_MODULES=(
   "validate.py"
 )
 
-log() { printf '[r5a-executor-ext] %s\n' "$1"; }
+log() { printf '[r5a-executor-ext] %s\n' "$1" >&2; }
 die() { printf '[r5a-executor-ext] ERROR: %s\n' "$1" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------

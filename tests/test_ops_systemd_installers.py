@@ -9,6 +9,7 @@ wrapper scripts to PATH and running the installers in --check mode
 from __future__ import annotations
 
 import os
+import re
 import stat
 import subprocess
 from pathlib import Path
@@ -227,6 +228,54 @@ main
         assert "set -euo pipefail" not in content
 
 
+class TestR5ABackupDirCaptureNotPolluted:
+    """Regression test for a third bug found alongside errtrace and the
+    health-check assertion: log() printed to stdout, but
+    `backup_dir="$(do_backup)"` captures do_backup()'s entire stdout --
+    so every `log "backed up ..."` line inside do_backup() became part
+    of the captured backup_dir value instead of just the final path.
+    Harmless while rollback() never fired (the errtrace bug above), but
+    the errtrace fix makes rollback() fire on real failures, and
+    rollback() builds paths like "${backup_dir}/hermes_root" -- with a
+    polluted, multi-line backup_dir that path silently does not exist,
+    so a real rollback would wrongly take the "no package backup --
+    removed new package" branch instead of restoring it. Fixed by
+    sending log() output to stderr, leaving stdout clean for command
+    substitution.
+    """
+
+    _HARNESS = """set -Eeuo pipefail
+log() { printf '[x] %s\\n' "$1"REDIRECT_TOKEN; }
+do_backup() {
+    log "backed up something"
+    log "backed up something else"
+    printf '%s' "/the/real/path"
+}
+captured="$(do_backup)"
+printf '%s' "$captured" > "OUT_TOKEN"
+"""
+
+    def _run(self, tmp_path, redirect):
+        out = tmp_path / "captured.txt"
+        script = tmp_path / "harness.sh"
+        text = self._HARNESS.replace("REDIRECT_TOKEN", redirect).replace("OUT_TOKEN", str(out))
+        script.write_text(text)
+        subprocess.run(["bash", str(script)], capture_output=True, text=True, timeout=5)
+        return out.read_text() if out.exists() else ""
+
+    def test_stdout_logging_pollutes_captured_return_value(self, tmp_path):
+        """Reproduces the bug in isolation: log() to stdout corrupts a
+        `var="$(fn)"` capture with every intermediate log line."""
+        assert self._run(tmp_path, redirect="") != "/the/real/path"
+
+    def test_stderr_logging_keeps_captured_return_value_clean(self, tmp_path):
+        """Proves the fix in isolation: log() to stderr leaves the
+        captured value as exactly the function's real return value."""
+        assert self._run(tmp_path, redirect=" >&2") == "/the/real/path"
+
+    def test_r5a_installer_log_writes_to_stderr(self):
+        content = R5A_SCRIPT.read_text()
+        assert re.search(r"log\(\) \{ printf.*>&2", content)
 class TestR5AHealthCheckAssertion:
     """Regression test for a second real bug found alongside the
     errtrace issue: verify_executor_health() runs its self-test as
