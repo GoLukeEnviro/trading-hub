@@ -41,7 +41,7 @@
 #     deploy-owned; this script only reads from it.
 #   - Does not start or stop any R5A compose services.
 
-set -euo pipefail
+set -Eeuo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOURCE_PACKAGE="${REPO_ROOT}/hermes_root"
@@ -298,9 +298,15 @@ sock.sendall(req + b'\n')
 raw = sock.recv(65536)
 sock.close()
 resp = json.loads(raw.decode())
-assert resp.get('decision') == 'ALLOWED', f'health check blocked: {resp.get(\"reason\")}'
-assert resp.get('stdout') == 'healthy'
-print(f'executor health OK (audit_id={resp.get(\"audit_id\")})')
+# This check runs as root (peer_uid=0), which is deliberately excluded
+# from DEFAULT_ALLOWED_UIDS={10000} -- the daemon must reject it. The
+# expected healthy response is therefore BLOCKED/peer_uid_not_allowed;
+# this proves the socket accepts connections, parses requests, and
+# enforces the peer allowlist. Any other outcome (ALLOWED as root, a
+# different reason, or no response) indicates a real problem.
+assert resp.get('decision') == 'BLOCKED', f'expected BLOCKED for root peer, got {resp.get(\"decision\")}'
+assert resp.get('reason') == 'peer_uid_not_allowed', f'expected peer_uid_not_allowed, got {resp.get(\"reason\")}'
+print(f'executor health OK -- socket alive, peer ACL enforced correctly (audit_id={resp.get(\"audit_id\")})')
 " || die "executor health check failed"
 }
 
