@@ -12,7 +12,7 @@
 
 R5A deployed and proved parity of the **canonical HermesTrader dry-run fleet** (5/5 services healthy: `freqforge`, `freqforge-canary`, `regime-hybrid`, `webserver`, `rainbow` — all `dry_run=true`, Rainbow read-only/fail-closed, kill-switch cycle proven, secret scan clean). ai4trade runtime locked to `6e850c8f8ba1d8a0ad45250f130280e4171c001d`.
 
-R5B is the **cutover gate**: plan the migration of the **active agent0 dry-run fleet** (4 bots + webserver verified running on agent0 as of R3 live verification 2026-07-11) to the **canonical HermesTrader dry-run fleet**, then retire agent0 trading workloads. This plan is **inventory + gap analysis + sequenced retirement steps only**. Execution requires separate A2 approval with full approval gates (snapshot, canary, allowlist, rollback, audit, bounded measurement).
+R5B is the **canonical dry-run cutover gate**: it covers only the three reproducible agent0 trading roles (`freqforge`, `freqforge-canary`, `regime-hybrid`) and the agent0 webserver. `freqai-rebel` is an explicitly isolated, non-canonical legacy exception and is not migrated, stopped, archived, or deleted by R5B. This plan is **inventory + gap analysis + sequenced, reversible cutover steps only**. No database, volume, model, or credential data is transferred. Execution requires a separate A2 approval for each gate.
 
 ---
 
@@ -57,10 +57,10 @@ R5B is the **cutover gate**: plan the migration of the **active agent0 dry-run f
 | Compose | Implicit/adhoc (no canonical file) | `docker-compose.hermestrader-dryrun.yml` (canonical) | agent0 has no versioned compose |
 | Images | `freqtrade-hermes1337:*` (UID 1337) | `Dockerfile.hermes10000` base (UID 10000) | UID mismatch, image lineage different |
 | Configs | Bind-mounted from `/home/hermes/projects/trading/` | Repo-mounted configs in compose | Config drift risk |
-| Volumes | Named volumes on agent0 | Named volumes on HermesTrader (UID 10000) | Volume migration needed |
+| Volumes | Named volumes on agent0 | Named volumes on HermesTrader (UID 10000) | **No migration** — source data remains untouched on agent0 |
 | Rainbow | Not running | Running (advisory, read-only) | New capability on HermesTrader |
 | Root executor | N/A (legacy D1/D2/D3) | `hermes-root-executor.service` (UID 0, proven) | New capability |
-| Kill switch | File-based (state unknown) | Provisioned `NORMAL` on HermesTrader | State sync needed |
+| Kill switch | File-based, scoped to legacy roles | Provisioned `NORMAL` on HermesTrader | Gate 1 verifies isolation before a reversible canonical-role freeze |
 | ai4trade lock | N/A (uses local images) | `6e850c8f8ba1d8a0ad45250f130280e4171c001d` | Pinned |
 
 ---
@@ -74,22 +74,28 @@ R5B is the **cutover gate**: plan the migration of the **active agent0 dry-run f
 | freqforge | Image UID 1337 vs 10000; bind-mount vs repo-mount | Re-deploy via canonical compose (R5A proven) |
 | canary | Stock image vs `Dockerfile.hermes10000` | Re-deploy via canonical compose (R5A proven) |
 | regime-hybrid | Image UID 1337 vs 10000; bind-mount vs repo-mount | Re-deploy via canonical compose (R5A proven) |
-| rebel | **NOT_REPRODUCIBLE** — 1.2 GB models, FreqAI deps, uncommitted patch | **Excluded from canonical fleet** (R3 decision: `SELECTED_FLEET_MODEL = OPTION_C`, rebel = profile-gated only) |
+| rebel | **NOT_REPRODUCIBLE** — 1.2 GB models, FreqAI deps, uncommitted patch | **Non-canonical legacy exception**; owner Luke; review due within 30 days after this plan merges |
 | webserver | Image UID 1337 vs 10000 | Re-deploy via canonical compose (R5A proven) |
 
-**Resolution:** The 3 reproducible bots + webserver are **already deployed and parity-proven on HermesTrader** (R5A). The cutover is a **traffic/state switch**, not a rebuild.
+**Resolution:** The 3 reproducible trading roles + webserver are **already deployed and parity-proven on HermesTrader** (R5A). The cutover is a **traffic switch without state transfer**, not a rebuild.
 
-### 3.2 State & Data Migration Gaps
+### 3.2 Data Boundary (No Migration)
 
-| Asset | agent0 Location | HermesTrader Target | Migration Needed |
-|-------|-----------------|---------------------|------------------|
-| Freqtrade DB (trades, locks) | `/home/hermes/projects/trading/freqtrade/user_data/` (bind-mounted) | Docker volumes `hermestrader-dryrun_freqforge-userdata` etc. (UID 10000) | **YES** — DB export/import or volume migration |
-| Kill switch state | `freqtrade/shared/kill_switch.json` (bind-mounted) | `freqtrade/shared/kill_switch.json` (git-ignored, UID 10000) | **YES** — sync state (currently NORMAL on both) |
-| Rainbow storage | N/A | `hermestrader-dryrun_rainbow-storage` (UID 10000, fixed) | N/A — new on HermesTrader |
-| Strategy configs | Bind-mounted JSON files | Compose-mounted configs (same content, verified by R3 strategy hash match) | **NO** — content identical per R3 |
-| `freqtrade/shared/` modules | Bind-mounted | Compose-mounted (same repo path) | **NO** — content identical |
+| Asset | agent0 Location | HermesTrader Handling | R5B Rule |
+|-------|-----------------|----------------------|----------|
+| Freqtrade DB (trades, locks) | `/home/hermes/projects/trading/freqtrade/user_data/` (bind-mounted) | HermesTrader uses its existing canonical volumes | **No export, import, copy, snapshot, or deletion** |
+| Kill switch state | Legacy bind-mounted file | Canonical kill switch remains independently managed | No state sync; a later approved freeze is reversible and scoped to canonical agent0 roles only |
+| rebel models and state | agent0 bind-mount + `user_data/models/` | No HermesTrader target | Never transferred or handled by R5B |
+| Rainbow storage | N/A | `hermestrader-dryrun_rainbow-storage` (UID 10000, fixed) | Canonical-only; no agent0 data input |
+| Strategy configs and modules | Bind-mounted | Compose-mounted | Read-only hash/status evidence only |
 
-### 3.3 Operational Gaps
+### 3.3 Legacy Isolation Preflight
+
+`freqai-rebel`, `rainbow-live-rainbow-1`, and `rainbow-live-dashboard-1` are non-canonical. Gate 1 begins with a read-only inventory proving that these legacy workloads share **no credentials, volumes, ports, networks, or delivery/execution control paths** with the canonical HermesTrader fleet. The evidence records identifiers and status only; it never prints secrets.
+
+If any isolation condition cannot be proven, Gate 1 aborts before every mutation and a separate legacy-reconciliation task is required. R6 may exclude rebel only when this evidence is green.
+
+### 3.4 Operational Gaps
 
 | Area | agent0 | HermesTrader | Gap |
 |------|--------|--------------|-----|
@@ -115,6 +121,9 @@ R5B is the **cutover gate**: plan the migration of the **active agent0 dry-run f
 - ✅ Kill switch NORMAL on HermesTrader
 - ✅ Root executor proven (Issue #531 proof matrix 5/5)
 - ✅ Secret scan clean (Main Gate green)
+- ✅ Exposed GitHub OAuth credential revocation request submitted externally; no credential value is recorded
+- ✅ Primary Trading-Hub checkout fast-forwarded on `main`; PR #576 retained in its own worktree
+- ✅ Read-only evidence: no active or planned Roadmap Cron jobs; no new job will be created before the separate hygiene gates
 - ⚠️ agent0 fleet running (R3 verified) — state file drift documented
 - ⚠️ rebel NOT_REPRODUCIBLE — excluded from canonical fleet per R3
 
@@ -122,20 +131,28 @@ R5B is the **cutover gate**: plan the migration of the **active agent0 dry-run f
 
 ---
 
-### Phase 1: State Sync & Freeze (A2 — requires A2 approval)
+### Phase 1: Legacy Preflight & Reversible Freeze (A2 — requires A2 approval)
 
-**Objective:** Freeze agent0 fleet state; sync critical state to HermesTrader; prepare for traffic switch.
+**Objective:** Prove legacy isolation, then freeze only the canonical agent0 roles within one explicitly approved maintenance window. No data moves.
+
+**Hard boundary:** R5B does not snapshot, export, import, copy, archive, or delete databases, volumes, models, credentials, containers, or configuration files.
 
 | Step | Action | Tool | Validation | Rollback |
 |------|--------|------|------------|----------|
-| 1.1 | Snapshot agent0 volumes (restic) | `hermes-root-executor` (remote) | Snapshot ID recorded | Restore from snapshot |
-| 1.2 | Export Freqtrade DB from agent0 | `hermes-root-executor` (remote) | Export files verified (checksums) | Re-import to agent0 |
-| 1.3 | Import Freqtrade DB to HermesTrader volumes | `hermes-root-executor` (local) | Import verified; trade counts match | Recreate volumes from scratch |
-| 1.4 | Sync kill switch state (agent0 → HermesTrader) | `hermes-root-executor` | Both show `NORMAL` | Manual file copy |
-| 1.5 | Freeze agent0 fleet (stop accepting new trades) | Kill switch → `HALT_NEW` on agent0 | Kill switch file shows `HALT_NEW` | Kill switch → `NORMAL` |
-| 1.6 | Verify HermesTrader fleet still healthy | Compose healthchecks + Rainbow | 5/5 green | N/A |
+| 1.1 | Inventory legacy rebel and `rainbow-live-*` boundaries read-only | Read-only host/container inspection | No shared credentials, volumes, ports, networks, or delivery/execution paths | Abort before mutation if evidence is incomplete |
+| 1.2 | Verify canonical HermesTrader fleet health | Compose healthchecks + Rainbow | 5/5 green | N/A |
+| 1.3 | Record canonical agent0 role status and counters read-only | Freqtrade API / container status | Evidence complete; no data transferred | N/A |
+| 1.4 | Freeze only canonical agent0 roles after steps 1.1–1.3 pass | Scoped kill switch → `HALT_NEW` | Previous state recorded; freeze verified | Restore the prior kill-switch state |
 
-**Gate 1:** `AGENT0_SNAPSHOT_GREEN` + `DB_SYNC_VERIFIED` + `KILL_SWITCH_SYNCED` + `HERMESTRADER_HEALTHY` → A2 approval required
+**Approval contract (defined, not issued by this report):**
+- Marker: `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE`.
+- Authority: Luke as repository owner; scope references Issue #561 and this exact gate.
+- Validity: one UTC maintenance window, maximum 24 hours.
+- Allowed commands: read-only inventory, read-only health/status checks, and the scoped reversible kill-switch freeze.
+- Prohibited commands: data movement, snapshots, exports, imports, deletes, Docker/Compose changes, credential changes, container stops, and any Gate 2–4 action.
+- Fail closed: failed or incomplete isolation evidence aborts before mutation; after a freeze, only restoring the immediately preceding kill-switch state is allowed.
+
+**Gate 1:** `LEGACY_ISOLATION_VERIFIED` + `CANONICAL_HEALTHY` + `READ_ONLY_EVIDENCE_COMPLETE` + `CANONICAL_FREEZE_RECORDED` → A2 approval required
 
 ---
 
@@ -156,49 +173,43 @@ R5B is the **cutover gate**: plan the migration of the **active agent0 dry-run f
 
 ### Phase 3: Baseline Fleet Switch (A2 — requires A2 approval)
 
-**Objective:** Switch remaining reproducible bots (freqforge, regime-hybrid, webserver) to HermesTrader.
+**Objective:** Switch the two remaining reproducible trading roles and the agent0 webserver to HermesTrader.
 
 | Step | Action | Tool | Validation | Rollback |
 |------|--------|------|------------|----------|
 | 3.1 | Stop `trading-freqtrade-freqforge-1` on agent0 | `hermes-root-executor` (remote) | Container stopped | Restart on agent0 |
 | 3.2 | Stop `trading-freqtrade-regime-hybrid-1` on agent0 | `hermes-root-executor` (remote) | Container stopped | Restart on agent0 |
 | 3.3 | Stop `trading-freqtrade-webserver-1` on agent0 | `hermes-root-executor` (remote) | Container stopped | Restart on agent0 |
-| 3.4 | Verify all 4 bots + webserver on HermesTrader | Compose + API | 5/5 healthy, trades executing | Re-enable agent0 fleet |
-| 3.5 | Update kill switch on agent0 → `EMERGENCY` (hard freeze) | `hermes-root-executor` (remote) | File shows `EMERGENCY` | Manual override |
+| 3.4 | Verify the 3 canonical roles, webserver, and Rainbow on HermesTrader | Compose + API | 5/5 healthy; canonical traffic only | Restart only the affected agent0 role |
 
-**Gate 3:** `BASELINE_FLEET_SWITCH_VERIFIED` + `AGENT0_FROZEN` → A2 approval required
+**Gate 3:** `CANONICAL_FLEET_SWITCH_VERIFIED` + `AGENT0_CANONICAL_WORKLOADS_STOPPED` → A2 approval required
 
 ---
 
-### Phase 4: agent0 Retirement & Validation (A2 — requires A2 approval)
+### Phase 4: Canonical Workload Inactivity Validation (A2 — requires A2 approval)
 
-**Objective:** Confirm agent0 trading workloads fully retired; validate HermesTrader as sole dry-run fleet.
+**Objective:** Make no new mutation; validate 24 hours of inactivity for the three canonical agent0 trading roles plus the agent0 webserver, while HermesTrader remains healthy.
 
 | Step | Action | Tool | Validation | Rollback |
 |------|--------|------|------------|----------|
-| 4.1 | Verify zero trades on agent0 for 24h | Freqtrade API / DB | No new trades, no open positions | Re-enable if needed |
-| 4.2 | Decommission agent0 trading containers | `hermes-root-executor` (remote) | Containers removed | Recreate from snapshots |
-| 4.3 | Decommission agent0 trading volumes | `hermes-root-executor` (remote) | Volumes removed (after backup retention) | Restore from restic |
-| 4.4 | Archive agent0 configs/state to cold storage | `hermes-root-executor` (remote) | Archive verified (checksums) | N/A |
-| 4.5 | Update DNS/routing if any (webserver) | `hermes-root-executor` (local) | Webserver accessible on HermesTrader | Revert DNS |
+| 4.1 | Observe canonical agent0 roles and webserver for 24h | Read-only API/container status | No activity; no container, volume, or data action | Retain all legacy state unchanged |
 
-**Gate 4:** `AGENT0_TRADING_ZERO` + `HERMESTRADER_SOLE_FLEET` → A2 approval required
+**Gate 4:** `CANONICAL_AGENT0_INACTIVITY_24H` + `HERMESTRADER_CANONICAL_HEALTHY` + `REBEL_LEGACY_ISOLATED` → A2 approval required
 
 ---
 
 ### Phase 5: Post-Cutover Reconciliation (A1 — can proceed after Gate 4)
 
-**Objective:** Reconcile documentation, state files, and handoff to R6/R7.
+**Objective:** Reconcile the canonical fleet state and hand off only to R6. R7 remains blocked.
 
 | Step | Action | Tool | Validation |
 |------|--------|------|------------|
-| 5.1 | Update `current-operational-state.md` — agent0 retired, HermesTrader canonical | Git (A1) | PR merged |
+| 5.1 | Update `current-operational-state.md` — HermesTrader canonical; rebel remains isolated legacy | Git (A1) | PR merged |
 | 5.2 | Close Issue #561 with `R5B_CUTOVER_COMPLETE` | GitHub | Issue closed |
-| 5.3 | Archive agent0 operational docs to `docs/context/` | Git (A1) | Files committed |
-| 5.4 | Handoff to R6 (permanent reconciliation via systemd) | Roadmap tick | R6 issue created |
-| 5.5 | Handoff to R7 / #496 (Rainbow dry-run measurement) | Roadmap tick | R7 unblocked |
+| 5.3 | Create the R6 task for the canonical HermesTrader fleet | Roadmap tick | R6 issue created |
+| 5.4 | Record R7/#496 as blocked by R6 and the separate immutable runtime-promotion gate | GitHub/state file | No premature R7 start |
 
-**Gate 5:** `STATE_RECONCILED` + `R6_UNBLOCKED` + `R7_UNBLOCKED` → automatic (A1)
+**Gate 5:** `STATE_RECONCILED` + `R6_UNBLOCKED` + `R7_STILL_BLOCKED` → automatic (A1)
 
 ---
 
@@ -207,11 +218,11 @@ R5B is the **cutover gate**: plan the migration of the **active agent0 dry-run f
 | Gate | Phase | Required Approval | Evidence Required |
 |------|-------|-------------------|-------------------|
 | Gate 0 | Pre-validation | **AUTO** (already satisfied) | R5A_PARITY_GREEN, R3_DECISION, ROOT_EXECUTOR_GREEN |
-| Gate 1 | State Sync & Freeze | **A2** (explicit human) | Snapshot IDs, DB checksums, kill-switch sync, health checks |
+| Gate 1 | Legacy Preflight & Reversible Freeze | **A2** (explicit human) | Legacy-isolation inventory, read-only evidence, canonical health, scoped freeze record |
 | Gate 2 | Canary Switch | **A2** (explicit human) | Canary-only-on-HermesTrader, measurement window initiated |
-| Gate 3 | Baseline Switch | **A2** (explicit human) | All 4 bots on HermesTrader, agent0 EMERGENCY |
-| Gate 4 | agent0 Retirement | **A2** (explicit human) | 24h zero trades, containers/volumes decommissioned |
-| Gate 5 | Reconciliation | **A1** (automatic) | State file updated, issues closed, R6/R7 unblocked |
+| Gate 3 | Canonical Baseline Switch | **A2** (explicit human) | Three canonical trading roles plus webserver on HermesTrader; agent0 counterparts stopped |
+| Gate 4 | Inactivity Validation | **A2** (explicit human) | 24h inactive canonical agent0 roles/webserver; no deletion or data handling |
+| Gate 5 | Reconciliation | **A1** (automatic) | State file updated, #561 closed, R6 unblocked, R7 still blocked |
 
 ---
 
@@ -222,12 +233,14 @@ R5B is the **cutover gate**: plan the migration of the **active agent0 dry-run f
 | `dry_run=true` on ALL bots, always | Compose config immutable; secret scan blocks `dry_run=false` |
 | No live exchange credentials on either host | Secret scan on both hosts; external live approval required |
 | Kill switch respected | `HALT_NEW`/`EMERGENCY` blocks new entries on both fleets |
-| Rollback capability maintained | Restic snapshots + rehearsed rollback via root executor |
-| Rebel excluded from canonical fleet | Compose profile `rebel` not in default deploy; `NOT_REPRODUCIBLE` recorded |
+| Rollback capability maintained | Reversible scoped kill-switch state and targeted service restart; no R5B data destruction |
+| Rebel excluded and isolated | Owner Luke; 30-day review; no shared credentials, volumes, ports, networks, or control paths |
+| Legacy Rainbow isolated | Gate 1 read-only inventory proves `rainbow-live-*` shares no canonical resource or execution path |
 | C4 `ROLLBACK_RECOMMENDED` preserved | No live rollout without C4 `KEEP` + `APPROVED_LIVE_FLEET_ROLLOUT` |
 | D1/D2 live gates blocked | Explicitly recorded in state file |
 | UID 10000 on HermesTrader | `Dockerfile.hermes10000` bakes UID; compose enforces |
 | No `git add .`, no force-push, no reset --hard | AGENTS.md discipline enforced |
+| Roadmap Cron remains disabled | No creation or reactivation until `/proposals/` is fixed and the active skills profile is manifested |
 
 ---
 
@@ -235,10 +248,10 @@ R5B is the **cutover gate**: plan the migration of the **active agent0 dry-run f
 
 | Phase | Rollback Trigger | Rollback Action | Max Time |
 |-------|------------------|-----------------|----------|
-| 1 | DB sync fails / health check fails | Restore agent0 from restic snapshot; kill switch → NORMAL | 15 min |
+| 1 | Isolation evidence incomplete / health check fails | Abort before mutation; if frozen, restore prior scoped kill-switch state | 15 min |
 | 2 | Canary measurement fails / health degrades | Restart agent0 canary; kill switch → NORMAL on agent0 | 10 min |
-| 3 | Baseline bots unhealthy on HermesTrader | Restart agent0 fleet (freqforge, regime-hybrid, webserver) | 15 min |
-| 4 | Unexpected trades on agent0 after freeze | Kill switch → EMERGENCY on agent0; investigate | 5 min |
+| 3 | Canonical roles unhealthy on HermesTrader | Restart only the affected agent0 role or webserver | 15 min |
+| 4 | Activity from a stopped canonical agent0 role or webserver | Make no new mutation; preserve data and investigate | 5 min |
 
 **Rollback rehearsal:** Phase 5A (`rollback_rehearsal.py`, PR #383) completed and rehearsed but not executed. Root executor rollback path proven in Issue #531 proof matrix.
 
@@ -250,12 +263,15 @@ R5B is the **cutover gate**: plan the migration of the **active agent0 dry-run f
 
 ---
 
-## 9. Next Automatic Action
+## 9. Next Action After Merge
 
-Post-merge reconciliation: R5B planning COMPLETE. Next roadmap tick will:
-- Reconcile Issue #561 (mark planning complete)
-- Wait for A2 approval for Gate 1 (Phase 1: State Sync & Freeze)
-- R6 (permanent reconciliation via systemd) and R7/#496 (Rainbow dry-run measurement) remain blocked pending R5B execution completion
+Post-merge reconciliation: R5B planning is complete. No runtime action is automatic.
+- Close Issue #561 as completed A1 planning.
+- Wait for an explicit `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` approval before any Gate 1 action.
+- Keep Roadmap Cron disabled until the separate `/proposals/` hygiene fix and active skills-profile manifest are complete.
+- R6 remains blocked pending R5B execution; R7/#496 remains blocked pending R6 and the separate immutable runtime-promotion gate.
+**Not in scope:** the `/proposals/` ignore fix, tracked-but-ignored file classification, the skills manifest, `orchestrator.env` templating, `kill_switch.example.json`, ai4trade ignore hygiene, and any runtime activation.
+
 
 ---
 
