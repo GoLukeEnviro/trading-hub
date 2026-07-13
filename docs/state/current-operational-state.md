@@ -30,12 +30,16 @@
 > credential through unredacted stdout; the credential was revoked and
 > replaced outside the agent context, and a leak-spread scan found zero
 > matches anywhere in the repository, PR/issue history, audit log, or
-> shell history. `H3B_RUNTIME_CONTROL_GREEN` is withheld pending explicit
-> human confirmation that the credential rotation is complete — the only
-> remaining gate, and not verifiable from within the repository.
+> shell history. The credential rotation has been **human-attested** by
+> the repository owner on 2026-07-13 (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`,
+> `confirmed_by=Luke`, `scope=H3B_PR559_INCIDENT`) — the required A2
+> human-confirmation gate. The agent did not independently verify the
+> GitHub-side revocation event; the attestation itself is the gate.
+> `H3B_RUNTIME_CONTROL_GREEN` is now active (PR #559 squash-merge).
 >
-> **Last updated:** 2026-07-13 after the secret-redaction hardening + full proof matrix run
-> **Previous update:** 2026-07-13 after the systemd permission fix + full proof matrix run
+> **Last updated:** 2026-07-13 after H3B GREEN promotion (human-attested credential rotation, PR #559 squash-merge)
+> **Previous update:** 2026-07-13 after the secret-redaction hardening + full proof matrix run
+> **Earlier update:** 2026-07-13 after the systemd permission fix + full proof matrix run
 
 ---
 
@@ -140,7 +144,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H3B_RUNTIME_CONTROL_DEGRADED`. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed, healthy, and reachable from Hermes (host-verified). All three blockers found on 2026-07-12/13 (stale bind mount, `RuntimeDirectoryMode=0750 root:root` permission gap, undeployed `docker_compose_config` fix) are fixed and verified. The complete Issue #531 proof matrix now passes: positive v1 proof, 5/5 read-only actions, the complete security-proof matrix (wrong UID, missing/invalid A2 approval, A3, kill switch, locking, a non-mocked real-subprocess timeout proof, isolated mutation lifecycle), and audit correlation with a clean secret scan. A secret-exposure incident during proof re-verification (rendered Compose config, unredacted stdout) was contained (credential revoked/replaced outside the agent context, zero leak-spread found) and root-caused (data minimization via `config --quiet`, defense-in-depth redaction at both daemon and client boundaries, both regression-tested with canary secrets). `H3B_RUNTIME_CONTROL_GREEN` is withheld pending explicit human confirmation that the credential rotation is complete. Next task after `H3B_RUNTIME_CONTROL_GREEN`: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
+Current task: **H3B — Root-Executor Client Activation (#531)** — **CLOSED and `H3B_RUNTIME_CONTROL_GREEN`**. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed, healthy, and reachable from Hermes (host-verified). All three blockers found on 2026-07-12/13 (stale bind mount, `RuntimeDirectoryMode=0750 root:root` permission gap, undeployed `docker_compose_config` fix) are fixed and verified. The complete Issue #531 proof matrix passes: positive v1 proof, 5/5 read-only actions, the complete security-proof matrix (wrong UID, missing/invalid A2 approval, A3, kill switch, locking, a non-mocked real-subprocess timeout proof, isolated mutation lifecycle), and audit correlation with a clean secret scan. A secret-exposure incident during proof re-verification (rendered Compose config, unredacted stdout) was contained (credential revoked/replaced outside the agent context, zero leak-spread found) and root-caused (data minimization via `config --quiet`, defense-in-depth redaction at both daemon and client boundaries, both regression-tested with canary secrets). The credential rotation was **human-attested** by the repository owner on 2026-07-13 (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`, `confirmed_by=Luke`, `scope=H3B_PR559_INCIDENT`) — the required A2 human-confirmation gate. PR #559 squash-merged. Next task: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` (now satisfied) + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -168,8 +172,8 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
 - R7 measurement → R5A complete + runtime preflight approved
-- H3B root-executor client activation → host daemon is healthy, dual-protocol, and reachable from Hermes; the complete Issue #531 proof matrix passes. The only remaining gate before `H3B_RUNTIME_CONTROL_GREEN` is human confirmation that a credential exposed during proof re-verification has been revoked and replaced — not a code or infrastructure blocker.
-- R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
+- H3B root-executor client activation → **CLOSED — `H3B_RUNTIME_CONTROL_GREEN`** (PR #559 squash-merged 2026-07-13). Host daemon is healthy, dual-protocol, and reachable from Hermes. Complete Issue #531 proof matrix passes. Secret-exposure incident contained; credential rotation human-attested by the repository owner (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`).
+- R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN (now satisfied) + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
 
 ---
 
@@ -186,7 +190,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 | Rollback path | Rehearsed but execution hard-blocked |
 | Measurement path | Read-only decision engine on `main` |
 | Rainbow advisory | Read-only, fail-closed, disabled by default |
-| Root Executor | 🟢 **Reachable and proven from Hermes** — `hermes-root-executor.service` active/running (`root:hermes` permissions since the 2026-07-13 systemd fix); full Issue #531 proof matrix passes except `docker_compose_config` (blocked by a missing CLI plugin in the Hermes image, not a code issue) |
+| Root Executor | 🟢 **Reachable and fully proven from Hermes** — `hermes-root-executor.service` active/running (`root:hermes` permissions since the 2026-07-13 systemd fix); complete Issue #531 proof matrix passes 5/5 (positive v1, all read-only actions, full security matrix, audit correlation); secret exposure contained and credential rotation human-attested (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`, `confirmed_by=Luke`) |
 | Autonomous roadmap loop | Contract defined in `AGENTS.md` and `commands/trading-hub-roadmap-tick.md` |
 
 ---
@@ -282,7 +286,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
-| H3B — Root-Executor Client Activation | 🟡 H3B_RUNTIME_CONTROL_DEGRADED (all fixes verified 2026-07-13; complete Issue #531 proof matrix passes 5/5; sole remaining gate is human confirmation of an unrelated credential rotation, not code) | #531 → #549, #550, #551, #553, #554, #555, #557, #558, #559 |
+| H3B — Root-Executor Client Activation | 🟢 **H3B_RUNTIME_CONTROL_GREEN** (PR #559 squash-merged 2026-07-13; complete Issue #531 proof matrix passes 5/5; secret exposure contained; credential rotation human-attested) | #531 → #549, #550, #551, #553, #554, #555, #557, #558, #559 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |

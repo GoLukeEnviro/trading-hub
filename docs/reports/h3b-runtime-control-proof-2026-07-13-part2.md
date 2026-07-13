@@ -1,7 +1,7 @@
 # H3B Runtime-Control Proof — 2026-07-13 (systemd Permission Fix + Full Proof Matrix)
 
 **Date:** 2026-07-13 06:30–07:00 UTC
-**Gate:** `H3B_RUNTIME_CONTROL_DEGRADED`
+| **Gate:** | `H3B_RUNTIME_CONTROL_DEGRADED` (first push, **superseded**) → `H3B_RUNTIME_CONTROL_GREEN` (final, see Addendum 2) |
 **Classification:** A2 — approved (`APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION` + `APPROVED_H3B_SYSTEMD_PERMISSION_FIX_AND_RUNTIME_PROOF`)
 
 ## Goal
@@ -152,9 +152,57 @@ Per the explicit rule for this run, `H3B_RUNTIME_CONTROL_GREEN` requires the com
 - PR #558 (`091ea22`) — bind mount fixed, runtime-directory permission blocker found
 - This run — permission blocker fixed, full proof matrix executed, one new environmental blocker found and precisely isolated
 - Backups: Restic snapshot `377258fd`; `/root/backups/h3b-systemd-permission-fix-20260713/`
-## Addendum — 2026-07-13 (Same-Branch Follow-Up): Execution-Boundary Correction, Secret-Exposure Incident, and Full Resolution
+## Addendum 2 — 2026-07-13: H3B GREEN promotion after human-attested credential rotation
 
-**Supersedes:** the `BLOCKED_BY_MISSING_DOCKER_COMPOSE_PLUGIN_IN_HERMES_IMAGE` verdict earlier in this report.
+**Status:** `H3B_RUNTIME_CONTROL_GREEN` (PR #559 squash-merged 2026-07-13, Issue #531 closed).
+
+### Reconciliation of the credential-rotation gate
+
+The first two push iterations of this PR kept the gate at `H3B_RUNTIME_CONTROL_DEGRADED` because the proof matrix could not independently verify the external GitHub-side revocation of the credential that was briefly exposed through unredacted executor stdout during `docker_compose_config` re-verification. All other criteria for GREEN were already satisfied (complete Issue #531 matrix, redacted/data-minimized Compose validation, zero leak-spread, all tests green).
+
+On 2026-07-13, the repository owner **human-attested** the external rotation:
+
+```
+COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED
+confirmed_by=Luke
+scope=H3B_PR559_INCIDENT
+```
+
+This is the required A2 human-confirmation gate for H3B. The agent did **not** independently verify the GitHub-side revocation event; the attestation itself is the gate. The secret-spread scan (generic patterns only, no content ever printed) was re-run against the final state of the branch, PR #559 body and full comment thread, this report, `current-operational-state.md`, the executor audit log, and `root`/`deploy` shell history — **zero matches** anywhere.
+
+### Final reconciliation against earlier stale claims
+
+| Earlier stale claim (first push of this PR) | Reconciled status |
+|---|---|
+| `BLOCKED_BY_MISSING_DOCKER_COMPOSE_PLUGIN_IN_HERMES_IMAGE` | Already retracted in the first Addendum; the actual defect was a non-deployed `actions.py` fix, corrected and live-verified. |
+| `docker_compose_config` is blocked | **Retracted** — `docker_compose_config` is live-verified as `ALLOWED` with `config --quiet`, `stdout_len=0`, `stderr_len=0`. |
+| `H3B_RUNTIME_CONTROL_DEGRADED` (Root Executor safety table) | **Retracted** — Root Executor is 🟢 Reachable and fully proven from Hermes. |
+| `Main Gate: pending on this push` | **Superseded** — Main Gate is green on the final head. |
+| `external human confirmation remains missing` | **Superseded** — confirmed by the human operator 2026-07-13. |
+
+### Snapshot / correlation references (sanitized)
+
+- Restic snapshot: `377258fd` (tag `h3b-systemd-permission-fix-<ts>`)
+- Unit-file backup: `/root/backups/h3b-systemd-permission-fix-20260713/`
+- Executor audit log: `/opt/data/hermes/audit/runtime-actions.jsonl` — every H3B session correlation ID is present with `repository_commit=ea26ff7a9899f4af7e462bcd8ef288c203cb4ff9` (or later, fail-closed).
+- Main Gate: pass (run `29246191120` at the time of the previous push, then re-run on the GREEN-promotion commit).
+- PR #559: `https://github.com/GoLukeEnviro/trading-hub/pull/559`
+- Issue #531: `https://github.com/GoLukeEnviro/trading-hub/issues/531`
+- Final head SHA (post-merge): captured in the squash-merge comment on PR #559 and the Issue #531 closure comment.
+
+### R5A readiness (separate, not started)
+
+`H3B_RUNTIME_CONTROL_GREEN` is now satisfied. R5A (HermesTrader deployment) remains **blocked** by:
+
+- `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT`
+- `BACKUP_GATE_GREEN`
+- explicit human approval for R5A
+
+R5A is **not started** in this run.
+
+## Addendum 1 — 2026-07-13 (Same-Branch Follow-Up): Execution-Boundary Correction, Secret-Exposure Incident, and Full Resolution
+
+**Supersedes:** the `BLOCKED_BY_MISSING_DOCKER_COMPOSE_PLUGIN_IN_HERMES_IMAGE` verdict earlier in this report. The GREEN promotion that followed this addendum is in Addendum 2 above.
 
 ### Execution-boundary misdiagnosis, corrected
 
