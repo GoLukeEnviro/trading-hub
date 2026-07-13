@@ -60,6 +60,18 @@ more specific approved scope:
    applied. Do not override an active kill switch without explicit human
    approval.
 
+## Background Review Constraints
+
+Der Background-Review-Agent (post-turn review path) operiert mit einer
+eingeschraenkten Tool-Whitelist:
+
+- **Erlaubt:** `memory/*` (Mem0/Holographic persist), `skill/*` (Skill-Management)
+- **NICHT erlaubt:** `read_file`, `search_files`, `patch`, `terminal`, `execute_code`, `edit`, `write`
+
+Der Review-Pfad dient der Memory-Persistenz und Skill-Verwaltung, nicht
+der Code- oder Dateisystem-Inspektion. Datei-Aenderungen und Code-Reviews
+erfolgen im primaeren Agent-Pfad, nicht im Background-Review.
+
 ## Proven SI-v2 4-bot loop
 
 The current agent assumption is a proven four-bot, dry-run SI-v2 Active Cycle
