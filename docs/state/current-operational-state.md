@@ -1,17 +1,20 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #554 (source-of-truth proof and post-merge state reconciliation).
-> The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is now
-> on `main` with 33 passing tests. The production host daemon
-> (`/usr/local/sbin/hermes-root-executor`, 8521 B, deployed 2026-07-11) still
-> runs the legacy-only R1 artifact and has **not** been replaced.
-> A live `executor_health` v1 request still returns `BLOCKED: unknown_category`.
-> The source-of-truth proof confirms the production daemon was authored directly
-> on the host (R1, PR #508) and is not derived from this repository.
+> PR #557 (H3B protocol rollout incident reconciliation, host-verified).
+> The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is on
+> `main` with 33 passing tests (PRs #553, #554, #555 merged) **and is the
+> daemon currently running on the host** (SHA-256 `c89768b6…`, active since
+> 2026-07-12 23:08:19 UTC, `NRestarts=0`, host-verified via direct root probe).
+> The daemon itself is healthy. The H3B rollout is **not fully usable** because
+> the Hermes container cannot reach it: its `/run/hermes-root-executor` bind
+> mount went stale when systemd recreated the RuntimeDirectory on restart
+> (same failure mode previously seen on the D3 bridge socket mount). A
+> container recreate — not performed in this reconciliation — is required
+> before Hermes has runtime control again.
 >
-> **Last updated:** 2026-07-12 after PR #554 merge (source-of-truth proof and reconciliation)
-> **Previous update:** 2026-07-12 after PR #553 merge (H3B_DAEMON_SOURCE_MERGED)
+> **Last updated:** 2026-07-12 after PR #557 reconciliation 2 (host-verified)
+> **Previous update:** 2026-07-12 after PR #557 reconciliation 1 (container-only, since corrected)
 
 ---
 
@@ -116,7 +119,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as BLOCKED_BY_BOOTSTRAP_CONTROL_PATH. All code merged (PRs #549, #550, #551). The socket bind-mount has since been completed; the remaining blocker is that the production daemon only speaks the legacy protocol. A repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) now exists (`H3B_DAEMON_SOURCE_READY`), but has **not** been deployed to the host. Next task after review/rollout approval: R5A (HermesTrader Deployment) — BLOCKED by H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT.
+Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H3B_RUNTIME_CONTROL_DEGRADED`. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed and healthy on the host (host-verified). Hermes cannot reach the current socket because its directory bind mount became stale after the systemd `RuntimeDirectory=` restart on 2026-07-12. A targeted Hermes-container recreate and the remaining Issue #531 proof matrix (positive v1 proof, audit correlation, locking, timeout, kill-switch, approval gates, isolated mutating test) are required before `H3B_RUNTIME_CONTROL_GREEN`. Next task after that: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -144,7 +147,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as B
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
 - R7 measurement → R5A complete + runtime preflight approved
-- H3B root-executor client activation → socket bind-mount complete; blocked on production daemon still speaking only the legacy protocol. Repository daemon source now exists (`H3B_DAEMON_SOURCE_READY`, PR pending review) but is not deployed — deployment requires a separate, explicitly-gated rollout approval.
+- H3B root-executor client activation → host daemon is healthy and dual-protocol; blocked because the Hermes container has a stale bind mount. Requires an explicitly approved targeted Hermes-container recreate, followed by positive UID-10000 v1, audit-correlation, locking, timeout, kill-switch, approval-gate and isolated mutation proofs.
 - R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
 
 ---
@@ -162,7 +165,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as B
 | Rollback path | Rehearsed but execution hard-blocked |
 | Measurement path | Read-only decision engine on `main` |
 | Rainbow advisory | Read-only, fail-closed, disabled by default |
-| Root Executor | `hermes-root-executor.service` shipped and active (PR #508, R1) |
+| Root Executor | 🟡 **Daemon healthy, unreachable from Hermes** — `hermes-root-executor.service` active/running (host-verified), but the Hermes container bind mount is stale after the 2026-07-12 restart; container recreate required; see PR #557 |
 | Autonomous roadmap loop | Contract defined in `AGENTS.md` and `commands/trading-hub-roadmap-tick.md` |
 
 ---
@@ -258,7 +261,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as B
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
-| H3B — Root-Executor Client Activation | 🟡 H3B_DAEMON_SOURCE_MERGED (PR #553 merged `34b39f0`; dual-protocol daemon on `main`, 33 tests; production host daemon still legacy-only, not deployed) | #531 → #549, #550, #551, #553 |
+| H3B — Root-Executor Client Activation | 🟡 H3B_RUNTIME_CONTROL_DEGRADED (daemon healthy and host-verified since 2026-07-12 23:08 UTC; Hermes container mount stale, container recreate required for a positive v1 proof; incident reconciled in PR #557) | #531 → #549, #550, #551, #553, #554, #555, #557 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
