@@ -121,6 +121,41 @@ When resolving conflicts or stale claims, use this hierarchy:
 - RiskGuard weakening
 - Kill-switch bypass or deactivation
 
+## Repository writer contract
+
+Every roadmap tick (cron or manual) and every autonomous agent session that
+writes to the trading-hub repository MUST follow the enforced single-writer
+contract defined in `orchestrator/scripts/repo_writer.py`.
+
+**Global lock.** A single non-blocking `fcntl.flock` on
+`/opt/data/state/hermes-repo-writer.lock` serialises all writers. The lock is
+process-scoped and kernel-released on exit (incl. SIGKILL). The on-disk JSON
+carries holder metadata (PID, host, worktree path, branch, session ID,
+started-at) for inspection via `RepoWriterLock().read_holder()`. Failed
+acquisition raises `RepoWriterError("BLOCKED_BY_ACTIVE_REPO_WRITER")`;
+
+**Isolated worktrees.** Every writer MUST create a fresh `git worktree add`
+from a pinned `origin/main` SHA (never a moving branch) under
+`/opt/data/projects/trading-hub-worktrees/`. The shared canonical checkout
+(`/workspace/projects/trading-hub`) is read-only — never switch branches,
+commit, or reset there. The new worktree's status must be clean
+(`git status --porcelain` empty, `HEAD` on the requested branch) before
+creating any commits. Remove the worktree after merge or formal abort.
+
+**Clean-worktree verification.** Both the shared checkout and the new
+worktree must be clean before branch creation and before commit.
+
+**Stop condition.** `BLOCKED_BY_ACTIVE_REPO_WRITER` is a hard stop — do not
+override without explicit operator approval.
+
+**No unrelated debug work.** No session outside the roadmap loop may write
+to the trading-hub repository. Cron ticks are the exclusive repository
+writer; manual operator sessions may hold the lock but must follow the same
+contract.
+
+See `commands/trading-hub-roadmap-tick.md` for the per-tick algorithm and
+`tests/test_repo_writer.py` for the enforcement test suite (31 tests).
+
 ## Autonomous roadmap session algorithm
 
 Every autonomous agent session acting on the roadmap MUST:

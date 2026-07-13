@@ -12,8 +12,8 @@
 > commit `782d2c04f59ee96151581de436b069095d28b019` (ratified by
 > repository owner after installer bug-fix arc).
 >
-> **Last updated:** 2026-07-13 post-orchestrator-gateway-restore (`HERMES_ORCHESTRATOR_GATEWAY_GREEN`, s6-svc -u, no runtime mutation)
-> **Previous update:** 2026-07-13 post-R5A reconciliation (PR #560 merge `80f9733`, Issue #527 closed with R5A_PARITY_GREEN)
+> **Last updated:** 2026-07-13 post-single-writer-containment (`HERMES_SINGLE_WRITER_GREEN`, PRs #564–#570 closed, enforced RepoWriterLock + IsolatedWorktree contract, no runtime mutation)
+> **Previous update:** 2026-07-13 post-orchestrator-gateway-restore (`HERMES_ORCHESTRATOR_GATEWAY_GREEN`, s6-svc -u)
 > **Earlier update:** 2026-07-13 after secret-redaction hardening + full proof matrix run
 
 ---
@@ -427,3 +427,40 @@ begins in a separate future tick.
 - Duplicate jobs: 0
 - Runtime mutation: NONE
 - Full report: `docs/reports/hermes-orchestrator-gateway-restore-2026-07-13.md`
+
+## Hermes Concurrent-Writer Incident and Recovery (2026-07-13)
+
+**`HERMES_SINGLE_WRITER_GREEN`** — containment of a concurrent-writer
+incident where the `trading-hub-roadmap-tick` cron job fan-contaminated
+the repository with 7 parallel `docs/debug/*` branches and PRs (#564–#570)
+in 12 minutes (2026-07-13 19:24–35 UTC). All 7 PRs included the same
+R5B cutover-gate planning report (fan-out contamination).
+
+### Containment actions (completed)
+
+- Cron `f18cbcdb56b7`: **paused** (gateway still running, no active jobs)
+- PRs #564–#570: **closed** with `INVALIDATED_BY_CONCURRENT_WORKTREE_CONTAMINATION`; no merge, no cherry-pick
+- Embedded PAT in `.git/logs/HEAD` (4 entries): **redacted** (file-level, not history rewrite)
+- Remote URLs: **confirmed clean** (both `trading-hub` and `ai4trade-bot`); credential helper `!gh auth git-credential` configured
+- Shared canonical checkout: **preserved without reset/clean** (local `main` at `aa0e769`; new work is in isolated worktrees from `origin/main`)
+- `COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`: **⏳ REQUIRED** before cron resume. Token in `/opt/data/.config/gh/hosts.yml` must be revoked and replaced.
+
+### New single-writer enforcement (`ops/hermes-single-writer-recovery`)
+
+- `orchestrator/scripts/repo_writer.py` — `RepoWriterLock` (global non-blocking `fcntl.flock`) + `IsolatedWorktree` (per-run worktree from pinned `origin/main` SHA)
+- `tests/test_repo_writer.py` — 31 tests, all passing
+- `commands/trading-hub-roadmap-tick.md` — updated with mandatory "Repository writer contract" section
+- `AGENTS.md` — new "Repository writer contract" section
+- `docs/state/current-operational-state.md` — this section
+
+### Post-merge: resume cron
+
+After credential rotation confirmed + this PR merged:
+
+```bash
+hermes -p trading-hub-orchestrator cron resume f18cbcdb56b7
+```
+
+- Full report: `docs/reports/hermes-concurrent-writer-incident-and-recovery-2026-07-13.md`
+- Approval markers: `APPROVED_HERMES_AUTONOMY_CONTAINMENT`, `APPROVED_PAUSE_TRADING_HUB_ROADMAP_TICK`, `APPROVED_CLOSE_CONTAMINATED_PRS_564_570`
+- Runtime mutation: NONE

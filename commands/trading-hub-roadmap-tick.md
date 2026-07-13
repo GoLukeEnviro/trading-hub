@@ -65,6 +65,9 @@ Exactly one of:
 
 ## Stop conditions
 
+- `BLOCKED_BY_ACTIVE_REPO_WRITER` — another Hermes session holds the
+  global repository writer lock (see §Repository writer contract below).
+  Do not override without explicit operator approval.
 - Another active roadmap PR overlaps the selected scope
 - Dirty or ambiguous working tree
 - Contradictory runtime evidence cannot be resolved read-only
@@ -72,6 +75,50 @@ Exactly one of:
 - CI or relevant tests remain red
 - A secret or credential would be exposed
 - `dry_run=false` or live order would be placed
+
+## Repository writer contract (mandatory for every tick)
+
+This command runs under the enforced single-writer contract
+(`orchestrator/scripts/repo_writer.py`). Every tick MUST:
+
+1. Acquire the global `RepoWriterLock`
+   (`orchestrator/scripts/repo_writer.RepoWriterLock`) at
+   `/opt/data/state/hermes-repo-writer.lock`.
+   - Non-blocking: fails immediately with
+     `BLOCKED_BY_ACTIVE_REPO_WRITER` when another session holds the lock.
+   - Do not override this failure — STOP and report the holder.
+
+2. Inspect open PRs (read-only, pre-lock).
+
+3. Create an isolated git worktree:
+   - Fork from `origin/main` (pinned SHA, not a moving branch).
+   - Worktree parent: `/opt/data/projects/trading-hub-worktrees/`
+     (hermes-writable, never inside the shared checkout).
+   - Branch name must match
+     `(feat|fix|docs|ops|chore|test|refactor|ci)/[a-z0-9][a-z0-9_./-]*`.
+     `main` itself is rejected.
+
+4. Verify the shared canonical checkout (`/workspace/projects/trading-hub`)
+   is on branch `main` and has no uncommitted changes.
+
+5. Verify the newly created worktree is clean
+   (`git status --porcelain` empty, HEAD on the requested branch).
+
+6. Execute the task entirely inside the worktree.
+
+7. Commit, push, open exactly one PR.
+
+8. After merge or formal abort, remove the worktree
+   (`git worktree remove` / `git worktree prune`).
+
+9. Release the global writer lock.
+
+**Never:** switch branches in the shared canonical checkout, commit
+directly in the shared checkout, use `git add .`, `git reset --hard`,
+`git clean`, `git push -f`, or rewrite history.
+
+See `orchestrator/scripts/repo_writer.py` for the full API
+(`RepoWriterLock`, `IsolatedWorktree`, `RepoWriterError`).
 
 ## Execution class authorization
 
