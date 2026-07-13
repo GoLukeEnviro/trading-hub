@@ -535,8 +535,6 @@ def _namespace(**overrides):
         ("docker_inspect", {"container": "hermes"}, ["docker", "inspect", "hermes"]),
         ("systemctl_status", {"unit": "hermes-root-executor.service"},
          ["systemctl", "status", "hermes-root-executor.service"]),
-        ("docker_compose_config", {"file": "/opt/stacks/hermes/compose.yaml"},
-         ["docker", "compose", "-f", "/opt/stacks/hermes/compose.yaml", "config"]),
         ("docker_stop", {"container": "throwaway"}, ["docker", "stop", "throwaway"]),
         ("docker_remove", {"container": "throwaway"}, ["docker", "rm", "throwaway"]),
         ("systemctl_restart", {"unit": "some.service"}, ["systemctl", "restart", "some.service"]),
@@ -548,6 +546,130 @@ def test_cli_extras_match_daemon_builder(action, ns_kwargs, expected_final_argv)
     extras = cli_build_argv(action, _namespace(**ns_kwargs))
     final_argv = daemon_build_argv(action, extras)
     assert final_argv == expected_final_argv
+
+
+# ---------------------------------------------------------------------------
+# docker_compose_config: multi-file contract + path-safety tests
+# ---------------------------------------------------------------------------
+
+import tempfile as _tempfile
+from hermes_root.actions import ActionError as _ActionError
+
+
+def test_cli_compose_config_single_file_extras():
+    """A single --file becomes a one-element extras list (no -f prefix —
+    the daemon builds the flags itself)."""
+    ns = _namespace(file=["/opt/stacks/hermes/compose.yaml"])
+    extras = cli_build_argv("docker_compose_config", ns)
+    assert extras == ["/opt/stacks/hermes/compose.yaml"]
+
+
+def test_cli_compose_config_multi_file_extras():
+    """Repeated --file layers multiple compose files, base first."""
+    ns = _namespace(file=[
+        "/opt/stacks/hermes/compose.yaml",
+        "/opt/stacks/hermes/compose.override.yaml",
+    ])
+    extras = cli_build_argv("docker_compose_config", ns)
+    assert extras == [
+        "/opt/stacks/hermes/compose.yaml",
+        "/opt/stacks/hermes/compose.override.yaml",
+    ]
+
+
+def test_cli_compose_config_too_many_files_rejected():
+    """More than 4 --file arguments must be rejected client-side."""
+    ns = _namespace(file=["/opt/stacks/a", "/opt/stacks/b", "/opt/stacks/c",
+                           "/opt/stacks/d", "/opt/stacks/e"])
+    with pytest.raises(ValueError, match="at most 4"):
+        cli_build_argv("docker_compose_config", ns)
+
+
+def test_cli_compose_config_missing_file_rejected():
+    """No --file at all must be rejected client-side."""
+    ns = _namespace(file=None)
+    with pytest.raises(ValueError, match="--file is required"):
+        cli_build_argv("docker_compose_config", ns)
+
+
+def test_daemon_compose_config_multi_file_builds_repeated_flags(tmp_path):
+    """The daemon builder lays out -f <file> once per file, base first,
+    then a single trailing 'config'."""
+    base = tmp_path / "compose.yaml"
+    override = tmp_path / "compose.override.yaml"
+    base.write_text("services: {}\n")
+    override.write_text("services: {}\n")
+
+    import hermes_root.actions as actions_mod
+    real_roots = actions_mod.ALLOWED_COMPOSE_STACK_ROOTS
+    actions_mod.ALLOWED_COMPOSE_STACK_ROOTS = (str(tmp_path),)
+    try:
+        final_argv = daemon_build_argv("docker_compose_config", [str(base), str(override)])
+    finally:
+        actions_mod.ALLOWED_COMPOSE_STACK_ROOTS = real_roots
+
+    assert final_argv == [
+        "docker", "compose",
+        "-f", str(base),
+        "-f", str(override),
+        "config", "--quiet",
+    ]
+
+
+def test_daemon_compose_config_rejects_relative_path():
+    with pytest.raises(_ActionError, match="compose_file_not_absolute"):
+        daemon_build_argv("docker_compose_config", ["relative/compose.yaml"])
+
+
+def test_daemon_compose_config_rejects_path_traversal():
+    with pytest.raises(_ActionError, match="compose_file_path_traversal"):
+        daemon_build_argv("docker_compose_config", ["/opt/stacks/hermes/../../etc/passwd"])
+
+
+def test_daemon_compose_config_rejects_outside_allowlisted_root(tmp_path):
+    outside = tmp_path / "compose.yaml"
+    outside.write_text("services: {}\n")
+    with pytest.raises(_ActionError, match="compose_file_outside_allowlisted_root"):
+        daemon_build_argv("docker_compose_config", [str(outside)])
+
+
+def test_daemon_compose_config_rejects_missing_file():
+    with pytest.raises(_ActionError, match="compose_file_not_found"):
+        daemon_build_argv("docker_compose_config", ["/opt/stacks/hermes/does-not-exist.yaml"])
+
+
+def test_daemon_compose_config_rejects_symlink_escape(tmp_path):
+    """A symlink inside the allowlisted root pointing outside it must be
+    rejected — realpath() resolution catches this before the file is used."""
+    import hermes_root.actions as actions_mod
+    real_roots = actions_mod.ALLOWED_COMPOSE_STACK_ROOTS
+
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    secret_file = outside_dir / "secret.yaml"
+    secret_file.write_text("services: {}\n")
+
+    inside_root = tmp_path / "stacks"
+    inside_root.mkdir()
+    symlink_path = inside_root / "compose.yaml"
+    symlink_path.symlink_to(secret_file)
+
+    actions_mod.ALLOWED_COMPOSE_STACK_ROOTS = (str(inside_root / "allowlisted-subdir-only"),)
+    try:
+        with pytest.raises(_ActionError, match="compose_file_outside_allowlisted_root"):
+            daemon_build_argv("docker_compose_config", [str(symlink_path)])
+    finally:
+        actions_mod.ALLOWED_COMPOSE_STACK_ROOTS = real_roots
+
+
+def test_daemon_compose_config_rejects_too_many_files():
+    with pytest.raises(_ActionError, match="invalid_argv_for_action"):
+        daemon_build_argv("docker_compose_config", ["/a", "/b", "/c", "/d", "/e"])
+
+
+def test_daemon_compose_config_rejects_zero_files():
+    with pytest.raises(_ActionError, match="invalid_argv_for_action"):
+        daemon_build_argv("docker_compose_config", [])
 
 
 def test_cli_docker_create_extras_match_daemon_builder():
@@ -607,6 +729,93 @@ def test_legacy_shaped_response_parses_with_defaults(fake_server, fake_socket_pa
     assert response.stdout == "legacy-ok"
     assert response.action == ""
     assert response.audit_id == ""
+
+
+# ---------------------------------------------------------------------------
+# Client/CLI defense-in-depth secret redaction (canary secrets only)
+#
+# Regression coverage for the 2026-07-13 incident: a rendered
+# docker-compose config exposed a live GH_TOKEN through unredacted
+# stdout. The daemon now redacts before responding, but the client also
+# redacts independently (defense in depth, e.g. against an older or
+# bypassed daemon) — these tests verify that second boundary directly.
+# ---------------------------------------------------------------------------
+
+CANARY_GH_TOKEN = "github_pat_11CANARY0000000000000000000000000000000000000000000000"
+
+
+def test_client_response_redacts_canary_in_stdout(fake_server, fake_socket_path, valid_request):
+    """Even if a (hypothetical, non-redacting) daemon sent a secret in
+    stdout, the client must redact it before returning ExecutorResponse."""
+    fake_server.set_response({
+        "request_id": valid_request.request_id,
+        "correlation_id": valid_request.correlation_id,
+        "decision": "ALLOWED",
+        "reason": "ok",
+        "returncode": 0,
+        "stdout": f"GH_TOKEN: {CANARY_GH_TOKEN}",
+        "stderr": "",
+    })
+    response = send_request(fake_socket_path, valid_request)
+    assert CANARY_GH_TOKEN not in response.stdout
+    assert "[REDACTED]" in response.stdout
+
+
+def test_cli_json_output_redacts_canary(fake_server, fake_socket_path, valid_request):
+    fake_server.set_response({
+        "request_id": valid_request.request_id,
+        "correlation_id": valid_request.correlation_id,
+        "decision": "ALLOWED",
+        "reason": "ok",
+        "returncode": 0,
+        "stdout": f"GH_TOKEN: {CANARY_GH_TOKEN}",
+        "stderr": "",
+    })
+    saved_stdout = sys.stdout
+    try:
+        sys.stdout = io.StringIO()
+        rc = cli_main([
+            "executor_health",
+            "--socket", fake_socket_path,
+            "--correlation-id", valid_request.correlation_id,
+            "--json",
+        ])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = saved_stdout
+
+    assert rc == 0
+    assert CANARY_GH_TOKEN not in output
+    parsed = json.loads(output)
+    assert CANARY_GH_TOKEN not in parsed["stdout"]
+    assert "[REDACTED]" in parsed["stdout"]
+
+
+def test_cli_human_readable_output_redacts_canary(fake_server, fake_socket_path, valid_request):
+    fake_server.set_response({
+        "request_id": valid_request.request_id,
+        "correlation_id": valid_request.correlation_id,
+        "decision": "ALLOWED",
+        "reason": "ok",
+        "returncode": 0,
+        "stdout": f"GH_TOKEN: {CANARY_GH_TOKEN}",
+        "stderr": "",
+    })
+    saved_stdout = sys.stdout
+    try:
+        sys.stdout = io.StringIO()
+        rc = cli_main([
+            "executor_health",
+            "--socket", fake_socket_path,
+            "--correlation-id", valid_request.correlation_id,
+        ])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = saved_stdout
+
+    assert rc == 0
+    assert CANARY_GH_TOKEN not in output
+    assert "[REDACTED]" in output
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import re
 import socket
 import struct
 import subprocess
@@ -26,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from hermes_root import actions, audit, policy, protocol
+from hermes_root import actions, audit, policy, protocol, redact
 from hermes_root.schema import MAX_RESPONSE_BYTES, SCHEMA_VERSION
 
 DAEMON_VERSION = "2.0.0-repo"
@@ -133,11 +134,15 @@ class RootExecutorDaemon:
             norm, peer_pid, peer_uid, decision="ALLOWED", reason=None,
             returncode=result.returncode, stdout_len=len(result.stdout), stderr_len=len(result.stderr),
         )
+        # Audit logs only the original lengths above (for accurate sizing);
+        # the client-facing response is redacted — secrets in command
+        # output (e.g. a rendered docker-compose config with resolved
+        # environment values) must never leave the executor process.
         return {
             "decision": "ALLOWED",
             "returncode": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "stdout": redact.redact_text_output(result.stdout),
+            "stderr": redact.redact_text_output(result.stderr),
         }
 
     def _audit_legacy(
@@ -265,6 +270,10 @@ class RootExecutorDaemon:
             daemon_version=DAEMON_VERSION,
             repository_commit=self.repository_commit,
         )
+        # audit_id/duration/lengths above are computed from the original,
+        # unredacted stdout/stderr; only the client-facing response is
+        # redacted — secrets in command output must never leave the
+        # executor process.
         return {
             "schema_version": SCHEMA_VERSION,
             "request_id": norm.request_id,
@@ -272,8 +281,8 @@ class RootExecutorDaemon:
             "decision": decision,
             "reason": reason,
             "returncode": returncode,
-            "stdout": stdout,
-            "stderr": stderr,
+            "stdout": redact.redact_text_output(stdout),
+            "stderr": redact.redact_text_output(stderr),
             "started_at": started_at,
             "finished_at": finished_at,
             "duration_ms": duration_ms,
@@ -357,11 +366,32 @@ class RootExecutorDaemon:
                 pass
 
 
-def main() -> None:  # pragma: no cover - not exercised in this change
-    """Entry point for a future systemd-managed deployment (not started here)."""
+_COMMIT_SHA_RE = re.compile(r"[0-9a-f]{7,40}")
+
+
+def main() -> None:  # pragma: no cover - exercised via installer/systemd, not unit tests
+    """Entry point for the systemd-managed deployment.
+
+    repository_commit is required, not defaulted: it must come from
+    HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT (populated by the installer via
+    a systemd EnvironmentFile=). A missing or malformed value fails closed
+    at startup rather than silently logging "unknown" in every audit entry
+    forever, as happened before this fix.
+    """
     if os.geteuid() != 0:
         raise SystemExit("hermes_root.daemon must run as root")
-    daemon = RootExecutorDaemon()
+
+    repository_commit = os.environ.get(
+        "HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT", ""
+    ).strip()
+    if not _COMMIT_SHA_RE.fullmatch(repository_commit):
+        raise SystemExit(
+            "HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT must be set to a valid "
+            "git commit SHA (7-40 hex characters) via the systemd "
+            f"EnvironmentFile=; got {repository_commit!r}"
+        )
+
+    daemon = RootExecutorDaemon(repository_commit=repository_commit)
     daemon.serve_forever()
 
 

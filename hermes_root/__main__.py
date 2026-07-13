@@ -105,8 +105,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="systemd unit name (for systemctl_status, systemctl_restart)",
     )
     parser.add_argument(
-        "--file", default=None,
-        help="Compose file path (for docker_compose_config)",
+        "--file", action="append", default=None,
+        help="Compose file path (for docker_compose_config; repeat for "
+             "multiple layered files, e.g. base + override, max 4)",
     )
     parser.add_argument(
         "--image", default=None,
@@ -150,10 +151,12 @@ def _build_argv(action: str, args: argparse.Namespace) -> list[str]:
             raise ValueError("--unit is required for systemctl_status")
         return [unit]
     elif action == "docker_compose_config":
-        compose_file = args.file
-        if not compose_file:
+        compose_files = args.file
+        if not compose_files:
             raise ValueError("--file is required for docker_compose_config")
-        return [compose_file]
+        if len(compose_files) > 4:
+            raise ValueError("at most 4 --file arguments are allowed for docker_compose_config")
+        return list(compose_files)
     elif action == "docker_create":
         image = args.image
         name = args.name
