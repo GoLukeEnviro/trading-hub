@@ -123,7 +123,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 The canonical HermesTrader dry-run fleet is persistently deployed and parity-proven (5/5 health, `dry_run=true` validated, Rainbow read-only, kill-switch cycle proven, secret scan clean). ai4trade runtime is locked to `6e850c8f8ba1d8a0ad45250f130280e4171c001d`.
 
-**Next automatic Hermes action (post-reconciliation):** R5B gate — HermesTrader cutover gate and agent0 retirement plan. Inventory/plan/evidence only; no agent0 mutation. Requires separate A2 approval before any host mutation.
+**Next automatic Hermes action (post-reconciliation):** R5B gate — HermesTrader cutover gate and agent0 retirement plan. **Planning COMPLETE** — inventory, gap analysis, and sequenced 5-phase retirement plan documented in `docs/reports/r5b-cutover-gate-planning-2026-07-13.md` (A1). Execution requires separate A2 approval before any host mutation (Gate 1: state sync & freeze).
 
 **Blocked pending action (after R5B):**
 - R6 — Permanent reconciliation (systemd)
@@ -159,7 +159,7 @@ The canonical HermesTrader dry-run fleet is persistently deployed and parity-pro
 - R7 measurement → R5B gate + R6 reconciliation + runtime preflight approved
 - H3B root-executor client activation → **CLOSED — `H3B_RUNTIME_CONTROL_GREEN`** (PR #559 squash-merged 2026-07-13). Host daemon is healthy, dual-protocol, and reachable from Hermes.
 - R5A HermesTrader deployment → **COMPLETE and `R5A_PARITY_GREEN`** (PR #560 merged at `80f9733`, Issue #527 closed). Canonical dry-run fleet deployed with 5/5 parity; Rainbow storage fixed; kill-switch provisioned. ai4trade locked to `6e850c8`.
-- R5B agent0 cutover gate → **Next task.** Inventory/plan/evidence only until A2 approval. No agent0 mutation.
+- R5B agent0 cutover gate → **Planning COMPLETE (A1 this tick)**. Inventory/plan/evidence documented in `docs/reports/r5b-cutover-gate-planning-2026-07-13.md`. Execution requires A2 approval (Gate 1: state sync & freeze). No agent0 mutation.
 
 ---
 
@@ -398,6 +398,7 @@ Post-R5A source-of-truth reconciliation. No runtime mutation (A1 only).
 - **D1/D2:** Blocked (C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT` required)
 - **Cross-repo drift (recorded, not deployed):** ai4trade-bot `master` has newer commits beyond `6e850c8`. Lock remains at `6e850c8`; moving branch not pulled.
 - **R5B issue:** Created as `[Root-Runtime][R5b] HermesTrader cutover gate and agent0 retirement plan` — inventory/plan/evidence only until A2 approval
+- **R5B planning:** COMPLETE — inventory, gap analysis, and sequenced retirement plan documented in `docs/reports/r5b-cutover-gate-planning-2026-07-13.md` (A1, this tick)
 - Full report: `docs/reports/post-r5a-hermes-orchestrator-reconciliation-2026-07-13.md`
 
 ## Hermes Orchestrator Gateway Restore (2026-07-13)
