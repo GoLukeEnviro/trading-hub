@@ -12,8 +12,8 @@
 > commit `782d2c04f59ee96151581de436b069095d28b019` (ratified by
 > repository owner after installer bug-fix arc).
 >
-> **Last updated:** 2026-07-13 post-R5A reconciliation (PR #560 merge `80f9733`, Issue #527 closed with R5A_PARITY_GREEN)
-> **Previous update:** 2026-07-13 after H3B GREEN promotion (PR #559)
+> **Last updated:** 2026-07-13 post-orchestrator-gateway-restore (`HERMES_ORCHESTRATOR_GATEWAY_GREEN`, s6-svc -u, no runtime mutation)
+> **Previous update:** 2026-07-13 post-R5A reconciliation (PR #560 merge `80f9733`, Issue #527 closed with R5A_PARITY_GREEN)
 > **Earlier update:** 2026-07-13 after secret-redaction hardening + full proof matrix run
 
 ---
@@ -399,3 +399,31 @@ Post-R5A source-of-truth reconciliation. No runtime mutation (A1 only).
 - **Cross-repo drift (recorded, not deployed):** ai4trade-bot `master` has newer commits beyond `6e850c8`. Lock remains at `6e850c8`; moving branch not pulled.
 - **R5B issue:** Created as `[Root-Runtime][R5b] HermesTrader cutover gate and agent0 retirement plan` — inventory/plan/evidence only until A2 approval
 - Full report: `docs/reports/post-r5a-hermes-orchestrator-reconciliation-2026-07-13.md`
+
+## Hermes Orchestrator Gateway Restore (2026-07-13)
+
+`HERMES_ORCHESTRATOR_GATEWAY_GREEN` — native Hermes gateway for the
+`trading-hub-orchestrator` profile is back online. The pre-existing
+s6-supervised service slot at `/run/service/gateway-trading-hub-orchestrator`
+was brought up with a single `s6-svc -u` invocation (no new service, no
+new systemd unit, no Docker change, no runtime mutation). The cron
+job `f18cbcdb56b7` (`trading-hub-roadmap-tick`, `*/30 * * * *`,
+`ollama-cloud/nemotron-3-ultra`, workdir `/workspace/projects/trading-hub`)
+is now visible to a running dispatcher and will fire automatically on
+schedule. Gateway PID 17842 is s6-supervised (parent `s6-supervise
+gateway-trading-hub-orchestrator`, PID 152), runs as UID 10000 (user
+`hermes`), and the argv contains no secrets/tokens/passwords. The
+pre-existing `default`-profile gateway (PID 153) was left alone — it
+serves a different profile and has no conflict (no shared port, no
+shared cron queue, no shared state). The validation tick confirmed
+Issue #561 (R5B) as the next unblocked task and classified it A1
+(planning only). R5B work is **out of scope** for this restore; it
+begins in a separate future tick.
+
+- Approval marker: `APPROVED_HERMES_ORCHESTRATOR_GATEWAY_RESTORE` (`confirmed_by=Luke`, `scope=HERMES_NATIVE_GATEWAY_ONLY`)
+- Cron job: `f18cbcdb56b7` (unchanged)
+- Provider/model: `ollama-cloud` / `nemotron-3-ultra` (unchanged)
+- Workdir: `/workspace/projects/trading-hub` (unchanged)
+- Duplicate jobs: 0
+- Runtime mutation: NONE
+- Full report: `docs/reports/hermes-orchestrator-gateway-restore-2026-07-13.md`
