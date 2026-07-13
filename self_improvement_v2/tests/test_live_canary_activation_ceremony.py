@@ -6,7 +6,9 @@ no real runtime, no API, no Docker.
 
 from __future__ import annotations
 
+import datetime
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -347,7 +349,11 @@ class TestCeremonyBlocked:
         assert len(result.snapshots) == 0
 
     def test_blocked_stale_c3_marker(self, tmp_path: Path) -> None:
-        _make_c3_approval_doc(tmp_path)
+        c3_doc = _make_c3_approval_doc(tmp_path)
+        # Deterministically age the C3 marker to 2026-07-02 so it is 10 days
+        # older than future_now, exceeding the 7-day expiry (wall-clock independent).
+        _aged = datetime.datetime(2026, 7, 2, 12, 0, 0, tzinfo=datetime.UTC).timestamp()
+        os.utime(c3_doc, (_aged, _aged))
         _make_c2_plan_ready(tmp_path)
         _make_c1_gate_ready(tmp_path)
         _make_b2_doc(tmp_path)
