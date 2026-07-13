@@ -168,14 +168,13 @@ Every autonomous agent session acting on the roadmap MUST:
   implementation history. That narrow-slice model is superseded as of the
   **Root-Runtime-Authority decision (R0)** — see
   [`docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md`](docs/decisions/ADR-2026-07-11-hermes-root-runtime-authority.md).
-  The dedicated, UID-separated `hermes-root-executor.service` is
-  **shipped and running on the host, but currently unreachable from Hermes**
-  (host-verified 2026-07-12 23:57 UTC: daemon active/running, healthy; the
-  Hermes container bind mount went stale after the 2026-07-12 23:08 UTC
-  restart and needs a container recreate; incident reconciled in PR #557).
-  When reachable, it provides full host/Docker runtime
-  authority over HermesTrader via a local Unix socket with peer-credential
-  authentication. D1/D2/D3 remain documented and may keep running as a
+  The dedicated, UID-separated `hermes-root-executor.service`
+  provides host and Docker runtime authority through a local Unix socket
+  with peer-credential authentication. Runtime availability and current
+  reachability from Hermes must be verified against
+  [`docs/state/current-operational-state.md`](docs/state/current-operational-state.md)
+  before use — deployment state and reachability can change independently
+  of this document. D1/D2/D3 remain documented and may keep running as a
   fallback path. Live-capital trading authority remains separate and
   externally signature-gated regardless of root runtime authority — see the
   ADR's External Live Authority Boundary section.

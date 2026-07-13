@@ -119,7 +119,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as BLOCKED_BY_BOOTSTRAP_CONTROL_PATH. All code merged (PRs #549, #550, #551). The socket bind-mount has since been completed; the remaining blocker is that the production daemon only speaks the legacy protocol. A repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) now exists (`H3B_DAEMON_SOURCE_READY`), but has **not** been deployed to the host. Next task after review/rollout approval: R5A (HermesTrader Deployment) — BLOCKED by H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT.
+Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H3B_RUNTIME_CONTROL_DEGRADED`. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed and healthy on the host (host-verified). Hermes cannot reach the current socket because its directory bind mount became stale after the systemd `RuntimeDirectory=` restart on 2026-07-12. A targeted Hermes-container recreate and the remaining Issue #531 proof matrix (positive v1 proof, audit correlation, locking, timeout, kill-switch, approval gates, isolated mutating test) are required before `H3B_RUNTIME_CONTROL_GREEN`. Next task after that: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -147,7 +147,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — CLOSED as B
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
 - R7 measurement → R5A complete + runtime preflight approved
-- H3B root-executor client activation → socket bind-mount complete; blocked on production daemon still speaking only the legacy protocol. Repository daemon source now exists (`H3B_DAEMON_SOURCE_READY`, PR pending review) but is not deployed — deployment requires a separate, explicitly-gated rollout approval.
+- H3B root-executor client activation → host daemon is healthy and dual-protocol; blocked because the Hermes container has a stale bind mount. Requires an explicitly approved targeted Hermes-container recreate, followed by positive UID-10000 v1, audit-correlation, locking, timeout, kill-switch, approval-gate and isolated mutation proofs.
 - R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
 
 ---

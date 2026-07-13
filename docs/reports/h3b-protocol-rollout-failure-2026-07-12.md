@@ -42,9 +42,17 @@ This is a repeat of a known failure mode: an advisory agent without host access 
 | Binary SHA-256 | `c89768b62fd12f38f4b02e933ea39cad98de2f4faf05143b947c9da6cc8812bf` (differs from the backed-up old daemon `ff228215…` — confirms the **new** daemon is the one running) |
 | `hermes_root/` package files | 9 files present (`__init__.py`, `policy.py`, `actions.py`, `audit.py`, `redact.py`, `schema.py`, `client.py`, `validate.py`, `protocol.py`), all `root:root` |
 | Journal | One non-fatal `BrokenPipeError` at `21:00:07` on the pre-rollout (old) daemon from a single malformed-JSON client request; no crash traceback at or after `23:08:19` |
-| Root-side functional probe (`executor_health`, raw socket, as `root`) | `{"decision": "BLOCKED", "reason": "peer_uid_not_allowed"}` — proves the daemon correctly parses v1 JSON and enforces `SO_PEERCRED`; `root` is correctly rejected because it is not the allowlisted peer UID |
+| Root-side functional probe (`executor_health`, raw socket, as `root`) | `{"decision": "BLOCKED", "reason": "peer_uid_not_allowed"}` — proves the socket is reachable, the daemon accepts connections, and `SO_PEERCRED` correctly rejects a non-allowlisted peer UID |
 
-**Conclusion: the daemon rollout succeeded and the new dual-protocol daemon is healthy.**
+**Correction:** the root-side probe does **not** prove v1 request parsing. `handle_payload()`
+checks `peer_uid` first and returns `peer_uid_not_allowed` **before** `json.loads()` and
+`protocol.normalize_request()` ever run (verified by reading
+`/usr/local/sbin/hermes-root-executor` directly). The probe only proves socket
+reachability and `SO_PEERCRED` enforcement. Positive v1 parsing from an allowlisted
+caller (Hermes, UID 10000) remains unproven and stays
+`BLOCKED_FROM_HERMES_UID_10000_BY_STALE_BIND_MOUNT`.
+
+**Conclusion: the daemon rollout succeeded (service healthy, correct binary, no crash) and the new dual-protocol daemon is up — but positive v1 protocol parsing from an allowlisted caller is still unproven.**
 
 ## Root cause analysis — why the container still cannot reach a healthy daemon
 
