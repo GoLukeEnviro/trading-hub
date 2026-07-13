@@ -276,6 +276,209 @@ class TestAuditV2:
         assert secret not in dumped
 
 
+class TestSecretRedaction:
+    """Regression coverage for the 2026-07-13 incident: a rendered
+    docker-compose config exposed a live GH_TOKEN through unredacted
+    executor stdout. TestAuditV2.test_no_synthetic_secrets_leak only ever
+    checked the *audit log* (which stores lengths, not content, and was
+    never the leak vector) — it gave false confidence. These tests check
+    the actual response payload returned to the caller, which is what
+    leaked. All secrets here are synthetic canaries, never real credentials.
+    """
+
+    CANARY_GH_TOKEN = "github_pat_11CANARY0000000000000000000000000000000000000000000000"
+    CANARY_BEARER = "canary-bearer-token-0123456789abcdef"
+    CANARY_PASSWORD = "canary-s3cr3t-password"
+    CANARY_API_KEY = "canary-api-key-fedcba9876543210"
+
+    def _fake_run_with(self, stdout: str = "", stderr: str = ""):
+        def fake_run(argv, **kw):
+            return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr=stderr)
+        return fake_run
+
+    def test_v1_response_stdout_redacts_env_style_canary(self, daemon, monkeypatch):
+        stdout = (
+            "name: hermes\nservices:\n  hermes:\n    environment:\n"
+            f"      GH_TOKEN: {self.CANARY_GH_TOKEN}\n"
+            "      HERMES_UID: \"10000\"\n"
+        )
+        monkeypatch.setattr("hermes_root.daemon.subprocess.run", self._fake_run_with(stdout=stdout))
+        resp = _send(daemon, _v1_payload(action="docker_ps"))
+        assert self.CANARY_GH_TOKEN not in resp["stdout"]
+        assert "[REDACTED]" in resp["stdout"]
+        assert "HERMES_UID" in resp["stdout"]  # non-secret fields survive
+
+    def test_v1_response_stderr_redacts_bearer_canary(self, daemon, monkeypatch):
+        stderr = f"Authorization: Bearer {self.CANARY_BEARER}\n"
+        monkeypatch.setattr("hermes_root.daemon.subprocess.run", self._fake_run_with(stderr=stderr))
+        resp = _send(daemon, _v1_payload())
+        assert self.CANARY_BEARER not in resp["stderr"]
+        assert "[REDACTED]" in resp["stderr"]
+
+    def test_v1_response_redacts_json_style_canary(self, daemon, monkeypatch):
+        stdout = f'{{"API_KEY": "{self.CANARY_API_KEY}"}}'
+        monkeypatch.setattr("hermes_root.daemon.subprocess.run", self._fake_run_with(stdout=stdout))
+        resp = _send(daemon, _v1_payload())
+        assert self.CANARY_API_KEY not in resp["stdout"]
+        assert "[REDACTED]" in resp["stdout"]
+
+    def test_v1_response_redacts_env_assignment_canary(self, daemon, monkeypatch):
+        stdout = f"PASSWORD={self.CANARY_PASSWORD}\n"
+        monkeypatch.setattr("hermes_root.daemon.subprocess.run", self._fake_run_with(stdout=stdout))
+        resp = _send(daemon, _v1_payload())
+        assert self.CANARY_PASSWORD not in resp["stdout"]
+        assert "[REDACTED]" in resp["stdout"]
+
+    def test_legacy_response_also_redacts_canary(self, daemon, monkeypatch):
+        """The legacy protocol path (_handle_legacy) has its own response
+        construction, separate from _finish_v1 — must be redacted too."""
+        stdout = f"GH_TOKEN: {self.CANARY_GH_TOKEN}\n"
+        monkeypatch.setattr("hermes_root.daemon.subprocess.run", self._fake_run_with(stdout=stdout))
+        resp = _send(daemon, _legacy_payload(category="docker", args=["ps"]))
+        assert self.CANARY_GH_TOKEN not in resp["stdout"]
+        assert "[REDACTED]" in resp["stdout"]
+
+    def test_normal_output_unaffected_by_redaction(self, daemon, monkeypatch):
+        stdout = "container1\ncontainer2\n"
+        monkeypatch.setattr("hermes_root.daemon.subprocess.run", self._fake_run_with(stdout=stdout))
+        resp = _send(daemon, _v1_payload(action="docker_ps"))
+        assert resp["stdout"] == stdout
+
+    def test_audit_log_still_has_no_canary(self, daemon, monkeypatch):
+        stdout = f"GH_TOKEN: {self.CANARY_GH_TOKEN}\n"
+        monkeypatch.setattr("hermes_root.daemon.subprocess.run", self._fake_run_with(stdout=stdout))
+        _send(daemon, _v1_payload())
+        entries = _read_audit(daemon)
+        dumped = json.dumps(entries[-1])
+        assert self.CANARY_GH_TOKEN not in dumped
+
+
+def test_real_timeout_with_real_subprocess(daemon, monkeypatch):
+    """Non-mocked timeout proof (Issue #531 requirement): the existing
+    test_timeout_blocks mocks subprocess.run entirely, which only proves
+    the daemon *would* handle a TimeoutExpired exception, not that a real,
+    long-running subprocess actually gets bounded and cleaned up.
+
+    This test forces actions.build_argv to return a real "sleep" command
+    for a single request only (monkeypatched per-test, never added to the
+    production ALL_ACTIONS/LEGACY_CATEGORY_BINARIES registry — no new
+    permanent action or generic shell capability is introduced), sends it
+    through the real AF_UNIX socket server with timeout=1, and verifies:
+    genuine subprocess.TimeoutExpired handling, a bounded wall-clock
+    duration (not the full sleep duration), the correct decision/reason,
+    and no orphaned child process left behind afterward.
+    """
+    import hermes_root.daemon as daemon_mod
+
+    original_build_argv = daemon_mod.actions.build_argv
+    # An unusual, specific duration (not a shell comment — subprocess.run
+    # never invokes a shell, so sleep only accepts numeric time arguments)
+    # to keep the orphan-process check below unlikely to collide with any
+    # unrelated sleep invocation on the host/CI runner.
+    sleep_duration = "5.417"
+
+    def slow_build_argv(action, argv):
+        if action == "docker_ps":
+            # A real subprocess guaranteed to outlive a 1s timeout.
+            return ["sleep", sleep_duration]
+        return original_build_argv(action, argv)
+
+    monkeypatch.setattr(daemon_mod.actions, "build_argv", slow_build_argv)
+
+    thread = threading.Thread(target=daemon.serve_forever, daemon=True)
+    thread.start()
+    try:
+        for _ in range(50):
+            if os.path.exists(daemon.socket_path):
+                break
+            time.sleep(0.05)
+
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.settimeout(10)
+        client.connect(daemon.socket_path)
+        payload = _v1_payload(action="docker_ps", timeout=1)
+
+        start = time.monotonic()
+        client.sendall(json.dumps(payload).encode())
+        raw = client.recv(65536)
+        elapsed = time.monotonic() - start
+        client.close()
+        resp = json.loads(raw.decode())
+
+        assert resp["decision"] == "BLOCKED"
+        assert resp["reason"] == "command_timeout"
+        assert resp["correlation_id"] == payload["correlation_id"]
+        # Bounded: the ~1s configured timeout fired, we did not wait out
+        # the full 5s sleep.
+        assert 1.0 <= elapsed < 4.0, f"expected timeout around 1s, took {elapsed:.2f}s"
+
+        # No orphaned child process: subprocess.run(timeout=...) kills the
+        # process on TimeoutExpired before re-raising; confirm nothing
+        # matching this test's unique marker is still running.
+        time.sleep(0.3)
+        leftover = subprocess.run(
+            ["pgrep", "-f", f"sleep {sleep_duration}"], capture_output=True, text=True
+        )
+        assert leftover.returncode != 0, (
+            f"orphaned sleep process found: {leftover.stdout!r}"
+        )
+
+        # No lock file left held.
+        entries = _read_audit(daemon)
+        assert entries[-1]["reason"] == "command_timeout"
+        assert entries[-1]["correlation_id"] == payload["correlation_id"]
+    finally:
+        daemon.stop()
+
+
+class TestMainRepositoryCommit:
+    """main() must fail closed without a valid HERMES_ROOT_EXECUTOR_
+    REPOSITORY_COMMIT, instead of silently defaulting to "unknown" (as it
+    did before this fix — every audit entry logged repository_commit=
+    "unknown" regardless of what was actually deployed)."""
+
+    def test_non_root_blocked(self, monkeypatch):
+        import hermes_root.daemon as daemon_mod
+        monkeypatch.setattr(daemon_mod.os, "geteuid", lambda: 1000)
+        with pytest.raises(SystemExit, match="must run as root"):
+            daemon_mod.main()
+
+    def test_missing_env_var_fails_closed(self, monkeypatch):
+        import hermes_root.daemon as daemon_mod
+        monkeypatch.setattr(daemon_mod.os, "geteuid", lambda: 0)
+        monkeypatch.delenv("HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT", raising=False)
+        with pytest.raises(SystemExit, match="HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT"):
+            daemon_mod.main()
+
+    def test_malformed_env_var_fails_closed(self, monkeypatch):
+        import hermes_root.daemon as daemon_mod
+        monkeypatch.setattr(daemon_mod.os, "geteuid", lambda: 0)
+        monkeypatch.setenv("HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT", "not-a-sha!!")
+        with pytest.raises(SystemExit, match="HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT"):
+            daemon_mod.main()
+
+    def test_empty_env_var_fails_closed(self, monkeypatch):
+        import hermes_root.daemon as daemon_mod
+        monkeypatch.setattr(daemon_mod.os, "geteuid", lambda: 0)
+        monkeypatch.setenv("HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT", "   ")
+        with pytest.raises(SystemExit, match="HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT"):
+            daemon_mod.main()
+
+    def test_valid_commit_starts_daemon_with_it(self, monkeypatch):
+        import hermes_root.daemon as daemon_mod
+        monkeypatch.setattr(daemon_mod.os, "geteuid", lambda: 0)
+        monkeypatch.setenv("HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT", "abc1234")
+
+        captured = {}
+
+        def fake_serve_forever(self):
+            captured["repository_commit"] = self.repository_commit
+
+        monkeypatch.setattr(daemon_mod.RootExecutorDaemon, "serve_forever", fake_serve_forever)
+        daemon_mod.main()
+        assert captured["repository_commit"] == "abc1234"
+
+
 def test_real_socket_end_to_end(daemon, monkeypatch):
     monkeypatch.setattr("hermes_root.daemon.subprocess.run", _fake_ok_run)
     thread = threading.Thread(target=daemon.serve_forever, daemon=True)

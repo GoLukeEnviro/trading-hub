@@ -105,8 +105,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="systemd unit name (for systemctl_status, systemctl_restart)",
     )
     parser.add_argument(
-        "--file", default=None,
-        help="Compose file path (for docker_compose_config)",
+        "--file", action="append", default=None,
+        help="Compose file path (for docker_compose_config; repeat for "
+             "multiple layered files, e.g. base + override, max 4)",
     )
     parser.add_argument(
         "--image", default=None,
@@ -125,26 +126,37 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _build_argv(action: str, args: argparse.Namespace) -> list[str]:
-    """Build the argv list for the given action and parsed arguments."""
+    """Build the resource-specific argv *extras* for the given action.
+
+    The daemon's action registry (hermes_root.actions.build_argv) owns the
+    fixed base command for every action and appends these extras itself
+    (e.g. docker_ps -> ["docker", "ps", *extras]). The client must send
+    only the extras, never the base command tokens again, or the daemon
+    ends up running a duplicated/invalid command (e.g. "docker ps docker
+    ps") or rejecting the request outright (actions requiring exactly one
+    extra argument, like docker_inspect, reject anything longer).
+    """
     if action == "executor_health":
-        return ["hermes-root-executor", "health"]
+        return []
     elif action == "docker_ps":
-        return ["docker", "ps"]
+        return []
     elif action == "docker_inspect":
         container = args.container
         if not container:
             raise ValueError("--container is required for docker_inspect")
-        return ["docker", "inspect", container]
+        return [container]
     elif action == "systemctl_status":
         unit = args.unit
         if not unit:
             raise ValueError("--unit is required for systemctl_status")
-        return ["systemctl", "status", unit]
+        return [unit]
     elif action == "docker_compose_config":
-        compose_file = args.file
-        if not compose_file:
+        compose_files = args.file
+        if not compose_files:
             raise ValueError("--file is required for docker_compose_config")
-        return ["docker", "compose", "-f", compose_file, "config"]
+        if len(compose_files) > 4:
+            raise ValueError("at most 4 --file arguments are allowed for docker_compose_config")
+        return list(compose_files)
     elif action == "docker_create":
         image = args.image
         name = args.name
@@ -152,26 +164,25 @@ def _build_argv(action: str, args: argparse.Namespace) -> list[str]:
             raise ValueError("--image is required for docker_create")
         if not name:
             raise ValueError("--name is required for docker_create")
-        cmd_parts = ["docker", "run", "-d", "--name", name]
+        extras = ["--name", name, image]
         if args.cmd:
-            cmd_parts.append(args.cmd)
-        cmd_parts.append(image)
-        return cmd_parts
+            extras.append(args.cmd)
+        return extras
     elif action == "docker_stop":
         container = args.container
         if not container:
             raise ValueError("--container is required for docker_stop")
-        return ["docker", "stop", container]
+        return [container]
     elif action == "docker_remove":
         container = args.container
         if not container:
             raise ValueError("--container is required for docker_remove")
-        return ["docker", "rm", container]
+        return [container]
     elif action == "systemctl_restart":
         unit = args.unit
         if not unit:
             raise ValueError("--unit is required for systemctl_restart")
-        return ["systemctl", "restart", unit]
+        return [unit]
     else:
         raise ValueError(f"Unknown action: {action}")
 
@@ -234,19 +245,35 @@ def main(argv: Optional[list[str]] = None) -> int:
     # Output
     if args.json_output:
         print(json.dumps({
+            "schema_version": response.schema_version,
             "request_id": response.request_id,
             "correlation_id": response.correlation_id,
             "decision": response.decision,
             "reason": response.reason,
-            "result": response.result,
-            "audit_seq": response.audit_seq,
+            "returncode": response.returncode,
+            "stdout": response.stdout,
+            "stderr": response.stderr,
+            "resource_key": response.resource_key,
+            "action": response.action,
+            "execution_class": response.execution_class,
+            "audit_id": response.audit_id,
+            "duration_ms": response.duration_ms,
         }, indent=2))
     else:
         print(f"decision: {response.decision}")
         print(f"reason: {response.reason}")
-        if response.result:
-            print(f"result: {json.dumps(response.result)}")
-        print(f"audit_seq: {response.audit_seq}")
+        if response.action:
+            print(f"action: {response.action}")
+        if response.execution_class:
+            print(f"execution_class: {response.execution_class}")
+        if response.returncode is not None:
+            print(f"returncode: {response.returncode}")
+        if response.stdout:
+            print(f"stdout: {response.stdout}")
+        if response.stderr:
+            print(f"stderr: {response.stderr}")
+        if response.audit_id:
+            print(f"audit_id: {response.audit_id}")
         print(f"correlation_id: {response.correlation_id}")
 
     if response.is_allowed:

@@ -65,6 +65,43 @@ def redact_dict(data: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+_SECRET_KEY_FRAGMENT = (
+    r"[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|"
+    r"PRIVATE[_-]?KEY|ACCESS[_-]?KEY|AUTH|CREDENTIAL)[A-Za-z0-9_]*"
+)
+
+# Credential shapes that are secrets regardless of the surrounding key name.
+_TOKEN_SHAPE_RE = re.compile(
+    r"\b(?:ghp|gho|ghs|ghr|ghu)_[A-Za-z0-9]{20,}\b"
+    r"|\bgithub_pat_[A-Za-z0-9_]{20,}\b"
+)
+_BEARER_RE = re.compile(r"(?i)(bearer\s+)\S+")
+_JSON_KV_RE = re.compile(rf'(?i)("(?:{_SECRET_KEY_FRAGMENT})"\s*:\s*)"[^"]*"')
+_YAML_KV_RE = re.compile(rf"(?im)^(\s*{_SECRET_KEY_FRAGMENT}\s*:\s*).+$")
+_ENV_KV_RE = re.compile(rf"(?im)^(\s*{_SECRET_KEY_FRAGMENT}\s*=\s*).+$")
+
+
+def redact_text_output(value: str) -> str:
+    """Redact secret-like content from free-text command output
+    (stdout/stderr), e.g. a rendered docker-compose config or environment
+    dump. Unlike redact_dict/redact_argv (structured data with known key
+    boundaries), this operates on arbitrary text, so it combines known
+    credential *shapes* (GitHub PAT/token prefixes, Bearer headers) with
+    key=value / "key": value / key: value patterns for secret-like key
+    names. Applied unconditionally at the daemon response boundary and
+    again at the client boundary — no debug bypass, no raw-output flag.
+    """
+    if not value:
+        return value
+
+    text = _TOKEN_SHAPE_RE.sub(REDACTED, value)
+    text = _BEARER_RE.sub(r"\1" + REDACTED, text)
+    text = _JSON_KV_RE.sub(r"\1" + f'"{REDACTED}"', text)
+    text = _YAML_KV_RE.sub(r"\1" + REDACTED, text)
+    text = _ENV_KV_RE.sub(r"\1" + REDACTED, text)
+    return text
+
+
 def redact_argv(argv: list[str]) -> list[str]:
     """Redact secret-like arguments from an argv list.
 

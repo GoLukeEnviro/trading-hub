@@ -17,7 +17,7 @@ from hermes_root.schema import (
     ExecutorRequest,
     ExecutorResponse,
 )
-from hermes_root.redact import redact_argv, redact_dict
+from hermes_root.redact import redact_argv, redact_text_output
 
 
 class ExecutorClientError(Exception):
@@ -101,12 +101,14 @@ def send_request(
         except json.JSONDecodeError as e:
             raise ExecutorProtocolError(f"Invalid JSON response: {e}")
 
+        # Defense in depth: the daemon already redacts stdout/stderr before
+        # they leave the executor process. The client redacts again here so
+        # that any daemon that predates or bypasses that redaction (e.g. a
+        # legacy-protocol daemon) still never surfaces secrets to a caller
+        # or to the CLI's human/JSON output. No debug bypass.
         response = ExecutorResponse.from_dict(response_dict)
-
-        # Redact any secrets in the result before returning to caller
-        if response.result:
-            response.result = redact_dict(response.result)
-
+        response.stdout = redact_text_output(response.stdout)
+        response.stderr = redact_text_output(response.stderr)
         return response
 
     except FileNotFoundError:

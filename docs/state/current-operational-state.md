@@ -2,22 +2,44 @@
 
 > **Canonical current-state snapshot** — validated against `main` at
 > PR #557 (H3B protocol rollout incident reconciliation, host-verified) plus
-> the 2026-07-13 runtime-control proof run.
+> the 2026-07-13 runtime-control proof run (systemd permission fix + full
+> Issue #531 proof matrix + secret-redaction hardening).
 > The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is on
-> `main` with 33 passing tests (PRs #553, #554, #555 merged) **and is the
-> daemon currently running on the host** (SHA-256 `c89768b6…`, active since
-> 2026-07-12 23:08:19 UTC, `NRestarts=0`, host-verified via direct root probe).
-> The stale Hermes bind mount from PR #557 was fixed on 2026-07-13 via a
-> scoped Hermes container recreate (host inode now matches container inode).
-> Hermes still cannot reach the socket: `/run/hermes-root-executor` is
-> `0750 root:root` (systemd `RuntimeDirectoryMode=`/`Group=root`), which
-> denies UID 10000 (Hermes) OS-level traversal regardless of the daemon's own
-> correctly-configured allowlist (`DEFAULT_ALLOWED_UIDS = {10000}`). Fixing
-> this requires either an ACL grant or a systemd unit change + service
-> restart — neither performed yet, both out of scope for the 2026-07-13 run.
+> `main` **and is the daemon currently running on the host**, host-verified
+> (active, `NRestarts=0`, `repository_commit` now correctly tracked —
+> previously always logged `"unknown"`, fixed via a required, fail-closed
+> `HERMES_ROOT_EXECUTOR_REPOSITORY_COMMIT` environment variable).
+> The stale Hermes bind mount (PR #557) and the runtime-directory
+> permission gap (`0750 root:root` denying UID 10000) are both fixed and
+> now codified as transactional installer scripts under `ops/systemd/`.
+> **Hermes has full, verified runtime control**: the complete Issue #531
+> proof matrix passes — positive v1 proof, **5 of 5** read-only actions
+> (an earlier report of `docker_compose_config` being blocked by a missing
+> Hermes-image Docker Compose plugin was a misdiagnosis of the wrong
+> execution boundary — the action runs on the *host* via the daemon's
+> `subprocess.run()`, not inside the Hermes container; the real defect was
+> an undeployed daemon-side fix, now deployed and verified), the complete
+> security-proof matrix (wrong UID, missing/invalid A2 approval client- and
+> server-side, A3 always blocked, kill switch, locking, a non-mocked
+> real-subprocess timeout proof, isolated mutation lifecycle
+> create/inspect/stop/remove), and audit correlation with a clean secret
+> scan. `docker_compose_config` was also hardened to run `config --quiet`
+> (data minimization — it validates, it does not need to render resolved
+> secrets) with defense-in-depth redaction at both the daemon and client
+> boundaries, after a live proof run briefly exposed a repository
+> credential through unredacted stdout; the credential was revoked and
+> replaced outside the agent context, and a leak-spread scan found zero
+> matches anywhere in the repository, PR/issue history, audit log, or
+> shell history. The credential rotation has been **human-attested** by
+> the repository owner on 2026-07-13 (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`,
+> `confirmed_by=Luke`, `scope=H3B_PR559_INCIDENT`) — the required A2
+> human-confirmation gate. The agent did not independently verify the
+> GitHub-side revocation event; the attestation itself is the gate.
+> `H3B_RUNTIME_CONTROL_GREEN` is now active (PR #559 squash-merge).
 >
-> **Last updated:** 2026-07-13 after the runtime-control proof run (mount fixed, new permission blocker found)
-> **Previous update:** 2026-07-12 after PR #557 reconciliation 2 (host-verified)
+> **Last updated:** 2026-07-13 after H3B GREEN promotion (human-attested credential rotation, PR #559 squash-merge)
+> **Previous update:** 2026-07-13 after the secret-redaction hardening + full proof matrix run
+> **Earlier update:** 2026-07-13 after the systemd permission fix + full proof matrix run
 
 ---
 
@@ -122,7 +144,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H3B_RUNTIME_CONTROL_DEGRADED`. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed and healthy on the host (host-verified). The Hermes container bind mount was fixed on 2026-07-13 (targeted container recreate; host and container inode now match). Hermes still cannot reach the socket: `/run/hermes-root-executor` is `0750 root:root` at the OS level (systemd `RuntimeDirectoryMode=`/`Group=root`), denying UID 10000 traversal even though the daemon's own allowlist already includes UID 10000. An ACL grant or a systemd unit fix (requiring a service restart) plus the full Issue #531 proof matrix (positive v1 proof, audit correlation, locking, timeout, kill-switch, approval gates, isolated mutating test) are required before `H3B_RUNTIME_CONTROL_GREEN`. Next task after that: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
+Current task: **H3B — Root-Executor Client Activation (#531)** — **CLOSED and `H3B_RUNTIME_CONTROL_GREEN`**. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed, healthy, and reachable from Hermes (host-verified). All three blockers found on 2026-07-12/13 (stale bind mount, `RuntimeDirectoryMode=0750 root:root` permission gap, undeployed `docker_compose_config` fix) are fixed and verified. The complete Issue #531 proof matrix passes: positive v1 proof, 5/5 read-only actions, the complete security-proof matrix (wrong UID, missing/invalid A2 approval, A3, kill switch, locking, a non-mocked real-subprocess timeout proof, isolated mutation lifecycle), and audit correlation with a clean secret scan. A secret-exposure incident during proof re-verification (rendered Compose config, unredacted stdout) was contained (credential revoked/replaced outside the agent context, zero leak-spread found) and root-caused (data minimization via `config --quiet`, defense-in-depth redaction at both daemon and client boundaries, both regression-tested with canary secrets). The credential rotation was **human-attested** by the repository owner on 2026-07-13 (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`, `confirmed_by=Luke`, `scope=H3B_PR559_INCIDENT`) — the required A2 human-confirmation gate. PR #559 squash-merged. Next task: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` (now satisfied) + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -150,8 +172,8 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
 - R7 measurement → R5A complete + runtime preflight approved
-- H3B root-executor client activation → host daemon is healthy and dual-protocol; the stale bind mount is fixed. Blocked now by `/run/hermes-root-executor` being `0750 root:root` (systemd RuntimeDirectoryMode/Group), denying UID 10000 OS-level access. Requires an explicitly approved ACL grant or systemd unit fix + service restart, followed by positive UID-10000 v1, audit-correlation, locking, timeout, kill-switch, approval-gate and isolated mutation proofs.
-- R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
+- H3B root-executor client activation → **CLOSED — `H3B_RUNTIME_CONTROL_GREEN`** (PR #559 squash-merged 2026-07-13). Host daemon is healthy, dual-protocol, and reachable from Hermes. Complete Issue #531 proof matrix passes. Secret-exposure incident contained; credential rotation human-attested by the repository owner (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`).
+- R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN (now satisfied) + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
 
 ---
 
@@ -168,7 +190,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 | Rollback path | Rehearsed but execution hard-blocked |
 | Measurement path | Read-only decision engine on `main` |
 | Rainbow advisory | Read-only, fail-closed, disabled by default |
-| Root Executor | 🟡 **Daemon healthy, unreachable from Hermes** — `hermes-root-executor.service` active/running (host-verified); bind mount fixed 2026-07-13 via container recreate; blocked now by `RuntimeDirectoryMode=0750 root:root` denying UID 10000 OS-level traversal (ACL or systemd fix + restart required, not yet performed) |
+| Root Executor | 🟢 **Reachable and fully proven from Hermes** — `hermes-root-executor.service` active/running (`root:hermes` permissions since the 2026-07-13 systemd fix); complete Issue #531 proof matrix passes 5/5 (positive v1, all read-only actions, full security matrix, audit correlation); secret exposure contained and credential rotation human-attested (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`, `confirmed_by=Luke`) |
 | Autonomous roadmap loop | Contract defined in `AGENTS.md` and `commands/trading-hub-roadmap-tick.md` |
 
 ---
@@ -264,7 +286,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
-| H3B — Root-Executor Client Activation | 🟡 H3B_RUNTIME_CONTROL_DEGRADED (bind mount fixed 2026-07-13; now blocked by `BLOCKED_BY_EXECUTOR_RUNTIME_DIRECTORY_PERMISSIONS` — RuntimeDirectoryMode=0750 root:root denies UID 10000 traversal; full Issue #531 proof matrix still unattempted) | #531 → #549, #550, #551, #553, #554, #555, #557 |
+| H3B — Root-Executor Client Activation | 🟢 **H3B_RUNTIME_CONTROL_GREEN** (PR #559 squash-merged 2026-07-13; complete Issue #531 proof matrix passes 5/5; secret exposure contained; credential rotation human-attested) | #531 → #549, #550, #551, #553, #554, #555, #557, #558, #559 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
