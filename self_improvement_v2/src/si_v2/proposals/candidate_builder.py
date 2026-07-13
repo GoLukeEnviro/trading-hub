@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from statistics import median
-from typing import Callable, Final
+from typing import Final
 
 # ------------------------------------------------------------------
 # JSON-safe type aliases
@@ -289,7 +290,8 @@ def _build_dispersion_candidate(cycle_id: str, bot: BotMetrics, fleet: FleetMetr
             "pair_cluster_action": "align_to_fleet_median",
         },
         expected_effect=(
-            f"Align {bot.bot_id} parameters toward fleet median (fleet_median_profit={fleet.fleet_median_profit_pct:.1f}%, "
+            f"Align {bot.bot_id} parameters toward fleet median "
+            f"(fleet_median_profit={fleet.fleet_median_profit_pct:.1f}%, "
             f"bot_profit={bot.profit_pct:.1f}%). Expected: reduced fleet profitability dispersion."
         ),
         risk_notes=(
@@ -380,7 +382,8 @@ def _build_reinforce_candidate(cycle_id: str, bot: BotMetrics, fleet: FleetMetri
             "Over-tightening could create fragility.",
         ),
         rollback_condition=(
-            "If profit drops below 0.5% OR Sharpe drops below 0.3 in walk-forward, revert to pre-reinforcement parameters."
+            "If profit drops below 0.5% OR Sharpe drops below 0.3 in walk-forward, "
+            "revert to pre-reinforcement parameters."
         ),
         source_evidence_refs=(
             f"fleet_analyzer:{cycle_id}:{bot.bot_id}:reinforce",
@@ -522,17 +525,17 @@ def build_candidate_proposals(
 
 
 __all__ = [
-    "BotMetrics",
-    "FleetBotMetrics",
-    "FleetMetrics",
     "HYPOTHESIS_PROFIT_DISPERSION",
     "HYPOTHESIS_REINFORCE_PROFITABLE",
     "HYPOTHESIS_SIGNAL_QUALITY",
     "HYPOTHESIS_TRADE_DURATION",
     "HYPOTHESIS_UNDERPERFORMING",
-    "ProposalCandidate",
     "SAFE_OVERLAY_KEYS",
     "SUPPORTED_HYPOTHESES",
+    "BotMetrics",
+    "FleetBotMetrics",
+    "FleetMetrics",
+    "ProposalCandidate",
     "build_candidate_proposals",
     "build_fleet_metrics_from_cycle",
     "validate_candidate_overlay",
