@@ -37,7 +37,15 @@ def build_argv(action: str, argv: list[str]) -> list[str]:
         return ["docker", "inspect", argv[0]]
 
     if action == "docker_compose_config":
-        return ["docker", "compose", "config", *argv]
+        # docker compose's -f/--file flag is a top-level flag and must
+        # precede the "config" subcommand (docker compose -f <path> config);
+        # it is not accepted after the subcommand. Require exactly the
+        # compose file path as the sole extra argument, matching the
+        # docker_inspect/systemctl_status _require_argv_len(1) pattern, and
+        # build the flag ourselves rather than trusting a client-supplied
+        # flag token.
+        _require_argv_len(argv, 1)
+        return ["docker", "compose", "-f", argv[0], "config"]
 
     if action == "systemctl_status":
         _require_argv_len(argv, 1)

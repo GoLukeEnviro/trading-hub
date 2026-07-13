@@ -135,14 +135,24 @@ class FakeExecutorServer:
                         (json.dumps(self._response) + "\n").encode("utf-8")
                     )
                 else:
-                    # Default: echo back as ALLOWED
+                    # Default: echo back as ALLOWED, matching the real
+                    # daemon's v1 wire format (hermes-root-executor._finish_v1)
                     echo = {
+                        "schema_version": SCHEMA_VERSION,
                         "request_id": parsed_request.get("request_id", ""),
                         "correlation_id": parsed_request.get("correlation_id", ""),
                         "decision": "ALLOWED",
                         "reason": "ok",
-                        "result": {"echo": True},
-                        "audit_seq": 1,
+                        "returncode": 0,
+                        "stdout": "healthy",
+                        "stderr": "",
+                        "started_at": "2026-07-13T00:00:00+00:00",
+                        "finished_at": "2026-07-13T00:00:00+00:00",
+                        "duration_ms": 1,
+                        "resource_key": parsed_request.get("resource_key", ""),
+                        "action": parsed_request.get("action", ""),
+                        "execution_class": parsed_request.get("execution_class", ""),
+                        "audit_id": "test-audit-id",
                     }
                     conn.sendall((json.dumps(echo) + "\n").encode("utf-8"))
             except OSError:
@@ -496,6 +506,60 @@ def test_redact_argv_token_value():
 
 
 # ---------------------------------------------------------------------------
+# Client/daemon argv contract test
+#
+# The daemon-side action registry (hermes_root.actions.build_argv) owns the
+# fixed base command per action and appends the client's argv as extras. The
+# CLI's _build_argv must send only those extras, or the daemon runs a
+# duplicated/invalid command (see 2026-07-13 H3B proof run: docker_ps sent
+# as ["docker", "ps"] duplicated into "docker ps docker ps" and failed).
+# ---------------------------------------------------------------------------
+
+from hermes_root.__main__ import _build_argv as cli_build_argv
+from hermes_root.actions import build_argv as daemon_build_argv
+
+
+def _namespace(**overrides):
+    """Minimal argparse.Namespace stand-in with the fields _build_argv reads."""
+    import argparse
+    defaults = dict(container=None, unit=None, file=None, image=None, name=None, cmd=None)
+    defaults.update(overrides)
+    return argparse.Namespace(**defaults)
+
+
+@pytest.mark.parametrize(
+    "action,ns_kwargs,expected_final_argv",
+    [
+        ("executor_health", {}, []),
+        ("docker_ps", {}, ["docker", "ps"]),
+        ("docker_inspect", {"container": "hermes"}, ["docker", "inspect", "hermes"]),
+        ("systemctl_status", {"unit": "hermes-root-executor.service"},
+         ["systemctl", "status", "hermes-root-executor.service"]),
+        ("docker_compose_config", {"file": "/opt/stacks/hermes/compose.yaml"},
+         ["docker", "compose", "-f", "/opt/stacks/hermes/compose.yaml", "config"]),
+        ("docker_stop", {"container": "throwaway"}, ["docker", "stop", "throwaway"]),
+        ("docker_remove", {"container": "throwaway"}, ["docker", "rm", "throwaway"]),
+        ("systemctl_restart", {"unit": "some.service"}, ["systemctl", "restart", "some.service"]),
+    ],
+)
+def test_cli_extras_match_daemon_builder(action, ns_kwargs, expected_final_argv):
+    """CLI extras, run through the real daemon-side builder, must produce the
+    exact final command — no duplication, no missing/rejected arguments."""
+    extras = cli_build_argv(action, _namespace(**ns_kwargs))
+    final_argv = daemon_build_argv(action, extras)
+    assert final_argv == expected_final_argv
+
+
+def test_cli_docker_create_extras_match_daemon_builder():
+    """docker_create: daemon only requires len(argv) >= 1, verify the CLI's
+    extras produce a syntactically sane 'docker create ...' invocation."""
+    ns = _namespace(image="alpine:latest", name="h3b-test", cmd="sleep 60")
+    extras = cli_build_argv("docker_create", ns)
+    final_argv = daemon_build_argv("docker_create", extras)
+    assert final_argv == ["docker", "create", "--name", "h3b-test", "alpine:latest", "sleep 60"]
+
+
+# ---------------------------------------------------------------------------
 # Server error response test
 # ---------------------------------------------------------------------------
 
@@ -506,12 +570,43 @@ def test_server_error_response(fake_server, fake_socket_path, valid_request):
         "correlation_id": valid_request.correlation_id,
         "decision": "BLOCKED",
         "reason": "resource_locked",
-        "result": {},
-        "audit_seq": 1,
+        "returncode": None,
+        "stdout": "",
+        "stderr": "",
     })
     response = send_request(fake_socket_path, valid_request)
     assert response.is_blocked
     assert response.reason == "resource_locked"
+
+
+def test_v1_response_fields_parsed(fake_server, fake_socket_path, valid_request):
+    """action, execution_class and audit_id from a real v1 response must be
+    surfaced on ExecutorResponse, not silently dropped."""
+    response = send_request(fake_socket_path, valid_request)
+    assert response.is_allowed
+    assert response.action == valid_request.action
+    assert response.execution_class == valid_request.execution_class
+    assert response.audit_id == "test-audit-id"
+    assert response.returncode == 0
+    assert response.stdout == "healthy"
+
+
+def test_legacy_shaped_response_parses_with_defaults(fake_server, fake_socket_path, valid_request):
+    """A legacy-protocol response (only decision/reason/returncode/stdout/stderr,
+    no v1-only fields) must still parse without error, defaulting the
+    v1-only fields instead of raising."""
+    fake_server.set_response({
+        "decision": "ALLOWED",
+        "returncode": 0,
+        "stdout": "legacy-ok",
+        "stderr": "",
+    })
+    response = send_request(fake_socket_path, valid_request)
+    assert response.is_allowed
+    assert response.returncode == 0
+    assert response.stdout == "legacy-ok"
+    assert response.action == ""
+    assert response.audit_id == ""
 
 
 # ---------------------------------------------------------------------------

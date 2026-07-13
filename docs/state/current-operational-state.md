@@ -2,22 +2,31 @@
 
 > **Canonical current-state snapshot** — validated against `main` at
 > PR #557 (H3B protocol rollout incident reconciliation, host-verified) plus
-> the 2026-07-13 runtime-control proof run.
+> the 2026-07-13 runtime-control proof run (systemd permission fix + full
+> Issue #531 proof matrix).
 > The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is on
-> `main` with 33 passing tests (PRs #553, #554, #555 merged) **and is the
-> daemon currently running on the host** (SHA-256 `c89768b6…`, active since
-> 2026-07-12 23:08:19 UTC, `NRestarts=0`, host-verified via direct root probe).
-> The stale Hermes bind mount from PR #557 was fixed on 2026-07-13 via a
-> scoped Hermes container recreate (host inode now matches container inode).
-> Hermes still cannot reach the socket: `/run/hermes-root-executor` is
-> `0750 root:root` (systemd `RuntimeDirectoryMode=`/`Group=root`), which
-> denies UID 10000 (Hermes) OS-level traversal regardless of the daemon's own
-> correctly-configured allowlist (`DEFAULT_ALLOWED_UIDS = {10000}`). Fixing
-> this requires either an ACL grant or a systemd unit change + service
-> restart — neither performed yet, both out of scope for the 2026-07-13 run.
+> `main` **and is the daemon currently running on the host**, host-verified
+> (SHA-256 `c89768b6…`, active since 2026-07-12 23:08:19 UTC, `NRestarts=0`).
+> The stale Hermes bind mount from PR #557 is fixed. The
+> `/run/hermes-root-executor` runtime-directory permission blocker
+> (`0750 root:root` denying UID 10000) is **fixed**: the unit now runs with
+> a `Group=hermes` + `RuntimeDirectoryPreserve=restart` drop-in, producing
+> `root:hermes 0750`/`0660` ownership that Hermes (UID/GID 10000) can use.
+> **Hermes now has working runtime control**: a full Issue #531 proof
+> matrix passed — positive v1 proof, 4 of 5 read-only actions, the complete
+> security-proof matrix (wrong UID, missing/invalid A2 approval client- and
+> server-side, A3 always blocked, kill switch, locking, timeout, isolated
+> mutation lifecycle create/inspect/stop/remove), and audit correlation with
+> a clean secret scan. The sole remaining gap is `docker_compose_config`:
+> the daemon/client code is now correct, but the `docker compose` CLI
+> plugin is entirely absent from the Hermes container image
+> (`nousresearch/hermes-agent:latest`, confirmed `Plugins: []`) — an
+> image-packaging gap, not a code defect, and out of scope for this run
+> (no image changes authorized). `H3B_RUNTIME_CONTROL_GREEN` requires this
+> one action re-verified after the plugin gap is closed in a separate run.
 >
-> **Last updated:** 2026-07-13 after the runtime-control proof run (mount fixed, new permission blocker found)
-> **Previous update:** 2026-07-12 after PR #557 reconciliation 2 (host-verified)
+> **Last updated:** 2026-07-13 after the systemd permission fix + full proof matrix run
+> **Previous update:** 2026-07-13 after the runtime-control proof run (mount fixed, permission blocker found)
 
 ---
 
@@ -122,7 +131,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H3B_RUNTIME_CONTROL_DEGRADED`. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed and healthy on the host (host-verified). The Hermes container bind mount was fixed on 2026-07-13 (targeted container recreate; host and container inode now match). Hermes still cannot reach the socket: `/run/hermes-root-executor` is `0750 root:root` at the OS level (systemd `RuntimeDirectoryMode=`/`Group=root`), denying UID 10000 traversal even though the daemon's own allowlist already includes UID 10000. An ACL grant or a systemd unit fix (requiring a service restart) plus the full Issue #531 proof matrix (positive v1 proof, audit correlation, locking, timeout, kill-switch, approval gates, isolated mutating test) are required before `H3B_RUNTIME_CONTROL_GREEN`. Next task after that: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
+Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H3B_RUNTIME_CONTROL_DEGRADED`. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed, healthy, and reachable from Hermes (host-verified). Both blockers found on 2026-07-12/13 (stale bind mount, then a `RuntimeDirectoryMode=0750 root:root` permission gap) are fixed. The full Issue #531 proof matrix now passes: positive v1 proof, 4/5 read-only actions, the complete security-proof matrix (wrong UID, missing/invalid A2 approval, A3, kill switch, locking, timeout, isolated mutation lifecycle), and audit correlation with a clean secret scan. The one remaining gap, `docker_compose_config`, is blocked by a missing `docker compose` CLI plugin in the Hermes container image — an image-packaging gap requiring a separate, explicitly-approved run (install the plugin or an equivalent capability, then re-verify). Next task after `H3B_RUNTIME_CONTROL_GREEN`: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -150,7 +159,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 - C4 re-execution → new measurement window + human gate
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
 - R7 measurement → R5A complete + runtime preflight approved
-- H3B root-executor client activation → host daemon is healthy and dual-protocol; the stale bind mount is fixed. Blocked now by `/run/hermes-root-executor` being `0750 root:root` (systemd RuntimeDirectoryMode/Group), denying UID 10000 OS-level access. Requires an explicitly approved ACL grant or systemd unit fix + service restart, followed by positive UID-10000 v1, audit-correlation, locking, timeout, kill-switch, approval-gate and isolated mutation proofs.
+- H3B root-executor client activation → host daemon is healthy, dual-protocol, and reachable from Hermes; the full Issue #531 proof matrix passes except `docker_compose_config`. Requires an explicitly approved run to install the `docker compose` CLI plugin (or equivalent) into the Hermes container image, then re-verify that one action, before `H3B_RUNTIME_CONTROL_GREEN`.
 - R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
 
 ---
@@ -168,7 +177,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 | Rollback path | Rehearsed but execution hard-blocked |
 | Measurement path | Read-only decision engine on `main` |
 | Rainbow advisory | Read-only, fail-closed, disabled by default |
-| Root Executor | 🟡 **Daemon healthy, unreachable from Hermes** — `hermes-root-executor.service` active/running (host-verified); bind mount fixed 2026-07-13 via container recreate; blocked now by `RuntimeDirectoryMode=0750 root:root` denying UID 10000 OS-level traversal (ACL or systemd fix + restart required, not yet performed) |
+| Root Executor | 🟢 **Reachable and proven from Hermes** — `hermes-root-executor.service` active/running (`root:hermes` permissions since the 2026-07-13 systemd fix); full Issue #531 proof matrix passes except `docker_compose_config` (blocked by a missing CLI plugin in the Hermes image, not a code issue) |
 | Autonomous roadmap loop | Contract defined in `AGENTS.md` and `commands/trading-hub-roadmap-tick.md` |
 
 ---
@@ -264,7 +273,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — OPEN and `H
 | H1 — Governance Reconciliation | ✅ COMPLETE | #525 (`408f035`) |
 | H2 — Autonomous Roadmap Tick | ✅ COMPLETE | #529 (`f5f36ff`) |
 | H3A — Root-Executor Client Contract | ✅ COMPLETE | #533 (`38203a7`) |
-| H3B — Root-Executor Client Activation | 🟡 H3B_RUNTIME_CONTROL_DEGRADED (bind mount fixed 2026-07-13; now blocked by `BLOCKED_BY_EXECUTOR_RUNTIME_DIRECTORY_PERMISSIONS` — RuntimeDirectoryMode=0750 root:root denies UID 10000 traversal; full Issue #531 proof matrix still unattempted) | #531 → #549, #550, #551, #553, #554, #555, #557 |
+| H3B — Root-Executor Client Activation | 🟡 H3B_RUNTIME_CONTROL_DEGRADED (permission blocker fixed 2026-07-13; full Issue #531 proof matrix passes except `docker_compose_config`, blocked by `BLOCKED_BY_MISSING_DOCKER_COMPOSE_PLUGIN_IN_HERMES_IMAGE` — image-packaging gap, not a code defect) | #531 → #549, #550, #551, #553, #554, #555, #557, #558 |
 | R5a — HermesTrader Deployment | BLOCKED (needs APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT) | — |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |

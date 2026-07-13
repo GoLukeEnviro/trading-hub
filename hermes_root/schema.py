@@ -101,24 +101,49 @@ class ExecutorRequest:
 
 @dataclass
 class ExecutorResponse:
-    """Structured response from the root executor."""
+    """Structured response from the root executor.
 
+    Mirrors the daemon's actual wire format for both the v1 protocol
+    (hermes-root-executor._finish_v1) and the legacy protocol
+    (hermes-root-executor._handle_legacy). The legacy shape only ever sets
+    decision/reason/returncode/stdout/stderr, so v1-only fields default to
+    their empty/zero value for legacy responses.
+    """
+
+    schema_version: str = ""
     request_id: str = ""
     correlation_id: str = ""
     decision: str = "BLOCKED"  # ALLOWED or BLOCKED
     reason: str = ""
-    result: dict[str, Any] = field(default_factory=dict)
-    audit_seq: int = 0
+    returncode: Optional[int] = None
+    stdout: str = ""
+    stderr: str = ""
+    started_at: str = ""
+    finished_at: str = ""
+    duration_ms: int = 0
+    resource_key: str = ""
+    action: str = ""
+    execution_class: str = ""
+    audit_id: str = ""
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "ExecutorResponse":
         return cls(
+            schema_version=d.get("schema_version", ""),
             request_id=d.get("request_id", ""),
             correlation_id=d.get("correlation_id", ""),
             decision=d.get("decision", "BLOCKED"),
             reason=d.get("reason", ""),
-            result=d.get("result", {}),
-            audit_seq=d.get("audit_seq", 0),
+            returncode=d.get("returncode"),
+            stdout=d.get("stdout", ""),
+            stderr=d.get("stderr", ""),
+            started_at=d.get("started_at", ""),
+            finished_at=d.get("finished_at", ""),
+            duration_ms=d.get("duration_ms", 0),
+            resource_key=d.get("resource_key", ""),
+            action=d.get("action", ""),
+            execution_class=d.get("execution_class", ""),
+            audit_id=d.get("audit_id", ""),
         )
 
     @property

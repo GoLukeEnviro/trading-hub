@@ -1,0 +1,154 @@
+# H3B Runtime-Control Proof — 2026-07-13 (systemd Permission Fix + Full Proof Matrix)
+
+**Date:** 2026-07-13 06:30–07:00 UTC
+**Gate:** `H3B_RUNTIME_CONTROL_DEGRADED`
+**Classification:** A2 — approved (`APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION` + `APPROVED_H3B_SYSTEMD_PERMISSION_FIX_AND_RUNTIME_PROOF`)
+
+## Goal
+
+Fix the `BLOCKED_BY_EXECUTOR_RUNTIME_DIRECTORY_PERMISSIONS` blocker from PR #558 via a systemd unit change, then run the full Issue #531 runtime-control proof matrix.
+
+## Precondition: GID check
+
+```
+$ getent group hermes
+hermes:x:10000:deploy
+$ docker exec -u 10000 hermes id
+uid=10000(hermes) gid=10000(hermes) groups=10000(hermes)
+```
+
+Host group `hermes` has exactly GID `10000`, matching the Hermes container. Proceeded.
+
+## Backup before mutation
+
+* Fresh Restic snapshot `377258fd` (tag `h3b-systemd-permission-fix-<ts>`).
+* Root-only backup of the unit file at `/root/backups/h3b-systemd-permission-fix-20260713/` (`hermes-root-executor.service` + SHA-256; no pre-existing drop-ins to back up).
+
+## systemd fix applied
+
+New drop-in `/etc/systemd/system/hermes-root-executor.service.d/10-hermes-group-permissions.conf`:
+
+```ini
+[Service]
+Group=hermes
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=restart
+```
+
+`User=root` left unchanged. `systemctl daemon-reload` + a single `systemctl restart hermes-root-executor.service`.
+
+**Result:**
+
+| Check | Before | After |
+|---|---|---|
+| `MainPID` | `468055` | `531456` (new, stable) |
+| `NRestarts` | `0` | `0` |
+| `/run/hermes-root-executor` owner:mode | `root:root 0750` | `root:hermes 0750` |
+| `/run/hermes-root-executor/executor.sock` owner:mode | `root:root 0660` | `root:hermes 0660` |
+| Host/container inode | mismatched (stale) | **matched immediately** — `RuntimeDirectoryPreserve=restart` kept the same tmpfs directory across the restart, so no container recreate was needed this time |
+| Journal | — | clean, no crash, no restart loop |
+
+## Bugs found and fixed in this branch (with tests)
+
+Once the socket became reachable, three further defects surfaced — each one blocked part of the proof matrix and was fixed with regression tests, per the run's authorization to fix H3B-related client/daemon bugs in-branch:
+
+### 1. `ExecutorResponse` schema mismatch (client bug)
+
+`hermes_root/schema.py`'s `ExecutorResponse` only parsed `request_id`/`correlation_id`/`decision`/`reason`/`result`/`audit_seq` — but neither the v1 nor the legacy daemon response ever contains `result` or `audit_seq` (confirmed via a raw socket capture: the real v1 response has `schema_version`, `returncode`, `stdout`, `stderr`, `started_at`, `finished_at`, `duration_ms`, `resource_key`, `action`, `execution_class`, `audit_id`). The client was silently dropping `action`, `execution_class`, `audit_id`, and all output fields.
+
+**Fix:** `ExecutorResponse` now mirrors the real wire format for both protocols (v1-only fields default to empty/zero for legacy responses). Updated `client.py` (removed dead redaction of the never-populated `result` field, with a comment explaining stdout/stderr are not redacted and callers must do their own secret scanning for display) and `__main__.py`'s human/JSON output. Added `test_v1_response_fields_parsed` and `test_legacy_shaped_response_parses_with_defaults`.
+
+### 2. CLI argv duplication (client bug, affected nearly every action)
+
+`hermes_root/__main__.py`'s `_build_argv()` built the **full** command (e.g. `["docker", "ps"]`) and sent it as the request's `argv`. But the daemon's `hermes_root/actions.py::build_argv()` treats `argv` as *extras* and prepends its own fixed base command (`["docker", "ps", *argv]`) — so the daemon ended up running `docker ps docker ps` (`docker: 'docker ps' accepts no arguments`). Actions requiring exactly one extra argument (`docker_inspect`, `systemctl_status`, `docker_stop`, `docker_remove`, `systemctl_restart`) would have been rejected outright (`invalid_argv_for_action`) the same way, and `docker_create` would have produced a nonsensical duplicated command.
+
+**Fix:** rewrote `_build_argv()` to return only the resource-specific extras for every action, matching `hermes_root/actions.py` exactly. Added a parametrized contract test (`test_cli_extras_match_daemon_builder`) that runs the CLI's extras through the real daemon-side builder for all 8 actions and asserts the exact final command.
+
+### 3. `docker_compose_config` flag ordering (daemon bug)
+
+`actions.py` built `["docker", "compose", "config", *argv]` — but `docker compose`'s `-f`/`--file` flag must precede the `config` subcommand; placing it after produces `unknown shorthand flag: 'f' in -f`. Fixed to `["docker", "compose", "-f", argv[0], "config"]` with `_require_argv_len(argv, 1)`, matching the pattern already used for `docker_inspect`/`systemctl_status`. Client-side extras updated to `[compose_file]` (single element). Test case updated.
+
+**This fix is source-correct and unit-tested, but could not be verified end-to-end** — see below.
+
+## New environmental blocker found (not a code bug, not fixed)
+
+`docker exec -u 10000 hermes docker compose version` → `docker: 'compose' is not a docker command.` `docker info --format '{{json .ClientInfo}}'` confirms `"Plugins":[]` — the Hermes container image (`nousresearch/hermes-agent:latest`) ships the Docker CLI with **zero** CLI plugins, no `docker compose`, no standalone `docker-compose`. This is an image-packaging gap, not something fixable by a code change in this repo, and installing a plugin into the running container or rebuilding its image is out of this run's scope (no image/Dockerfile changes authorized).
+
+## Proof matrix results
+
+### Positive v1 proof — PASSED
+
+```
+$ python3 -m hermes_root executor_health --class A0 --json   # as uid 10000
+{
+  "decision": "ALLOWED", "reason": "ok",
+  "action": "executor_health", "execution_class": "A0",
+  "audit_id": "f700afc1-9119-4612-a7a8-f2274035fce4",
+  "correlation_id": "<exact match>"
+}
+```
+
+### Read-only action-proof matrix — 4/5 PASSED
+
+| Action | Result |
+|---|---|
+| `executor_health` | ✅ ALLOWED |
+| `docker_ps` | ✅ ALLOWED, `returncode=0`, real container list (after argv fix) |
+| `docker_inspect` (Hermes container) | ✅ ALLOWED, `returncode=0` |
+| `systemctl_status` (the executor unit itself) | ✅ ALLOWED, `returncode=0`, output shows the new drop-in |
+| `docker_compose_config` | ❌ **BLOCKED** — `docker compose` plugin absent in the Hermes image (see above); code is correct, environment is not |
+
+### Security proof matrix — 7/7 PASSED
+
+| Test | Result |
+|---|---|
+| Wrong UID (as root, via canonical client) | `BLOCKED` / `peer_uid_not_allowed` |
+| Missing A2 approval (client-side) | Validation error, exit 2, no request sent |
+| Missing A2 approval (server-side, raw request bypassing client validation) | `BLOCKED` / `approval_reference_missing_or_invalid` |
+| A3 (even with a valid approval reference) | `BLOCKED` / `a3_never_authorized` |
+| Kill switch | prior state absent → enabled → `BLOCKED`/`emergency_disable_switch_active` → restored to absent → normal A0 access confirmed working again |
+| Locking | two barrier-synced concurrent requests, same `resource_key`: first `ALLOWED`, second `BLOCKED`/`resource_locked` |
+| Timeout | isolated mocked unit test `test_timeout_blocks` (no live allowlisted action runs long enough to exceed `MIN_TIMEOUT=1s` naturally; this directly exercises the real `subprocess.TimeoutExpired` handling code path with zero risk of orphaned live resources) |
+| Isolated mutation lifecycle | `docker_create` → `docker_inspect` → `docker_stop` → `docker_remove` on a uniquely-named disposable container, all `ALLOWED`/`returncode=0`; `docker ps -a --filter name=...` empty afterward — proven absent |
+
+### Audit correlation — PASSED
+
+16/16 of this session's correlation IDs found in `/opt/data/hermes/audit/runtime-actions.jsonl` with matching `action`/`execution_class`/`decision`/`reason`/`peer_uid`. All required fields present (`audit_id`, `correlation_id`, `peer_uid`, `action`, `execution_class`, `decision`, `reason`, `resource_key`, `duration_ms`, `daemon_version=2.0.0-repo`, `approval_reference_redacted`). Secret scan (key-pattern + token-shape heuristic) over all 16 entries: **0 hits**.
+
+Observation (not fixed, not a bug): the wrong-UID rejection does **not** appear in the audit log — `peer_uid` is checked before any audit write. This means unauthorized connection attempts currently leave no audit trace. Worth a deliberate decision in a future task, not changed here.
+
+Observation (not fixed): `repository_commit` is logged as the literal string `"unknown"` in every audit entry — the daemon's constructor default was never overridden with a real commit hash at install time. Traceability gap, not a security issue.
+
+### Stability proof — PASSED
+
+`hermes-root-executor.service` unchanged since the fix restart (`MainPID=531456`, `NRestarts=0`), both host and container socket visible, Hermes container healthy, kill switch absent, zero disposable containers remain, networks/volumes unchanged, working tree contains only the intended 5 fix files.
+
+## Validation
+
+* `git diff --check`: clean
+* `pytest tests/test_hermes_root_client.py tests/test_hermes_root_daemon.py -q`: **84 passed** (75 pre-existing/fixed + 9 new: response-schema regression tests, CLI/daemon argv contract tests)
+* Main Gate: pending on this push
+
+## Gate status
+
+```
+H3B_RUNTIME_CONTROL_DEGRADED
+```
+
+**Blocker:**
+
+```
+BLOCKED_BY_MISSING_DOCKER_COMPOSE_PLUGIN_IN_HERMES_IMAGE
+```
+
+Per the explicit rule for this run, `H3B_RUNTIME_CONTROL_GREEN` requires the complete Issue #531 proof matrix to pass. Every other required proof passed cleanly — positive v1 proof, 4 of 5 read-only actions, the full security-proof matrix (wrong UID, missing/invalid approval both client- and server-side, A3, kill switch, locking, timeout, isolated mutation lifecycle), and audit correlation with a clean secret scan. The sole remaining gap is `docker_compose_config`, blocked by a missing CLI plugin in the Hermes container image — not a code defect (the daemon and client code for this action are now correct and unit-tested).
+
+`H3B_RUNTIME_CONTROL_GREEN` requires, in a separate explicitly-approved run: installing the `docker compose` CLI plugin into the Hermes container image (or an equivalent capability), followed by a live re-verification of `docker_compose_config` specifically.
+
+## References
+
+- Issue #531 — H3B Root-Executor Client Activation
+- PR #557 (`a5a8cbe`) — stale bind mount diagnosis
+- PR #558 (`091ea22`) — bind mount fixed, runtime-directory permission blocker found
+- This run — permission blocker fixed, full proof matrix executed, one new environmental blocker found and precisely isolated
+- Backups: Restic snapshot `377258fd`; `/root/backups/h3b-systemd-permission-fix-20260713/`
