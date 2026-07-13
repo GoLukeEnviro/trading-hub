@@ -1,0 +1,24 @@
+# Canonical dependency lock — Rainbow build dependency on ai4trade-bot.
+# Consumed by docker-compose.hermestrader-dryrun.yml service "rainbow"
+# (build context = ai4trade-bot repo, rainbow.Dockerfile).
+#
+# Update this lock whenever the pinned ai4trade-bot commit changes, then
+# rebuild the Rainbow image from an immutable checkout of that exact SHA and
+# re-run the R5A parity matrix. Never build the deployed fleet from a moving
+# branch; point AI4TRADE_CONTEXT at an immutable checkout of locked_sha.
+repo: GoLukeEnviro/ai4trade-bot
+branch: master
+locked_sha: 6e850c8f8ba1d8a0ad45250f130280e4171c001d
+pr: 102
+subject: "fix(rainbow): align storage ownership with HermesTrader UID 10000 (#102)"
+supersedes: cd63051545e9b27235f47a3bbb5de858782fcd20   # prior pin (#78 + #79)
+
+dockerfile: rainbow.Dockerfile
+dockerfile_sha256: faa2e3d8c351dc50adc4af21093811587c2f49caaa8827e138fee8c0d0796405
+dockerfile_git_blob: c694ee1a2c6a1eefcb0b4941671b97538686ea0a
+
+# Resulting Rainbow image, built on HermesTrader from the immutable checkout
+# (AI4TRADE_CONTEXT=/opt/data/projects/ai4trade-bot-r5a-6e850c8):
+rainbow_image_digest: sha256:f49ceccb724727f4a702c0de0f01d5bb2f2c302018790417bd19aeb09cb611e2
+rainbow_image_config_digest: sha256:e6443248639ffd217e716e93a56b13927bb9ce404e181adaa4ffdfc3b1307bdd
+image_config_user: "10000:10000"
