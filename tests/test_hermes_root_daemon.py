@@ -498,3 +498,241 @@ def test_real_socket_end_to_end(daemon, monkeypatch):
         assert resp["decision"] == "ALLOWED"
     finally:
         daemon.stop()
+
+
+# ============================================================================
+# R5A — HermesTrader dry-run compose execution tests (Issue #527)
+# ============================================================================
+
+R5A_APPROVED = "APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT"
+H3B_APPROVED = "APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION"
+
+
+@pytest.fixture(autouse=True)
+def _r5a_mock_compose_file(monkeypatch):
+    """Mock _validate_compose_file so R5A argv tests don't require the
+    canonical compose file to exist on the test filesystem.
+    This is safe for all tests — it only skips the filesystem existence
+    check and does not change path resolution behavior."""
+    from hermes_root import actions as actions_mod
+    monkeypatch.setattr(actions_mod, "_validate_compose_file", lambda p: p)
+
+
+def _r5a_v1_payload(**overrides):
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "request_id": str(uuid.uuid4()),
+        "correlation_id": str(uuid.uuid4()),
+        "issue_number": 527,
+        "task_name": "R5A",
+        "execution_class": "A2",
+        "resource_key": "r5a:compose",
+        "action": "r5a_compose_build",
+        "argv": [],
+        "cwd": "/tmp",
+        "timeout": 120,
+        "approval_reference": R5A_APPROVED,
+    }
+    payload.update(overrides)
+    return payload
+
+
+class TestR5AComposeExactArgv:
+    """Exact argv generation for each R5A compose action."""
+
+    def test_build_all_services(self, daemon):
+        from hermes_root.actions import build_argv
+        argv = build_argv("r5a_compose_build", [])
+        assert argv == [
+            "docker", "compose", "-f",
+            "/opt/data/projects/trading-hub/docker-compose.hermestrader-dryrun.yml",
+            "-p", "hermestrader-dryrun", "build",
+        ]
+
+    def test_build_specific_services(self, daemon):
+        from hermes_root.actions import build_argv
+        argv = build_argv("r5a_compose_build", ["freqtrade-freqforge", "rainbow"])
+        assert "freqtrade-freqforge" in argv
+        assert "rainbow" in argv
+        assert "freqai-rebel" not in argv
+        assert argv[-2:] == ["freqtrade-freqforge", "rainbow"]
+
+    def test_up_all_services_includes_dash_d(self, daemon):
+        from hermes_root.actions import build_argv
+        argv = build_argv("r5a_compose_up", [])
+        assert argv[-1] == "-d"
+        assert "up" in argv
+
+    def test_stop_services(self, daemon):
+        from hermes_root.actions import build_argv
+        argv = build_argv("r5a_compose_stop", ["freqtrade-freqforge"])
+        assert "stop" in argv
+        assert "freqtrade-freqforge" in argv
+        assert "-d" not in argv
+
+    def test_down_all_services(self, daemon):
+        from hermes_root.actions import build_argv
+        argv = build_argv("r5a_compose_down", [])
+        assert "down" in argv
+        assert "-d" not in argv
+        assert "--volumes" not in argv
+        assert "-v" not in argv
+
+
+class TestR5AComposeCanonicalPath:
+    """Canonical compose path only — no arbitrary paths accepted."""
+
+    def test_hardcoded_canonical_path_used(self):
+        from hermes_root.actions import R5A_CANONICAL_COMPOSE_FILE
+        assert R5A_CANONICAL_COMPOSE_FILE == (
+            "/opt/data/projects/trading-hub/docker-compose.hermestrader-dryrun.yml"
+        )
+
+    def test_hardcoded_canonical_project_used(self):
+        from hermes_root.actions import R5A_CANONICAL_PROJECT
+        assert R5A_CANONICAL_PROJECT == "hermestrader-dryrun"
+
+
+class TestR5AComposeServiceAllowlist:
+    """Service allowlist validation — only the 5 default services."""
+
+    def test_all_default_services_allowed(self, daemon):
+        from hermes_root.actions import build_argv
+        for svc in ["freqtrade-freqforge", "freqtrade-freqforge-canary",
+                      "freqtrade-regime-hybrid", "freqtrade-webserver", "rainbow"]:
+            argv = build_argv("r5a_compose_build", [svc])
+            assert svc in argv
+
+    def test_unknown_service_rejected(self, daemon):
+        from hermes_root.actions import build_argv, ActionError
+        with pytest.raises(ActionError, match="invalid_service"):
+            build_argv("r5a_compose_build", ["nonexistent-service"])
+
+    def test_rebel_service_blocked(self, daemon):
+        from hermes_root.actions import build_argv, ActionError
+        with pytest.raises(ActionError, match="rebel_blocked"):
+            build_argv("r5a_compose_build", ["freqai-rebel"])
+
+    def test_rebel_in_mixed_list_blocked(self, daemon):
+        from hermes_root.actions import build_argv, ActionError
+        with pytest.raises(ActionError, match="rebel_blocked"):
+            build_argv("r5a_compose_up", ["freqtrade-freqforge", "freqai-rebel"])
+
+
+class TestR5AComposeDownVolumesBlocked:
+    """down -v / --volumes is explicitly blocked."""
+
+    def test_down_v_flag_blocked(self, daemon):
+        from hermes_root.actions import build_argv, ActionError
+        with pytest.raises(ActionError, match="down_volumes_flag_blocked"):
+            build_argv("r5a_compose_down", ["-v"])
+
+    def test_down_volumes_flag_blocked(self, daemon):
+        from hermes_root.actions import build_argv, ActionError
+        with pytest.raises(ActionError, match="down_volumes_flag_blocked"):
+            build_argv("r5a_compose_down", ["--volumes"])
+
+    def test_down_with_valid_services_no_v(self, daemon):
+        from hermes_root.actions import build_argv
+        argv = build_argv("r5a_compose_down", ["freqtrade-freqforge"])
+        assert "down" in argv
+        assert "-v" not in argv
+        assert "--volumes" not in argv
+
+
+class TestR5AComposePolicyGates:
+    """Policy gate enforcement: approval, execution class, issue context."""
+
+    def test_r5a_approval_allowed(self, daemon):
+        resp = _send(daemon, _r5a_v1_payload())
+        assert resp["decision"] == "ALLOWED"
+
+    def test_h3b_approval_also_accepted(self, daemon):
+        resp = _send(daemon, _r5a_v1_payload(approval_reference=H3B_APPROVED))
+        assert resp["decision"] == "ALLOWED"
+
+    def test_missing_approval_blocked(self, daemon):
+        resp = _send(daemon, _r5a_v1_payload(approval_reference=None))
+        assert resp["decision"] == "BLOCKED"
+        assert "approval" in resp["reason"]
+
+    def test_wrong_approval_blocked(self, daemon):
+        resp = _send(daemon, _r5a_v1_payload(approval_reference="BOGUS"))
+        assert resp["decision"] == "BLOCKED"
+        assert "approval" in resp["reason"]
+
+    def test_a3_always_blocked(self, daemon):
+        resp = _send(daemon, _r5a_v1_payload(execution_class="A3"))
+        assert resp["decision"] == "BLOCKED"
+        assert "a3" in resp["reason"]
+
+    def test_a0_mutation_blocked(self, daemon):
+        resp = _send(daemon, _r5a_v1_payload(execution_class="A0"))
+        assert resp["decision"] == "BLOCKED"
+
+    def test_a1_mutation_blocked(self, daemon):
+        resp = _send(daemon, _r5a_v1_payload(execution_class="A1"))
+        assert resp["decision"] == "BLOCKED"
+
+    def test_issue_context_required(self, daemon):
+        resp = _send(daemon, _r5a_v1_payload(issue_number=None))
+        assert resp["decision"] == "BLOCKED"
+
+    def test_task_context_required(self, daemon):
+        resp = _send(daemon, _r5a_v1_payload(task_name=""))
+        assert resp["decision"] == "BLOCKED"
+
+
+class TestR5AComposeAuditFields:
+    """Audit completeness for R5A compose actions."""
+
+    def test_audit_fields_present_on_allow(self, daemon):
+        resp = _send(daemon, _r5a_v1_payload())
+        assert resp["decision"] == "ALLOWED"
+        assert resp.get("audit_id"), "audit_id must be present"
+        assert resp.get("schema_version") == SCHEMA_VERSION
+        assert resp.get("execution_class") == "A2"
+        assert resp.get("action") == "r5a_compose_build"
+        assert resp.get("resource_key") == "r5a:compose"
+
+    def test_audit_file_written(self, daemon):
+        _send(daemon, _r5a_v1_payload())
+        entries = _read_audit(daemon)
+        assert len(entries) >= 1
+        entry = entries[0]
+        assert entry["action"] == "r5a_compose_build"
+        assert entry["execution_class"] == "A2"
+        assert entry["audit_id"]
+        assert entry["decision"] == "ALLOWED"
+        assert entry.get("approval_reference_redacted") == "[PRESENT]"
+
+    def test_audit_on_blocked(self, daemon):
+        _send(daemon, _r5a_v1_payload(approval_reference=None))
+        entries = _read_audit(daemon)
+        assert len(entries) >= 1
+        entry = entries[0]
+        assert entry["decision"] == "BLOCKED"
+
+
+class TestR5AComposeKillSwitch:
+    """Kill switch blocks R5A compose actions."""
+
+    def test_kill_switch_blocks_r5a(self, daemon, tmp_path):
+        ks = tmp_path / "DISABLED"
+        ks.write_text("")
+        daemon.kill_switch_path = str(ks)
+        resp = _send(daemon, _r5a_v1_payload())
+        assert resp["decision"] == "BLOCKED"
+        assert "emergency" in resp["reason"]
+
+
+class TestR5AComposeRedaction:
+    """Redaction of approval reference in audit."""
+
+    def test_approval_reference_redacted_in_audit(self, daemon):
+        _send(daemon, _r5a_v1_payload(approval_reference=R5A_APPROVED))
+        entries = _read_audit(daemon)
+        entry = entries[0]
+        assert entry["approval_reference_redacted"] == "[PRESENT]"
+        raw = json.dumps(entry)
+        assert R5A_APPROVED not in raw

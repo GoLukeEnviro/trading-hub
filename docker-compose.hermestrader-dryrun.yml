@@ -222,11 +222,14 @@ services:
       - trading_egress
 
   # Rainbow: TA-collector, internal-only, no published ports.
-  # Build pinned to ai4trade-bot@cd63051545e9b27235f47a3bbb5de858782fcd20
-  # (ai4trade-bot#78 + #79) - read-only/fail-closed runtime contract fix
-  # plus the CanonicalSignalRegistry storage-path follow-up.
+  # Build pinned to ai4trade-bot@6e850c8f8ba1d8a0ad45250f130280e4171c001d
+  # (ai4trade-bot#102) - align Rainbow storage ownership with HermesTrader
+  # UID 10000; supersedes the prior cd63051 pin (#78 + #79).
+  # Canonical dependency lock: ops/ai4trade-rainbow.lock.yml
+  # Build from an IMMUTABLE checkout of that exact SHA, not a moving branch:
+  #   AI4TRADE_CONTEXT=/opt/data/projects/ai4trade-bot-r5a-6e850c8
   # Verify before deploy: git -C ../ai4trade-bot merge-base --is-ancestor
-  # cd63051545e9b27235f47a3bbb5de858782fcd20 HEAD
+  # 6e850c8f8ba1d8a0ad45250f130280e4171c001d origin/master
   rainbow:
     build:
       context: ${AI4TRADE_CONTEXT:-../ai4trade-bot}

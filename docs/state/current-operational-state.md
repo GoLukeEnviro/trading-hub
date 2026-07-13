@@ -144,7 +144,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A)
 
-Current task: **H3B — Root-Executor Client Activation (#531)** — **CLOSED and `H3B_RUNTIME_CONTROL_GREEN`**. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed, healthy, and reachable from Hermes (host-verified). All three blockers found on 2026-07-12/13 (stale bind mount, `RuntimeDirectoryMode=0750 root:root` permission gap, undeployed `docker_compose_config` fix) are fixed and verified. The complete Issue #531 proof matrix passes: positive v1 proof, 5/5 read-only actions, the complete security-proof matrix (wrong UID, missing/invalid A2 approval, A3, kill switch, locking, a non-mocked real-subprocess timeout proof, isolated mutation lifecycle), and audit correlation with a clean secret scan. A secret-exposure incident during proof re-verification (rendered Compose config, unredacted stdout) was contained (credential revoked/replaced outside the agent context, zero leak-spread found) and root-caused (data minimization via `config --quiet`, defense-in-depth redaction at both daemon and client boundaries, both regression-tested with canary secrets). The credential rotation was **human-attested** by the repository owner on 2026-07-13 (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`, `confirmed_by=Luke`, `scope=H3B_PR559_INCIDENT`) — the required A2 human-confirmation gate. PR #559 squash-merged. Next task: R5A (HermesTrader Deployment) — BLOCKED by `H3B_RUNTIME_CONTROL_GREEN` (now satisfied) + `APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT` + `BACKUP_GATE_GREEN`.
+Current task: **H3B — Root-Executor Client Activation (#531)** — **CLOSED and `H3B_RUNTIME_CONTROL_GREEN`**. The repository-sourced dual-protocol daemon (`hermes_root/daemon.py`) is deployed, healthy, and reachable from Hermes (host-verified). All three blockers found on 2026-07-12/13 (stale bind mount, `RuntimeDirectoryMode=0750 root:root` permission gap, undeployed `docker_compose_config` fix) are fixed and verified. The complete Issue #531 proof matrix passes: positive v1 proof, 5/5 read-only actions, the complete security-proof matrix (wrong UID, missing/invalid A2 approval, A3, kill switch, locking, a non-mocked real-subprocess timeout proof, isolated mutation lifecycle), and audit correlation with a clean secret scan. A secret-exposure incident during proof re-verification (rendered Compose config, unredacted stdout) was contained (credential revoked/replaced outside the agent context, zero leak-spread found) and root-caused (data minimization via `config --quiet`, defense-in-depth redaction at both daemon and client boundaries, both regression-tested with canary secrets). The credential rotation was **human-attested** by the repository owner on 2026-07-13 (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`, `confirmed_by=Luke`, `scope=H3B_PR559_INCIDENT`) — the required A2 human-confirmation gate. PR #559 squash-merged. Next task: R5A (HermesTrader Deployment) -- **root-executor extension deployed and H3B-revalidated** (PR #560, commit `782d2c04f59ee96151581de436b069095d28b019`, ratified by the repository owner after a same-branch installer bug-fix arc; see `docs/reports/r5a-hermestrader-dryrun-deployment-2026-07-13.md`). Fleet build/up and the dry-run parity matrix are next.
 
 **Do NOT start** without explicit approval:
 - new apply
@@ -173,7 +173,7 @@ Current task: **H3B — Root-Executor Client Activation (#531)** — **CLOSED an
 - D1/D2 live rollout → C4 KEEP + `APPROVED_LIVE_FLEET_ROLLOUT`
 - R7 measurement → R5A complete + runtime preflight approved
 - H3B root-executor client activation → **CLOSED — `H3B_RUNTIME_CONTROL_GREEN`** (PR #559 squash-merged 2026-07-13). Host daemon is healthy, dual-protocol, and reachable from Hermes. Complete Issue #531 proof matrix passes. Secret-exposure incident contained; credential rotation human-attested by the repository owner (`COMPROMISED_GITHUB_PAT_REVOKED_AND_REPLACED`).
-- R5A HermesTrader deployment → H3B_RUNTIME_CONTROL_GREEN (now satisfied) + APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT
+- R5A HermesTrader deployment → executor extension deployed + H3B revalidated (commit `782d2c04f59ee96151581de436b069095d28b019`, ratified); fleet build/up + parity matrix still require explicit human approval before execution
 
 ---
 
@@ -365,3 +365,32 @@ review. R3 did not mutate any runtime state.
   Eine Freigabe erfordert eine neue C4-Entscheidung `KEEP`
   sowie `APPROVED_LIVE_FLEET_ROLLOUT`.
 - Diese Dokumentationsänderung führt keine Runtime- oder Host-Mutation aus.
+
+---
+
+## R5A Dry-Run Fleet — Deployed and Parity-Green (2026-07-13)
+
+The canonical HermesTrader dry-run fleet (Issue #527, PR #560) is persistently
+deployed and has passed full 5/5 dry-run parity.
+
+- **Services (all healthy):** `freqforge`, `freqforge-canary`, `regime-hybrid`,
+  `webserver` (Freqtrade, all `dry_run=true`) and `rainbow` (advisory,
+  read-only/fail-closed). `freqai-rebel` remains profile-gated and excluded.
+- **Rainbow storage fix:** the read-only-database startup crash was caused by a
+  `999:999`-owned storage volume against a `10000:10000` container. Fixed by
+  ai4trade-bot@`6e850c8` (#102): image now `Config.User=10000:10000` and bakes
+  an empty 10000-owned `storage/`. Build pinned via
+  `ops/ai4trade-rainbow.lock.yml` (immutable checkout of the locked SHA, not a
+  moving branch). Only `hermestrader-dryrun_rainbow-storage` was recreated; no
+  other volume touched; no `down -v`/prune.
+- **Kill switch:** now provisioned at NORMAL (git-ignored
+  `freqtrade/shared/kill_switch.json`); it had been fail-closed to HALT_NEW due
+  to a missing state file on a read-only mount. HALT_NEW -> NORMAL cycle
+  verified across all four bots.
+- **Safety posture:** loopback/internal-only exposure, internal/egress network
+  split preserved, DB/WAL owned by UID 10000, Bitget market-data egress works,
+  restart/persistence and non-destructive rollback rehearsed, secret scan clean
+  (Main Gate green), agent0 untouched.
+- **Rollback point:** Restic snapshot `252e9711` (parent `ff6b7dbc`).
+- **Measurement gate #496** remains blocked pending its own separate
+  prerequisites; R5A proves only the persistent dry-run deployment and parity.
