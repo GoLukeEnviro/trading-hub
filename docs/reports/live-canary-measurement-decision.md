@@ -35,6 +35,43 @@ measurement window, and produces an explicit decision.
 | Max drawdown | ≤ 15% | > 20% |
 | Daily loss count | ≤ 3 | > 5 |
 
+## Canonical Measurement Scope
+
+C4 accepts `C4MeasurementInput` raw trade observations, explicit timezone-aware
+`measurement_start_utc` / `measurement_end_utc` boundaries, and the lifetime
+and continuation equity baselines. The public decision entrypoint does not
+accept precomputed `CanaryMetrics`; missing, naive, invalid, or reversed window
+boundaries block the decision rather than falling back to lifetime data.
+
+The canonical selector is `close_in_window_or_open_at_window_end/v1`:
+
+- A trade closed inside the inclusive `[start, end]` interval is realized in
+  the window, including a trade opened before the window.
+- A trade opened by `end` but closed after `end`, or still open at `end`, is
+  included as exposure evidence but its future PnL is excluded.
+- A trade closed before `start` or opened after `end` is excluded from the
+  window.
+- Win rate, profit factor, Sharpe, daily loss count, average profit, and the
+  decision trade count use only realized window trades.
+- Notional exposure uses trades that remain open at the window end.
+
+Max drawdown retains three explicitly named calculations in evidence:
+
+| Method | Scope | Decision authority |
+|--------|-------|--------------------|
+| `lifetime` | All realized trades through the window end from lifetime starting equity | No — audit only |
+| `window_relative` | Realized window PnL rebased to zero | No — audit only |
+| `continuation` | Realized window PnL continued from pre-window equity | **Yes** |
+
+The decision JSON embeds `measurement_scope`, including boundaries, selection
+method, included/realized/open/excluded counts and IDs, calculated metrics, and
+all three drawdown methods. Its `metric_authority` map explicitly assigns
+trade count, win rate, profit factor, Sharpe, daily loss count, and average PnL
+to realized-window trades; notional exposure to open-at-window-end trades; and
+max drawdown to continuation equity. This makes the exact input scope reviewable
+without turning historical or lifetime calculations into windowed decision
+authority.
+
 ---
 
 ## Decision Outcomes

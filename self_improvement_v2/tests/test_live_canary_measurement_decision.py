@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from si_v2.live.c4_window_scope import C4MeasurementInput, C4Trade
 from si_v2.live.live_canary_measurement_decision import (
     CANARY_TARGET,
     EXTEND,
@@ -29,6 +30,43 @@ from si_v2.live.live_canary_measurement_decision import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _raw_measurement_fixture_for_expected_decision(
+    metrics: CanaryMetrics,
+) -> C4MeasurementInput:
+    """Build raw trades for legacy decision assertions.
+
+    The production entrypoint no longer accepts ``CanaryMetrics``. These
+    existing tests retain their readable expected-metric setup while the
+    helper supplies raw observations that exercise the corresponding outcome.
+    """
+    if (metrics.total_trades or 0) < 5:
+        pnls = (1.0, -0.1)
+    elif metrics.profit_factor is not None and metrics.profit_factor < 0.8:
+        pnls = (0.1, 0.1, 0.1, 0.1, -5.0)
+    elif metrics.win_rate is not None and metrics.win_rate < 0.4:
+        pnls = (1.0, 1.0, 1.0, -0.4, -0.4, -0.4, -0.4, -0.4, -0.4, -0.4)
+    else:
+        pnls = (1.0, 1.0, 1.0, 1.0, -0.1)
+    trades = tuple(
+        C4Trade(
+            trade_id=f"fixture-{index}",
+            opened_at_utc="2026-06-18T12:00:00Z",
+            closed_at_utc=f"2026-06-20T12:{index:02d}:00Z",
+            profit_abs=pnl,
+            profit_ratio=pnl / 100.0,
+            notional=100.0,
+        )
+        for index, pnl in enumerate(pnls, start=1)
+    )
+    return C4MeasurementInput(
+        measurement_start_utc="2026-06-18T12:00:00Z",
+        measurement_end_utc="2026-07-02T12:00:00Z",
+        continuation_start_equity=100.0,
+        lifetime_start_equity=100.0,
+        trades=trades,
+    )
 
 
 def _make_c3_ceremony_ready(repo_root: Path) -> None:
@@ -53,12 +91,8 @@ def _make_c3_ceremony_ready(repo_root: Path) -> None:
                 "max_drawdown",
                 "daily_loss_count",
             ],
-            "comparison_baseline": (
-                "Dry-run performance over the 14 days prior to activation"
-            ),
-            "evaluation_gate": (
-                "Post-activation T0/T1/T2/T3 measurement evaluations"
-            ),
+            "comparison_baseline": ("Dry-run performance over the 14 days prior to activation"),
+            "evaluation_gate": ("Post-activation T0/T1/T2/T3 measurement evaluations"),
             "decision_outcomes": [
                 "KEEP",
                 "EXTEND",
@@ -129,16 +163,12 @@ class TestDataModels:
     """Test that result data models work correctly."""
 
     def test_measurement_check_result_defaults(self) -> None:
-        check = MeasurementCheckResult(
-            check_name="test", passed=True, detail="ok"
-        )
+        check = MeasurementCheckResult(check_name="test", passed=True, detail="ok")
         assert check.check_name == "test"
         assert check.passed is True
 
     def test_measurement_check_result_to_dict(self) -> None:
-        check = MeasurementCheckResult(
-            check_name="test", passed=True, detail="ok"
-        )
+        check = MeasurementCheckResult(check_name="test", passed=True, detail="ok")
         d = check.to_dict()
         assert d["check_name"] == "test"
         assert d["passed"] is True
@@ -247,9 +277,7 @@ class TestDataModels:
         assert result.decision == KEEP
 
     def test_decision_result_to_dict(self) -> None:
-        c = MeasurementCheckResult(
-            check_name="c1", passed=True, detail="ok"
-        )
+        c = MeasurementCheckResult(check_name="c1", passed=True, detail="ok")
         result = LiveCanaryMeasurementDecisionResult(
             status=LIVE_CANARY_MEASUREMENT_READY,
             decision=KEEP,
@@ -617,7 +645,7 @@ class TestPreflightChecks:
             repo_root=tmp_path,
             decision_output_dir=tmp_path / "decision_out",
             now_utc="2026-07-02T12:00:00+00:00",
-            metrics=metrics,
+            measurement_input=_raw_measurement_fixture_for_expected_decision(metrics),
             data_points_available=5,
         )
         assert result.status == LIVE_CANARY_MEASUREMENT_READY
@@ -686,7 +714,7 @@ class TestDecisionOutput:
             repo_root=tmp_path,
             decision_output_dir=out,
             now_utc="2026-07-02T12:00:00+00:00",
-            metrics=metrics,
+            measurement_input=_raw_measurement_fixture_for_expected_decision(metrics),
             data_points_available=5,
         )
         decision_file = out / "live_canary_measurement_decision.json"
@@ -714,7 +742,7 @@ class TestDecisionOutput:
             repo_root=tmp_path,
             decision_output_dir=out,
             now_utc="2026-07-02T12:00:00+00:00",
-            metrics=metrics,
+            measurement_input=_raw_measurement_fixture_for_expected_decision(metrics),
             data_points_available=5,
         )
         report_file = out / "live_canary_measurement_decision.md"
@@ -739,7 +767,7 @@ class TestDecisionOutput:
             repo_root=tmp_path,
             decision_output_dir=tmp_path / "decision_out",
             now_utc="2026-07-02T12:00:00+00:00",
-            metrics=metrics,
+            measurement_input=_raw_measurement_fixture_for_expected_decision(metrics),
             data_points_available=5,
         )
         assert result.decision == KEEP
@@ -760,7 +788,7 @@ class TestDecisionOutput:
             repo_root=tmp_path,
             decision_output_dir=tmp_path / "decision_out",
             now_utc="2026-07-02T12:00:00+00:00",
-            metrics=metrics,
+            measurement_input=_raw_measurement_fixture_for_expected_decision(metrics),
             data_points_available=5,
         )
         assert result.decision == EXTEND
@@ -781,14 +809,12 @@ class TestDecisionOutput:
             repo_root=tmp_path,
             decision_output_dir=tmp_path / "decision_out",
             now_utc="2026-07-02T12:00:00+00:00",
-            metrics=metrics,
+            measurement_input=_raw_measurement_fixture_for_expected_decision(metrics),
             data_points_available=5,
         )
         assert result.decision == ROLLBACK_RECOMMENDED
 
-    def test_decision_insufficient_data_low_trades(
-        self, tmp_path: Path
-    ) -> None:
+    def test_decision_insufficient_data_low_trades(self, tmp_path: Path) -> None:
         _make_c3_ceremony_ready(tmp_path)
         metrics = CanaryMetrics(
             total_trades=2,  # Very few trades
@@ -804,14 +830,12 @@ class TestDecisionOutput:
             repo_root=tmp_path,
             decision_output_dir=tmp_path / "decision_out",
             now_utc="2026-07-02T12:00:00+00:00",
-            metrics=metrics,
+            measurement_input=_raw_measurement_fixture_for_expected_decision(metrics),
             data_points_available=1,
         )
         assert result.decision == INSUFFICIENT_DATA
 
-    def test_decision_insufficient_data_no_data_points(
-        self, tmp_path: Path
-    ) -> None:
+    def test_decision_insufficient_data_no_data_points(self, tmp_path: Path) -> None:
         _make_c3_ceremony_ready(tmp_path)
         result = run_live_canary_measurement_decision(
             repo_root=tmp_path,

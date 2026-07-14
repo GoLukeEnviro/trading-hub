@@ -22,6 +22,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
+from si_v2.live.c4_window_scope import (
+    C4MeasurementInput,
+    WindowScopedMeasurement,
+    build_window_scoped_measurement,
+)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -41,34 +47,39 @@ C2_PLAN_OUTPUT_DIR: str = "var/si_v2/live_canary_config_plan"
 C2_PLAN_FILENAME: str = "live_canary_config_plan.json"
 
 # Decision outcome strings.
-KEEP: str = "KEEP"
-EXTEND: str = "EXTEND"
-ROLLBACK_RECOMMENDED: str = "ROLLBACK_RECOMMENDED"
-INSUFFICIENT_DATA: str = "INSUFFICIENT_DATA"
+Decision = Literal["KEEP", "EXTEND", "ROLLBACK_RECOMMENDED", "INSUFFICIENT_DATA"]
+MeasurementStatus = Literal[
+    "LIVE_CANARY_MEASUREMENT_READY",
+    "LIVE_CANARY_MEASUREMENT_BLOCKED",
+]
+KEEP: Literal["KEEP"] = "KEEP"
+EXTEND: Literal["EXTEND"] = "EXTEND"
+ROLLBACK_RECOMMENDED: Literal["ROLLBACK_RECOMMENDED"] = "ROLLBACK_RECOMMENDED"
+INSUFFICIENT_DATA: Literal["INSUFFICIENT_DATA"] = "INSUFFICIENT_DATA"
 
 # Thresholds from B2 risk limits and C2 measurement window.
 # Minimum trades needed to form a meaningful decision.
 MIN_TRADES_FOR_DECISION: int = 5
 
 # Win rate thresholds.
-WIN_RATE_THRESHOLD_MIN: float = 0.40       # 40% min acceptable
+WIN_RATE_THRESHOLD_MIN: float = 0.40  # 40% min acceptable
 WIN_RATE_THRESHOLD_CRITICAL: float = 0.25  # 25% triggers ROLLBACK
 
 # Profit factor thresholds.
-PROFIT_FACTOR_THRESHOLD_MIN: float = 1.0        # Below 1.0 = losing money
-PROFIT_FACTOR_THRESHOLD_CRITICAL: float = 0.8   # 0.8 triggers ROLLBACK
+PROFIT_FACTOR_THRESHOLD_MIN: float = 1.0  # Below 1.0 = losing money
+PROFIT_FACTOR_THRESHOLD_CRITICAL: float = 0.8  # 0.8 triggers ROLLBACK
 
 # Sharpe ratio thresholds.
 SHARPE_THRESHOLD_MIN: float = 0.5
 SHARPE_THRESHOLD_CRITICAL: float = 0.0
 
 # Max drawdown thresholds (percentage, positive value).
-MAX_DRAWDOWN_THRESHOLD_MAX: float = 15.0       # 15% from B2
+MAX_DRAWDOWN_THRESHOLD_MAX: float = 15.0  # 15% from B2
 MAX_DRAWDOWN_THRESHOLD_CRITICAL: float = 20.0  # 20% triggers ROLLBACK
 
 # Daily loss count thresholds.
-DAILY_LOSS_THRESHOLD_MAX: int = 3        # Max losing days in window
-DAILY_LOSS_THRESHOLD_CRITICAL: int = 5   # Triggers ROLLBACK
+DAILY_LOSS_THRESHOLD_MAX: int = 3  # Max losing days in window
+DAILY_LOSS_THRESHOLD_CRITICAL: int = 5  # Triggers ROLLBACK
 
 # Measurement window defaults (from C3).
 MEASUREMENT_WINDOW_DAYS: int = 14
@@ -172,16 +183,8 @@ class LiveCanaryMeasurementDecisionResult:
         next_step: Suggested next action.
     """
 
-    status: Literal[
-        "LIVE_CANARY_MEASUREMENT_READY",
-        "LIVE_CANARY_MEASUREMENT_BLOCKED",
-    ]
-    decision: Literal[
-        "KEEP",
-        "EXTEND",
-        "ROLLBACK_RECOMMENDED",
-        "INSUFFICIENT_DATA",
-    ]
+    status: MeasurementStatus
+    decision: Decision
     preflight_checks: tuple[MeasurementCheckResult, ...]
     metric_evaluations: tuple[MetricEvaluation, ...]
     blocked_reasons: tuple[str, ...]
@@ -215,9 +218,7 @@ class LiveCanaryMeasurementDecisionResult:
 def _atomic_write_json(path: Path, data: dict[str, object]) -> None:
     """Write JSON atomically via temp file + replace."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(
-        path.suffix + f".tmp.{abs(hash(str(data)))}"
-    )
+    tmp = path.with_suffix(path.suffix + f".tmp.{abs(hash(str(data)))}")
     tmp.write_text(json.dumps(data, indent=2, sort_keys=True))
     tmp.replace(path)
 
@@ -260,16 +261,11 @@ def _check_c3_ceremony_artifacts(
         return MeasurementCheckResult(
             check_name="c3_ceremony_artifacts",
             passed=False,
-            detail=(
-                f"C3 ceremony at {ceremony_file} is not valid JSON."
-            ),
+            detail=(f"C3 ceremony at {ceremony_file} is not valid JSON."),
         )
 
     ceremony_status = ceremony_data.get("status", "")
-    raw_ceremony_status = (
-        ceremony_status if isinstance(ceremony_status, str)
-        else str(ceremony_status)
-    )
+    raw_ceremony_status = ceremony_status if isinstance(ceremony_status, str) else str(ceremony_status)
     if raw_ceremony_status != C3_READY_STATUS:
         return MeasurementCheckResult(
             check_name="c3_ceremony_artifacts",
@@ -283,18 +279,12 @@ def _check_c3_ceremony_artifacts(
 
     # Verify target matches.
     ceremony_target = ceremony_data.get("canary_target", "")
-    raw_target = (
-        ceremony_target if isinstance(ceremony_target, str)
-        else str(ceremony_target)
-    )
+    raw_target = ceremony_target if isinstance(ceremony_target, str) else str(ceremony_target)
     if raw_target != CANARY_TARGET:
         return MeasurementCheckResult(
             check_name="c3_ceremony_artifacts",
             passed=False,
-            detail=(
-                f"C3 ceremony targets {raw_target!r}, expected "
-                f"{CANARY_TARGET!r}. Mismatch — cannot proceed."
-            ),
+            detail=(f"C3 ceremony targets {raw_target!r}, expected {CANARY_TARGET!r}. Mismatch — cannot proceed."),
         )
 
     return MeasurementCheckResult(
@@ -316,9 +306,7 @@ def _check_c3_measurement_start_reference(
     repo_root: Path,
 ) -> MeasurementCheckResult:
     """Check that the C3 ceremony artifact contains a measurement window."""
-    ceremony_file = (
-        repo_root / C3_CEREMONY_OUTPUT_DIR / C3_CEREMONY_FILENAME
-    )
+    ceremony_file = repo_root / C3_CEREMONY_OUTPUT_DIR / C3_CEREMONY_FILENAME
     if not ceremony_file.exists():
         return MeasurementCheckResult(
             check_name="c3_measurement_start_reference",
@@ -339,10 +327,7 @@ def _check_c3_measurement_start_reference(
         return MeasurementCheckResult(
             check_name="c3_measurement_start_reference",
             passed=False,
-            detail=(
-                "C3 ceremony artifact does not contain a valid "
-                "measurement_window section. Re-run C3 ceremony."
-            ),
+            detail=("C3 ceremony artifact does not contain a valid measurement_window section. Re-run C3 ceremony."),
         )
 
     metrics = meas_window.get("metrics", [])
@@ -365,10 +350,7 @@ def _check_c3_measurement_start_reference(
     return MeasurementCheckResult(
         check_name="c3_measurement_start_reference",
         passed=True,
-        detail=(
-            f"C3 measurement-start reference found with {len(metrics)} "
-            f"metrics and {duration}-day window."
-        ),
+        detail=(f"C3 measurement-start reference found with {len(metrics)} metrics and {duration}-day window."),
     )
 
 
@@ -409,10 +391,7 @@ def _evaluate_metric_float(
             critical_threshold_min=critical_min,
             critical_threshold_max=critical_max,
             status="BREACH",
-            detail=(
-                f"{metric_name} = {value:.4f} is below critical minimum "
-                f"{critical_min}. RECOMMEND ROLLBACK."
-            ),
+            detail=(f"{metric_name} = {value:.4f} is below critical minimum {critical_min}. RECOMMEND ROLLBACK."),
         )
 
     if critical_max is not None and value > critical_max:
@@ -424,10 +403,7 @@ def _evaluate_metric_float(
             critical_threshold_min=critical_min,
             critical_threshold_max=critical_max,
             status="BREACH",
-            detail=(
-                f"{metric_name} = {value:.4f} exceeds critical maximum "
-                f"{critical_max}. RECOMMEND ROLLBACK."
-            ),
+            detail=(f"{metric_name} = {value:.4f} exceeds critical maximum {critical_max}. RECOMMEND ROLLBACK."),
         )
 
     # Check standard thresholds.
@@ -440,10 +416,7 @@ def _evaluate_metric_float(
             critical_threshold_min=critical_min,
             critical_threshold_max=critical_max,
             status="BORDERLINE",
-            detail=(
-                f"{metric_name} = {value:.4f} is below minimum threshold "
-                f"{threshold_min}. Monitor closely."
-            ),
+            detail=(f"{metric_name} = {value:.4f} is below minimum threshold {threshold_min}. Monitor closely."),
         )
 
     if threshold_max is not None and value > threshold_max:
@@ -455,10 +428,7 @@ def _evaluate_metric_float(
             critical_threshold_min=critical_min,
             critical_threshold_max=critical_max,
             status="BORDERLINE",
-            detail=(
-                f"{metric_name} = {value:.4f} exceeds maximum threshold "
-                f"{threshold_max}. Monitor closely."
-            ),
+            detail=(f"{metric_name} = {value:.4f} exceeds maximum threshold {threshold_max}. Monitor closely."),
         )
 
     return MetricEvaluation(
@@ -487,18 +457,10 @@ def _evaluate_metric_int(
         return MetricEvaluation(
             metric_name=metric_name,
             value=None,
-            threshold_min=(
-                float(threshold_min) if threshold_min is not None else None
-            ),
-            threshold_max=(
-                float(threshold_max) if threshold_max is not None else None
-            ),
-            critical_threshold_min=(
-                float(critical_min) if critical_min is not None else None
-            ),
-            critical_threshold_max=(
-                float(critical_max) if critical_max is not None else None
-            ),
+            threshold_min=(float(threshold_min) if threshold_min is not None else None),
+            threshold_max=(float(threshold_max) if threshold_max is not None else None),
+            critical_threshold_min=(float(critical_min) if critical_min is not None else None),
+            critical_threshold_max=(float(critical_max) if critical_max is not None else None),
             status="NO_DATA",
             detail=f"No data available for {metric_name}.",
         )
@@ -509,17 +471,10 @@ def _evaluate_metric_int(
             value=float(value),
             threshold_min=float(threshold_min) if threshold_min is not None else None,
             threshold_max=float(threshold_max) if threshold_max is not None else None,
-            critical_threshold_min=(
-                float(critical_min) if critical_min is not None else None
-            ),
-            critical_threshold_max=(
-                float(critical_max) if critical_max is not None else None
-            ),
+            critical_threshold_min=(float(critical_min) if critical_min is not None else None),
+            critical_threshold_max=(float(critical_max) if critical_max is not None else None),
             status="BREACH",
-            detail=(
-                f"{metric_name} = {value} is below critical minimum "
-                f"{critical_min}. RECOMMEND ROLLBACK."
-            ),
+            detail=(f"{metric_name} = {value} is below critical minimum {critical_min}. RECOMMEND ROLLBACK."),
         )
 
     if critical_max is not None and value > critical_max:
@@ -528,17 +483,10 @@ def _evaluate_metric_int(
             value=float(value),
             threshold_min=float(threshold_min) if threshold_min is not None else None,
             threshold_max=float(threshold_max) if threshold_max is not None else None,
-            critical_threshold_min=(
-                float(critical_min) if critical_min is not None else None
-            ),
-            critical_threshold_max=(
-                float(critical_max) if critical_max is not None else None
-            ),
+            critical_threshold_min=(float(critical_min) if critical_min is not None else None),
+            critical_threshold_max=(float(critical_max) if critical_max is not None else None),
             status="BREACH",
-            detail=(
-                f"{metric_name} = {value} exceeds critical maximum "
-                f"{critical_max}. RECOMMEND ROLLBACK."
-            ),
+            detail=(f"{metric_name} = {value} exceeds critical maximum {critical_max}. RECOMMEND ROLLBACK."),
         )
 
     if threshold_min is not None and value < threshold_min:
@@ -547,17 +495,10 @@ def _evaluate_metric_int(
             value=float(value),
             threshold_min=float(threshold_min) if threshold_min is not None else None,
             threshold_max=float(threshold_max) if threshold_max is not None else None,
-            critical_threshold_min=(
-                float(critical_min) if critical_min is not None else None
-            ),
-            critical_threshold_max=(
-                float(critical_max) if critical_max is not None else None
-            ),
+            critical_threshold_min=(float(critical_min) if critical_min is not None else None),
+            critical_threshold_max=(float(critical_max) if critical_max is not None else None),
             status="BORDERLINE",
-            detail=(
-                f"{metric_name} = {value} is below minimum threshold "
-                f"{threshold_min}. Monitor closely."
-            ),
+            detail=(f"{metric_name} = {value} is below minimum threshold {threshold_min}. Monitor closely."),
         )
 
     if threshold_max is not None and value > threshold_max:
@@ -566,17 +507,10 @@ def _evaluate_metric_int(
             value=float(value),
             threshold_min=float(threshold_min) if threshold_min is not None else None,
             threshold_max=float(threshold_max) if threshold_max is not None else None,
-            critical_threshold_min=(
-                float(critical_min) if critical_min is not None else None
-            ),
-            critical_threshold_max=(
-                float(critical_max) if critical_max is not None else None
-            ),
+            critical_threshold_min=(float(critical_min) if critical_min is not None else None),
+            critical_threshold_max=(float(critical_max) if critical_max is not None else None),
             status="BORDERLINE",
-            detail=(
-                f"{metric_name} = {value} exceeds maximum threshold "
-                f"{threshold_max}. Monitor closely."
-            ),
+            detail=(f"{metric_name} = {value} exceeds maximum threshold {threshold_max}. Monitor closely."),
         )
 
     return MetricEvaluation(
@@ -584,12 +518,8 @@ def _evaluate_metric_int(
         value=float(value),
         threshold_min=float(threshold_min) if threshold_min is not None else None,
         threshold_max=float(threshold_max) if threshold_max is not None else None,
-        critical_threshold_min=(
-            float(critical_min) if critical_min is not None else None
-        ),
-        critical_threshold_max=(
-            float(critical_max) if critical_max is not None else None
-        ),
+        critical_threshold_min=(float(critical_min) if critical_min is not None else None),
+        critical_threshold_max=(float(critical_max) if critical_max is not None else None),
         status="OK",
         detail=f"{metric_name} = {value} is within acceptable range.",
     )
@@ -605,7 +535,7 @@ def run_live_canary_measurement_decision(
     repo_root: Path | None = None,
     decision_output_dir: Path | None = None,
     now_utc: str | None = None,
-    metrics: CanaryMetrics | None = None,
+    measurement_input: C4MeasurementInput | None = None,
     data_points_available: int | None = None,
 ) -> LiveCanaryMeasurementDecisionResult:
     """Run the live canary measurement and decision watcher.
@@ -615,8 +545,10 @@ def run_live_canary_measurement_decision(
             auto-detection from the current file location.
         decision_output_dir: Override for decision output directory.
         now_utc: Override for current UTC time (testing).
-        metrics: Canary metrics to evaluate. If None, NO_DATA status
-            is reported for all metrics.
+        measurement_input: Raw trades, explicit UTC boundaries, and equity
+            baselines used to build the canonical window-scoped metrics.
+            Missing or invalid input blocks instead of falling back to
+            lifetime metrics.
         data_points_available: Number of measurement data points
             collected. If None, defaults to 0.
 
@@ -628,13 +560,11 @@ def run_live_canary_measurement_decision(
 
     # Auto-detect repo root if not provided.
     if repo_root is None:
-        repo_root = (
-            Path(__file__).resolve().parent.parent.parent.parent.parent
-        )
+        repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent
 
     resolved_dir.mkdir(parents=True, exist_ok=True)
 
-    resolved_metrics = metrics or CanaryMetrics(
+    resolved_metrics = CanaryMetrics(
         total_trades=None,
         win_rate=None,
         profit_factor=None,
@@ -644,6 +574,7 @@ def run_live_canary_measurement_decision(
         avg_profit_per_trade=None,
         notional_exposure=None,
     )
+    scoped_measurement: WindowScopedMeasurement | None = None
     resolved_data_points = data_points_available or 0
 
     # ------------------------------------------------------------------
@@ -665,13 +596,60 @@ def run_live_canary_measurement_decision(
     if not c2.passed:
         blocked.append(c2.detail)
 
+    # Check 3: explicit raw-trade input can be scoped before evaluation.
+    if measurement_input is None:
+        c3 = MeasurementCheckResult(
+            check_name="measurement_window_scope",
+            passed=False,
+            detail=(
+                "measurement_window_scope: raw trades and explicit "
+                "measurement_start_utc/measurement_end_utc are required; "
+                "unscoped lifetime metrics are rejected."
+            ),
+        )
+    else:
+        try:
+            scoped_measurement = build_window_scoped_measurement(measurement_input)
+        except ValueError as exc:
+            c3 = MeasurementCheckResult(
+                check_name="measurement_window_scope",
+                passed=False,
+                detail=f"measurement_window_scope: {exc}",
+            )
+        else:
+            scoped_metrics = scoped_measurement.metrics
+            resolved_metrics = CanaryMetrics(
+                total_trades=scoped_metrics.total_trades,
+                win_rate=scoped_metrics.win_rate,
+                profit_factor=scoped_metrics.profit_factor,
+                sharpe_ratio=scoped_metrics.sharpe_ratio,
+                max_drawdown_pct=scoped_metrics.max_drawdown_pct,
+                daily_loss_count=scoped_metrics.daily_loss_count,
+                avg_profit_per_trade=scoped_metrics.avg_profit_per_trade,
+                notional_exposure=scoped_metrics.notional_exposure,
+                window_trade_count=scoped_measurement.included_trade_count,
+            )
+            c3 = MeasurementCheckResult(
+                check_name="measurement_window_scope",
+                passed=True,
+                detail=(
+                    "Canonical window scope built before metric evaluation: "
+                    f"included={scoped_measurement.included_trade_count}, "
+                    f"realized={scoped_measurement.realized_trade_count}, "
+                    f"method={scoped_measurement.scope_method}."
+                ),
+            )
+    checks.append(c3)
+    if not c3.passed:
+        blocked.append(c3.detail)
+
     # ------------------------------------------------------------------
     # Determine measurement status
     # ------------------------------------------------------------------
 
     if blocked:
-        status: str = "LIVE_CANARY_MEASUREMENT_BLOCKED"
-        decision: str = INSUFFICIENT_DATA
+        status: MeasurementStatus = "LIVE_CANARY_MEASUREMENT_BLOCKED"
+        decision: Decision = INSUFFICIENT_DATA
         next_step = (
             "Review blocked reasons and address before re-running "
             "measurement. Required C3 ceremony artifacts are missing "
@@ -704,6 +682,7 @@ def run_live_canary_measurement_decision(
         "blocked_reasons": blocked,
         "total_trades_observed": total_trades,
         "window_trade_count": resolved_metrics.window_trade_count,
+        "measurement_scope": (scoped_measurement.to_dict() if scoped_measurement is not None else None),
         "data_points_available": resolved_data_points,
         "measurement_window_days": MEASUREMENT_WINDOW_DAYS,
         "created_at_utc": resolved_now,
@@ -753,6 +732,38 @@ def run_live_canary_measurement_decision(
             report_lines.append("")
 
     if not blocked:
+        if scoped_measurement is not None:
+            report_lines.extend(
+                [
+                    "---",
+                    "",
+                    "## Measurement Scope",
+                    "",
+                    f"**Start:** {scoped_measurement.measurement_start_utc}",
+                    f"**End:** {scoped_measurement.measurement_end_utc}",
+                    f"**Method:** {scoped_measurement.scope_method}",
+                    (
+                        "**Included / realized / open at end:** "
+                        f"{scoped_measurement.included_trade_count} / "
+                        f"{scoped_measurement.realized_trade_count} / "
+                        f"{scoped_measurement.open_at_window_end_trade_count}"
+                    ),
+                    "**Authoritative drawdown method:** continuation",
+                    (
+                        "**Metric authority:** realized-window trades for trade "
+                        "count, win rate, profit factor, Sharpe, daily losses, "
+                        "and average PnL; open-at-window-end trades for exposure; "
+                        "continuation equity for max drawdown."
+                    ),
+                    (
+                        "**Drawdown (lifetime / window-relative / continuation):** "
+                        f"{scoped_measurement.drawdown_calculations.lifetime_pct} / "
+                        f"{scoped_measurement.drawdown_calculations.window_relative_pct} / "
+                        f"{scoped_measurement.drawdown_calculations.continuation_pct}"
+                    ),
+                    "",
+                ]
+            )
         report_lines.append("---")
         report_lines.append("")
         report_lines.append("## Metric Evaluations")
@@ -778,68 +789,65 @@ def run_live_canary_measurement_decision(
             if ev.threshold_max is not None:
                 report_lines.append(f"**Max threshold:** {ev.threshold_max}")
                 report_lines.append("")
-            if (
-                ev.critical_threshold_min is not None
-                or ev.critical_threshold_max is not None
-            ):
+            if ev.critical_threshold_min is not None or ev.critical_threshold_max is not None:
                 report_lines.append("**Critical thresholds:**")
                 report_lines.append("")
                 if ev.critical_threshold_min is not None:
-                    report_lines.append(
-                        f"- Min: {ev.critical_threshold_min}"
-                    )
+                    report_lines.append(f"- Min: {ev.critical_threshold_min}")
                 if ev.critical_threshold_max is not None:
-                    report_lines.append(
-                        f"- Max: {ev.critical_threshold_max}"
-                    )
+                    report_lines.append(f"- Max: {ev.critical_threshold_max}")
                 report_lines.append("")
             report_lines.append(f"**Detail:** {ev.detail}")
             report_lines.append("")
 
-        report_lines.extend([
+        report_lines.extend(
+            [
+                "---",
+                "",
+                "## Decision Summary",
+                "",
+                f"**Decision:** {decision}",
+                "",
+                "### KEEP",
+                "",
+                "All metrics are within acceptable thresholds. Continue live canary "
+                "operation. Proceed to fleet rollout evaluation if fleet rollout "
+                "approval marker exists.",
+                "",
+                "### EXTEND",
+                "",
+                "Some metrics are borderline. Extend the measurement window to "
+                "gather more data. Re-run measurement after additional data "
+                "points are collected.",
+                "",
+                "### ROLLBACK_RECOMMENDED",
+                "",
+                "One or more metrics have breached critical thresholds. The "
+                "canary should be returned to dry-run mode. See the rollback "
+                "plan in the C3 ceremony artifacts.",
+                "",
+                "### INSUFFICIENT_DATA",
+                "",
+                "Not enough data points or no metrics provided. Wait for more "
+                "trades to accumulate before making a decision.",
+                "",
+            ]
+        )
+
+    report_lines.extend(
+        [
             "---",
             "",
-            "## Decision Summary",
+            "## Next Steps",
             "",
-            f"**Decision:** {decision}",
+            f"**{next_step}**",
             "",
-            "### KEEP",
-            "",
-            "All metrics are within acceptable thresholds. Continue live canary "
-            "operation. Proceed to fleet rollout evaluation if fleet rollout "
-            "approval marker exists.",
-            "",
-            "### EXTEND",
-            "",
-            "Some metrics are borderline. Extend the measurement window to "
-            "gather more data. Re-run measurement after additional data "
-            "points are collected.",
-            "",
-            "### ROLLBACK_RECOMMENDED",
-            "",
-            "One or more metrics have breached critical thresholds. The "
-            "canary should be returned to dry-run mode. See the rollback "
-            "plan in the C3 ceremony artifacts.",
-            "",
-            "### INSUFFICIENT_DATA",
-            "",
-            "Not enough data points or no metrics provided. Wait for more "
-            "trades to accumulate before making a decision.",
-            "",
-        ])
-
-    report_lines.extend([
-        "---",
-        "",
-        "## Next Steps",
-        "",
-        f"**{next_step}**",
-        "",
-    ])
+        ]
+    )
 
     report_path = resolved_dir / "live_canary_measurement_decision.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text("\n".join(report_lines))
+    report_path.write_text("\n".join(report_lines), encoding="utf-8")
 
     return LiveCanaryMeasurementDecisionResult(
         status=status,
@@ -937,10 +945,7 @@ def _compute_decision(
     evaluations: list[MetricEvaluation],
     total_trades: int,
     data_points: int,
-) -> tuple[
-    Literal["KEEP", "EXTEND", "ROLLBACK_RECOMMENDED", "INSUFFICIENT_DATA"],
-    str,
-]:
+) -> tuple[Decision, str]:
     """Compute the overall decision from metric evaluations.
 
     Priority:
@@ -951,7 +956,7 @@ def _compute_decision(
     """
     # Check for insufficient data.
     if total_trades < MIN_TRADES_FOR_DECISION and data_points < REQUIRED_DATA_POINTS_MIN:
-        return (  # type: ignore[return-value]
+        return (
             INSUFFICIENT_DATA,
             (
                 f"Insufficient data: {total_trades} trades observed "
@@ -965,7 +970,7 @@ def _compute_decision(
     breaches = [e for e in evaluations if e.status == "BREACH"]
     if breaches:
         breached_names = ", ".join(e.metric_name for e in breaches)
-        return (  # type: ignore[return-value]
+        return (
             ROLLBACK_RECOMMENDED,
             (
                 f"CRITICAL BREACH detected in: {breached_names}. "
@@ -978,7 +983,7 @@ def _compute_decision(
     borderlines = [e for e in evaluations if e.status == "BORDERLINE"]
     if borderlines:
         borderline_names = ", ".join(e.metric_name for e in borderlines)
-        return (  # type: ignore[return-value]
+        return (
             EXTEND,
             (
                 f"Borderline metrics detected in: {borderline_names}. "
@@ -988,7 +993,7 @@ def _compute_decision(
         )
 
     # All metrics OK or NO_DATA — KEEP.
-    return (  # type: ignore[return-value]
+    return (
         KEEP,
         (
             "All metrics within acceptable thresholds. Continue live canary "
