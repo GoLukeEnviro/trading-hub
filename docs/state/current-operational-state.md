@@ -1,7 +1,7 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #581 (R5B-A1 roadmap alignment, merge `c9c8c4c`). R5A is **complete
+> PR #585 (Legacy Rainbow credential isolation, merge `a503275`). R5A is **complete
 > and parity-proven**: the canonical HermesTrader dry-run fleet (freqforge,
 > freqforge-canary, regime-hybrid, webserver, rainbow) is persistently
 > deployed with 5/5 health, full `dry_run=true` parity, and a clean secret
@@ -12,10 +12,10 @@
 > commit `782d2c04f59ee96151581de436b069095d28b019` (ratified by
 > repository owner after installer bug-fix arc).
 >
-> **Last updated:** 2026-07-14 post-roadmap-tick (Legacy Rainbow credential isolation RESOLVED PASS in Issue #583; R5B Gate 1 now has 0 remaining UNVERIFIED items — both freqai-rebel config and Rainbow credential isolation resolved; Gate 1 remains BLOCKED pending explicit `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker; no runtime mutation; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved).
-> **Previous update:** 2026-07-14 post-roadmap-correction (PR #581 merged — R5B-A1 roadmap alignment, substantive body update)
+> **Last updated:** 2026-07-14 post-roadmap-tick (PR #585 merged — Legacy Rainbow credential isolation RESOLVED PASS; Issue #583 closed; R5B Gate 1 now has 0 remaining UNVERIFIED items — both freqai-rebel config and Rainbow credential isolation resolved; Gate 1 remains BLOCKED pending explicit `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker; no runtime mutation; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved).
+> **Previous update:** 2026-07-14 post-roadmap-tick (PR #585 merged — Legacy Rainbow credential isolation resolved)
+> **Earlier update:** 2026-07-14 post-roadmap-correction (PR #581 merged — R5B-A1 roadmap alignment, substantive body update)
 > **Earlier update:** 2026-07-13 post-single-writer-containment (`HERMES_SINGLE_WRITER_GREEN`, PRs #564–#570 closed, enforced RepoWriterLock + IsolatedWorktree contract, no runtime mutation)
-> **Earlier update:** 2026-07-13 post-orchestrator-gateway-restore (`HERMES_ORCHESTRATOR_GATEWAY_GREEN`, s6-svc -u)
 
 ---
 
