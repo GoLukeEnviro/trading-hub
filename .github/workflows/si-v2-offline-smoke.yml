@@ -2,10 +2,8 @@ name: SI v2 Offline Smoke
 
 on:
   pull_request:
-    paths:
-      - "self_improvement_v2/**"
-      - ".github/workflows/si-v2-offline-smoke.yml"
-      - "pyproject.toml"
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:

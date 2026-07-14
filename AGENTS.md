@@ -127,12 +127,17 @@ Every roadmap tick (cron or manual) and every autonomous agent session that
 writes to the trading-hub repository MUST follow the enforced single-writer
 contract defined in `orchestrator/scripts/repo_writer.py`.
 
-**Global lock.** A single non-blocking `fcntl.flock` on
-`/opt/data/state/hermes-repo-writer.lock` serialises all writers. The lock is
-process-scoped and kernel-released on exit (incl. SIGKILL). The on-disk JSON
-carries holder metadata (PID, host, worktree path, branch, session ID,
-started-at) for inspection via `RepoWriterLock().read_holder()`. Failed
-acquisition raises `RepoWriterError("BLOCKED_BY_ACTIVE_REPO_WRITER")`;
+**Global lock.** A single non-blocking `fcntl.flock` on the preprovisioned
+`/opt/data/state/repo-writer/hermes-repo-writer.lock` serialises all writers.
+Its parent is `root:root` and not writable by UID 10000; the regular lock file
+is `10000:10000` mode `0600`. Production opens it without `O_CREAT`. The lock
+is process-scoped and kernel-released on exit (incl. SIGKILL). Holder metadata
+includes PID, host, worktree path, branch, session ID, started-at, device and
+inode. `assert_held()` must run immediately before worktree, commit, push and
+PR mutations and verifies that the held FD and canonical path still identify
+the same inode. Missing, replaced or invalid lock state fails closed with
+`LOCK_FILE_MISSING`, `LOCK_PATH_REPLACED` or `LOCK_OWNERSHIP_INVALID`.
+Contention raises `BLOCKED_BY_ACTIVE_REPO_WRITER`.
 
 **Isolated worktrees.** Every writer MUST create a fresh `git worktree add`
 from a pinned `origin/main` SHA (never a moving branch) under
@@ -148,19 +153,25 @@ worktree must be clean before branch creation and before commit.
 **Stop condition.** `BLOCKED_BY_ACTIVE_REPO_WRITER` is a hard stop — do not
 override without explicit operator approval.
 
-**No unrelated debug work.** No session outside the roadmap loop may write
-to the trading-hub repository. Cron ticks are the exclusive repository
-writer; manual operator sessions may hold the lock but must follow the same
-contract.
+**Human-only merge boundary.** Roadmap ticks and autonomous merge invocations
+remain disabled. Agents may commit, push, open a PR and run the executable
+merge guard, but MUST stop at `READY_FOR_HUMAN_MERGE`. Only Luke merges. A
+future autonomous controller requires a separately proven identity, lock
+rehearsal and governance check; root or Hermes writer access is insufficient.
+
+**No unrelated debug work.** No session outside an explicitly selected
+roadmap issue may write to the trading-hub repository. Manual writer sessions
+must hold the same lock and follow the same isolated-worktree contract.
 
 See `commands/trading-hub-roadmap-tick.md` for the per-tick algorithm and
-`tests/test_repo_writer.py` for the enforcement test suite (31 tests).
+`tests/test_repo_writer.py`, `tests/test_repo_writer_hardening.py`, and
+`tests/test_roadmap_merge_guard.py` for the enforcement suites.
 
 ### Codex Cloud A1 writer path
 
 OpenAI Codex Cloud checks out a selected branch or commit in an isolated
 container and **cannot** acquire the HermesTrader host lock at
-`/opt/data/state/hermes-repo-writer.lock`. This section defines a separate,
+`/opt/data/state/repo-writer/hermes-repo-writer.lock`. This section defines a separate,
 PR-only A1 writer path for Codex Cloud that does **not** weaken the
 HermesTrader host writer contract.
 
@@ -208,11 +219,12 @@ Every autonomous agent session acting on the roadmap MUST:
 1. Read `AGENTS.md`, `SOUL.md`, `docs/state/current-operational-state.md`,
    and issue #423.
 2. Inspect open PRs and linked active issues.
-3. Finish or formally block the existing roadmap PR before selecting another
-   task.
+3. Validate the existing roadmap PR to `READY_FOR_HUMAN_MERGE` or formally
+   block it before selecting another task. Never merge it autonomously.
 4. Select the first truly unblocked task.
 5. Execute one GOAL, one branch, one PR and one report.
-6. Reconcile issue and state after merge.
+6. After Luke's human merge, reconcile issue and state in a later bounded
+   session.
 7. Stop at every missing A2 or A3 approval.
 
 ## System architecture boundaries

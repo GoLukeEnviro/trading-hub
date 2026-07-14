@@ -9,8 +9,9 @@ repository at any given moment, and that the shared canonical checkout is
 Two primitives:
 
 - :class:`RepoWriterLock` — global, process-safe, non-blocking
-  ``fcntl.flock`` on a shared file under ``/opt/data/state/``. Acquire fails
-  fast with ``BLOCKED_BY_ACTIVE_REPO_WRITER`` when another writer holds it.
+  ``fcntl.flock`` on a preprovisioned file under
+  ``/opt/data/state/repo-writer/``. Acquire fails fast with
+  ``BLOCKED_BY_ACTIVE_REPO_WRITER`` when another writer holds it.
 - :class:`IsolatedWorktree` — one-shot ``git worktree add`` from a
   pinned base ref, with explicit clean-worktree verification before
   branch creation and before commit.
@@ -32,9 +33,9 @@ Design constraints (all enforced in code):
   one before any commit.
 - **No git reset / clean / push -f**: the contract is additive; the
   shared checkout is read-only from the writer's perspective.
-- **Lock file lives outside any worktree**: ``/opt/data/state/`` is a
-  durable persistent volume, not part of any git worktree, so its
-  lifecycle is independent of branch switches.
+- **Stable lock inode**: the root-owned lock parent cannot be modified by the
+  writer. Production never creates the lock and ``assert_held()`` proves that
+  the FD and canonical path still identify the same device/inode.
 - **Path resolution is sandboxed**: lock and worktree paths are
   validated against the canonical repo root and the persistent
   volume root to prevent symlink/path-traversal attacks.
@@ -66,6 +67,7 @@ Usage (cron tick or manual session):
             base_ref="origin/main",
             new_branch="ops/hermes-single-writer-recovery",
             worktree_parent="/opt/data/projects/trading-hub-worktrees",
+            writer_lock=lock,
         )
         wt.create()
         # ... do work in wt.path ...
@@ -75,6 +77,10 @@ Usage (cron tick or manual session):
 Error codes (string constants):
 
 - ``BLOCKED_BY_ACTIVE_REPO_WRITER`` — another writer holds the lock
+- ``LOCK_FILE_MISSING`` — the preprovisioned production lock is absent
+- ``LOCK_OWNERSHIP_INVALID`` — lock ownership, type, mode, or access is invalid
+- ``LOCK_PATH_REPLACED`` — the held FD and canonical path identify different
+  inodes (or the path disappeared)
 - ``LOCK_HELD_BY_DEAD_PID`` — stale lock whose holder is no longer
   running; the acquirer MUST NOT silently break it without
   human approval (the PID check is informational, the actual
@@ -108,13 +114,14 @@ import os
 import pwd
 import re
 import socket
+import stat
 import subprocess
 import sys
-import time
-from dataclasses import dataclass, asdict
+from contextlib import suppress
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 # ----------------------------------------------------------------------
 # Canonical paths (single source of truth)
@@ -123,8 +130,10 @@ from typing import Optional
 # Persistent state directory (durable across reboots, hermes-writable).
 PERSISTENT_STATE_DIR = Path("/opt/data/state")
 
-# Lock file lives here, NOT inside any git worktree.
-LOCK_FILE_PATH = PERSISTENT_STATE_DIR / "hermes-repo-writer.lock"
+# The parent is root-owned and not removable by the Hermes writer identity.
+LOCK_DIRECTORY = PERSISTENT_STATE_DIR / "repo-writer"
+# The file is preprovisioned as hermes:hermes 0600; production never creates it.
+LOCK_FILE_PATH = LOCK_DIRECTORY / "hermes-repo-writer.lock"
 
 # Default worktree parent directory (one level under /opt/data so hermes
 # can write without /workspace ACLs).
@@ -164,14 +173,13 @@ FORBIDDEN_WORKTREE_PARENT_PATTERNS = (
 # always created from origin/main, so this is mainly for sanity). ``codex/``
 # is included for Codex Cloud A1 sessions, whose operator contract requires
 # reviewable branches named ``codex/{feature}{date}``.
-BRANCH_NAME_PATTERN = re.compile(
-    r"^(feat|fix|docs|ops|chore|test|refactor|ci|codex)/[a-z0-9][a-z0-9_./-]*$"
-)
+BRANCH_NAME_PATTERN = re.compile(r"^(feat|fix|docs|ops|chore|test|refactor|ci|codex)/[a-z0-9][a-z0-9_./-]*$")
 
 
 # ----------------------------------------------------------------------
 # Errors
 # ----------------------------------------------------------------------
+
 
 class RepoWriterError(Exception):
     """Base class for all repo writer contract errors.
@@ -189,6 +197,7 @@ class RepoWriterError(Exception):
 # ----------------------------------------------------------------------
 # Production writer identity / mount guard
 # ----------------------------------------------------------------------
+
 
 def _current_writer_identity() -> tuple[int, str]:
     """Return the effective UID and passwd-resolved username."""
@@ -211,6 +220,21 @@ def _writer_parent_status(path: Path) -> tuple[int, int, bool, bool]:
         metadata.st_gid,
         path.is_dir(),
         os.access(path, os.W_OK | os.X_OK),
+    )
+
+
+def _lock_file_status(path: Path) -> tuple[int, int, bool, int, bool]:
+    """Return ownership, regular-file status, mode, and writer access."""
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return -1, -1, False, 0, False
+    return (
+        metadata.st_uid,
+        metadata.st_gid,
+        stat.S_ISREG(metadata.st_mode),
+        stat.S_IMODE(metadata.st_mode),
+        os.access(path, os.R_OK | os.W_OK),
     )
 
 
@@ -254,41 +278,57 @@ def _validate_production_writer_environment(
         resolved_actual = _resolved_path(actual)
         resolved_expected = _resolved_path(expected)
         if resolved_actual != resolved_expected:
-            raise _writer_identity_mismatch(
-                f"{label} must resolve to {resolved_expected}; "
-                f"got {resolved_actual}"
-            )
+            raise _writer_identity_mismatch(f"{label} must resolve to {resolved_expected}; got {resolved_actual}")
 
-    for label, parent in (
-        ("lock parent", Path(lock_path).parent),
-        ("worktree parent", Path(worktree_parent)),
+    lock_parent = Path(lock_path).parent
+    uid, gid, is_dir, writable = _writer_parent_status(lock_parent)
+    if not is_dir:
+        raise _writer_identity_mismatch(f"lock parent {lock_parent} is missing or not a directory")
+    if uid != 0 or gid != 0:
+        raise _writer_identity_mismatch(f"lock parent {lock_parent} requires uid:gid 0:0; got {uid}:{gid}")
+    if writable:
+        raise _writer_identity_mismatch(f"lock parent {lock_parent} must not be writable by the writer")
+
+    worktree_parent_path = Path(worktree_parent)
+    uid, gid, is_dir, writable = _writer_parent_status(worktree_parent_path)
+    if not is_dir:
+        raise _writer_identity_mismatch(f"worktree parent {worktree_parent_path} is missing or not a directory")
+    if uid != EXPECTED_WRITER_UID or gid != EXPECTED_WRITER_GID:
+        raise _writer_identity_mismatch(
+            f"worktree parent requires uid:gid {EXPECTED_WRITER_UID}:{EXPECTED_WRITER_GID}; got {uid}:{gid}"
+        )
+    if not writable:
+        raise _writer_identity_mismatch(f"worktree parent {worktree_parent_path} is not writer-writable")
+
+    lock_uid, lock_gid, is_file, mode, lock_writable = _lock_file_status(Path(lock_path))
+    if lock_uid == -1:
+        raise RepoWriterError(
+            "LOCK_FILE_MISSING",
+            f"preprovisioned lock file is missing: {lock_path}",
+        )
+    if (
+        lock_uid != EXPECTED_WRITER_UID
+        or lock_gid != EXPECTED_WRITER_GID
+        or not is_file
+        or mode != 0o600
+        or not lock_writable
     ):
-        uid, gid, is_dir, writable = _writer_parent_status(parent)
-        if not is_dir:
-            raise _writer_identity_mismatch(
-                f"{label} {parent} is missing or not a directory"
-            )
-        if uid != EXPECTED_WRITER_UID or gid != EXPECTED_WRITER_GID:
-            raise _writer_identity_mismatch(
-                f"{label} {parent} requires uid:gid "
-                f"{EXPECTED_WRITER_UID}:{EXPECTED_WRITER_GID}; got {uid}:{gid}"
-            )
-        if not writable:
-            raise _writer_identity_mismatch(
-                f"{label} {parent} is not writable/searchable by the writer"
-            )
+        raise RepoWriterError(
+            "LOCK_OWNERSHIP_INVALID",
+            "preprovisioned lock requires regular file, uid:gid "
+            f"{EXPECTED_WRITER_UID}:{EXPECTED_WRITER_GID}, mode 0600, writer access",
+        )
 
 
 def _validate_test_mode(*, test_mode: bool, enforce_sandbox: bool) -> None:
     if not test_mode and not enforce_sandbox:
-        raise _writer_identity_mismatch(
-            "enforce_sandbox=False is allowed only with explicit test_mode=True"
-        )
+        raise _writer_identity_mismatch("enforce_sandbox=False is allowed only with explicit test_mode=True")
 
 
 # ----------------------------------------------------------------------
 # RepoWriterLock
 # ----------------------------------------------------------------------
+
 
 @dataclass
 class LockHolder:
@@ -299,6 +339,8 @@ class LockHolder:
     session_id: str
     started_at: str  # ISO 8601 UTC
     note: str = ""
+    lock_device: int = 0
+    lock_inode: int = 0
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), sort_keys=True, indent=2)
@@ -314,14 +356,16 @@ class LockHolder:
             session_id=str(data["session_id"]),
             started_at=str(data["started_at"]),
             note=str(data.get("note", "")),
+            lock_device=int(data.get("lock_device", 0)),
+            lock_inode=int(data.get("lock_inode", 0)),
         )
 
 
 class RepoWriterLock:
     """Global non-blocking writer lock for the trading-hub repo.
 
-    The lock is held by writing a small JSON document to
-    ``/opt/data/state/hermes-repo-writer.lock`` and acquiring an
+    The lock is held by writing a small JSON document to the preprovisioned
+    ``/opt/data/state/repo-writer/hermes-repo-writer.lock`` and acquiring an
     exclusive ``fcntl.flock`` on the file's open file descriptor. The
     lock is process-scoped — when the holding process exits, the
     kernel releases the flock automatically.
@@ -333,7 +377,7 @@ class RepoWriterLock:
     manual cleanup.
 
     The lock JSON contains only operational metadata (PID, host,
-    worktree path, branch, session id, started-at). It does not
+    worktree path, branch, session id, started-at, device, inode). It does not
     contain tokens, secrets, or environment values.
     """
 
@@ -394,11 +438,23 @@ class RepoWriterLock:
         # Acquire the flock first — it is the authoritative source
         # of truth. The on-disk JSON is informational and may be
         # stale or absent; the flock cannot be.
-        fd = os.open(
-            str(self.lock_path),
-            os.O_RDWR | os.O_CREAT,
-            0o600,
-        )
+        open_flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+        if self.test_mode:
+            open_flags |= os.O_CREAT
+        try:
+            fd = os.open(str(self.lock_path), open_flags, 0o600)
+        except FileNotFoundError as exc:
+            raise RepoWriterError(
+                "LOCK_FILE_MISSING",
+                f"preprovisioned lock file is missing: {self.lock_path}",
+            ) from exc
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                raise RepoWriterError(
+                    "LOCK_PATH_REPLACED",
+                    f"lock path is a symlink: {self.lock_path}",
+                ) from exc
+            raise
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
@@ -407,13 +463,26 @@ class RepoWriterLock:
                 # Read the existing holder JSON for context.
                 existing = self._read_holder()
                 existing_dict = asdict(existing) if existing is not None else {}
+                message = (
+                    "lock held by "
+                    f"pid={existing_dict.get('pid')} "
+                    f"branch={existing_dict.get('branch')!r} "
+                    f"session={existing_dict.get('session_id')!r}"
+                    if existing_dict
+                    else "lock held by another writer (no holder JSON)"
+                )
                 raise RepoWriterError(
                     "BLOCKED_BY_ACTIVE_REPO_WRITER",
-                    f"lock held by pid={existing_dict.get('pid')} branch={existing_dict.get('branch')!r} session={existing_dict.get('session_id')!r}"
-                    if existing_dict
-                    else "lock held by another writer (no holder JSON)",
+                    message,
                     holder=existing_dict,
-                )
+                ) from exc
+            raise
+
+        try:
+            fd_metadata = self._assert_fd_matches_path(fd)
+        except RepoWriterError:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
             raise
 
         # We have the flock. Optionally check the on-disk holder
@@ -422,15 +491,13 @@ class RepoWriterLock:
         # the threshold). The flock itself is the real lock; this
         # check is defensive: it lets the next acquirer know that
         # a previous holder crashed without releasing.
-        existing = self._read_holder()
+        existing = self._read_holder_fd(fd)
         if existing is not None and self._is_stale(existing) and not force_break_stale:
             # We already have the flock, but a previous holder's
             # stale metadata is on disk. Clean it up and proceed.
             # This is NOT a security issue: the flock was free.
-            try:
+            with suppress(OSError):
                 os.ftruncate(fd, 0)
-            except OSError:
-                pass
 
         # Truncate and write the holder JSON.
         os.ftruncate(fd, 0)
@@ -442,12 +509,57 @@ class RepoWriterLock:
             session_id=session_id,
             started_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             note=note,
+            lock_device=fd_metadata.st_dev,
+            lock_inode=fd_metadata.st_ino,
         )
         os.write(fd, holder.to_json().encode("utf-8"))
         os.fsync(fd)
 
         self._fd = fd
+        try:
+            self.assert_held()
+        except RepoWriterError:
+            self.release()
+            raise
         return holder
+
+    def assert_held(self) -> None:
+        """Fail closed unless this object holds the canonical lock inode."""
+        if self._fd is None:
+            raise RepoWriterError(
+                "LOCK_NOT_HELD",
+                "repository mutation requires an acquired writer lock",
+            )
+        self._assert_fd_matches_path(self._fd)
+
+    def run_guarded_mutation(
+        self,
+        *,
+        mutation: str,
+        command: Sequence[str],
+        cwd: Path,
+        timeout: int = 120,
+    ) -> subprocess.CompletedProcess[str]:
+        """Run an approved repository mutation after rechecking the inode."""
+        self.assert_held()
+        if mutation == "merge":
+            raise RepoWriterError(
+                "HUMAN_ONLY_MERGE_REQUIRED",
+                "agents may stop only at READY_FOR_HUMAN_MERGE",
+            )
+        if mutation not in {"commit", "push", "pr-create"}:
+            raise RepoWriterError(
+                "UNSUPPORTED_REPOSITORY_MUTATION",
+                f"unsupported guarded mutation: {mutation}",
+            )
+        return subprocess.run(
+            list(command),
+            cwd=str(cwd),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
 
     def release(self) -> None:
         """Release the global writer lock.
@@ -485,16 +597,17 @@ class RepoWriterLock:
             return False
         # Try a non-blocking flock. If we get it, the lock is free.
         try:
-            fd = os.open(str(self.lock_path), os.O_RDWR | os.O_CREAT, 0o600)
+            open_flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+            if self.test_mode:
+                open_flags |= os.O_CREAT
+            fd = os.open(str(self.lock_path), open_flags, 0o600)
         except OSError:
             return False
         try:
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError as exc:
-                if exc.errno in (errno.EWOULDBLOCK, errno.EAGAIN):
-                    return True
-                return False
+                return exc.errno in (errno.EWOULDBLOCK, errno.EAGAIN)
             # We got the lock; release it.
             fcntl.flock(fd, fcntl.LOCK_UN)
             return False
@@ -510,6 +623,47 @@ class RepoWriterLock:
         self.release()
 
     # ----- internals -----
+
+    def _assert_fd_matches_path(self, fd: int) -> os.stat_result:
+        try:
+            fd_metadata = os.fstat(fd)
+        except OSError as exc:
+            raise RepoWriterError(
+                "LOCK_NOT_HELD",
+                "writer lock file descriptor is no longer valid",
+            ) from exc
+        try:
+            path_metadata = os.stat(self.lock_path, follow_symlinks=False)
+        except OSError as exc:
+            raise RepoWriterError(
+                "LOCK_PATH_REPLACED",
+                f"locked path disappeared while held: {self.lock_path}",
+            ) from exc
+        if (
+            not stat.S_ISREG(path_metadata.st_mode)
+            or fd_metadata.st_dev != path_metadata.st_dev
+            or fd_metadata.st_ino != path_metadata.st_ino
+        ):
+            raise RepoWriterError(
+                "LOCK_PATH_REPLACED",
+                "locked file descriptor and canonical path do not identify "
+                f"the same inode: fd={fd_metadata.st_dev}:{fd_metadata.st_ino} "
+                f"path={path_metadata.st_dev}:{path_metadata.st_ino}",
+            )
+        return fd_metadata
+
+    @staticmethod
+    def _read_holder_fd(fd: int) -> Optional[LockHolder]:
+        try:
+            raw = os.pread(fd, 65_536, 0).decode("utf-8").strip()
+        except (OSError, UnicodeDecodeError):
+            return None
+        if not raw:
+            return None
+        try:
+            return LockHolder.from_json(raw)
+        except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+            return None
 
     def _read_holder(self) -> Optional[LockHolder]:
         if not self.lock_path.exists():
@@ -556,12 +710,13 @@ class RepoWriterLock:
             raise RepoWriterError(
                 "LOCK_PATH_OUTSIDE_SANDBOX",
                 f"lock path {resolved_lock} escapes sandbox root {resolved_root}",
-            )
+            ) from None
 
 
 # ----------------------------------------------------------------------
 # IsolatedWorktree
 # ----------------------------------------------------------------------
+
 
 class IsolatedWorktree:
     """One isolated git worktree per run, forked from a pinned base ref.
@@ -587,6 +742,7 @@ class IsolatedWorktree:
         new_branch: str,
         worktree_parent: Path = DEFAULT_WORKTREE_PARENT,
         worktree_name: Optional[str] = None,
+        writer_lock: Optional[RepoWriterLock] = None,
         enforce_sandbox: bool = True,
         test_mode: bool = False,
     ) -> None:
@@ -596,6 +752,7 @@ class IsolatedWorktree:
         self.worktree_parent = Path(worktree_parent)
         self.worktree_name = worktree_name or _sanitize_worktree_name(new_branch)
         self.worktree_path = self.worktree_parent / self.worktree_name
+        self.writer_lock = writer_lock
         self._validate_inputs()
         self.test_mode = bool(test_mode)
         _validate_test_mode(
@@ -624,6 +781,7 @@ class IsolatedWorktree:
         4. Verify the new worktree's HEAD is on the requested branch
            AND ``git status --porcelain`` is empty.
         """
+        self._assert_mutation_lock()
         self._check_shared_checkout()
 
         pinned_sha = self._resolve_base_sha()
@@ -645,6 +803,7 @@ class IsolatedWorktree:
         """Remove the worktree. Idempotent."""
         if not self.worktree_path.exists():
             return
+        self._assert_mutation_lock()
         cmd = ["git", "worktree", "remove"]
         if force:
             cmd.append("--force")
@@ -655,16 +814,19 @@ class IsolatedWorktree:
             check=False,
             capture_output=True,
         )
-        # Also prune any stale worktree refs.
-        subprocess.run(
-            ["git", "worktree", "prune"],
-            cwd=str(self.repo_root),
-            check=False,
-            capture_output=True,
-        )
         self._created = False
 
     # ----- internals -----
+
+    def _assert_mutation_lock(self) -> None:
+        if self.test_mode:
+            return
+        if self.writer_lock is None:
+            raise RepoWriterError(
+                "LOCK_NOT_HELD",
+                "production worktree mutation requires the owning writer lock",
+            )
+        self.writer_lock.assert_held()
 
     def _validate_inputs(self) -> None:
         if not BRANCH_NAME_PATTERN.match(self.new_branch):
@@ -698,7 +860,7 @@ class IsolatedWorktree:
             raise RepoWriterError(
                 "WORKTREE_PATH_OUTSIDE_SANDBOX",
                 f"worktree parent {parent_resolved} must be inside /opt/data",
-            )
+            ) from None
 
     def _check_shared_checkout(self) -> None:
         # 1. The repo root must exist and be a git worktree.
@@ -769,8 +931,11 @@ class IsolatedWorktree:
                 f"worktree path {self.worktree_path} already exists; refusing to clobber",
             )
         cmd = [
-            "git", "worktree", "add",
-            "-b", self.new_branch,
+            "git",
+            "worktree",
+            "add",
+            "-b",
+            self.new_branch,
             str(self.worktree_path),
             pinned_sha,
         ]
@@ -813,6 +978,7 @@ class IsolatedWorktree:
 # ----------------------------------------------------------------------
 # Helpers
 # ----------------------------------------------------------------------
+
 
 def _pid_alive(pid: int) -> bool:
     """Return True iff the given PID is alive in the current PID namespace.
@@ -876,6 +1042,7 @@ def _sanitize_worktree_name(branch: str) -> str:
 # CLI (for ad-hoc testing and operator inspection)
 # ----------------------------------------------------------------------
 
+
 def _cli() -> int:
     import argparse
 
@@ -885,14 +1052,14 @@ def _cli() -> int:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_status = sub.add_parser("status", help="print the current lock holder")
+    sub.add_parser("status", help="print the current lock holder")
     p_acquire = sub.add_parser("acquire", help="acquire the lock (does not release)")
     p_acquire.add_argument("--branch", required=True)
     p_acquire.add_argument("--session-id", required=True)
     p_acquire.add_argument("--worktree-path", default="")
     p_acquire.add_argument("--note", default="")
     p_acquire.add_argument("--force-break-stale", action="store_true")
-    p_release = sub.add_parser("release", help="release the lock (only if held by this pid)")
+    sub.add_parser("release", help="release the lock (only if held by this pid)")
     p_worktree = sub.add_parser("worktree", help="create an isolated worktree")
     p_worktree.add_argument("--branch", required=True)
     p_worktree.add_argument("--base-ref", default=DEFAULT_BASE_REF)

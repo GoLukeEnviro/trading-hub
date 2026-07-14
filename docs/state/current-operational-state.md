@@ -1,7 +1,15 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot** — validated against `main` at
-> PR #613 (post-merge state reconciliation, merge `3da465f`). R5A is **complete
+> **Canonical current-state snapshot** — revalidated on 2026-07-15 against
+> `main` at `a820c9560e354087470525cd7d8bf96e564c23ca`. PR #620 is merged,
+> `main-gate` and `offline-smoke` are GREEN, Issue #594 is closed, and the
+> Phase-0A installable cost-model correction is present. PR #618 is not yet
+> reverted; Issue #595 remains blocked. Issue #621 is the sole selected A1
+> governance recovery task. Roadmap ticks and autonomous merges are disabled;
+> agents stop at `READY_FOR_HUMAN_MERGE`. No runtime or trading mutation was
+> performed by this recovery.
+>
+> R5A is **complete
 > and parity-proven**: the canonical HermesTrader dry-run fleet (freqforge,
 > freqforge-canary, regime-hybrid, webserver, rainbow) is persistently
 > deployed with 5/5 health, full `dry_run=true` parity, and a clean secret
@@ -12,7 +20,9 @@
 > commit `782d2c04f59ee96151581de436b069095d28b019` (ratified by
 > repository owner after installer bug-fix arc).
 >
-> **Last updated:** 2026-07-14 post-roadmap-tick (PR #618 merged at `55d005d` — fleet HWM and daily drawdown guard; Issue #595 closed; PR #617 merged at `67ae1d1` — state reconcile after PR #616; Issue #594 reopened with corrective requirements (Phase 0A harness needs 10 corrective items); 30 new tests all passing; CI main-gate GREEN; no runtime mutation; no open PRs remaining; R5B Gate 1 remains BLOCKED pending Luke's decision on three paths; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved; Codex Cloud issues #592–#606 explicitly non-authoritative until #600 ADR gate accepted).
+> **Last updated:** 2026-07-15 governance recovery in progress (Issue #621;
+> stable lock inode and read-only human merge guard; no runtime mutation).
+> **Previous update:** 2026-07-14 post-roadmap-tick (PR #618 merged at `55d005d` — fleet HWM and daily drawdown guard; Issue #595 closed; PR #617 merged at `67ae1d1` — state reconcile after PR #616; Issue #594 reopened with corrective requirements (Phase 0A harness needs 10 corrective items); 30 new tests all passing; CI main-gate GREEN; no runtime mutation; no open PRs remaining; R5B Gate 1 remains BLOCKED pending Luke's decision on three paths; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved; Codex Cloud issues #592–#606 explicitly non-authoritative until #600 ADR gate accepted).
 > **Previous update:** 2026-07-14 post-roadmap-tick (PR #616 merged at `c0b0a34` — writer identity guard: fail-closed on wrong UID and host paths; Issue #615 closed; 43 tests all passing; CI main-gate GREEN; no runtime mutation; no open PRs remaining; R5B Gate 1 remains BLOCKED pending Luke's decision on three paths; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved; Codex Cloud issues #592–#606 explicitly non-authoritative until #600 ADR gate accepted).
 > **Earlier update:** 2026-07-14 post-roadmap-tick (PR #591 merged — simplified target architecture roadmap v4; PR #591 was the only open roadmap PR; merged with owner COMMENTED review and editorial suggestions preserved in downstream issues #592–#605; no runtime mutation; R5B Gate 1 remains BLOCKED pending `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE`; C4 ROLLBACK_RECOMMENDED preserved; Codex Cloud issues #592–#606 explicitly non-authoritative until #600 ADR gate accepted).
 > **Earlier update:** 2026-07-14 post-roadmap-tick (PR #589 merged — R5B Gate 1 state reconciled after PR #588 safety correction; Gate 1 remains BLOCKED/NOT APPROVABLE pending Luke's decision on three paths; no runtime mutation; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved).
