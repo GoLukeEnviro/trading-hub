@@ -21,8 +21,8 @@ dev = [
     "ruff>=0.15.16",
 ]
 
-[tool.setuptools]
-py-modules = []
+[tool.setuptools.packages.find]
+include = ["backtests*"]
 
 [tool.ruff]
 line-length = 120

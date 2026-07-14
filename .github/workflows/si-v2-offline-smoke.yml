@@ -27,8 +27,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
           python -m pip install -e ./self_improvement_v2
-          python -m pip install pytest ruff httpx pandas
+          python -m pip install pytest httpx pandas
 
       - name: Compile SI v2
         run: |
