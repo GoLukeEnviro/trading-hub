@@ -156,6 +156,51 @@ contract.
 See `commands/trading-hub-roadmap-tick.md` for the per-tick algorithm and
 `tests/test_repo_writer.py` for the enforcement test suite (31 tests).
 
+### Codex Cloud A1 writer path
+
+OpenAI Codex Cloud checks out a selected branch or commit in an isolated
+container and **cannot** acquire the HermesTrader host lock at
+`/opt/data/state/hermes-repo-writer.lock`. This section defines a separate,
+PR-only A1 writer path for Codex Cloud that does **not** weaken the
+HermesTrader host writer contract.
+
+**This is not an exception to the host lock.** The two paths are separate
+non-overlapping writer domains:
+
+| Domain | Lock | Worktree | Branch prefix | Direct-to-main |
+|--------|------|----------|---------------|----------------|
+| HermesTrader (cron/manual) | Host `fcntl.flock` | Host isolated worktree | `feat\|fix\|docs\|ops\|chore\|test\|refactor\|ci/` | Never |
+| Codex Cloud A1 | N/A (cloud checkout) | N/A (cloud checkout) | `codex/` | Never |
+
+**Codex Cloud A1 writer rules:**
+
+1. **One atomic issue, one `codex/` branch, one PR, one validation report.**
+   Never select a follow-up task in the same session.
+2. **Inspect open PRs before starting.** If an overlapping or conflicting
+   active PR exists, stop with `BLOCKED_BY_OPEN_PR`.
+3. **Branch naming:** `codex/{feature}{date}` (e.g. `codex/a1-writer-contract2026-07-14`).
+   The branch must be forked from `origin/main` (pinned SHA, never a moving
+   branch).
+4. **PR-only, never direct-to-main.** No auto-merge, no force-push, no
+   history rewrite, no `git add .`, no destructive cleanup.
+5. **No runtime mutation.** No VPS, Docker, Cron, scheduler, container,
+   exchange, secret, or live-capital change. Never set `dry_run=false`,
+   place live orders, deploy exchange keys, increase risk/capital limits,
+   weaken RiskGuard, bypass the kill switch, or create an approval marker.
+6. **Hard blockers** (stop and report `BLOCKED_<REASON>`):
+   - Conflicting open PR touching the same scope
+   - Ambiguous source of truth (contradictory runtime evidence)
+   - Missing required toolchain or dependency
+   - Secret, credential, or runtime state would be exposed or needed
+   - Scope would require A2 or A3 without explicit approval
+7. **Cleanup:** If the PR is abandoned or superseded, close it without merge
+   and leave a comment explaining why. Do not leave stale `codex/` branches
+   on the remote.
+8. **Regression check:** Every PR that adds or modifies this section must
+   include a documentation/link check proving the HermesTrader host writer
+   contract (`repo_writer.py`, host lock, isolated worktree) is not weakened
+   by the change.
+
 ## Autonomous roadmap session algorithm
 
 Every autonomous agent session acting on the roadmap MUST:
