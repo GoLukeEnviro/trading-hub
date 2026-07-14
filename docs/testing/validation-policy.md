@@ -46,7 +46,6 @@ python3 scripts/secret_scan.py --tracked
 python3 -m compileall bridge primo shadowlock intelligence orchestrator tests scripts
 python3 -m pytest tests -q
 PYTHONPATH=self_improvement_v2/src:self_improvement_v2 python3 -m pytest self_improvement_v2/tests -q
-PYTHONPATH=/home/hermes/projects/trading python3 -m pytest orchestrator/control/tests -q
 ```
 
 ## CI integration
