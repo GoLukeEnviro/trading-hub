@@ -23,7 +23,6 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
 
 # ---------------------------------------------------------------------------
 # Gate-0 output states
@@ -119,7 +118,7 @@ class HarnessProvenance:
     n_strategies_evaluated: int
     """Number of strategy variants evaluated in this session (selection bias visibility)."""
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """JSON-safe dict representation."""
         return asdict(self)
 
@@ -164,7 +163,7 @@ class EvaluationConfig:
     require_holdout: bool = True
     """Whether untouched holdout data is required for PASS_CANDIDATE."""
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """JSON-safe dict representation."""
         return asdict(self)
 
@@ -210,7 +209,7 @@ class DataQualityReport:
             and len(self.unsupported_pairs) == 0
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """JSON-safe dict representation."""
         return {
             "missing_candles": self.missing_candles,
@@ -284,10 +283,10 @@ class EvaluationResult:
     regime_breakdown: dict[str, int] = field(default_factory=dict)
     """Trade count per market regime (e.g., {'bull': 40, 'bear': 30, 'sideways': 30})."""
 
-    walk_forward_metrics: list[dict[str, Any]] = field(default_factory=list)
+    walk_forward_metrics: list[dict[str, object]] = field(default_factory=list)
     """Per-window walk-forward metrics for reproducibility."""
 
-    holdout_metrics: dict[str, Any] | None = None
+    holdout_metrics: dict[str, object] | None = None
     """Metrics from the untouched holdout period, if applicable."""
 
     reproducibility_fingerprint: str = ""
@@ -299,9 +298,9 @@ class EvaluationResult:
     run_timestamp_utc: str = ""
     """ISO-8601 timestamp of when the evaluation was run."""
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """JSON-safe dict representation for serialization."""
-        d: dict[str, Any] = {
+        d: dict[str, object] = {
             "outcome": self.outcome.value,
             "provenance": self.provenance.to_dict(),
             "config": self.config.to_dict(),
@@ -403,7 +402,7 @@ class StrategyEvaluationHarness:
 
     def evaluate(
         self,
-        trade_results: list[dict[str, Any]],
+        trade_results: list[dict[str, object]],
         regime_labels: dict[str, int] | None = None,
     ) -> EvaluationResult:
         """Run the evaluation against a list of trade results.
@@ -565,7 +564,7 @@ class StrategyEvaluationHarness:
         return result
 
     def _check_data_quality(
-        self, trade_results: list[dict[str, Any]]
+        self, trade_results: list[dict[str, object]]
     ) -> DataQualityReport:
         """Check trade results for data quality issues.
 

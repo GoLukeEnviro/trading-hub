@@ -13,20 +13,16 @@ Covers:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 
 import pytest
 
 from si_v2.research.edge_evidence_harness import (
-    DEFAULT_EVALUATION_CONFIG,
     DataQualityReport,
     EvaluationConfig,
-    EvaluationResult,
     Gate0Outcome,
     HarnessProvenance,
     StrategyEvaluationHarness,
 )
-
 
 # =========================================================================
 # Fixtures
@@ -63,7 +59,7 @@ def sample_provenance() -> HarnessProvenance:
 def positive_trades() -> list[dict]:
     """List of 150 trades with positive net PnL and safe drawdown (<25%)."""
     trades = []
-    for i in range(150):
+    for _ in range(150):
         entry = 100.0
         # All trades are winners with small consistent profit
         exit_price = entry + 3.0
@@ -91,7 +87,7 @@ def positive_trades() -> list[dict]:
 def negative_trades() -> list[dict]:
     """List of 50 trades with negative net PnL."""
     trades = []
-    for i in range(50):
+    for _ in range(50):
         entry = 100.0
         exit_price = entry - 3.0  # consistent loss
         qty = 1.0
@@ -117,13 +113,12 @@ def negative_trades() -> list[dict]:
 def high_drawdown_trades() -> list[dict]:
     """List of 120 trades with high drawdown (>25%)."""
     trades = []
-    equity = 0.0
-    for i in range(120):
+    for idx in range(120):
         entry = 100.0
         # Alternating wins and big losses to create drawdown
-        if i < 30:
+        if idx < 30:
             exit_price = entry + 5.0  # early wins
-        elif i < 60:
+        elif idx < 60:
             exit_price = entry - 8.0  # big losses
         else:
             exit_price = entry + 1.0  # small wins
@@ -490,13 +485,13 @@ class TestEdgeCases:
 
     def test_harness_provenance_immutable(self, sample_provenance) -> None:
         """HarnessProvenance is frozen and cannot be modified."""
-        with pytest.raises(Exception):  # frozen dataclass raises on setattr
+        with pytest.raises(AttributeError):  # frozen dataclass raises on setattr
             sample_provenance.strategy_identifier = "changed"  # type: ignore
 
     def test_evaluation_config_immutable(self) -> None:
         """EvaluationConfig is frozen and cannot be modified."""
         config = EvaluationConfig()
-        with pytest.raises(Exception):
+        with pytest.raises(AttributeError):
             config.min_trades = 999  # type: ignore
 
     def test_float_inf_profit_factor(self, sample_provenance) -> None:
