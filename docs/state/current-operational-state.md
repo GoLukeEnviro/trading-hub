@@ -13,6 +13,7 @@
 > repository owner after installer bug-fix arc).
 >
 > **Last updated:** 2026-07-14 post-roadmap-tick (PR #586 merged — header refresh to reference PR #586; no substantive state change; R5B Gate 1 remains BLOCKED pending `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE`; no runtime mutation).
+> **SAFETY CORRECTION 2026-07-14:** Fresh agent0 evidence proves the planned canonical-role-only freeze is IMPOSSIBLE with the current fleet-wide kill switch. Agent0 `trading-freqai-rebel-1` is RUNNING and shares the fleet-wide writable kill-switch mount (`/home/hermes/projects/trading/freqtrade/shared` → `/freqtrade/shared` rw=true; `kill_switch.json` mode=NORMAL; `freqtrade/shared/kill_switch.py` is fleet-wide). Gate 1 remains BLOCKED/NOT APPROVABLE until Luke explicitly selects one of three decision paths. No role-scoped freeze exists. R6/R7 remain blocked; runtime_mutation=NONE.
 > **Previous update:** 2026-07-14 post-roadmap-tick (PR #585 merged — Legacy Rainbow credential isolation RESOLVED PASS; Issue #583 closed; R5B Gate 1 now has 0 remaining UNVERIFIED items — both freqai-rebel config and Rainbow credential isolation resolved; Gate 1 remains BLOCKED pending explicit `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker; no runtime mutation; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved).
 > **Earlier update:** 2026-07-14 post-roadmap-tick (PR #585 merged — Legacy Rainbow credential isolation resolved)
 > **Earlier update:** 2026-07-14 post-roadmap-correction (PR #581 merged — R5B-A1 roadmap alignment, substantive body update)
@@ -185,14 +186,23 @@ There is no role-scoped or bot-scoped freeze in the current architecture. A `HAL
 - No valid exchange credentials in repo (placeholders only: `CHANGE_ME_LOCAL_ONLY_KEY` / `CHANGE_ME_LOCAL_ONLY_SECRET`)
 - Profile-gated in HermesTrader compose (`profiles: ["rebel"]`) — not part of default stack
 - R3 classified `NOT_REPRODUCIBLE` (1.2 GB trained FreqAI models not in repo; FreqAI deps + `directory_operations.py` patch missing; base unpinned)
-- No running container on HermesTrader
+- **No running container on HermesTrader**
 - Full evidence: Issue #580 comment 2026-07-14
 
-Rebel remains **dormant/out-of-scope/start-prohibited for Gate 1** pending explicit Luke decision. No rebel start, configuration, or runtime action is authorized for Gate 1 unless Luke explicitly decides otherwise in the Gate 1 approval marker.
+**SAFETY CORRECTION 2026-07-14 — Agent0 Rebel is RUNNING:** Fresh read-only evidence (2026-07-14) proves `trading-freqai-rebel-1` is RUNNING on agent0 (`Up 4 days`). All four agent0 trading containers (`trading-freqtrade-freqforge-1`, `trading-freqtrade-freqforge-canary-1`, `trading-freqtrade-regime-hybrid-1`, `trading-freqai-rebel-1`) mount the same host directory `/home/hermes/projects/trading/freqtrade/shared` to `/freqtrade/shared` with `rw=true`. The shared kill-switch file at that mount reports `mode=NORMAL`. The kill switch at `freqtrade/shared/kill_switch.py` is **fleet-wide** — no role-scoped or bot-scoped freeze exists.
+
+**Consequence:** The planned Gate 1 freeze of "canonical agent0 roles only" is IMPOSSIBLE with the current kill-switch implementation. Setting `HALT_NEW` would affect the running Rebel bot on agent0, contradicting the Gate 1 boundary that Rebel is dormant/out-of-scope.
+
+**Required Luke decision before any A2 marker:** Luke must explicitly select ONE of three paths:
+1. **Fleet-wide freeze:** Include the running Rebel in the approved `HALT_NEW` impact scope for the bounded Gate 1 window; OR
+2. **Scoped-freeze architecture:** Implement and prove a separate role-scoped/bot-scoped freeze mechanism before Gate 1; OR
+3. **Rebel lifecycle gate first:** Separately approve and execute a reversible Rebel stop/isolation gate before Gate 1, with its own evidence and rollback.
+
+Until one path is explicitly selected and documented, no `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker may be issued. Rebel remains start-prohibited for Gate 1. No rebel start, configuration, or runtime action is authorized for Gate 1 unless Luke explicitly decides otherwise in the Gate 1 approval marker.
 
 ---
-**R5B Gate 1 (Issue #580) — BLOCKED:** Preflight evidence shows **0 remaining `UNVERIFIED` items** — both freqai-rebel configuration (RESOLVED PASS per PR #584) and Legacy Rainbow credential isolation (RESOLVED PASS per Issue #583) are now resolved. Gate 1 remains BLOCKED pending explicit `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker from Luke. The central `freqtrade/shared/kill_switch.py` is **fleet-wide** — a freeze affects all four bots; role-scoped freeze would require a separate architectural decision and is not in scope for Gate 1.
 
+**R5B Gate 1 (Issue #580) — BLOCKED:** Preflight evidence showed **0 remaining `UNVERIFIED` items** for the original credential/config questions (both freqai-rebel config and Legacy Rainbow credential isolation RESOLVED PASS). **HOWEVER**, fresh agent0 evidence proves a separate execution-contract contradiction: the running agent0 Rebel shares the fleet-wide kill switch, making the planned canonical-role-only freeze impossible. Gate 1 remains BLOCKED/NOT APPROVABLE pending Luke's explicit decision among the three paths above. No role-scoped freeze exists in current architecture. R6/R7 remain blocked; runtime_mutation=NONE.
 **R7 track split (Issue #423 / #423 Track R7):**
 - **ai4trade-bot #105** — Shadow validation (read-only evidence collection)
 - **trading-hub #496** — Attributed dry-run trading measurement (Rainbow R7)
