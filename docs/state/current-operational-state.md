@@ -127,7 +127,7 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 The canonical HermesTrader dry-run fleet is persistently deployed and parity-proven (5/5 health, `dry_run=true` validated, Rainbow read-only, kill-switch cycle proven, secret scan clean). ai4trade runtime is locked to `6e850c8f8ba1d8a0ad45250f130280e4171c001d`.
 
-**Next Hermes action:** R5B canonical dry-run cutover Gate 1 (A2). Issue #580 is the active next R5B A2 preflight decision. Gate 1 requires the separate `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` approval; no host mutation is currently authorized. **freqai-rebel config status RESOLVED (PASS)** — **Legacy Rainbow credential isolation RESOLVED (PASS)** (Issue #583). R5B Gate 1 now has 0 remaining UNVERIFIED items. R5B planning documented in PR #575 / `docs/reports/r5b-cutover-gate-planning-2026-07-13.md` (A1); no data migration and no runtime action.
+**Next Hermes action:** R5B canonical dry-run cutover Gate 1 (A2). Issue #580 is the active next R5B A2 preflight decision. **Gate 1 is BLOCKED/NOT APPROVABLE** per fresh agent0 evidence (PR #588, merge `6e29263`). Agent0 `trading-freqai-rebel-1` is RUNNING (Up 4 days) with a shared rw mount of the fleet-wide kill switch — a canonical-role-only freeze is impossible. Luke must select one of three decision paths before any `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker may be issued. R5B planning documented in PR #575 / `docs/reports/r5b-cutover-gate-planning-2026-07-13.md` (A1); no data migration and no runtime action.
 
 **Issue #561:** SUPERSEDED/CLOSED — R5B planning complete, superseded by #580 for Gate 1 preflight.
 
