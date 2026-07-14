@@ -10,12 +10,20 @@ from .dynamic_exits import (
     calculate_dynamic_exit,
     calculate_dynamic_exit_from_row,
 )
+from .fleet_drawdown_guard import (
+    DrawdownEvaluation,
+    DrawdownState,
+    FleetDrawdownGuard,
+)
 
 __all__ = [
     "DYNAMIC_EXIT_MODES",
     "DYNAMIC_EXIT_QUANTUM",
     "DYNAMIC_EXIT_STATUSES",
+    "DrawdownEvaluation",
+    "DrawdownState",
     "DynamicExitResult",
+    "FleetDrawdownGuard",
     "calculate_dynamic_exit",
     "calculate_dynamic_exit_from_row",
 ]
