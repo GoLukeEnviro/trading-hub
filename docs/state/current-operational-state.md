@@ -13,8 +13,8 @@
 > repository owner after installer bug-fix arc).
 >
 > **Last updated:** 2026-07-14 post-roadmap-tick (PR #589 merged — R5B Gate 1 state reconciled after PR #588 safety correction; Gate 1 remains BLOCKED/NOT APPROVABLE pending Luke's decision on three paths; no runtime mutation; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved).
-> **Previous update:** 2026-07-14 — SAFETY CORRECTION: Fresh agent0 evidence proves the planned canonical-role-only freeze is IMPOSSIBLE with the current fleet-wide kill switch (PR #588).
-> **Earlier update:** 2026-07-14 post-roadmap-tick (PR #585 merged — Legacy Rainbow credential isolation resolved)
+> **Last updated:** 2026-07-14 post-roadmap-tick (PR #591 merged — simplified target architecture roadmap v4; PR #591 was the only open roadmap PR; merged with owner COMMENTED review and editorial suggestions preserved in downstream issues #592–#605; no runtime mutation; R5B Gate 1 remains BLOCKED pending `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE`; C4 ROLLBACK_RECOMMENDED preserved; Codex Cloud issues #592–#606 explicitly non-authoritative until #600 ADR gate accepted).
+> **Previous update:** 2026-07-14 post-roadmap-tick (PR #585 merged — Legacy Rainbow credential isolation RESOLVED PASS; Issue #583 closed; R5B Gate 1 now has 0 remaining UNVERIFIED items)
 > **Earlier update:** 2026-07-14 post-roadmap-correction (PR #581 merged — R5B-A1 roadmap alignment, substantive body update)
 > **Earlier update:** 2026-07-13 post-single-writer-containment (`HERMES_SINGLE_WRITER_GREEN`, PRs #564–#570 closed, enforced RepoWriterLock + IsolatedWorktree contract, no runtime mutation)
 
