@@ -5,6 +5,18 @@
 **PR:** #613
 **Execution class:** A1 — Repository-only (no runtime mutation)
 
+## Corrective status
+
+The #613 scaffold was accepted as a useful repository foundation, but its
+Phase-0A acceptance was incomplete. Issue #594 was reopened without reverting
+the scaffold. The corrective completion replaces the list-of-dicts evaluation
+entry point with the manifest-bound `EvaluationBundleV1` contract and records
+the full acceptance evidence in
+`docs/reports/phase-0a-corrective-completion-2026-07-14.md`.
+
+Until that corrective change is merged, #604 and all downstream Gate-0/Phase-1
+work remain blocked.
+
 ## Summary
 
 Implemented a reproducible, repository-only edge-evidence evaluation harness
@@ -75,6 +87,7 @@ cost and data-quality assumptions.
 
 ## Next steps
 
+- Complete corrective issue #594 before any downstream research work
 - Issue #604 — Select one core strategy and freeze evaluation inputs
 - Issue #595 — Fleet HWM and daily drawdown guard
 - Issue #596 — Bot-level HALT_BOT circuit breaker

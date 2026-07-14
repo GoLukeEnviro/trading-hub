@@ -7,6 +7,7 @@ dependency needed.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import List
 
@@ -31,16 +32,20 @@ class CostConfig:
     leverage: float = 1.0
 
     def __post_init__(self) -> None:
-        """Validate rates are non-negative."""
+        """Validate physical rates while preserving signed funding."""
         for name, val in {
             "entry_fee_rate": self.entry_fee_rate,
             "exit_fee_rate": self.exit_fee_rate,
             "slippage_rate": self.slippage_rate,
-            "funding_rate_per_8h": self.funding_rate_per_8h,
         }.items():
-            if val < 0:
+            if not math.isfinite(val) or val < 0:
                 raise ValueError(f"{name} must be >= 0, got {val}")
-        if self.leverage <= 0:
+        if not math.isfinite(self.funding_rate_per_8h):
+            raise ValueError(
+                "funding_rate_per_8h must be finite, got "
+                f"{self.funding_rate_per_8h}"
+            )
+        if not math.isfinite(self.leverage) or self.leverage <= 0:
             raise ValueError(f"leverage must be > 0, got {self.leverage}")
 
 
@@ -82,6 +87,22 @@ class TradeInput:
     side: str  # "long" or "short"
     # Held time in hours (for funding accrual)
     hold_hours: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Reject non-physical trades instead of silently inverting them."""
+        for name, value in {
+            "entry_price": self.entry_price,
+            "exit_price": self.exit_price,
+            "quantity": self.quantity,
+        }.items():
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be finite and > 0, got {value}")
+        if self.side not in {"long", "short"}:
+            raise ValueError(f"side must be 'long' or 'short', got {self.side!r}")
+        if not math.isfinite(self.hold_hours) or self.hold_hours < 0:
+            raise ValueError(
+                f"hold_hours must be finite and >= 0, got {self.hold_hours}"
+            )
 
 
 @dataclass
