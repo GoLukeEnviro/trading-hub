@@ -72,7 +72,7 @@ Executing the planned Step 1.4 ("Scoped kill switch → `HALT_NEW`") would:
 
 ### Path 2: Scoped-Freeze Architecture (Separate Implementation)
 - **Scope:** Keep Rebel out of Gate 1 freeze; implement genuine role-scoped/bot-scoped freeze before Gate 1
-- **Requirements:** 
+- **Requirements:**
   1. New ADR defining scope, implementation, and safety boundaries
   2. Modify `kill_switch.py` and all bot entry points to respect scope
   3. Prove role-scoped behavior in dry-run without affecting other bots
