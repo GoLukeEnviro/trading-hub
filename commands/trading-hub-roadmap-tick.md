@@ -6,10 +6,9 @@
 
 ## Purpose
 
-Drive the autonomous issue-driven roadmap loop from the canonical task
-sequence (H1 → H2 → H3A → H3B → R5A). Each tick selects the first
-truly unblocked task and executes at most one task, one branch, one PR
-and one report.
+Drive one issue selected by the canonical roadmap tracker (#605). Each run
+executes at most one task, one branch, one PR and one report, then stops at the
+human merge boundary.
 
 ## Inputs (read-only)
 
@@ -31,7 +30,9 @@ non-authoritative workspace orientation. Its absence is not an error.
 3. Identify the first unblocked task in the canonical sequence.
 4. Verify all dependency gates are GREEN.
 5. Execute one GOAL, one branch, one PR and one report.
-6. After merge: reconcile issue, update state, close issue.
+6. Run the read-only merge guard against the expected issue, head SHA and
+   tracker selection. Stop at `READY_FOR_HUMAN_MERGE`.
+7. After Luke merges manually, reconcile issue and state in a later run.
 
 ## Output
 
@@ -60,8 +61,8 @@ Exactly one of:
 - `BLOCKED_BY_MISSING_A3_APPROVAL`
 - `BLOCKED_BY_RUNTIME_CLIENT_NOT_LOAD_BEARING`
 - `READY_FOR_REVIEW`
-- `READY_FOR_MERGE`
-- `MERGED_AND_RECONCILED`
+- `READY_FOR_HUMAN_MERGE`
+- `HUMAN_MERGE_RECONCILED`
 
 ## Stop conditions
 
@@ -71,6 +72,10 @@ Exactly one of:
 - `WRITER_IDENTITY_MISMATCH` — the process identity or canonical
   repo/lock/worktree namespace is not the Hermes production writer
   contract. Stop before creating lock or worktree state.
+- `LOCK_FILE_MISSING` — the root-protected, preprovisioned lock is absent.
+- `LOCK_OWNERSHIP_INVALID` — lock type, ownership, mode or access is invalid.
+- `LOCK_PATH_REPLACED` — the held FD and canonical path no longer identify
+  the same device/inode. Stop every repository mutation.
 - Another active roadmap PR overlaps the selected scope
 - Dirty or ambiguous working tree
 - Contradictory runtime evidence cannot be resolved read-only
@@ -86,16 +91,18 @@ This command runs under the enforced single-writer contract
 
 Before step 1, the production preflight requires effective UID `10000`,
 passwd user `hermes`, canonical repo `/workspace/projects/trading-hub`,
-lock `/opt/data/state/hermes-repo-writer.lock`, and worktree parent
-`/opt/data/projects/trading-hub-worktrees`. The lock and worktree parents
-must be owned by `10000:10000` and writable. A mismatch fails closed with
-`WRITER_IDENTITY_MISMATCH` before writer state is created. Host paths such
-as `/opt/data/projects/trading-hub` are invalid. `test_mode=True` is
-exclusively for hermetic tests and is never valid for a roadmap tick.
+lock `/opt/data/state/repo-writer/hermes-repo-writer.lock`, and worktree
+parent `/opt/data/projects/trading-hub-worktrees`. The lock parent must be
+`root:root` and not writable by UID 10000; the preprovisioned file must be a
+regular `10000:10000` mode-`0600` file. Production never uses `O_CREAT`. The
+worktree parent remains `10000:10000` and writable. A mismatch fails closed
+before writer state is created. Host paths such as
+`/opt/data/projects/trading-hub` are invalid. `test_mode=True` is exclusively
+for hermetic tests and is never valid for a roadmap tick.
 
 1. Acquire the global `RepoWriterLock`
    (`orchestrator/scripts/repo_writer.RepoWriterLock`) at
-   `/opt/data/state/hermes-repo-writer.lock`.
+   `/opt/data/state/repo-writer/hermes-repo-writer.lock`.
    - Non-blocking: fails immediately with
      `BLOCKED_BY_ACTIVE_REPO_WRITER` when another session holds the lock.
    - Do not override this failure — STOP and report the holder.
@@ -120,16 +127,32 @@ exclusively for hermetic tests and is never valid for a roadmap tick.
 
 6. Execute the task entirely inside the worktree.
 
-7. Commit, push, open exactly one PR.
+7. Call `assert_held()` immediately before worktree, commit, push and PR
+   mutations. Commit, push and open exactly one PR.
 
-8. After merge or formal abort, remove the worktree
-   (`git worktree remove` / `git worktree prune`).
+8. Run `orchestrator/scripts/roadmap_merge_guard.py` with the PR number,
+   expected issue, exact head SHA and #605 selection. Red or missing
+   `main-gate`/`offline-smoke`, head drift, blocked state, unresolved threads,
+   changed order or a formal governance block must stop. Agents never invoke
+   merge and end only at `READY_FOR_HUMAN_MERGE`.
+   - In the Hermes container, first run `unset GH_TOKEN` and then
+     `gh auth status`. A stale environment override must never shadow the
+     persistent `/opt/data/.config/gh/hosts.yml` login.
+   - Never print, copy or persist token values. Missing authentication is
+     `GITHUB_FACT_COLLECTION_FAILED` and a hard stop.
 
-9. Release the global writer lock.
+9. After human merge or formal abort, remove only the explicitly named
+   worktree with `git worktree remove`. Never run a broad prune.
+
+10. Release the global writer lock.
 
 **Never:** switch branches in the shared canonical checkout, commit
 directly in the shared checkout, use `git add .`, `git reset --hard`,
 `git clean`, `git push -f`, or rewrite history.
+
+**Never:** merge a PR from an agent, tick, Hermes writer, root session or
+roadmap controller. Human-only remains binding until a separate controller
+identity and merge-check provenance are proven and explicitly activated.
 
 See `orchestrator/scripts/repo_writer.py` for the full API
 (`RepoWriterLock`, `IsolatedWorktree`, `RepoWriterError`).

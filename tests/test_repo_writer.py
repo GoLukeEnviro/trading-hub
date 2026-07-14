@@ -14,18 +14,14 @@ Run with::
 
 from __future__ import annotations
 
-import errno
-import fcntl
 import json
 import os
-import shutil
 import socket
 import subprocess
 import sys
 import textwrap
 import time
 from pathlib import Path
-from typing import Iterator
 
 import pytest
 
@@ -36,22 +32,19 @@ if str(_REPO_ROOT) not in sys.path:
 
 import orchestrator.scripts.repo_writer as repo_writer  # noqa: E402
 from orchestrator.scripts.repo_writer import (  # noqa: E402
-    BRANCH_NAME_PATTERN,
-    DEFAULT_BASE_REF,
     DEFAULT_REPO_ROOT,
     DEFAULT_WORKTREE_PARENT,
     LOCK_FILE_PATH,
-    PERSISTENT_STATE_DIR,
-    RepoWriterError,
-    RepoWriterLock,
     IsolatedWorktree,
     LockHolder,
+    RepoWriterError,
+    RepoWriterLock,
 )
-
 
 # ----------------------------------------------------------------------
 # Fixtures
 # ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def tmp_lock_path(tmp_path: Path) -> Path:
@@ -123,6 +116,7 @@ def sandbox_worktree_parent(tmp_path: Path) -> Path:
 # LockHolder
 # ----------------------------------------------------------------------
 
+
 class TestLockHolder:
     def test_roundtrip_json(self) -> None:
         h = LockHolder(
@@ -150,6 +144,7 @@ class TestLockHolder:
 # ----------------------------------------------------------------------
 # RepoWriterLock — basic acquire / release
 # ----------------------------------------------------------------------
+
 
 class TestRepoWriterLockBasic:
     def test_acquire_and_release(self, lock: RepoWriterLock) -> None:
@@ -184,10 +179,9 @@ class TestRepoWriterLockBasic:
         assert not lock.is_locked()
 
     def test_context_manager_releases_on_exception(self, lock: RepoWriterLock) -> None:
-        with pytest.raises(RuntimeError, match="boom"):
-            with lock as ctx:
-                ctx.acquire(branch="ops/ctx-exc", session_id="s3")
-                raise RuntimeError("boom")
+        with pytest.raises(RuntimeError, match="boom"), lock as ctx:
+            ctx.acquire(branch="ops/ctx-exc", session_id="s3")
+            raise RuntimeError("boom")
         assert not lock.is_locked()
 
     def test_codex_cloud_branch_prefix_is_allowed(self, lock: RepoWriterLock) -> None:
@@ -205,6 +199,7 @@ class TestRepoWriterLockBasic:
 # ----------------------------------------------------------------------
 # RepoWriterLock — non-blocking contention
 # ----------------------------------------------------------------------
+
 
 class TestRepoWriterLockContention:
     def test_second_acquire_blocks(self, lock: RepoWriterLock) -> None:
@@ -228,7 +223,12 @@ class TestRepoWriterLockContention:
                 import sys
                 sys.path.insert(0, {str(_REPO_ROOT)!r})
                 from orchestrator.scripts.repo_writer import RepoWriterLock, RepoWriterError
-                lock = RepoWriterLock(lock_path={str(lock.lock_path)!r}, stale_seconds=60, enforce_sandbox=False, test_mode=True)
+                lock = RepoWriterLock(
+                    lock_path={str(lock.lock_path)!r},
+                    stale_seconds=60,
+                    enforce_sandbox=False,
+                    test_mode=True,
+                )
                 try:
                     lock.acquire(branch="ops/child", session_id="child")
                     print("ACQUIRED")
@@ -255,7 +255,12 @@ class TestRepoWriterLockContention:
             import sys
             sys.path.insert(0, {str(_REPO_ROOT)!r})
             from orchestrator.scripts.repo_writer import RepoWriterLock
-            lock = RepoWriterLock(lock_path={str(lock.lock_path)!r}, stale_seconds=60, enforce_sandbox=False, test_mode=True)
+            lock = RepoWriterLock(
+                lock_path={str(lock.lock_path)!r},
+                stale_seconds=60,
+                enforce_sandbox=False,
+                test_mode=True,
+            )
             lock.acquire(branch="ops/child2", session_id="child2")
             print("ACQUIRED")
             lock.release()
@@ -275,10 +280,9 @@ class TestRepoWriterLockContention:
 # RepoWriterLock — stale handling
 # ----------------------------------------------------------------------
 
+
 class TestRepoWriterLockStale:
-    def test_stale_lock_with_dead_pid_is_auto_cleaned(
-        self, lock: RepoWriterLock
-    ) -> None:
+    def test_stale_lock_with_dead_pid_is_auto_cleaned(self, lock: RepoWriterLock) -> None:
         # Write a holder with an obviously dead PID and an old timestamp.
         old_holder = LockHolder(
             pid=2_000_000,  # unused PID
@@ -323,9 +327,7 @@ class TestRepoWriterLockStale:
         assert holder.session_id == "forced-session"
         lock.release()
 
-    def test_fresh_lock_with_dead_pid_auto_cleans(
-        self, tmp_lock_path: Path
-    ) -> None:
+    def test_fresh_lock_with_dead_pid_auto_cleans(self, tmp_lock_path: Path) -> None:
         # Holder PID is dead but the holder's started_at is recent
         # (e.g. kernel reused the PID). With stale_seconds=0, even
         # a fresh timestamp is stale, so the next acquirer cleans
@@ -350,9 +352,7 @@ class TestRepoWriterLockStale:
         assert holder.session_id == "x"
         lock.release()
 
-    def test_malformed_lock_file_treated_as_stale(
-        self, lock: RepoWriterLock
-    ) -> None:
+    def test_malformed_lock_file_treated_as_stale(self, lock: RepoWriterLock) -> None:
         lock.lock_path.write_text("this is not json")
         # Malformed JSON is treated as "no holder" by _read_holder
         # (returns None), so a fresh acquire will succeed.
@@ -365,15 +365,14 @@ class TestRepoWriterLockStale:
 # RepoWriterLock — input validation
 # ----------------------------------------------------------------------
 
+
 class TestRepoWriterLockInputValidation:
     def test_invalid_branch_name_rejected(self, lock: RepoWriterLock) -> None:
         with pytest.raises(RepoWriterError) as ei:
             lock.acquire(branch="not-a-valid-branch", session_id="s")
         assert ei.value.code == "INVALID_BRANCH_NAME"
 
-    def test_branch_name_with_path_traversal_rejected(
-        self, lock: RepoWriterLock
-    ) -> None:
+    def test_branch_name_with_path_traversal_rejected(self, lock: RepoWriterLock) -> None:
         with pytest.raises(RepoWriterError) as ei:
             lock.acquire(branch="feat/../etc/passwd", session_id="s")
         assert ei.value.code == "INVALID_BRANCH_NAME"
@@ -383,9 +382,7 @@ class TestRepoWriterLockInputValidation:
             lock.acquire(branch="ops/x", session_id="")
         assert ei.value.code == "INVALID_SESSION_ID"
 
-    def test_main_branch_itself_rejected(
-        self, lock: RepoWriterLock
-    ) -> None:
+    def test_main_branch_itself_rejected(self, lock: RepoWriterLock) -> None:
         # ``main`` does not match the (feat|fix|docs|ops|...)/... pattern.
         with pytest.raises(RepoWriterError) as ei:
             lock.acquire(branch="main", session_id="s")
@@ -396,10 +393,9 @@ class TestRepoWriterLockInputValidation:
 # RepoWriterLock — sandbox
 # ----------------------------------------------------------------------
 
+
 class TestRepoWriterLockSandbox:
-    def test_lock_path_outside_sandbox_rejected(
-        self, tmp_path: Path
-    ) -> None:
+    def test_lock_path_outside_sandbox_rejected(self, tmp_path: Path) -> None:
         # When enforce_sandbox=True (production default), a lock
         # path that escapes /opt/data/state/ is rejected.
         with pytest.raises(RepoWriterError) as ei:
@@ -410,21 +406,20 @@ class TestRepoWriterLockSandbox:
             )
         assert ei.value.code == "LOCK_PATH_OUTSIDE_SANDBOX"
 
-    def test_lock_path_inside_sandbox_accepted(
-        self, valid_production_guard: None
-    ) -> None:
+    def test_lock_path_inside_sandbox_accepted(self, valid_production_guard: None) -> None:
         # The production lock path lives at
         # /opt/data/state/hermes-repo-writer.lock, which IS inside
         # the sandbox. The default constructor must succeed.
         # (We do not actually acquire the lock here — just construct
         # the object — to keep the test hermetic.)
-        lock = RepoWriterLock()  # noqa: F841
+        lock = RepoWriterLock()
         assert lock.lock_path == LOCK_FILE_PATH
 
 
 # ----------------------------------------------------------------------
 # Production writer identity / mount guard
 # ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def valid_production_guard(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -434,18 +429,28 @@ def valid_production_guard(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda: (10000, "hermes"),
         raising=False,
     )
+
+    def parent_status(path: Path) -> tuple[int, int, bool, bool]:
+        if path == repo_writer.LOCK_FILE_PATH.parent:
+            return (0, 0, True, False)
+        return (10000, 10000, True, True)
+
     monkeypatch.setattr(
         repo_writer,
         "_writer_parent_status",
-        lambda _path: (10000, 10000, True, True),
+        parent_status,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        repo_writer,
+        "_lock_file_status",
+        lambda _path: (10000, 10000, True, 0o600, True),
         raising=False,
     )
 
 
 class TestProductionWriterEnvironmentGuard:
-    def test_root_identity_is_rejected(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_root_identity_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             repo_writer,
             "_current_writer_identity",
@@ -456,9 +461,7 @@ class TestProductionWriterEnvironmentGuard:
             RepoWriterLock()
         assert ei.value.code == "WRITER_IDENTITY_MISMATCH"
 
-    def test_wrong_username_is_rejected(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_wrong_username_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             repo_writer,
             "_current_writer_identity",
@@ -480,9 +483,7 @@ class TestProductionWriterEnvironmentGuard:
         assert ei.value.code == "WRITER_IDENTITY_MISMATCH"
         assert not missing_parent.exists()
 
-    def test_host_repo_path_is_rejected(
-        self, valid_production_guard: None
-    ) -> None:
+    def test_host_repo_path_is_rejected(self, valid_production_guard: None) -> None:
         with pytest.raises(RepoWriterError) as ei:
             IsolatedWorktree(
                 repo_root=Path("/opt/data/projects/trading-hub"),
@@ -492,9 +493,7 @@ class TestProductionWriterEnvironmentGuard:
             )
         assert ei.value.code == "WRITER_IDENTITY_MISMATCH"
 
-    def test_wrong_worktree_parent_is_rejected(
-        self, valid_production_guard: None
-    ) -> None:
+    def test_wrong_worktree_parent_is_rejected(self, valid_production_guard: None) -> None:
         with pytest.raises(RepoWriterError) as ei:
             IsolatedWorktree(
                 repo_root=DEFAULT_REPO_ROOT,
@@ -544,16 +543,12 @@ class TestProductionWriterEnvironmentGuard:
             RepoWriterLock()
         assert ei.value.code == "WRITER_IDENTITY_MISMATCH"
 
-    def test_sandbox_opt_out_requires_explicit_test_mode(
-        self, tmp_lock_path: Path
-    ) -> None:
+    def test_sandbox_opt_out_requires_explicit_test_mode(self, tmp_lock_path: Path) -> None:
         with pytest.raises(RepoWriterError) as ei:
             RepoWriterLock(lock_path=tmp_lock_path, enforce_sandbox=False)
         assert ei.value.code == "WRITER_IDENTITY_MISMATCH"
 
-    def test_explicit_test_mode_allows_temporary_paths(
-        self, tmp_lock_path: Path
-    ) -> None:
+    def test_explicit_test_mode_allows_temporary_paths(self, tmp_lock_path: Path) -> None:
         lock = RepoWriterLock(
             lock_path=tmp_lock_path,
             enforce_sandbox=False,
@@ -566,10 +561,9 @@ class TestProductionWriterEnvironmentGuard:
 # IsolatedWorktree — input validation
 # ----------------------------------------------------------------------
 
+
 class TestIsolatedWorktreeInputValidation:
-    def test_invalid_branch_rejected(
-        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
-    ) -> None:
+    def test_invalid_branch_rejected(self, sandbox_git_repo: Path, sandbox_worktree_parent: Path) -> None:
         with pytest.raises(RepoWriterError) as ei:
             IsolatedWorktree(
                 repo_root=sandbox_git_repo,
@@ -581,9 +575,7 @@ class TestIsolatedWorktreeInputValidation:
             )
         assert ei.value.code == "INVALID_BRANCH_NAME"
 
-    def test_codex_cloud_branch_prefix_is_allowed(
-        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
-    ) -> None:
+    def test_codex_cloud_branch_prefix_is_allowed(self, sandbox_git_repo: Path, sandbox_worktree_parent: Path) -> None:
         wt = IsolatedWorktree(
             repo_root=sandbox_git_repo,
             base_ref="origin/main",
@@ -594,9 +586,7 @@ class TestIsolatedWorktreeInputValidation:
         )
         assert wt.new_branch == "codex/a1-writer-contract2026-07-14"
 
-    def test_empty_base_ref_rejected(
-        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
-    ) -> None:
+    def test_empty_base_ref_rejected(self, sandbox_git_repo: Path, sandbox_worktree_parent: Path) -> None:
         with pytest.raises(RepoWriterError) as ei:
             IsolatedWorktree(
                 repo_root=sandbox_git_repo,
@@ -613,10 +603,9 @@ class TestIsolatedWorktreeInputValidation:
 # IsolatedWorktree — sandbox enforcement
 # ----------------------------------------------------------------------
 
+
 class TestIsolatedWorktreeSandbox:
-    def test_worktree_parent_inside_shared_checkout_rejected(
-        self, sandbox_git_repo: Path
-    ) -> None:
+    def test_worktree_parent_inside_shared_checkout_rejected(self, sandbox_git_repo: Path) -> None:
         with pytest.raises(RepoWriterError) as ei:
             IsolatedWorktree(
                 repo_root=sandbox_git_repo,
@@ -627,9 +616,7 @@ class TestIsolatedWorktreeSandbox:
             )
         assert ei.value.code == "WORKTREE_PATH_OUTSIDE_SANDBOX"
 
-    def test_worktree_parent_outside_opt_data_rejected(
-        self, sandbox_git_repo: Path
-    ) -> None:
+    def test_worktree_parent_outside_opt_data_rejected(self, sandbox_git_repo: Path) -> None:
         with pytest.raises(RepoWriterError) as ei:
             IsolatedWorktree(
                 repo_root=sandbox_git_repo,
@@ -645,10 +632,9 @@ class TestIsolatedWorktreeSandbox:
 # IsolatedWorktree — clean shared checkout verification
 # ----------------------------------------------------------------------
 
+
 class TestIsolatedWorktreeSharedCheckoutGuard:
-    def test_shared_checkout_dirty_rejected(
-        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
-    ) -> None:
+    def test_shared_checkout_dirty_rejected(self, sandbox_git_repo: Path, sandbox_worktree_parent: Path) -> None:
         (sandbox_git_repo / "dirty.txt").write_text("uncommitted")
         wt = IsolatedWorktree(
             repo_root=sandbox_git_repo,
@@ -702,10 +688,9 @@ class TestIsolatedWorktreeSharedCheckoutGuard:
 # IsolatedWorktree — happy path
 # ----------------------------------------------------------------------
 
+
 class TestIsolatedWorktreeHappyPath:
-    def test_create_and_clean_verify(
-        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
-    ) -> None:
+    def test_create_and_clean_verify(self, sandbox_git_repo: Path, sandbox_worktree_parent: Path) -> None:
         wt = IsolatedWorktree(
             repo_root=sandbox_git_repo,
             base_ref="origin/main",
@@ -740,9 +725,7 @@ class TestIsolatedWorktreeHappyPath:
         wt.remove()
         assert not path.exists()
 
-    def test_create_codex_cloud_branch(
-        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
-    ) -> None:
+    def test_create_codex_cloud_branch(self, sandbox_git_repo: Path, sandbox_worktree_parent: Path) -> None:
         wt = IsolatedWorktree(
             repo_root=sandbox_git_repo,
             base_ref="origin/main",
@@ -762,9 +745,7 @@ class TestIsolatedWorktreeHappyPath:
         assert head_branch == "codex/a1-writer-contract2026-07-14"
         wt.remove()
 
-    def test_create_uses_pinned_sha(
-        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
-    ) -> None:
+    def test_create_uses_pinned_sha(self, sandbox_git_repo: Path, sandbox_worktree_parent: Path) -> None:
         # Get the SHA that origin/main points to.
         sha = subprocess.run(
             ["git", "rev-parse", "origin/main"],
@@ -792,9 +773,7 @@ class TestIsolatedWorktreeHappyPath:
         assert head_sha == sha
         wt.remove()
 
-    def test_existing_worktree_path_rejected(
-        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
-    ) -> None:
+    def test_existing_worktree_path_rejected(self, sandbox_git_repo: Path, sandbox_worktree_parent: Path) -> None:
         # Pre-create the worktree path with a file.
         wt_name = "ops__already-exists"
         (sandbox_worktree_parent / wt_name).mkdir()
@@ -810,9 +789,7 @@ class TestIsolatedWorktreeHappyPath:
             wt.create()
         assert ei.value.code == "WORKTREE_PATH_EXISTS"
 
-    def test_remove_idempotent(
-        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
-    ) -> None:
+    def test_remove_idempotent(self, sandbox_git_repo: Path, sandbox_worktree_parent: Path) -> None:
         wt = IsolatedWorktree(
             repo_root=sandbox_git_repo,
             base_ref="origin/main",
@@ -830,6 +807,7 @@ class TestIsolatedWorktreeHappyPath:
 # ----------------------------------------------------------------------
 # End-to-end: lock + worktree together
 # ----------------------------------------------------------------------
+
 
 class TestLockAndWorktreeIntegration:
     def test_full_workflow(

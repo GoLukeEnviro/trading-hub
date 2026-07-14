@@ -2,9 +2,9 @@ name: Main Gate
 
 # Always reports on every pull request targeting main.
 # This ensures branch protection has a required check that never deadlocks
-# unrelated PRs. Path-filtered workflows (offline-smoke, phase2-proposal-gate)
-# are NOT safe to require because they skip on non-matching PRs, leaving a
-# permanent "pending" status that blocks merging.
+# unrelated PRs. Offline smoke now follows the same every-PR rule and is also
+# required. Other path-filtered workflows (for example phase2-proposal-gate)
+# remain unsafe to require because skipped runs leave a permanent pending gate.
 
 on:
   pull_request:
