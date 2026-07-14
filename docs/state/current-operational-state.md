@@ -12,8 +12,9 @@
 > commit `782d2c04f59ee96151581de436b069095d28b019` (ratified by
 > repository owner after installer bug-fix arc).
 >
-> **Last updated:** 2026-07-13 post-single-writer-containment (`HERMES_SINGLE_WRITER_GREEN`, PRs #564–#570 closed, enforced RepoWriterLock + IsolatedWorktree contract, no runtime mutation)
-> **Previous update:** 2026-07-13 post-orchestrator-gateway-restore (`HERMES_ORCHESTRATOR_GATEWAY_GREEN`, s6-svc -u)
+> **Last updated:** 2026-07-14 post-roadmap-correction (R5B-A1 reconciliation complete; Issue #580 active next R5B A2 preflight decision; R5B Gate 1 BLOCKED; no runtime mutation; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; Rebel dormant/out-of-scope for Gate 1; C4 ROLLBACK_RECOMMENDED preserved).
+> **Previous update:** 2026-07-13 post-single-writer-containment (`HERMES_SINGLE_WRITER_GREEN`, PRs #564–#570 closed, enforced RepoWriterLock + IsolatedWorktree contract, no runtime mutation)
+> **Earlier update:** 2026-07-13 post-orchestrator-gateway-restore (`HERMES_ORCHESTRATOR_GATEWAY_GREEN`, s6-svc -u)
 > **Earlier update:** 2026-07-13 after secret-redaction hardening + full proof matrix run
 
 ---
@@ -47,6 +48,8 @@
 | R6 — Candidate quality | ✅ COMPLETED | #501 | `75384e1` |
 | R7A — Greenfield Compose + Rainbow Runtime | ✅ COMPLETED | #524 | `ee767a10` |
 | R7 — Dry-run measurement | ⏳ BLOCKED | — | — |
+| R7 Track 1 — ai4trade-bot #105 Shadow Validation | ⏳ BLOCKED | — | — |
+| R7 Track 2 — trading-hub #496 Attributed Measurement | ⏳ BLOCKED | — | — |
 
 ### Historical note
 
@@ -117,13 +120,15 @@ Momentum is decommissioned and MVS is not deployed. They are historical context 
 
 ## 4. Operational priority for agents
 
-### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A ✅)
+### Active priority: Autonomous roadmap loop (H1 → H2 → H3A → H3B → R5A ✅ → R5B-A1 ✅)
 
-**Current state: R5A COMPLETE (PR #560, merge `80f9733`, Issue #527 closed with R5A_PARITY_GREEN).**
+**Current state: R5A COMPLETE (PR #560, merge `80f9733`, Issue #527 closed with R5A_PARITY_GREEN). R5B-A1 PLANNING COMPLETE (PR #575 merged).**
 
 The canonical HermesTrader dry-run fleet is persistently deployed and parity-proven (5/5 health, `dry_run=true` validated, Rainbow read-only, kill-switch cycle proven, secret scan clean). ai4trade runtime is locked to `6e850c8f8ba1d8a0ad45250f130280e4171c001d`.
 
-**Next Hermes action:** R5B canonical dry-run cutover. **Planning COMPLETE** — the A1 report documents three reproducible roles plus webserver, no data migration, and isolated legacy exceptions. Gate 1 requires the separate `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` approval; no host mutation is currently authorized.
+**Next Hermes action:** R5B canonical dry-run cutover Gate 1 (A2). Issue #580 is the active next R5B A2 preflight decision. Gate 1 requires the separate `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` approval; no host mutation is currently authorized. R5B planning documented in PR #575 / `docs/reports/r5b-cutover-gate-planning-2026-07-13.md` (A1); no data migration and no runtime action.
+
+**Issue #561:** SUPERSEDED/CLOSED — R5B planning complete, superseded by #580 for Gate 1 preflight.
 
 **Blocked pending action (after R5B):**
 - R6 — Permanent reconciliation (systemd)
@@ -139,7 +144,7 @@ The canonical HermesTrader dry-run fleet is persistently deployed and parity-pro
 - canary redeployment
 - Rainbow producer start
 - R7 measurement
-- R5B execution / agent0 mutation
+- **R5B execution / agent0 mutation** (requires separate `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker; Gate 1 is currently BLOCKED per Issue #580 — two UNVERIFIED items: Legacy Rainbow credential isolation and `freqai-rebel` config status)
 - Docker/Compose mutation
 
 **Allowed:**
@@ -159,7 +164,31 @@ The canonical HermesTrader dry-run fleet is persistently deployed and parity-pro
 - R7 measurement → R5B execution + R6 reconciliation + immutable runtime promotion (`30e5ebe`, image digest, smoke gate) approved
 - H3B root-executor client activation → **CLOSED — `H3B_RUNTIME_CONTROL_GREEN`** (PR #559 squash-merged 2026-07-13). Host daemon is healthy, dual-protocol, and reachable from Hermes.
 - R5A HermesTrader deployment → **COMPLETE and `R5A_PARITY_GREEN`** (PR #560 merged at `80f9733`, Issue #527 closed). Canonical dry-run fleet deployed with 5/5 parity; Rainbow storage fixed; kill-switch provisioned. ai4trade locked to `6e850c8`.
-- R5B canonical cutover gate → **Planning COMPLETE (A1)**. No data migration; rebel and `rainbow-live-*` are non-canonical legacy workloads requiring read-only isolation evidence. Execution requires A2 approval (Gate 1: legacy preflight and reversible freeze). No runtime mutation.
+- R5B canonical cutover gate → **Planning COMPLETE (A1)**. No data migration; rebel and `rainbow-live-*` are non-canonical legacy workloads requiring read-only isolation evidence. Execution requires A2 approval (Gate 1: legacy preflight and reversible freeze). **Gate 1 is BLOCKED** per Issue #580 — requires Luke's explicit `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker with command allowlist, UTC time bounds (max 24h), fail-closed rules, and reversible kill-switch-only rollback. No runtime mutation.
+
+### Kill Switch — Fleet-Wide Impact
+
+**The kill switch at `freqtrade/shared/kill_switch.py` is fleet-wide.** Its modes (`NORMAL`, `HALT_NEW`, `EMERGENCY`) apply to ALL four canonical SI-v2 bots simultaneously:
+
+- `freqtrade-freqforge`
+- `freqtrade-freqforge-canary`
+- `freqtrade-regime-hybrid`
+- `freqai-rebel`
+
+There is no role-scoped or bot-scoped freeze in the current architecture. A `HALT_NEW` or `EMERGENCY` mode blocks new entries fleet-wide across all four bots. If role-scoped freeze behavior is desired, it requires a separate architecture decision, implementation, and approval — it does not exist today.
+
+### freqai-rebel — Gate 1 Status
+
+**Rebel is dormant / out-of-scope / start-prohibited for Gate 1** pending explicit Luke decision. R3 classified rebel as `NOT_REPRODUCIBLE` (1.2 GB trained FreqAI models not in repo; FreqAI deps + `directory_operations.py` patch missing; base unpinned). It remains defined). No rebel start, configuration, or runtime action is authorized for Gate 1 unless Luke explicitly decides otherwise in the Gate 1 approval marker.
+
+---
+**R5B Gate 1 (Issue #580) — BLOCKED:** Preflight evidence shows two `UNVERIFIED` items (Legacy Rainbow credential isolation; `freqai-rebel` configuration status). `freqai-rebel` is **dormant/out-of-scope/start-prohibited for Gate 1** pending explicit Luke decision. The central `freqtrade/shared/kill_switch.py` is **fleet-wide** — a freeze affects all four bots; role-scoped freeze would require a separate architectural decision and is not in scope for Gate 1.
+
+**R7 track split (Issue #423 / #423 Track R7):**
+- **ai4trade-bot #105** — Shadow validation (read-only evidence collection)
+- **trading-hub #496** — Attributed dry-run trading measurement (Rainbow R7)
+- Minimum 14-day shadow boundary before any attribution or measurement use.
+- Both tracks remain BLOCKED pending R5B + R6 + immutable promotion approval.
 
 ---
 
@@ -275,6 +304,7 @@ The canonical HermesTrader dry-run fleet is persistently deployed and parity-pro
 | H3B — Root-Executor Client Activation | 🟢 **H3B_RUNTIME_CONTROL_GREEN** (PR #559 squash-merged 2026-07-13; complete Issue #531 proof matrix passes 5/5; secret exposure contained; credential rotation human-attested) | #531 → #549, #550, #551, #553, #554, #555, #557, #558, #559 |
 | R5a — HermesTrader Deployment | ✅ COMPLETE (PR #560, `80f9733`, 5/5 parity) | #527 → #560 |
 | R5b — agent0 Cutover | BLOCKED (separate Luke approval) | — |
+| **R5B Gate 1 Preflight (Issue #580)** | **BLOCKED (A2 approval required)** | — |
 | R6 — Permanent Reconciliation (systemd) | — | — |
 | R7 — SI-v2 Runtime Integration (shadow) | — | — |
 | C5 — New Dry-Run Canary Measurement Window | — (replaces C4 ROLLBACK_RECOMMENDED) | — |
@@ -301,6 +331,22 @@ This **contradicts** the prior snapshot above ("no bots currently running" / all
 requires explicit approval to restart"). The discrepancy's cause (approved restart vs.
 auto-restart vs. unauthorized) is **not investigated in R3** — flagged for separate governance
 review. R3 did not mutate any runtime state.
+
+### R7 Track Split (2026-07-14)
+
+> R7 is split into two distinct tracks with separate evidence boundaries and issue ownership.
+
+| Track | Repository | Issue | Focus | Evidence Boundary |
+|---|---|---|---|---|
+| **R7 Track 1 — Shadow Validation** | ai4trade-bot | #105 | Read-only shadow evidence collection; no attribution | ai4trade-bot evidence bundles |
+| **R7 Track 2 — Attributed Dry-Run Measurement** | trading-hub | #496 | Attributed dry-run trading measurement; Rainbow attribution producer | trading-hub measurement window + Rainbow evidence |
+
+**Minimum 14-day shadow boundary** before any attribution or measurement use in either track.
+
+**Both tracks remain BLOCKED** pending:
+1. R5B execution + R6 reconciliation complete
+2. Immutable ai4trade runtime promotion approved (full commit SHA `30e5ebecaa8b0d3170349311f7a9964fa710d8bf`, OCI digest, smoke gate)
+3. Rollback baseline confirmed (full commit SHA `6e850c8f8ba1d8a0ad45250f130280e4171c001d`)
 
 ---
 
