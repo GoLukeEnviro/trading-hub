@@ -12,8 +12,7 @@
 > commit `782d2c04f59ee96151581de436b069095d28b019` (ratified by
 > repository owner after installer bug-fix arc).
 >
-> **Last updated:** 2026-07-14 post-roadmap-tick (PR #586 merged — header refresh to reference PR #586; no substantive state change; R5B Gate 1 remains BLOCKED pending `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE`; no runtime mutation).
-> **SAFETY CORRECTION 2026-07-14:** Fresh agent0 evidence proves the planned canonical-role-only freeze is IMPOSSIBLE with the current fleet-wide kill switch. Agent0 `trading-freqai-rebel-1` is RUNNING and shares the fleet-wide writable kill-switch mount (`/home/hermes/projects/trading/freqtrade/shared` → `/freqtrade/shared` rw=true; `kill_switch.json` mode=NORMAL; `freqtrade/shared/kill_switch.py` is fleet-wide). Gate 1 remains BLOCKED/NOT APPROVABLE until Luke explicitly selects one of three decision paths. No role-scoped freeze exists. R6/R7 remain blocked; runtime_mutation=NONE.
+> **Last updated:** 2026-07-14 — SAFETY CORRECTION: Fresh agent0 evidence proves the planned canonical-role-only freeze is IMPOSSIBLE with the current fleet-wide kill switch. Agent0 `trading-freqai-rebel-1` is RUNNING and shares the fleet-wide writable kill-switch mount (`/home/hermes/projects/trading/freqtrade/shared` → `/freqtrade/shared` rw=true; `kill_switch.json` mode=NORMAL; `freqtrade/shared/kill_switch.py` is fleet-wide). Gate 1 remains BLOCKED/NOT APPROVABLE until Luke explicitly selects one of three decision paths. No role-scoped freeze exists. R6/R7 remain blocked; runtime_mutation=NONE.
 > **Previous update:** 2026-07-14 post-roadmap-tick (PR #585 merged — Legacy Rainbow credential isolation RESOLVED PASS; Issue #583 closed; R5B Gate 1 now has 0 remaining UNVERIFIED items — both freqai-rebel config and Rainbow credential isolation resolved; Gate 1 remains BLOCKED pending explicit `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker; no runtime mutation; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved).
 > **Earlier update:** 2026-07-14 post-roadmap-tick (PR #585 merged — Legacy Rainbow credential isolation resolved)
 > **Earlier update:** 2026-07-14 post-roadmap-correction (PR #581 merged — R5B-A1 roadmap alignment, substantive body update)
@@ -195,10 +194,12 @@ There is no role-scoped or bot-scoped freeze in the current architecture. A `HAL
 
 **Required Luke decision before any A2 marker:** Luke must explicitly select ONE of three paths:
 1. **Fleet-wide freeze:** Include the running Rebel in the approved `HALT_NEW` impact scope for the bounded Gate 1 window; OR
-2. **Scoped-freeze architecture:** Implement and prove a separate role-scoped/bot-scoped freeze mechanism before Gate 1; OR
+2. **Scoped-freeze architecture:** Implement and prove a separate role-scoped/bot-scoped freeze mechanism before Gate 1. Repository architecture/code work is A1; any dry-run runtime rollout/test is separately A2-approved; A3/live remains prohibited and out of scope; OR
 3. **Rebel lifecycle gate first:** Separately approve and execute a reversible Rebel stop/isolation gate before Gate 1, with its own evidence and rollback.
 
 Until one path is explicitly selected and documented, no `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker may be issued. Rebel remains start-prohibited for Gate 1. No rebel start, configuration, or runtime action is authorized for Gate 1 unless Luke explicitly decides otherwise in the Gate 1 approval marker.
+
+**Critical lifecycle clarification:** The agent0 Rebel container `trading-freqai-rebel-1` is **already running**. It must not be stopped, restarted, or reconfigured except under an explicitly selected and separately approved decision path (Path 3 above). The Gate 1 boundary does not mean the running Rebel is merely "start-prohibited" — it is actively running and must not be disturbed unless Luke explicitly selects and documents Path 3 with its own evidence, approval, and rollback plan.
 
 ---
 

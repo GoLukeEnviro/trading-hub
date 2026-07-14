@@ -76,7 +76,7 @@ Executing the planned Step 1.4 ("Scoped kill switch → `HALT_NEW`") would:
   1. New ADR defining scope, implementation, and safety boundaries
   2. Modify `kill_switch.py` and all bot entry points to respect scope
   3. Prove role-scoped behavior in dry-run without affecting other bots
-  4. Separate A2/A3 gate for the freeze behavior change
+  4. Repository architecture/code work is A1; any dry-run runtime rollout/test is separately A2-approved; A3/live remains prohibited and out of scope
 - **Timeline:** Separate implementation phase before Gate 1 can proceed
 - **Note:** This is NOT in scope for Gate 1 per current planning
 
@@ -134,12 +134,12 @@ Executing the planned Step 1.4 ("Scoped kill switch → `HALT_NEW`") would:
 | Report references Issue #580 and comment 4968789848 | ✅ |
 | Report states fleet-wide kill-switch impact | ✅ |
 | Report states three decision paths explicitly | ✅ |
-| Report references Agent0, running Rebel, shared rw mount | ✅ |
+| Report references Agent0 `trading-freqai-rebel-1` RUNNING, running Rebel confirmed, shared rw mount `/home/hermes/projects/trading/freqtrade/shared` → `/freqtrade/shared` rw=true, fleet-wide kill switch at `freqtrade/shared/kill_switch.py` confirmed, `mode=NORMAL`, `HALT_NEW` fleet-wide | ✅ |
 | Report treats 2026-07-13 planning report as historical, explicitly superseded | ✅ |
 | No secret-like token patterns added | ✅ |
 | Shared checkout `/workspace/projects/trading-hub` remains clean and on `main` | ✅ |
 | Worktree clean, on branch `docs/r5b-gate1-fleetwide-rebel-correction` | ✅ |
-| Only the two intended Markdown paths changed | ✅ |
+| Only the two intended Markdown paths changed: `docs/state/current-operational-state.md` and `docs/reports/r5b-gate1-fleetwide-rebel-safety-correction-2026-07-14.md` | ✅ |
 | No changes to AGENTS.md, SOUL.md, runtime code, Docker, Cron, configs, bots, kill switch, issues, or runtime state | ✅ |
 
 ---
