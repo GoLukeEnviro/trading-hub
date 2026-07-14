@@ -94,6 +94,9 @@ Error codes (string constants):
   escapes the configured sandbox root
 - ``WORKTREE_PATH_OUTSIDE_SANDBOX`` — the resolved worktree path
   escapes the configured sandbox root
+- ``WRITER_IDENTITY_MISMATCH`` — the process identity, canonical repo,
+  lock path, worktree parent, or writer-owned parent metadata does not
+  match the Hermes container production contract
 """
 
 from __future__ import annotations
@@ -102,6 +105,7 @@ import errno
 import fcntl
 import json
 import os
+import pwd
 import re
 import socket
 import subprocess
@@ -133,6 +137,12 @@ DEFAULT_REPO_ROOT = Path("/workspace/projects/trading-hub")
 # Pinned to origin/main, not main, so we always pick up the remote
 # authoritative state, not the local-ahead R5B contamination.
 DEFAULT_BASE_REF = "origin/main"
+
+# Production writer identity. Host root, deploy, operator, and host-only
+# path namespaces are never valid autonomous writer contexts.
+EXPECTED_WRITER_UID = 10000
+EXPECTED_WRITER_GID = 10000
+EXPECTED_WRITER_USER = "hermes"
 
 # Stale lock threshold — if the lock is older than this AND the holder
 # PID is dead, the lock is considered stale and may be broken.
@@ -174,6 +184,106 @@ class RepoWriterError(Exception):
         super().__init__(f"{code}: {message}")
         self.code = code
         self.holder = holder or {}
+
+
+# ----------------------------------------------------------------------
+# Production writer identity / mount guard
+# ----------------------------------------------------------------------
+
+def _current_writer_identity() -> tuple[int, str]:
+    """Return the effective UID and passwd-resolved username."""
+    euid = os.geteuid()
+    try:
+        username = pwd.getpwuid(euid).pw_name
+    except KeyError:
+        username = "<unknown>"
+    return euid, username
+
+
+def _writer_parent_status(path: Path) -> tuple[int, int, bool, bool]:
+    """Return uid, gid, directory status, and writer access for ``path``."""
+    try:
+        metadata = path.stat()
+    except OSError:
+        return -1, -1, False, False
+    return (
+        metadata.st_uid,
+        metadata.st_gid,
+        path.is_dir(),
+        os.access(path, os.W_OK | os.X_OK),
+    )
+
+
+def _resolved_path(path: Path) -> Path:
+    try:
+        return path.resolve(strict=False)
+    except OSError:
+        return path.absolute()
+
+
+def _writer_identity_mismatch(message: str) -> RepoWriterError:
+    return RepoWriterError("WRITER_IDENTITY_MISMATCH", message)
+
+
+def _validate_production_writer_environment(
+    *,
+    repo_root: Path = DEFAULT_REPO_ROOT,
+    lock_path: Path = LOCK_FILE_PATH,
+    worktree_parent: Path = DEFAULT_WORKTREE_PARENT,
+) -> None:
+    """Fail closed unless execution is in the Hermes writer namespace.
+
+    This validation runs before a lock file, directory, or worktree can be
+    created. Tests that need temporary paths must opt in with
+    ``test_mode=True`` at the public constructor boundary.
+    """
+    euid, username = _current_writer_identity()
+    if euid != EXPECTED_WRITER_UID or username != EXPECTED_WRITER_USER:
+        raise _writer_identity_mismatch(
+            "writer requires "
+            f"euid={EXPECTED_WRITER_UID} user={EXPECTED_WRITER_USER!r}; "
+            f"got euid={euid} user={username!r}"
+        )
+
+    required_paths = (
+        ("canonical repository", Path(repo_root), DEFAULT_REPO_ROOT),
+        ("lock file", Path(lock_path), LOCK_FILE_PATH),
+        ("worktree parent", Path(worktree_parent), DEFAULT_WORKTREE_PARENT),
+    )
+    for label, actual, expected in required_paths:
+        resolved_actual = _resolved_path(actual)
+        resolved_expected = _resolved_path(expected)
+        if resolved_actual != resolved_expected:
+            raise _writer_identity_mismatch(
+                f"{label} must resolve to {resolved_expected}; "
+                f"got {resolved_actual}"
+            )
+
+    for label, parent in (
+        ("lock parent", Path(lock_path).parent),
+        ("worktree parent", Path(worktree_parent)),
+    ):
+        uid, gid, is_dir, writable = _writer_parent_status(parent)
+        if not is_dir:
+            raise _writer_identity_mismatch(
+                f"{label} {parent} is missing or not a directory"
+            )
+        if uid != EXPECTED_WRITER_UID or gid != EXPECTED_WRITER_GID:
+            raise _writer_identity_mismatch(
+                f"{label} {parent} requires uid:gid "
+                f"{EXPECTED_WRITER_UID}:{EXPECTED_WRITER_GID}; got {uid}:{gid}"
+            )
+        if not writable:
+            raise _writer_identity_mismatch(
+                f"{label} {parent} is not writable/searchable by the writer"
+            )
+
+
+def _validate_test_mode(*, test_mode: bool, enforce_sandbox: bool) -> None:
+    if not test_mode and not enforce_sandbox:
+        raise _writer_identity_mismatch(
+            "enforce_sandbox=False is allowed only with explicit test_mode=True"
+        )
 
 
 # ----------------------------------------------------------------------
@@ -233,12 +343,19 @@ class RepoWriterLock:
         stale_seconds: int = STALE_LOCK_SECONDS,
         *,
         enforce_sandbox: bool = True,
+        test_mode: bool = False,
     ) -> None:
         self.lock_path = Path(lock_path)
         self.stale_seconds = int(stale_seconds)
-        # Ensure the parent directory exists.
-        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
-        # Validate sandbox (opt-out for tests; default ON for production).
+        self.test_mode = bool(test_mode)
+        _validate_test_mode(
+            test_mode=self.test_mode,
+            enforce_sandbox=enforce_sandbox,
+        )
+        if not self.test_mode:
+            _validate_production_writer_environment(lock_path=self.lock_path)
+        # Validate sandbox after the identity/path guard. A wrong production
+        # context must fail before it can create writer state.
         if enforce_sandbox:
             self._validate_sandbox()
         # Open file descriptor is created on acquire; released on release.
@@ -471,6 +588,7 @@ class IsolatedWorktree:
         worktree_parent: Path = DEFAULT_WORKTREE_PARENT,
         worktree_name: Optional[str] = None,
         enforce_sandbox: bool = True,
+        test_mode: bool = False,
     ) -> None:
         self.repo_root = Path(repo_root)
         self.base_ref = base_ref
@@ -479,6 +597,16 @@ class IsolatedWorktree:
         self.worktree_name = worktree_name or _sanitize_worktree_name(new_branch)
         self.worktree_path = self.worktree_parent / self.worktree_name
         self._validate_inputs()
+        self.test_mode = bool(test_mode)
+        _validate_test_mode(
+            test_mode=self.test_mode,
+            enforce_sandbox=enforce_sandbox,
+        )
+        if not self.test_mode:
+            _validate_production_writer_environment(
+                repo_root=self.repo_root,
+                worktree_parent=self.worktree_parent,
+            )
         if enforce_sandbox:
             self._validate_sandbox()
         self._created = False

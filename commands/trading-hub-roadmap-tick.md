@@ -68,6 +68,9 @@ Exactly one of:
 - `BLOCKED_BY_ACTIVE_REPO_WRITER` — another Hermes session holds the
   global repository writer lock (see §Repository writer contract below).
   Do not override without explicit operator approval.
+- `WRITER_IDENTITY_MISMATCH` — the process identity or canonical
+  repo/lock/worktree namespace is not the Hermes production writer
+  contract. Stop before creating lock or worktree state.
 - Another active roadmap PR overlaps the selected scope
 - Dirty or ambiguous working tree
 - Contradictory runtime evidence cannot be resolved read-only
@@ -80,6 +83,15 @@ Exactly one of:
 
 This command runs under the enforced single-writer contract
 (`orchestrator/scripts/repo_writer.py`). Every tick MUST:
+
+Before step 1, the production preflight requires effective UID `10000`,
+passwd user `hermes`, canonical repo `/workspace/projects/trading-hub`,
+lock `/opt/data/state/hermes-repo-writer.lock`, and worktree parent
+`/opt/data/projects/trading-hub-worktrees`. The lock and worktree parents
+must be owned by `10000:10000` and writable. A mismatch fails closed with
+`WRITER_IDENTITY_MISMATCH` before writer state is created. Host paths such
+as `/opt/data/projects/trading-hub` are invalid. `test_mode=True` is
+exclusively for hermetic tests and is never valid for a roadmap tick.
 
 1. Acquire the global `RepoWriterLock`
    (`orchestrator/scripts/repo_writer.RepoWriterLock`) at
