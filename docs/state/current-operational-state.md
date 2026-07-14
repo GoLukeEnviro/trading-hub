@@ -1,7 +1,7 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #586 (post-merge header refresh, merge `2f8cfbc`). R5A is **complete
+> PR #589 (post-merge state reconciliation, merge `661334d`). R5A is **complete
 > and parity-proven**: the canonical HermesTrader dry-run fleet (freqforge,
 > freqforge-canary, regime-hybrid, webserver, rainbow) is persistently
 > deployed with 5/5 health, full `dry_run=true` parity, and a clean secret
@@ -12,8 +12,8 @@
 > commit `782d2c04f59ee96151581de436b069095d28b019` (ratified by
 > repository owner after installer bug-fix arc).
 >
-> **Last updated:** 2026-07-14 — SAFETY CORRECTION: Fresh agent0 evidence proves the planned canonical-role-only freeze is IMPOSSIBLE with the current fleet-wide kill switch. Agent0 `trading-freqai-rebel-1` is RUNNING and shares the fleet-wide writable kill-switch mount (`/home/hermes/projects/trading/freqtrade/shared` → `/freqtrade/shared` rw=true; `kill_switch.json` mode=NORMAL; `freqtrade/shared/kill_switch.py` is fleet-wide). Gate 1 remains BLOCKED/NOT APPROVABLE until Luke explicitly selects one of three decision paths. No role-scoped freeze exists. R6/R7 remain blocked; runtime_mutation=NONE.
-> **Previous update:** 2026-07-14 post-roadmap-tick (PR #585 merged — Legacy Rainbow credential isolation RESOLVED PASS; Issue #583 closed; R5B Gate 1 now has 0 remaining UNVERIFIED items — both freqai-rebel config and Rainbow credential isolation resolved; Gate 1 remains BLOCKED pending explicit `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE` marker; no runtime mutation; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved).
+> **Last updated:** 2026-07-14 post-roadmap-tick (PR #589 merged — R5B Gate 1 state reconciled after PR #588 safety correction; Gate 1 remains BLOCKED/NOT APPROVABLE pending Luke's decision on three paths; no runtime mutation; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved).
+> **Previous update:** 2026-07-14 — SAFETY CORRECTION: Fresh agent0 evidence proves the planned canonical-role-only freeze is IMPOSSIBLE with the current fleet-wide kill switch (PR #588).
 > **Earlier update:** 2026-07-14 post-roadmap-tick (PR #585 merged — Legacy Rainbow credential isolation resolved)
 > **Earlier update:** 2026-07-14 post-roadmap-correction (PR #581 merged — R5B-A1 roadmap alignment, substantive body update)
 > **Earlier update:** 2026-07-13 post-single-writer-containment (`HERMES_SINGLE_WRITER_GREEN`, PRs #564–#570 closed, enforced RepoWriterLock + IsolatedWorktree contract, no runtime mutation)
