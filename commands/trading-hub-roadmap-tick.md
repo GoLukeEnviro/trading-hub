@@ -135,6 +135,11 @@ for hermetic tests and is never valid for a roadmap tick.
    `main-gate`/`offline-smoke`, head drift, blocked state, unresolved threads,
    changed order or a formal governance block must stop. Agents never invoke
    merge and end only at `READY_FOR_HUMAN_MERGE`.
+   - In the Hermes container, first run `unset GH_TOKEN` and then
+     `gh auth status`. A stale environment override must never shadow the
+     persistent `/opt/data/.config/gh/hosts.yml` login.
+   - Never print, copy or persist token values. Missing authentication is
+     `GITHUB_FACT_COLLECTION_FAILED` and a hard stop.
 
 9. After human merge or formal abort, remove only the explicitly named
    worktree with `git worktree remove`. Never run a broad prune.

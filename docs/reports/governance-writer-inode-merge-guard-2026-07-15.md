@@ -71,11 +71,13 @@ execute switch and can return only `READY_FOR_HUMAN_MERGE` or
   both `main-gate` and `offline-smoke`.
 - The exact guard blocked merged PR #620 in the authenticated operator context
   with `PR_NOT_OPEN`, `ISSUE_NOT_OPEN`, and `TRACKER_TASK_MISMATCH` (exit 2).
-- The Hermes container's current `gh` authentication returned HTTP 401. No
-  credential was changed; the guard failed closed as
-  `GITHUB_FACT_COLLECTION_FAILED` (exit 3). Until a distinct controller
-  identity is proven, authenticated guard execution remains an operator-side
-  human-merge step.
+- The first Hermes guard call returned HTTP 401 and failed closed as
+  `GITHUB_FACT_COLLECTION_FAILED` (exit 3). Follow-up proved the cause without
+  exposing a token: an invalid ambient `GH_TOKEN` overrode the valid persistent
+  login in `/opt/data/.config/gh/hosts.yml`. After `unset GH_TOKEN`,
+  `gh auth status` was GREEN for `GoLukeEnviro`. No credential was changed.
+  Until a distinct controller identity is proven, the persistent Hermes login
+  may collect readiness facts, but Luke remains the only merge authority.
 - A strict worktree-only SI-v2 import check still reproduces the pre-existing
   `backtests.cost_model` installability defect. That is the deliberately
   sequenced Phase-0A correction after the #618 revert, not part of #621. The
