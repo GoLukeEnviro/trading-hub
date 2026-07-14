@@ -122,8 +122,8 @@ class TestGrossPnl:
         assert pnl == -10.0
 
     def test_zero_quantity(self) -> None:
-        pnl = calc_gross_pnl(_long_trade(entry=100.0, exit_=110.0, qty=0.0))
-        assert pnl == 0.0
+        with pytest.raises(ValueError, match="quantity"):
+            _long_trade(entry=100.0, exit_=110.0, qty=0.0)
 
 
 # ===========================================================================
@@ -206,22 +206,17 @@ class TestAggregateMetrics:
 
 
 class TestInvalidInputHandling:
-    def test_negative_prices_not_crashing(self) -> None:
-        trade = _long_trade(entry=-100.0, exit_=-90.0, qty=1.0)
-        pnl = calc_gross_pnl(trade)
-        assert pnl != 0.0  # logic still works with signs
+    def test_negative_prices_rejected(self) -> None:
+        with pytest.raises(ValueError, match="entry_price"):
+            _long_trade(entry=-100.0, exit_=-90.0, qty=1.0)
 
-    def test_zero_entry_price_handled(self) -> None:
-        trade = _long_trade(entry=0.0, exit_=10.0, qty=1.0)
-        gross = calc_gross_pnl(trade)
-        assert gross == 10.0
-        net = calc_net_pnl(trade)
-        assert net <= gross
+    def test_zero_entry_price_rejected(self) -> None:
+        with pytest.raises(ValueError, match="entry_price"):
+            _long_trade(entry=0.0, exit_=10.0, qty=1.0)
 
-    def test_negative_quantity_not_crashing(self) -> None:
-        trade = _long_trade(entry=100.0, exit_=110.0, qty=-1.0)
-        pnl = calc_gross_pnl(trade)
-        assert pnl < 0  # negative qty inverts the direction
+    def test_negative_quantity_rejected(self) -> None:
+        with pytest.raises(ValueError, match="quantity"):
+            _long_trade(entry=100.0, exit_=110.0, qty=-1.0)
 
     def test_config_rejects_negative_rates(self) -> None:
         with pytest.raises(ValueError):

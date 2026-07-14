@@ -107,7 +107,7 @@ def calc_all_costs(trade: TradeInput, config: CostConfig = DEFAULT_COST_CONFIG) 
         exit_fee=exit_fee,
         slippage_cost=slippage,
         funding_cost=funding,
-        total_cost=entry_fee + exit_fee + slippage + abs(funding),
+        total_cost=entry_fee + exit_fee + slippage + funding,
     )
     return breakdown
 
@@ -132,6 +132,36 @@ def compute_trade_result(trade: TradeInput, config: CostConfig = DEFAULT_COST_CO
         net_pnl=net,
         net_return_pct=net_pct,
     )
+
+
+def calc_mark_to_market_pnl(
+    trade: TradeInput,
+    *,
+    mark_price: float,
+    elapsed_hours: float,
+    config: CostConfig = DEFAULT_COST_CONFIG,
+) -> float:
+    """Return signed unrealized PnL with costs accrued through the mark.
+
+    This is the canonical mark-to-market companion to
+    :func:`compute_trade_result`.  Only entry fee/slippage are charged while
+    the position is open; funding retains its sign, so a credit increases
+    equity.  Exit costs are charged only by the closed-trade calculation.
+    """
+    marked = TradeInput(
+        entry_price=trade.entry_price,
+        exit_price=mark_price,
+        quantity=trade.quantity,
+        side=trade.side,
+        hold_hours=elapsed_hours,
+    )
+    gross = calc_gross_pnl(marked)
+    entry_fee = calc_enter_fee(marked, config)
+    entry_slippage = (
+        marked.entry_price * marked.quantity * config.slippage_rate
+    )
+    funding = calc_funding_cost(marked, config)
+    return gross - entry_fee - entry_slippage - funding
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +195,7 @@ def compute_aggregate_metrics(
     total_net = sum(r.net_pnl for r in results)
     total_fees = sum(r.costs.entry_fee + r.costs.exit_fee for r in results)
     total_slippage = sum(r.costs.slippage_cost for r in results)
-    total_funding = sum(abs(r.costs.funding_cost) for r in results)
+    total_funding = sum(r.costs.funding_cost for r in results)
     wins = sum(1 for r in results if r.is_profitable_net)
     win_rate = (wins / n) * 100.0
 

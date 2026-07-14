@@ -24,6 +24,11 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 
+
+class LegacyEvaluationAPIError(RuntimeError):
+    """The pre-manifest evaluation interface is intentionally disabled."""
+
+
 # ---------------------------------------------------------------------------
 # Gate-0 output states
 # ---------------------------------------------------------------------------
@@ -436,6 +441,12 @@ class StrategyEvaluationHarness:
         ValueError
             If trade_results is empty or missing required fields.
         """
+        raise LegacyEvaluationAPIError(
+            "evaluate(trade_results, regime_labels) is disabled; migrate to "
+            "EvaluationManifestV1 + EvaluationBundleV1 + EvaluationRunnerV1"
+        )
+
+        # Historical implementation remains below for audit/revert context.
         if not trade_results:
             raise ValueError("trade_results must not be empty")
 
