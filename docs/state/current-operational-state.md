@@ -1,21 +1,21 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot** — validated against `main` at
-> PR #560 (R5A HermesTrader dry-run deployment and parity proof, merge
-> `80f9733`). R5A is **complete and parity-proven**: the canonical
-> HermesTrader dry-run fleet (freqforge, freqforge-canary, regime-hybrid,
-> webserver, rainbow) is persistently deployed with 5/5 health, full
-> `dry_run=true` parity, and a clean secret scan. ai4trade runtime
-> dependency is locked to `6e850c8f8ba1d8a0ad45250f130280e4171c001d`.
+> PR #581 (R5B-A1 roadmap alignment, merge `c9c8c4c`). R5A is **complete
+> and parity-proven**: the canonical HermesTrader dry-run fleet (freqforge,
+> freqforge-canary, regime-hybrid, webserver, rainbow) is persistently
+> deployed with 5/5 health, full `dry_run=true` parity, and a clean secret
+> scan. ai4trade runtime dependency is locked to
+> `6e850c8f8ba1d8a0ad45250f130280e4171c001d`.
 > H3B_RUNTIME_CONTROL_GREEN (PR #559) and the full Issue #531 proof
 > matrix remain valid. The R5A executor extension was deployed at
 > commit `782d2c04f59ee96151581de436b069095d28b019` (ratified by
 > repository owner after installer bug-fix arc).
 >
 > **Last updated:** 2026-07-14 post-roadmap-correction (R5B-A1 reconciliation complete; Issue #580 active next R5B A2 preflight decision; R5B Gate 1 BLOCKED; no runtime mutation; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; Rebel dormant/out-of-scope for Gate 1; C4 ROLLBACK_RECOMMENDED preserved).
-> **Previous update:** 2026-07-13 post-single-writer-containment (`HERMES_SINGLE_WRITER_GREEN`, PRs #564–#570 closed, enforced RepoWriterLock + IsolatedWorktree contract, no runtime mutation)
+> **Previous update:** 2026-07-14 post-roadmap-correction (PR #581 merged — R5B-A1 roadmap alignment, substantive body update)
+> **Earlier update:** 2026-07-13 post-single-writer-containment (`HERMES_SINGLE_WRITER_GREEN`, PRs #564–#570 closed, enforced RepoWriterLock + IsolatedWorktree contract, no runtime mutation)
 > **Earlier update:** 2026-07-13 post-orchestrator-gateway-restore (`HERMES_ORCHESTRATOR_GATEWAY_GREEN`, s6-svc -u)
-> **Earlier update:** 2026-07-13 after secret-redaction hardening + full proof matrix run
 
 ---
 
