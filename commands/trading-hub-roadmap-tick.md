@@ -95,7 +95,9 @@ This command runs under the enforced single-writer contract
    - Worktree parent: `/opt/data/projects/trading-hub-worktrees/`
      (hermes-writable, never inside the shared checkout).
    - Branch name must match
-     `(feat|fix|docs|ops|chore|test|refactor|ci)/[a-z0-9][a-z0-9_./-]*`.
+     `(feat|fix|docs|ops|chore|test|refactor|ci|codex)/[a-z0-9][a-z0-9_./-]*`.
+     Codex Cloud A1 sessions use the `codex/{feature}{date}` prefix required
+     by the repository operating instructions.
      `main` itself is rejected.
 
 4. Verify the shared canonical checkout (`/workspace/projects/trading-hub`)

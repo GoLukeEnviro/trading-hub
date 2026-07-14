@@ -151,8 +151,12 @@ FORBIDDEN_WORKTREE_PARENT_PATTERNS = (
 )
 
 # Allowed branch name pattern (defense in depth — worktrees are
-# always created from origin/main, so this is mainly for sanity).
-BRANCH_NAME_PATTERN = re.compile(r"^(feat|fix|docs|ops|chore|test|refactor|ci)/[a-z0-9][a-z0-9_./-]*$")
+# always created from origin/main, so this is mainly for sanity). ``codex/``
+# is included for Codex Cloud A1 sessions, whose operator contract requires
+# reviewable branches named ``codex/{feature}{date}``.
+BRANCH_NAME_PATTERN = re.compile(
+    r"^(feat|fix|docs|ops|chore|test|refactor|ci|codex)/[a-z0-9][a-z0-9_./-]*$"
+)
 
 
 # ----------------------------------------------------------------------

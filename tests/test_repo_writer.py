@@ -188,6 +188,17 @@ class TestRepoWriterLockBasic:
                 raise RuntimeError("boom")
         assert not lock.is_locked()
 
+    def test_codex_cloud_branch_prefix_is_allowed(self, lock: RepoWriterLock) -> None:
+        holder = lock.acquire(
+            branch="codex/a1-writer-contract2026-07-14",
+            session_id="codex-cloud-a1",
+            worktree_path="/opt/data/projects/trading-hub-worktrees/codex-a1",
+        )
+        try:
+            assert holder.branch == "codex/a1-writer-contract2026-07-14"
+        finally:
+            lock.release()
+
 
 # ----------------------------------------------------------------------
 # RepoWriterLock — non-blocking contention
@@ -423,6 +434,18 @@ class TestIsolatedWorktreeInputValidation:
             )
         assert ei.value.code == "INVALID_BRANCH_NAME"
 
+    def test_codex_cloud_branch_prefix_is_allowed(
+        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
+    ) -> None:
+        wt = IsolatedWorktree(
+            repo_root=sandbox_git_repo,
+            base_ref="origin/main",
+            new_branch="codex/a1-writer-contract2026-07-14",
+            worktree_parent=sandbox_worktree_parent,
+            enforce_sandbox=False,
+        )
+        assert wt.new_branch == "codex/a1-writer-contract2026-07-14"
+
     def test_empty_base_ref_rejected(
         self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
     ) -> None:
@@ -562,6 +585,27 @@ class TestIsolatedWorktreeHappyPath:
         # Remove cleanly.
         wt.remove()
         assert not path.exists()
+
+    def test_create_codex_cloud_branch(
+        self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
+    ) -> None:
+        wt = IsolatedWorktree(
+            repo_root=sandbox_git_repo,
+            base_ref="origin/main",
+            new_branch="codex/a1-writer-contract2026-07-14",
+            worktree_parent=sandbox_worktree_parent,
+            enforce_sandbox=False,
+        )
+        path = wt.create()
+        head_branch = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(path),
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        assert head_branch == "codex/a1-writer-contract2026-07-14"
+        wt.remove()
 
     def test_create_uses_pinned_sha(
         self, sandbox_git_repo: Path, sandbox_worktree_parent: Path
