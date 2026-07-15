@@ -139,7 +139,7 @@ class TestContractMap:
         assert layer["fail_closed"] is True
 
 
-class TestBLOCK_ENTRY_NeutralizationGuard:
+class TestBlockEntryNeutralizationGuard:
     """Regression: BLOCK_ENTRY must never be neutralized by any helper."""
 
     def test_observation_to_entry_never_blocks(self) -> None:
