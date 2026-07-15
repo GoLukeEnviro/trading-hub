@@ -21,16 +21,6 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
-from freqtrade.shared.kill_switch import (
-    MODE_NORMAL,
-    SAFETY_EMERGENCY,
-    SAFETY_HALT_NEW,
-    SAFETY_NORMAL,
-    SAFETY_REDUCE_ONLY,
-    get_kill_mode,
-    is_kill_active,
-)
-
 from si_v2.safety.halt_bot_circuit_breaker import (
     HALT_BOT_HALTED,
     HALT_BOT_NORMAL,
@@ -39,6 +29,28 @@ from si_v2.safety.halt_bot_circuit_breaker import (
     BotSafetyState,
     HaltBotRegistry,
 )
+
+# Lazy import: freqtrade.shared is only on sys.path inside Freqtrade containers
+# and during test runs with explicit sys.path setup. Top-level import would
+# break pure unit tests that don't need the fleet kill-switch layer.
+
+
+def _get_fleet_mode() -> str:
+    from freqtrade.shared.kill_switch import get_kill_mode
+    return get_kill_mode()
+
+
+def _is_fleet_active() -> bool:
+    from freqtrade.shared.kill_switch import is_kill_active
+    return is_kill_active()
+
+
+# Constants — stable across versions
+MODE_NORMAL = "NORMAL"
+SAFETY_NORMAL = "NORMAL"
+SAFETY_HALT_NEW = "HALT_NEW"
+SAFETY_REDUCE_ONLY = "REDUCE_ONLY"
+SAFETY_EMERGENCY = "EMERGENCY"
 
 # ---------------------------------------------------------------------------
 # Decision enum
@@ -81,7 +93,7 @@ def resolve_bot_entry(
         Path to the bot-halt state file. Required if *registry* is ``None``.
     """
     # 1) Fleet override — authoritative
-    mode = fleet_mode if fleet_mode is not None else get_kill_mode()
+    mode = fleet_mode if fleet_mode is not None else _get_fleet_mode()
     if mode != MODE_NORMAL:
         return ScopedEntryDecision.BLOCKED
 
@@ -133,7 +145,7 @@ def freeze_bot(
     already in a non-NORMAL state, since a bot-scoped freeze would be
     meaningless.
     """
-    if is_kill_active():
+    if _is_fleet_active():
         raise RuntimeError(
             "Fleet kill-switch is active. Bot-scoped freeze is not meaningful "
             "while the entire fleet is blocked."
