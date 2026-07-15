@@ -267,7 +267,7 @@ def can_bot_open_new_position(
 ) -> bool:
     """Decide whether ``state.bot_id`` may open a new position.
 
-    Fleet kill switch is the highest authority: any non-NORMAL fleet mode
+    Fleet kill switch is the highest authority: a non-NORMAL fleet mode
     blocks all bots, regardless of per-bot state.
     """
     if fleet_kill_mode not in ("NORMAL", "HALT_NEW", "EMERGENCY"):
