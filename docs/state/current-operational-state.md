@@ -20,8 +20,29 @@
 > commit `782d2c04f59ee96151581de436b069095d28b019` (ratified by
 > repository owner after installer bug-fix arc).
 >
-> **Last updated:** 2026-07-15 governance recovery in progress (Issue #621;
-> stable lock inode and read-only human merge guard; no runtime mutation).
+|> **Last updated:** 2026-07-15 Phase 1B `HALT_BOT` circuit breaker implementation
+|> complete (A1, no runtime mutation; PR pending human merge on
+|> `feat/si-v2-phase1b-halt-bot-2026-07-15`; 30/30 tests passing; R5B Gate 1
+|> remains BLOCKED pending Luke's decision; previous: governance recovery in
+|> progress — Issue #621, stable lock inode, read-only human merge guard).
+
+## SI-v2 Phase 1B — `HALT_BOT` circuit breaker (2026-07-15)
+
+- **Issue:** #596
+- **Branch / PR (pending human merge):** `feat/si-v2-phase1b-halt-bot-2026-07-15`
+- **Status:** A1 repository code merged-by-Luke-pending. Runtime activation
+  remains **out of scope**; it requires separate A2 approval and strategy-gate
+  wiring.
+- **Authority:** Fleet kill switch (`freqtrade/shared/kill_switch.py`) remains
+  authoritative over all bot-level `HALT_BOT` states. Per-bot halt blocks only
+  the affected bot when fleet is `NORMAL`. UNKNOWN bot state fails closed.
+- **Tests:** 30 tests passing (validation, isolation, authority precedence,
+  atomic writes, corruption handling, evidence records, module-level helpers).
+- **Follow-up:** Strategy-gate wiring, CLI, contract coordination with #595 —
+  each in its own A1 PR.
+
+This section is superseded by the next post-tick state reconcile after the
+PR is merged.
 > **Previous update:** 2026-07-14 post-roadmap-tick (PR #618 merged at `55d005d` — fleet HWM and daily drawdown guard; Issue #595 closed; PR #617 merged at `67ae1d1` — state reconcile after PR #616; Issue #594 reopened with corrective requirements (Phase 0A harness needs 10 corrective items); 30 new tests all passing; CI main-gate GREEN; no runtime mutation; no open PRs remaining; R5B Gate 1 remains BLOCKED pending Luke's decision on three paths; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved; Codex Cloud issues #592–#606 explicitly non-authoritative until #600 ADR gate accepted).
 > **Previous update:** 2026-07-14 post-roadmap-tick (PR #616 merged at `c0b0a34` — writer identity guard: fail-closed on wrong UID and host paths; Issue #615 closed; 43 tests all passing; CI main-gate GREEN; no runtime mutation; no open PRs remaining; R5B Gate 1 remains BLOCKED pending Luke's decision on three paths; R6 blocked by R5B; R7 split into #105 shadow validation + #496 attributed measurement; C4 ROLLBACK_RECOMMENDED preserved; Codex Cloud issues #592–#606 explicitly non-authoritative until #600 ADR gate accepted).
 > **Earlier update:** 2026-07-14 post-roadmap-tick (PR #591 merged — simplified target architecture roadmap v4; PR #591 was the only open roadmap PR; merged with owner COMMENTED review and editorial suggestions preserved in downstream issues #592–#605; no runtime mutation; R5B Gate 1 remains BLOCKED pending `APPROVED_R5B_GATE_1_PREFLIGHT_AND_FREEZE`; C4 ROLLBACK_RECOMMENDED preserved; Codex Cloud issues #592–#606 explicitly non-authoritative until #600 ADR gate accepted).
