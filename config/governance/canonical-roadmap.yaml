@@ -1,0 +1,56 @@
+roadmap_revision: 1
+governance_contract_revision: 1
+phases:
+  - id: G0
+    title: Canonical Program Governance
+    status: in_progress
+    dependencies: []
+    exit_gate: governance_consistency_green
+  - id: A
+    title: State and Tracker Reconciliation
+    status: pending
+    dependencies: [G0]
+    exit_gate: canonical_state_reconciled
+  - id: B
+    title: SEC-1/SEC-3 Runtime Deployment
+    status: blocked
+    dependencies: [A]
+    issue: 636
+    execution_class: A2
+    exit_gate: executor_security_runtime_green
+  - id: C
+    title: Gate-0 Strategy Evidence
+    status: blocked
+    dependencies: [A]
+    issue: 604
+    execution_class: A1
+    exit_gate: edge_decision_recorded
+  - id: D
+    title: Runtime Safety Wiring
+    status: blocked
+    dependencies: [B, C]
+    exit_gate: safety_entry_path_green
+  - id: E
+    title: R5B/R6 Fleet Reconciliation
+    status: blocked
+    dependencies: [D]
+    exit_gate: canonical_four_bot_fleet_green
+  - id: F
+    title: R7 Dry-run Measurement
+    status: blocked
+    dependencies: [E]
+    issue: 496
+    exit_gate: sufficient_measurement_evidence
+  - id: G
+    title: Allocator and Execution Readiness
+    status: blocked
+    dependencies: [F]
+    issues: [600, 601, 602]
+    exit_gate: gate_3_green
+  - id: H
+    title: Micro-live Canary
+    status: blocked
+    dependencies: [G]
+    issue: 603
+    exit_gate: micro_live_canary_validated
+    requires_external_mandate: true

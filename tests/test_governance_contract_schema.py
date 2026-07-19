@@ -48,3 +48,28 @@ def test_roadmap_schema_rejects_unknown_execution_class():
                        "execution_class": "A9"}]}
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(bad, schema)
+
+
+def _toposort_ok(phases):
+    graph = {p["id"]: set(p["dependencies"]) for p in phases}
+    ids = set(graph)
+    for deps in graph.values():
+        assert deps <= ids  # every dependency is a real phase
+    resolved, guard = set(), 0
+    while len(resolved) < len(graph) and guard <= len(graph):
+        for pid, deps in graph.items():
+            if pid not in resolved and deps <= resolved:
+                resolved.add(pid)
+        guard += 1
+    return len(resolved) == len(graph)
+
+
+def test_canonical_roadmap_valid_acyclic_and_revision_aligned():
+    schema = _load_json("canonical-roadmap.schema.json")
+    roadmap = yaml.safe_load((GOV / "canonical-roadmap.yaml").read_text())
+    jsonschema.validate(roadmap, schema)
+    assert _toposort_ok(roadmap["phases"])  # no cycles, deps resolvable
+    contract = yaml.safe_load((GOV / "program-contract.yaml").read_text())
+    assert roadmap["governance_contract_revision"] == contract["governance_contract_revision"]
+    ids = [p["id"] for p in roadmap["phases"]]
+    assert ids == ["G0", "A", "B", "C", "D", "E", "F", "G", "H"]
