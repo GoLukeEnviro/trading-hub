@@ -474,3 +474,61 @@ def test_required_controller_files_exist() -> None:
         "orchestrator/scripts/roadmap_merge_controller_paths_allowlist.txt",
     ]:
         assert (_REPO_ROOT / f).is_file(), f"Required file missing: {f}"
+
+
+# ----------------------------------------------------------------------
+# G0.2 broker check_governance_scope (spec §7.4, §10.2)
+# ----------------------------------------------------------------------
+
+
+def test_check_governance_scope_blocks_governance_files_without_adr_scope() -> None:
+    from orchestrator.scripts.roadmap_merge_controller_broker import check_governance_scope
+
+    blockers = check_governance_scope(
+        changed_files=["config/governance/program-contract.yaml"],
+        pr_has_accepted_adr_scope=False,
+        human_only_files=["AGENTS.md", "config/governance/program-contract.yaml"],
+    )
+    assert blockers  # non-empty: governance file changed without ADR scope
+
+
+def test_check_governance_scope_allows_status_reconciliation_with_adr_scope() -> None:
+    from orchestrator.scripts.roadmap_merge_controller_broker import check_governance_scope
+
+    blockers = check_governance_scope(
+        changed_files=["config/governance/canonical-roadmap.yaml"],
+        pr_has_accepted_adr_scope=True,
+        human_only_files=["AGENTS.md", "config/governance/canonical-roadmap.yaml"],
+    )
+    assert blockers == []
+
+
+def test_check_governance_scope_allows_non_governance_files_without_adr_scope() -> None:
+    from orchestrator.scripts.roadmap_merge_controller_broker import check_governance_scope
+
+    blockers = check_governance_scope(
+        changed_files=["src/some_module.py", "tests/test_foo.py"],
+        pr_has_accepted_adr_scope=False,
+        human_only_files=["AGENTS.md", "config/governance/program-contract.yaml"],
+    )
+    assert blockers == []
+
+
+def test_check_governance_scope_blocks_multiple_governance_files() -> None:
+    from orchestrator.scripts.roadmap_merge_controller_broker import check_governance_scope
+
+    human_only = [
+        "AGENTS.md",
+        "config/governance/program-contract.yaml",
+        "config/governance/canonical-roadmap.yaml",
+    ]
+    blockers = check_governance_scope(
+        changed_files=[
+            "config/governance/program-contract.yaml",
+            "config/governance/canonical-roadmap.yaml",
+        ],
+        pr_has_accepted_adr_scope=False,
+        human_only_files=human_only,
+    )
+    assert len(blockers) == 2
+    assert all("GOVERNANCE_SCOPE:" in b for b in blockers)

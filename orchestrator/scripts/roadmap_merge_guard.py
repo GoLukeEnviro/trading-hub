@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Sequence
 
 REQUIRED_CHECKS = ("main-gate", "offline-smoke")
@@ -54,6 +55,67 @@ def parse_selected_task(body: str) -> int | None:
     """Return the machine-selected #605 task, if present."""
     match = SELECTED_TASK_PATTERN.search(body or "")
     return int(match.group(1)) if match else None
+
+
+# Phases that are considered "active enough" to be mergeable.
+_ACTIVE_STATUSES = frozenset({"in_progress", "pending"})
+_COMPLETE_STATUSES = frozenset({"complete", "completed", "done"})
+
+# Path to the canonical roadmap YAML, resolved relative to the repo root.
+# The guard is read-only and loads this only for dependency checks.
+_CANONICAL_ROADMAP_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "config"
+    / "governance"
+    / "canonical-roadmap.yaml"
+)
+
+
+def _load_roadmap_dependencies() -> dict[str, list[str]]:
+    """Load phase -> dependencies from the canonical roadmap YAML.
+
+    Returns an empty dict if the file is missing or unreadable (fail-open for
+    the dependency check; the status check still applies).
+    """
+    try:
+        import yaml
+
+        data = yaml.safe_load(_CANONICAL_ROADMAP_PATH.read_text())
+        return {p["id"]: list(p.get("dependencies", [])) for p in data["phases"]}
+    except Exception:
+        return {}
+
+
+def governance_task_compatible(
+    *,
+    selected_phase: str,
+    roadmap_status: dict[str, str],
+) -> bool:
+    """Check whether a selected roadmap phase is mergeable (spec §7.4).
+
+    Pure function. A phase is compatible only if:
+
+    - it exists in ``roadmap_status``;
+    - its status is ``in_progress`` or ``pending`` (not ``blocked``/``complete``);
+    - all of its dependencies (from the canonical roadmap YAML) are in a
+      complete state (``complete``/``completed``/``done``).
+
+    The caller supplies the current status of each phase. Dependency edges are
+    read from ``config/governance/canonical-roadmap.yaml``. If the roadmap file
+    is unavailable, the dependency check is skipped (fail-open) and only the
+    status check applies.
+    """
+    status = roadmap_status.get(selected_phase)
+    if status is None:
+        return False
+    if status not in _ACTIVE_STATUSES:
+        return False
+    deps = _load_roadmap_dependencies().get(selected_phase, [])
+    for dep in deps:
+        dep_status = roadmap_status.get(dep)
+        if dep_status not in _COMPLETE_STATUSES:
+            return False
+    return True
 
 
 def evaluate_merge_readiness(

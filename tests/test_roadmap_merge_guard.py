@@ -217,3 +217,57 @@ def test_main_fails_closed_when_github_facts_are_unavailable(
     assert result == 3
     assert "GITHUB_FACT_COLLECTION_FAILED" in payload
     assert "credentials" not in payload
+
+
+# ----------------------------------------------------------------------
+# G0.2 governance_task_compatible (spec §7.4)
+# ----------------------------------------------------------------------
+
+
+def test_governance_task_compatible_blocks_blocked_phase() -> None:
+    from orchestrator.scripts.roadmap_merge_guard import governance_task_compatible
+
+    # A blocked phase with unmet dependencies must be incompatible.
+    assert (
+        governance_task_compatible(
+            selected_phase="B",
+            roadmap_status={"G0": "complete", "A": "pending", "B": "blocked"},
+        )
+        is False
+    )
+
+
+def test_governance_task_compatible_allows_in_progress() -> None:
+    from orchestrator.scripts.roadmap_merge_guard import governance_task_compatible
+
+    assert (
+        governance_task_compatible(
+            selected_phase="G0",
+            roadmap_status={"G0": "in_progress"},
+        )
+        is True
+    )
+
+
+def test_governance_task_compatible_allows_pending_with_complete_deps() -> None:
+    from orchestrator.scripts.roadmap_merge_guard import governance_task_compatible
+
+    assert (
+        governance_task_compatible(
+            selected_phase="A",
+            roadmap_status={"G0": "complete", "A": "pending"},
+        )
+        is True
+    )
+
+
+def test_governance_task_compatible_blocks_pending_with_incomplete_deps() -> None:
+    from orchestrator.scripts.roadmap_merge_guard import governance_task_compatible
+
+    assert (
+        governance_task_compatible(
+            selected_phase="A",
+            roadmap_status={"G0": "in_progress", "A": "pending"},
+        )
+        is False
+    )
