@@ -1,34 +1,24 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-07-19 after Phase A
-> (state and tracker reconciliation). G0 (Canonical Program Governance) is
-> **complete**: G0.1 (PR #640 + #642) and G0.2 (PR #645, merge
-> `8c590bf`) are merged, the bootstrap ADR is `Accepted`, and
-> `governance-consistency` is a required branch-protection check on `main`.
-> The roadmap revision is bumped to 2 (G0 complete, Phase A in_progress).
-> Phase B (#636, SEC-1/SEC-3 runtime deployment) remains blocked (A2).
-> Phase C (#604, Gate-0 strategy evidence) remains blocked (A1, depends on
-> Phase A). No runtime mutation performed by this reconciliation.
+> **Canonical current-state snapshot.** Reconciled on 2026-07-19 after Phase C
+> status correction. Phase C exit gate `edge_decision_recorded` is **not yet
+> satisfied** — only the strategy selection and manifest freeze are complete;
+> snapshot acquisition, holdout inspection, and edge decision are still
+> pending. Phase C is back to `in_progress`. Roadmap revision 5. No runtime
+> mutation performed by this reconciliation.
 >
-> **Previous:** SEC-1 PR #632 merged at
-> `450c58d15d2af89f8731cc8219c19da3dedae1b8` and SEC-3 PR #635 at
-> `a815fce782c039cbfc4f2935d5bc5f1e24f8c878`. SEC-1 containment and SEC-3
-> durable intent auditing are present in repository code on `main`, but
-> neither has been deployed or runtime-proven. Detailed evidence and
-> limitations are recorded in
-> [`p0-runtime-state-reconciliation-2026-07-18.md`](../reports/p0-runtime-state-reconciliation-2026-07-18.md),
-> [`sec1-legacy-readonly-firewall-2026-07-18.md`](../reports/sec1-legacy-readonly-firewall-2026-07-18.md),
-> [`sec1-post-merge-reconciliation-2026-07-19.md`](../reports/sec1-post-merge-reconciliation-2026-07-19.md),
-> [`sec3-durable-intent-audit-2026-07-19.md`](../reports/sec3-durable-intent-audit-2026-07-19.md),
-> and
-> [`sec3-post-merge-reconciliation-2026-07-19.md`](../reports/sec3-post-merge-reconciliation-2026-07-19.md).
+> **Previous:** Phase A complete (#648, `2b6915d`). G0 complete: G0.1 (PR #640
+> + #642) and G0.2 (PR #645, `8c590bf`) merged; bootstrap ADR `Accepted`;
+> `governance-consistency` is a required branch-protection check. Phase C
+> inventory and manifest proposal merged (#649, `eca7923`); Luke signed
+> strategy selection (`FreqForge_Override`) and frozen manifest on #604.
 
 ## Governance revision pointers
 
 ```
 governance_contract_revision: 1
-roadmap_revision_observed: 4
-roadmap_observed_at_utc: 2026-07-19T20:45:00Z
+roadmap_revision_observed: 5
+roadmap_observed_at_utc: 2026-07-19T21:00:00Z
 ```
 
 `governance_contract_revision` is strictly checked against
@@ -36,26 +26,50 @@ roadmap_observed_at_utc: 2026-07-19T20:45:00Z
 informational only and does not force a state-file touch on ordinary roadmap
 status changes.
 
-## Phase A — State and Tracker Reconciliation (2026-07-19)
+## Phase C — Gate-0 Strategy Evidence (2026-07-19, in progress)
 
-Phase A is the first operational task executed under canonical program
-governance. It records G0 completion and advances the roadmap.
+Phase C exit gate is `edge_decision_recorded`. The exit gate is **not yet
+satisfied**. Current sub-status:
 
-- **G0 complete:** exit gate `governance_consistency_green` passed. The
-  governance layer (contract, roadmap, schemas, renderer, offline validator,
-  CI job, merge-guard extension, broker governance hook) is fully present on
-  `main` and enforced via branch protection.
-- **Branch protection:** `main` requires `main-gate`, `offline-smoke`, and
-  `governance-consistency` status checks (strict, up-to-date); linear history
-  enforced; force-push and deletion blocked.
-- **Roadmap revision 2:** G0 `complete`, Phase A `in_progress` (issue #647).
-  Derived View regenerated.
-- **Tracker #605:** repointed to Phase A (issue #647).
-- **No runtime mutation:** A1 documentation/roadmap/state only. No Docker,
-  Cron, trading, kill-switch, credential, `.env`, service, socket, broker, or
-  controller mutation.
+| Sub-step | Status | Evidence |
+|---|---|---|
+| Strategy selected | ✅ PASS | `FreqForge_Override` — Luke signed on #604 |
+| Manifest frozen | ✅ PASS | All thresholds approved; `APPROVED_GATE0_STRATEGY_AND_MANIFEST` on #604 |
+| Snapshot acquisition | ⏳ `PENDING_A2` | Data snapshot fetch authorized in principle (#604); dedicated A2 issue required with full execution contract before execution |
+| Holdout inspected | ❌ NO | Not started; blocked by snapshot |
+| Edge decision | ⏳ `PENDING` | Not yet recorded; blocked by holdout |
 
-### Post-G0 operational state (unchanged by Phase A)
+Phase C remains `in_progress` until the edge decision is recorded. Issue #604
+remains open.
+
+### Frozen manifest summary (approved by Luke on #604)
+
+| Field | Value |
+|---|---|
+| Strategy | `FreqForge_Override` |
+| Exchange | Bitget futures (linear) |
+| Pairs | BTC/USDT:USDT, ETH/USDT:USDT, SOL/USDT:USDT |
+| Timeframe | 15m |
+| Calibration | 2025-01-01 to 2025-06-30 |
+| Walk-forward | 2025-07-01 to 2025-09-30, 2025-10-01 to 2025-12-31 |
+| Holdout | 2026-01-01 to 2026-06-30 (untouched) |
+| OOS max drawdown | < 25% |
+| OOS profit factor | > 1.3 |
+| Min trades | > 100 |
+| Min regimes | ≥ 2 |
+
+Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/phase-c-gate0-candidate-inventory-2026-07-19.md)
+
+### Next step: A2 snapshot-fetch contract
+
+Luke's #604 comment authorizes the snapshot fetch in principle but is not yet
+an executable A2 contract. A dedicated A2 issue must specify: exact time
+window, target host and path, allowed public Bitget endpoints, exact pairs
+and timeframes, rate/size limits, credential prohibition, hash and provenance
+format, strategy-execution and holdout prohibition, cleanup scope, and audit
+requirements. Luke then issues a time-limited, scope-specific A2 marker.
+
+## Post-G0 operational state (unchanged)
 
 - Live trading: `TARGET_ARCHITECTURE_NOT_ENABLED`
 - Execution mode: Dry-run only

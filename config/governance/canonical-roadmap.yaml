@@ -1,4 +1,4 @@
-roadmap_revision: 4
+roadmap_revision: 5
 governance_contract_revision: 1
 phases:
   - id: G0
@@ -21,7 +21,7 @@ phases:
     exit_gate: executor_security_runtime_green
   - id: C
     title: Gate-0 Strategy Evidence
-    status: complete
+    status: in_progress
     dependencies: [A]
     issue: 604
     execution_class: A1
