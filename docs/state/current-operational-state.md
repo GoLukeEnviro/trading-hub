@@ -1,11 +1,15 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-07-18 from the
-> bounded P0 read-only audit and the separately authorized Issue #580
-> kill-switch state reconciliation. Repository base:
-> `d4f5c16bcbfcffad493f45e29dcba88abbbabd62` (`origin/main`). The detailed
-> evidence and limitations are recorded in
-> [`p0-runtime-state-reconciliation-2026-07-18.md`](../reports/p0-runtime-state-reconciliation-2026-07-18.md).
+> **Canonical current-state snapshot.** Reconciled on 2026-07-19 after Luke
+> squash-merged SEC-1 PR #632 at
+> `450c58d15d2af89f8731cc8219c19da3dedae1b8`. The bounded P0 runtime
+> evidence remains the runtime baseline. SEC-1 containment is now present on
+> `main`, but it has not been deployed. Detailed evidence and limitations are
+> recorded in
+> [`p0-runtime-state-reconciliation-2026-07-18.md`](../reports/p0-runtime-state-reconciliation-2026-07-18.md),
+> [`sec1-legacy-readonly-firewall-2026-07-18.md`](../reports/sec1-legacy-readonly-firewall-2026-07-18.md),
+> and
+> [`sec1-post-merge-reconciliation-2026-07-19.md`](../reports/sec1-post-merge-reconciliation-2026-07-19.md).
 
 ## 1. Executive state
 
@@ -17,13 +21,13 @@
 | Executor and fleet reachability | **PASS** |
 | R5A HermesTrader stack | **PASS — 5/5 healthy** |
 | SI-v2 four-bot fleet on HermesTrader | **PARTIAL — 3/4; Rebel absent** |
-| Legacy executor protocol | **FAIL — actively used** |
+| Legacy executor protocol | **SEC-1 CONTAINMENT MERGED / RUNTIME NOT DEPLOYED** |
 | Audit schema/structure | **PASS** |
 | Audit completeness and durability | **FAIL** |
 | Deployment provenance | **PARTIAL** |
 | Kill switch | **NORMAL persisted and effective after bounded reconciliation** |
 | Bot-scoped freeze at strategy entry | **NOT WIRED** |
-| Runtime mutation during P0 audit | **NONE** |
+| Runtime mutation during SEC-1 and this reconciliation | **NONE** |
 
 The R5A deployment and the logical SI-v2 fleet are different sets and must not
 be conflated. R5A parity is satisfied by FreqForge, Canary, Regime, Webserver,
@@ -73,9 +77,18 @@ workloads. It does not prove the absent Rebel configuration or Agent0 runtime.
   Runtime inspection can prove that entries exist, but cannot close this
   structural gap.
 
-SEC-1 must therefore be a legacy read-only compatibility firewall, not merely
-telemetry. SEC-3 owns the durable audit design gap. Neither change is included
-in this documentation-only PR.
+SEC-1 is merged on `main` through PR #632. The repository implementation now
+builds approved legacy command arguments server-side, permits only a bounded
+read-only compatibility subset, rejects mutation, injection, traversal, and
+unknown requests before subprocess execution, and records fixed non-secret
+classifications. Its complete repository test suite passed with **1007 passed,
+52 skipped**; both required GitHub checks passed before Luke's merge.
+
+This is a repository fact, not a runtime deployment claim. The running
+executor was not restarted, replaced, or revalidated in SEC-1 or this
+post-merge reconciliation. Until a separately approved deployment and runtime
+proof occurs, the bounded P0 observation remains authoritative for deployed
+legacy behavior. SEC-3 still owns the durable intent-audit design gap.
 
 ## 4. Deployment provenance
 
@@ -117,9 +130,11 @@ missing-file tests, and eventual bot-scoped entry integration.
 
 ## 6. Go / no-go
 
-**Allowed next repository work:** complete human review of this A1 state
-reconciliation, then implement SEC-1 in a separate issue, branch, PR, and
-report after this PR is merged.
+**Allowed next repository work:** complete human review of this A1 post-merge
+reconciliation. After it merges, SEC-1 is repository-complete. Any executor
+deployment/runtime proof requires a separate, explicitly scoped A2 issue,
+approval, snapshot, rollback plan, audit evidence, and bounded verification.
+SEC-3 remains separate A1 design/implementation work.
 
 **Not authorized:** R5B continuation, executor deployment, strategy reload,
 container mutation, kill-switch clear/bypass, new root capabilities,
