@@ -88,6 +88,19 @@ Loop semantics:
 Decommissioned or non-deployed bots such as Momentum and MVS are historical
 context only. Do not count them as active SI-v2 loop members.
 
+## Canonical program governance
+
+The authoritative program direction lives in
+`config/governance/program-contract.yaml` and
+`config/governance/canonical-roadmap.yaml` (see
+[`docs/decisions/ADR-2026-07-19-canonical-program-governance.md`](docs/decisions/ADR-2026-07-19-canonical-program-governance.md)).
+`docs/roadmap/canonical-program-roadmap.md` is a generated Derived View with
+no independent authority. Chats, reports, and proposals are advisory until
+merged, Accepted, and represented in the contract. This section is a pointer
+only; it does not restructure or resolve the existing "Source-of-truth order"
+list below, which continues to govern stale/conflicting operational-fact
+claims as before.
+
 ## Source-of-truth order
 
 When resolving conflicts or stale claims, use this hierarchy:
