@@ -693,18 +693,21 @@ git commit -m "docs(report): G0.1 governance-contract evidence"
 
 - [ ] **Step 1: Push branch and open the G0.1 PR** with the ADR still reading `Status: Proposed`. Link the G0.1 issue.
 
-- [ ] **Step 2: Request Luke's explicit confirmation** in the PR/issue. **Do not merge.**
+- [ ] **Step 2: Request Luke's explicit confirmation** in the PR/issue. Per ADR §2.6, confirmation must be a textual comment naming this ADR and the exact PR head SHA being confirmed — a GitHub "Approve" review click alone does not count. **Do not merge.**
 
-- [ ] **Step 3: After confirmation, on the exact same PR head**, flip the ADR to `Status: Accepted`:
+- [ ] **Step 3: After confirmation, on top of the exact SHA Luke named**, flip the ADR to `Status: Accepted` in a commit whose diff is limited to that one line — no other content changes in the same commit:
 
 ```bash
-# edit docs/decisions/ADR-2026-07-19-canonical-program-governance.md: Status: Accepted
+# edit docs/decisions/ADR-2026-07-19-canonical-program-governance.md: Status: Accepted (only this line)
 git add docs/decisions/ADR-2026-07-19-canonical-program-governance.md
+git diff --cached -- docs/decisions/ADR-2026-07-19-canonical-program-governance.md  # confirm only Status: changed
 git commit -m "docs(adr): accept canonical program governance ADR (Luke-confirmed)"
 git push
 ```
 
-- [ ] **Step 4: Re-verify CI is green on the accepted head** before merge. A merged `Proposed` ADR is forbidden (spec §0.2).
+If the ADR text needs to change after Luke has already confirmed a SHA, do not fold the edit into the flip commit — push a new commit, get a fresh confirmation naming the new SHA, then flip.
+
+- [ ] **Step 4: Re-verify CI is green on the flip commit** before merge (not the confirmed commit, not a prior commit, not a rebase). A merged `Proposed` ADR is forbidden (spec §0.2, ADR §2.6).
 
 - [ ] **Step 5: Human-only merge.** After merge, in a **separate** step, repoint tracker #605 to the G0.2 task (not part of this PR diff).
 

@@ -84,6 +84,31 @@ verbal instruction is not itself in this hierarchy at all. It can only become
 binding by being carried through the promotion flow in §2.3 into one of
 classes 1–5 above.
 
+**Relationship to `AGENTS.md`'s existing "Source-of-truth order."**
+`AGENTS.md` already contains a "Source-of-truth order" list used "when
+resolving conflicts or stale claims." That list and this section answer
+different questions and must not be read as competing rankings of the same
+thing:
+
+- **This section (§2.1)** governs **program direction**: which document type
+  is authoritative for "what phase are we in," "what is permitted," and "what
+  changes require what governance." It is scoped to the machine-readable
+  contract/roadmap and the promotion flow that changes them.
+- **`AGENTS.md`'s Source-of-truth order** governs **resolving stale or
+  conflicting factual claims about current runtime/operational state** — a
+  narrower, Operational-class (§2.1 item 4) question, such as "is SEC-1
+  actually deployed right now." Its ranking of fresh evidence above
+  `AGENTS.md`/`SOUL.md`/Active ADRs is correct for that purpose: a merged
+  ADR cannot override what CI or a live system actually shows to be true
+  today.
+
+If a future situation appears to pit these two lists against each other,
+that is itself a direction-vs-operational-fact confusion, not a genuine
+conflict — escalate rather than silently picking one list. Batch E of the
+implementing plan adds a reference from `AGENTS.md` to this contract; it does
+not resolve or restructure this pre-existing list, which is out of scope for
+G0.
+
 ### 2.2 The program contract as the authoritative machine-readable source
 
 `config/governance/program-contract.yaml` is the single authoritative
@@ -108,8 +133,8 @@ statement of:
   contract's `north_star.live_is_currently_authorized` field is hard-pinned
   to `false` by its own JSON Schema (`program-contract.schema.json` declares
   it a `const: false`), so no future contract revision can silently flip
-  live trading on without also changing the schema — itself a Normative,
-  ADR-gated change.
+  live trading on without also changing the schema — itself a Direction
+  change under §2.4, requiring an Accepted ADR.
 
 `config/governance/canonical-roadmap.yaml` is the sole authoritative
 roadmap. It is a directed acyclic graph of phases `G0` through `H`
@@ -218,17 +243,28 @@ The bootstrap sequence is:
    `Status: Proposed`. In this state it is a well-formed proposal for a
    governance system, nothing more — equivalent in binding force to a
    document in `docs/proposals/`.
-2. Luke explicitly confirms it — in the G0.1 tracker issue or directly on
-   the PR. Silence, an unrelated approval, or an automated check passing is
-   not confirmation.
-3. Only after that confirmation, a commit on the **exact same PR head**
-   flips the front-matter to `Status: Accepted`. CI and the governance guard
-   are re-run on that exact head (not a prior commit, not a rebase), and
-   only then is the PR eligible to merge.
+2. Luke explicitly confirms it: a textual comment, on the G0.1 tracker issue
+   or directly on the PR, that (a) references this ADR by title or file
+   path, and (b) names the exact commit SHA of the PR head being confirmed.
+   A GitHub "Approve" review click alone does **not** count as confirmation
+   — it signals code-review sign-off, not a program-direction ratification,
+   and does not name a SHA. Silence, an unrelated approval, or an automated
+   check passing is not confirmation either.
+3. Only after that confirmation, a commit **on top of the exact SHA named in
+   step 2** flips the front-matter to `Status: Accepted`, and that commit's
+   diff is limited to the `Status:` line — no substantive text may change in
+   the same commit. If the confirmed content needs to change, that requires
+   a new round: an updated PR head, a new confirmation naming the new SHA,
+   then the isolated flip commit. CI and the governance guard are re-run on
+   the flip commit (not the confirmed commit, not a prior commit, not a
+   rebase), and only then is the PR eligible to merge.
 
 A merged ADR whose front-matter still reads `Proposed` is a contradiction
 that must never happen: it would mean a direction-setting document became
 binding by merge alone, exactly the failure this ADR exists to close off.
+Equally forbidden: flipping to `Accepted` on a commit whose ADR text differs
+from what was named in Luke's confirmation, or bundling the flip with other
+substantive changes.
 If that state is ever observed, it must be treated as a governance
 violation and reverted, not treated as an accepted decision.
 
@@ -276,6 +312,10 @@ Once this ADR carries `Status: Accepted` on a merged PR head (per §2.6):
   remain gated exactly as `AGENTS.md`, `SOUL.md`, and
   `program-contract.yaml`'s `forbidden_without_a3` list already require,
   independent of this ADR.
+- Mark the pre-existing competing roadmap documents under `docs/roadmap/`
+  and `docs/roadmaps/` as superseded. §1 names them as part of the problem;
+  stamping them with `superseded_by` frontmatter is a separate, later step
+  in the implementing plan (not part of this ADR's own diff).
 
 ## 4. References
 
