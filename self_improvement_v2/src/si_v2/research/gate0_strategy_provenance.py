@@ -62,7 +62,7 @@ class StrategyProvenance:
         """Compute actual file hashes from the repository."""
         from pathlib import Path
 
-        root = Path(repo_root) if repo_root else Path(__file__).resolve().parents[2]
+        root = Path(repo_root) if repo_root else Path(__file__).resolve().parents[3]
 
         def file_sha256(rel_path: str) -> str:
             return hashlib.sha256((root / rel_path).read_bytes()).hexdigest()

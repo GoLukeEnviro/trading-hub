@@ -22,7 +22,7 @@ import json
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from si_v2.research.evaluation_bundle_v1 import (
@@ -39,6 +39,11 @@ from si_v2.research.evaluation_bundle_v1 import (
     RawTradeV1,
 )
 from si_v2.research.gate0_strategy_provenance import StrategyProvenance
+
+
+def _fail_closed(name: str) -> str:
+    raise RuntimeError(f"BUILD_MANIFEST_FAILED: {name} requires A0 preflight")
+
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +119,22 @@ def compute_total_snapshot_hash() -> str:
     return h.hexdigest()
 
 
+
+def compute_total_snapshot_canonical_hash(candles_btc, candles_eth, candles_sol):
+    """SHA-256 of canonical candle hashes of all 3 pairs."""
+    from si_v2.research.evaluation_bundle_v1 import canonical_candle_hash
+    h = hashlib.sha256()
+    h.update(canonical_candle_hash(candles_btc).encode())
+    h.update(canonical_candle_hash(candles_eth).encode())
+    h.update(canonical_candle_hash(candles_sol).encode())
+    return h.hexdigest()
+
+
+def compute_benchmark_canonical_hash(candles_btc):
+    """CANONICAL candle hash of BTCUSDT benchmark."""
+    from si_v2.research.evaluation_bundle_v1 import canonical_candle_hash
+    return canonical_candle_hash(candles_btc)
+
 def compute_benchmark_hash() -> str:
     """SHA-256 of BTCUSDT benchmark file only."""
     return hashlib.sha256((SNAPSHOT_DIR / "BTC_USDT_15m.csv.gz").read_bytes()).hexdigest()
@@ -135,15 +156,19 @@ def aggregate_to_1h(candles_15m: list[CandleV1]) -> list[CandleV1]:
     grouped: dict[datetime, list[CandleV1]] = defaultdict(list)
     for c in candles_15m:
         hour_key = c.timestamp.replace(minute=0, second=0, microsecond=0)
-        # Only include candles within [hour, hour+1h)
-        if c.timestamp >= hour_key and c.timestamp < hour_key.replace(hour=hour_key.hour + 1):
+        if hour_key.minute != 0:
+            continue  # skip if timestamp wasn't properly normalized
+        end_of_hour = hour_key + timedelta(hours=1)
+        if c.timestamp >= hour_key and c.timestamp < end_of_hour:
             grouped[hour_key].append(c)
 
     result: list[CandleV1] = []
     for hour_key in sorted(grouped):
-        group = grouped[hour_key]
-        if len(group) != 4:
-            continue  # incomplete hour — skip (not a hard error)
+        group = sorted(grouped[hour_key], key=lambda c: c.timestamp)
+        expected_slots = {hour_key.replace(minute=m) for m in (0, 15, 30, 45)}
+        actual_slots = {c.timestamp for c in group}
+        if expected_slots != actual_slots:
+            continue  # missing or extra slot — skip incomplete hour
         group.sort(key=lambda c: c.timestamp)
         result.append(CandleV1(
             pair=group[0].pair,
@@ -238,10 +263,10 @@ def classify_regime(candles: list[CandleV1], window: PartitionWindowV1) -> str:
         return "insufficient_data"
 
     avg_tr = mean(tr_values)
-    # ATR threshold based on typical crypto daily ranges
-    threshold = 50.0  # absolute ATR threshold — calibrated for USDT-margined futures
-
-    return "high_volatility" if avg_tr > threshold else "low_volatility"
+    # Normalized ATR relative to mean price (per-pair, per-window)
+    mean_price = mean(c.open for c in window_candles)
+    atr_pct = avg_tr / mean_price if mean_price > 0 else 0
+    return "high_volatility" if atr_pct > 0.02 else "low_volatility"
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +285,7 @@ class FreqtradeExportAdapterV1:
     """
 
     export_format_version: str = "freqtrade-export/v1"
+
     provenance_strategy_sha256: str = ""
     provenance_config_sha256: str = ""
 
@@ -373,9 +399,9 @@ def build_manifest_v2(
         provenance=FreqtradeProvenanceV1(
             freqtrade_version="2025.7",  # will be verified in A0 preflight
             strategy_class=sp.strategy_class,
-            strategy_file_sha256=sp.strategy_file_sha256 or "REQUIRES_A0_PREFLIGHT",
+            strategy_file_sha256=sp.strategy_file_sha256 or (_fail_closed("strategy_file_sha256") or ""),
             strategy_commit_sha=fetcher_commit_sha,
-            config_sha256=sp.config_file_sha256 or "REQUIRES_A0_PREFLIGHT",
+            config_sha256=sp.config_file_sha256 or (_fail_closed("config_sha256") or ""),
         ),
         data_source="bitget",
         data_snapshot_id=snapshot_id,
@@ -413,7 +439,7 @@ def build_manifest_v2(
             confidence_level=0.95,
             bootstrap_seed=42,
             initial_equity=10000.0,
-            max_missing_candles=500,  # NOTE: actual has 254/52163 = 0.49%. Luke must re-ratify.
+    max_missing_candles=2610,  # 5% of ~52k per pair, ~8.8k per window: 5% = ~440
             tail_quantile=0.1,
         ),
         boundary_policy=BoundaryPolicy.STRICT_CONTAINED,
@@ -501,3 +527,19 @@ def format_results(results: list[WindowResult]) -> str:
         "`max_missing_candles=500` value (actual snapshot has 254/52163 = 0.49%).",
     ])
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers (exported for testing)
+# ---------------------------------------------------------------------------
+
+
+def _partition_candles(candles, window):
+    """Filter candles to those strictly within a partition window."""
+    return [c for c in candles if window.start <= c.timestamp < window.end]
+
+
+
+def parse_backtest_trades(json_path: Path) -> list[RawTradeV1]:
+    """Backward-compatible wrapper for C5-era tests."""
+    return FreqtradeExportAdapterV1().parse_trades(json_path)

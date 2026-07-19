@@ -35,7 +35,7 @@ satisfied**. Current sub-status:
 |---|---|---|
 | Strategy selected | ✅ PASS | `FreqForge_Override` — Luke signed on #604 |
 | Manifest frozen | ✅ PASS | All thresholds approved; `APPROVED_GATE0_STRATEGY_AND_MANIFEST` on #604 |
-| Snapshot acquisition | ✅ `EXECUTED` | 156,489 candles fetched (#651, A2 marker `APPROVED_A2_GATE0_SNAPSHOT_FETCH`); C3 complete | with full execution contract before execution |
+| Snapshot acquisition | ✅ `EXECUTED` | 156,489 candles; A2 marker on #651. | with full execution contract before execution |
 | Holdout inspected | ❌ NO | Not started; blocked by snapshot |
 | Edge decision | ⏳ `PENDING` | Not yet recorded; blocked by holdout |
 
@@ -237,6 +237,6 @@ C5 (PR #657, `55ca28f`) was merged but runtime-unverified. 15 gaps identified:
 strategy mismatch (FreqForge_Override has Shorting/CustomStoploss/1h-informative/
 FleetRiskManager/Primo signals vs. simplified description), partition gaps,
 incorrect hash bindings, unachievable regime gate, and wrong min_duration_days.
-C5.1 corrective (PR pending) addresses all 14 items with strategy provenance,
+C5.1 corrective addresses all 14 items with strategy provenance,
 manifest v2, partition correction, converter, adapter, and 19 tests.
 Holdout remains sealed until A0 preflight + A2 selection backtest + C6 marker.
