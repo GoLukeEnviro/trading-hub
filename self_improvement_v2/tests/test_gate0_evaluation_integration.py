@@ -32,7 +32,8 @@ def sample_candles() -> list[CandleV1]:
     base = datetime(2025, 1, 1, tzinfo=UTC)
     return [
         CandleV1(pair="BTC/USDT", timestamp=base, open=100.0, high=101.0, low=99.0, close=100.5, volume=10.0),
-        CandleV1(pair="BTC/USDT", timestamp=base.replace(hour=0, minute=15), open=100.5, high=102.0, low=100.0, close=101.0, volume=12.0),
+        CandleV1(pair="BTC/USDT", timestamp=base.replace(hour=0, minute=15),
+                 open=100.5, high=102.0, low=100.0, close=101.0, volume=12.0),
         CandleV1(pair="ETH/USDT", timestamp=base, open=2000.0, high=2010.0, low=1990.0, close=2005.0, volume=5.0),
     ]
 
@@ -103,7 +104,13 @@ class TestParseBacktestTrades:
 
     def test_strategy_nested_format(self, tmp_path):
         """Some Freqtrade versions nest trades under strategy."""
-        export = {"strategy": {"trades": [{"trade_id": "a", "pair": "ETH/USDT", "open_date": "2025-01-01T00:00:00Z", "close_date": "2025-01-01T01:00:00Z", "open_rate": 2000, "close_rate": 2010, "amount": 0.5, "is_short": False}]}}
+        export = {"strategy": {"trades": [{
+            "trade_id": "a", "pair": "ETH/USDT",
+            "open_date": "2025-01-01T00:00:00Z",
+            "close_date": "2025-01-01T01:00:00Z",
+            "open_rate": 2000, "close_rate": 2010,
+            "amount": 0.5, "is_short": False,
+        }]}}
         path = tmp_path / "trades.json"
         path.write_text(json.dumps(export))
         trades = parse_backtest_trades(path)
@@ -111,7 +118,12 @@ class TestParseBacktestTrades:
         assert trades[0].pair == "ETH/USDT"
 
     def test_handles_missing_fields_defaults(self, tmp_path):
-        export = {"trades": [{"trade_id": "1", "pair": "SOL/USDT", "open_date": "2025-06-01T00:00:00Z", "close_date": "2025-06-01T01:00:00Z", "open_rate": 100.0, "close_rate": 101.0, "amount": 1.0}]}
+        export = {"trades": [{
+            "trade_id": "1", "pair": "SOL/USDT",
+            "open_date": "2025-06-01T00:00:00Z",
+            "close_date": "2025-06-01T01:00:00Z",
+            "open_rate": 100.0, "close_rate": 101.0, "amount": 1.0,
+        }]}
         path = tmp_path / "trades.json"
         path.write_text(json.dumps(export))
         trades = parse_backtest_trades(path)
