@@ -79,10 +79,16 @@ d300ae6 feat(governance): add program-contract JSON schema with pending-CI rule
 | `docs/roadmap/roadmap-v2-blocker-first-runtime-ownership.md` | +6 lines: supersession stamp | See supersede decisions below |
 | `docs/roadmap/simplified-target-architecture-roadmap-2026-07-14.md` | +6 lines: supersession stamp | See supersede decisions below |
 
-(Two additional files under `docs/context/` and `docs/proposals/` — the
-design-spec fix and a dangling-batch-reference fix — were touched as part of
-in-flight defect corrections; see "Defects found and fixed" below. They are
-plan artifacts, not governance-contract runtime files.)
+(Two additional files under `docs/superpowers/specs/` and
+`docs/superpowers/plans/` were touched as part of in-flight defect
+corrections and review fixes; see "Defects found and fixed" below. They are
+planning artifacts, not governance-contract runtime files:
+`docs/superpowers/specs/2026-07-19-canonical-program-governance-g0-design.md`
+(+1 line, commit `65f4616`, the phase-H `exit_gate` fix) and
+`docs/superpowers/plans/2026-07-19-g0-1-canonical-governance-contract.md`
+(+17/-11 lines across commits `2809a81` and `bebc81c`, syncing Task 13's
+bootstrap-flip rule and the renderer's reference code to the hardened
+versions actually shipped).)
 
 `git diff --stat 2911c2c..ceafbc3` (full batch, confirmed clean scope — no
 `docker`, `freqtrade`, `.env`, `guardian`, or `cron` paths touched):
