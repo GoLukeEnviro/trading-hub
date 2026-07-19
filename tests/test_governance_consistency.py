@@ -95,3 +95,27 @@ def test_schema_invalid_contract_fails(tmp_path):
     contract.write_text("schema_version: 1\nprogram_id: x\n")  # missing required
     result = _run(cwd=repo)
     assert result.returncode != 0
+
+
+# ── Task 2: DAG acyclicity, single direction ───────────────────────────────
+
+
+def test_cyclic_roadmap_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    rm = repo / "config/governance/canonical-roadmap.yaml"
+    data = yaml.safe_load(rm.read_text())
+    # A depends on H -> introduces a cycle (A->H->G->F->E->D->B->A)
+    data["phases"][1]["dependencies"].append("H")
+    rm.write_text(yaml.safe_dump(data))
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_two_active_directions_fail(tmp_path):
+    repo = _clone_governance(tmp_path)
+    c = repo / "config/governance/program-contract.yaml"
+    data = yaml.safe_load(c.read_text())
+    data["canonical_sources"]["roadmap"].append(
+        "config/governance/other-roadmap.yaml"
+    )
+    c.write_text(yaml.safe_dump(data))
+    assert _run(cwd=repo).returncode != 0

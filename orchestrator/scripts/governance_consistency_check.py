@@ -44,9 +44,35 @@ def check_schemas() -> tuple[dict, dict]:
     return contract, roadmap
 
 
+def check_dag(roadmap: dict) -> None:
+    graph = {p["id"]: set(p["dependencies"]) for p in roadmap["phases"]}
+    ids = set(graph)
+    for pid, deps in graph.items():
+        for d in deps - ids:
+            HARD_FAILURES.append(f"phase {pid} depends on unknown {d}")
+    resolved, guard = set(), 0
+    while len(resolved) < len(graph) and guard <= len(graph):
+        for pid, deps in graph.items():
+            if pid not in resolved and deps <= resolved:
+                resolved.add(pid)
+        guard += 1
+    if len(resolved) != len(graph):
+        HARD_FAILURES.append("roadmap DAG has a cycle")
+
+
+def check_single_direction(contract: dict) -> None:
+    roadmaps = contract["canonical_sources"].get("roadmap", [])
+    if len(roadmaps) != 1:
+        HARD_FAILURES.append(
+            f"expected exactly one authoritative roadmap, got {len(roadmaps)}"
+        )
+
+
 def main() -> int:
     contract, roadmap = check_schemas()
-    # further checks added in later tasks (DAG, paths, frontmatter, render, revision)
+    check_dag(roadmap)
+    check_single_direction(contract)
+    # further checks added in later tasks (paths, frontmatter, render, revision)
     for w in WARNINGS:
         print(f"WARN {w}")
     if HARD_FAILURES:
