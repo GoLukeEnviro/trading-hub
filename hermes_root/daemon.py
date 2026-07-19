@@ -22,6 +22,7 @@ import struct
 import subprocess
 import threading
 import time
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -103,68 +104,163 @@ class RootExecutorDaemon:
         try:
             command = legacy.build_legacy_command(norm.category, norm.argv)
         except legacy.LegacyCommandError as exc:
-            self._audit_legacy(
-                norm,
-                peer_pid,
-                peer_uid,
-                decision="BLOCKED",
-                reason=exc.reason,
-                legacy_classification=exc.audit_classification,
-            )
+            try:
+                self._audit_legacy(
+                    norm,
+                    peer_pid,
+                    peer_uid,
+                    event="rejected",
+                    decision="BLOCKED",
+                    reason=exc.reason,
+                    legacy_classification=exc.audit_classification,
+                )
+            except audit.AuditDurabilityError:
+                return {
+                    "decision": "BLOCKED",
+                    "reason": "audit_rejected_durability_failure",
+                }
             return {"decision": "BLOCKED", "reason": exc.reason}
 
         argv = list(command.argv)
         lock_fd = self._acquire_lock(norm.resource_key)
         if lock_fd is None:
-            self._audit_legacy(
-                norm,
-                peer_pid,
-                peer_uid,
-                decision="BLOCKED",
-                reason="resource_locked",
-                legacy_classification=command.audit_classification,
-            )
-            return {"decision": "BLOCKED", "reason": "resource_locked"}
-
-        try:
             try:
-                result = subprocess.run(argv, capture_output=True, text=True, timeout=self.command_timeout)
-            except subprocess.TimeoutExpired:
-                self._cleanup_after_timeout(norm.category, norm.argv, norm.resource_key)
                 self._audit_legacy(
                     norm,
                     peer_pid,
                     peer_uid,
+                    event="rejected",
+                    decision="BLOCKED",
+                    reason="resource_locked",
+                    legacy_classification=command.audit_classification,
+                )
+            except audit.AuditDurabilityError:
+                return {
+                    "decision": "BLOCKED",
+                    "reason": "audit_rejected_durability_failure",
+                }
+            return {"decision": "BLOCKED", "reason": "resource_locked"}
+
+        audit_id = audit.new_audit_id()
+        try:
+            try:
+                self._audit_legacy(
+                    norm,
+                    peer_pid,
+                    peer_uid,
+                    event="intent",
+                    audit_id=audit_id,
+                    decision="ALLOWED",
+                    reason="authorized",
+                    legacy_classification=command.audit_classification,
+                )
+            except audit.AuditDurabilityError:
+                return {
+                    "decision": "BLOCKED",
+                    "reason": "audit_intent_durability_failure",
+                }
+
+            try:
+                result = subprocess.run(
+                    argv,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.command_timeout,
+                )
+            except subprocess.TimeoutExpired:
+                self._cleanup_after_timeout(norm.category, norm.argv, norm.resource_key)
+                return self._finish_legacy_execution(
+                    norm,
+                    peer_pid,
+                    peer_uid,
+                    audit_id=audit_id,
+                    event="timeout",
                     decision="BLOCKED",
                     reason="command_timeout",
                     legacy_classification=command.audit_classification,
                 )
-                return {"decision": "BLOCKED", "reason": "command_timeout"}
+            except (OSError, subprocess.SubprocessError):
+                return self._finish_legacy_execution(
+                    norm,
+                    peer_pid,
+                    peer_uid,
+                    audit_id=audit_id,
+                    event="execution_error",
+                    decision="BLOCKED",
+                    reason="subprocess_execution_error",
+                    legacy_classification=command.audit_classification,
+                )
+
+            event = "completion" if result.returncode == 0 else "execution_error"
+            reason = None if result.returncode == 0 else "command_failed"
+            response = self._finish_legacy_execution(
+                norm,
+                peer_pid,
+                peer_uid,
+                audit_id=audit_id,
+                event=event,
+                decision="ALLOWED",
+                reason=reason,
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                legacy_classification=command.audit_classification,
+            )
         finally:
             self._release_lock(lock_fd)
 
-        self._audit_legacy(
-            norm, peer_pid, peer_uid, decision="ALLOWED", reason=None,
-            returncode=result.returncode, stdout_len=len(result.stdout), stderr_len=len(result.stderr),
-            legacy_classification=command.audit_classification,
-        )
-        # Audit logs only the original lengths above (for accurate sizing);
-        # the client-facing response is redacted — secrets in command
-        # output (e.g. a rendered docker-compose config with resolved
-        # environment values) must never leave the executor process.
+        return response
+
+    def _finish_legacy_execution(
+        self,
+        norm,
+        peer_pid,
+        peer_uid,
+        *,
+        audit_id,
+        event,
+        decision,
+        reason,
+        legacy_classification,
+        returncode=None,
+        stdout="",
+        stderr="",
+    ) -> dict[str, Any]:
+        try:
+            self._audit_legacy(
+                norm,
+                peer_pid,
+                peer_uid,
+                event=event,
+                audit_id=audit_id,
+                decision=decision,
+                reason=reason,
+                returncode=returncode,
+                stdout_len=len(stdout or ""),
+                stderr_len=len(stderr or ""),
+                legacy_classification=legacy_classification,
+            )
+        except audit.AuditDurabilityError:
+            return {
+                "decision": "BLOCKED",
+                "reason": "audit_terminal_durability_failure",
+            }
+
+        if decision != "ALLOWED":
+            return {"decision": decision, "reason": reason}
         return {
             "decision": "ALLOWED",
-            "returncode": result.returncode,
-            "stdout": redact.redact_text_output(result.stdout),
-            "stderr": redact.redact_text_output(result.stderr),
+            "returncode": returncode,
+            "stdout": redact.redact_text_output(stdout),
+            "stderr": redact.redact_text_output(stderr),
         }
 
     def _audit_legacy(
-        self, norm, peer_pid, peer_uid, *, decision, reason,
+        self, norm, peer_pid, peer_uid, *, event, decision, reason,
         returncode=None, stdout_len=None, stderr_len=None,
-        legacy_classification=None,
-    ) -> None:
-        audit.write_audit_entry(
+        legacy_classification=None, audit_id=None,
+    ) -> str:
+        return audit.write_audit_entry(
             self.audit_path,
             request_id=norm.request_id,
             correlation_id=norm.correlation_id,
@@ -188,14 +284,14 @@ class RootExecutorDaemon:
             daemon_version=DAEMON_VERSION,
             repository_commit=self.repository_commit,
             legacy_classification=legacy_classification,
+            event=event,
+            audit_id=audit_id,
         )
 
     def _cleanup_after_timeout(self, category: str, args: list[str], resource_key: str) -> None:
         if category == "docker" and args and args[0] == "run" and "-d" not in args and "--detach" not in args:
-            try:
+            with suppress(Exception):
                 subprocess.run(["docker", "rm", "-f", resource_key], timeout=10, capture_output=True)
-            except Exception:
-                pass
 
     # ------------------------------------------------------------------
     # v1 path
@@ -216,7 +312,8 @@ class RootExecutorDaemon:
         )
         if not allowed:
             return self._finish_v1(
-                norm, peer_pid, peer_uid, decision="BLOCKED", reason=reason,
+                norm, peer_pid, peer_uid, event="rejected",
+                decision="BLOCKED", reason=reason,
                 returncode=None, stdout="", stderr="", started_at=started_at, start=start,
             )
 
@@ -224,45 +321,139 @@ class RootExecutorDaemon:
             argv = actions.build_argv(norm.action, norm.argv)
         except actions.ActionError as exc:
             return self._finish_v1(
-                norm, peer_pid, peer_uid, decision="BLOCKED", reason=exc.reason,
+                norm, peer_pid, peer_uid, event="rejected",
+                decision="BLOCKED", reason=exc.reason,
                 returncode=None, stdout="", stderr="", started_at=started_at, start=start,
             )
 
         if norm.action == "executor_health":
             return self._finish_v1(
-                norm, peer_pid, peer_uid, decision="ALLOWED", reason="ok",
+                norm, peer_pid, peer_uid, event="completion",
+                decision="ALLOWED", reason="ok",
                 returncode=0, stdout="healthy", stderr="", started_at=started_at, start=start,
             )
 
         lock_fd = self._acquire_lock(norm.resource_key)
         if lock_fd is None:
             return self._finish_v1(
-                norm, peer_pid, peer_uid, decision="BLOCKED", reason="resource_locked",
+                norm, peer_pid, peer_uid, event="rejected",
+                decision="BLOCKED", reason="resource_locked",
                 returncode=None, stdout="", stderr="", started_at=started_at, start=start,
             )
+
+        audit_id = audit.new_audit_id()
         try:
             try:
-                result = subprocess.run(argv, capture_output=True, text=True, timeout=norm.timeout)
+                self._audit_v1(
+                    norm,
+                    peer_pid,
+                    peer_uid,
+                    event="intent",
+                    audit_id=audit_id,
+                    decision="ALLOWED",
+                    reason="authorized",
+                    returncode=None,
+                    duration_ms=0,
+                    stdout_len=0,
+                    stderr_len=0,
+                )
+            except audit.AuditDurabilityError:
+                return self._v1_response(
+                    norm,
+                    decision="BLOCKED",
+                    reason="audit_intent_durability_failure",
+                    returncode=None,
+                    stdout="",
+                    stderr="",
+                    started_at=started_at,
+                    start=start,
+                    audit_id=audit_id,
+                )
+
+            try:
+                result = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=norm.timeout
+                )
             except subprocess.TimeoutExpired:
                 return self._finish_v1(
-                    norm, peer_pid, peer_uid, decision="BLOCKED", reason="command_timeout",
+                    norm, peer_pid, peer_uid, event="timeout",
+                    audit_id=audit_id, decision="BLOCKED", reason="command_timeout",
                     returncode=None, stdout="", stderr="", started_at=started_at, start=start,
                 )
+            except (OSError, subprocess.SubprocessError):
+                return self._finish_v1(
+                    norm, peer_pid, peer_uid, event="execution_error",
+                    audit_id=audit_id, decision="BLOCKED",
+                    reason="subprocess_execution_error", returncode=None,
+                    stdout="", stderr="", started_at=started_at, start=start,
+                )
+
+            event = "completion" if result.returncode == 0 else "execution_error"
+            reason = "ok" if result.returncode == 0 else "command_failed"
+            return self._finish_v1(
+                norm, peer_pid, peer_uid, event=event, audit_id=audit_id,
+                decision="ALLOWED", reason=reason,
+                returncode=result.returncode, stdout=result.stdout, stderr=result.stderr,
+                started_at=started_at, start=start,
+            )
         finally:
             self._release_lock(lock_fd)
 
-        return self._finish_v1(
-            norm, peer_pid, peer_uid, decision="ALLOWED", reason="ok",
-            returncode=result.returncode, stdout=result.stdout, stderr=result.stderr,
-            started_at=started_at, start=start,
+    def _finish_v1(
+        self, norm, peer_pid, peer_uid, *, event, decision, reason, returncode,
+        stdout, stderr, started_at, start, audit_id=None,
+    ) -> dict[str, Any]:
+        duration_ms = int((time.monotonic() - start) * 1000)
+        stable_audit_id = audit_id or audit.new_audit_id()
+        try:
+            self._audit_v1(
+                norm,
+                peer_pid,
+                peer_uid,
+                event=event,
+                audit_id=stable_audit_id,
+                decision=decision,
+                reason=reason,
+                returncode=returncode,
+                duration_ms=duration_ms,
+                stdout_len=len(stdout or ""),
+                stderr_len=len(stderr or ""),
+            )
+        except audit.AuditDurabilityError:
+            failure_reason = (
+                "audit_rejected_durability_failure"
+                if event == "rejected"
+                else "audit_terminal_durability_failure"
+            )
+            return self._v1_response(
+                norm,
+                decision="BLOCKED",
+                reason=failure_reason,
+                returncode=returncode,
+                stdout="",
+                stderr="",
+                started_at=started_at,
+                start=start,
+                audit_id=stable_audit_id,
+            )
+
+        return self._v1_response(
+            norm,
+            decision=decision,
+            reason=reason,
+            returncode=returncode,
+            stdout=stdout,
+            stderr=stderr,
+            started_at=started_at,
+            start=start,
+            audit_id=stable_audit_id,
         )
 
-    def _finish_v1(
-        self, norm, peer_pid, peer_uid, *, decision, reason, returncode, stdout, stderr, started_at, start,
-    ) -> dict[str, Any]:
-        finished_at = datetime.now(timezone.utc).isoformat()
-        duration_ms = int((time.monotonic() - start) * 1000)
-        audit_id = audit.write_audit_entry(
+    def _audit_v1(
+        self, norm, peer_pid, peer_uid, *, event, audit_id, decision, reason,
+        returncode, duration_ms, stdout_len, stderr_len,
+    ) -> str:
+        return audit.write_audit_entry(
             self.audit_path,
             request_id=norm.request_id,
             correlation_id=norm.correlation_id,
@@ -280,12 +471,21 @@ class RootExecutorDaemon:
             reason=reason,
             returncode=returncode,
             duration_ms=duration_ms,
-            stdout_len=len(stdout or ""),
-            stderr_len=len(stderr or ""),
+            stdout_len=stdout_len,
+            stderr_len=stderr_len,
             timeout=norm.timeout,
             daemon_version=DAEMON_VERSION,
             repository_commit=self.repository_commit,
+            event=event,
+            audit_id=audit_id,
         )
+
+    def _v1_response(
+        self, norm, *, decision, reason, returncode, stdout, stderr,
+        started_at, start, audit_id,
+    ) -> dict[str, Any]:
+        finished_at = datetime.now(timezone.utc).isoformat()
+        duration_ms = int((time.monotonic() - start) * 1000)
         # audit_id/duration/lengths above are computed from the original,
         # unredacted stdout/stderr; only the client-facing response is
         # redacted — secrets in command output must never leave the
@@ -376,10 +576,8 @@ class RootExecutorDaemon:
     def stop(self) -> None:
         self._running = False
         if self._server is not None:
-            try:
+            with suppress(OSError):
                 self._server.close()
-            except OSError:
-                pass
 
 
 _COMMIT_SHA_RE = re.compile(r"[0-9a-f]{7,40}")
