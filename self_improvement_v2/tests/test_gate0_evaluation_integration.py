@@ -7,27 +7,20 @@ backtest execution (not available on this container).
 
 from __future__ import annotations
 
-import gzip
 import json
-import csv
 from datetime import UTC, datetime
-from pathlib import Path
-from io import StringIO
 
 import pytest
 
+from si_v2.research.evaluation_bundle_v1 import CandleV1, PartitionWindowV1
 from si_v2.research.gate0_evaluation_integration import (
-    load_snapshot_candles,
-    _partition_candles,
-    parse_backtest_trades,
-    build_frozen_manifest,
     CALIBRATION,
+    HOLDOUT,
     WALK_FORWARD_1,
     WALK_FORWARD_2,
-    HOLDOUT,
+    _partition_candles,
+    parse_backtest_trades,
 )
-from si_v2.research.evaluation_bundle_v1 import CandleV1, PartitionWindowV1
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
