@@ -151,7 +151,6 @@ def run_backtest_cli(
         data_dir: Freqtrade data directory (with Freqtrade-formatted data).
         timerange: ``"20250101-20250630"`` style timerange.
         export_path: Output JSON path for trade export.
-        freqtrade_bin: ``"freqtrade"`` or ``"docker exec ... freqtrade"``.
         timeout: Max execution time in seconds.
 
     Returns:
