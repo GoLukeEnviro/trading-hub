@@ -1,13 +1,17 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-07-19 after Luke
-> squash-merged SEC-1 PR #632 at
-> `450c58d15d2af89f8731cc8219c19da3dedae1b8` and SEC-3 PR #635 at
-> `a815fce782c039cbfc4f2935d5bc5f1e24f8c878`. The bounded P0 runtime
-> evidence remains the deployed-runtime baseline. SEC-1 containment and SEC-3
-> durable intent auditing are present in repository code on `main`, but
-> neither has been deployed or runtime-proven. Detailed evidence and
-> limitations are recorded in
+> **Canonical current-state snapshot.** Reconciled on 2026-07-19 after G0
+> (Canonical Program Governance) completion. G0.1 (PR #643, merge `b8827b0`)
+> established the machine-readable program contract and canonical roadmap DAG.
+> G0.2 (PR #645, merge `8c590bf`) added the governance-consistency CI job,
+> offline validator, merge-guard extension, and broker hook. Both Main Gate and
+> governance-consistency CI are GREEN on `main` at `8c590bf`.
+>
+> Phase A (State and Tracker Reconciliation) is now the active phase. The
+> bounded P0 runtime evidence remains the deployed-runtime baseline. SEC-1
+> containment and SEC-3 durable intent auditing are present in repository code
+> on `main`, but neither has been deployed or runtime-proven. Detailed
+> evidence and limitations are recorded in
 > [`p0-runtime-state-reconciliation-2026-07-18.md`](../reports/p0-runtime-state-reconciliation-2026-07-18.md),
 > [`sec1-legacy-readonly-firewall-2026-07-18.md`](../reports/sec1-legacy-readonly-firewall-2026-07-18.md),
 > [`sec1-post-merge-reconciliation-2026-07-19.md`](../reports/sec1-post-merge-reconciliation-2026-07-19.md),
@@ -20,7 +24,7 @@
 ```
 governance_contract_revision: 1
 roadmap_revision_observed: 1
-roadmap_observed_at_utc: 2026-07-19T00:00:00Z
+roadmap_observed_at_utc: 2026-07-19T20:00:00Z
 ```
 
 `governance_contract_revision` is strictly checked against
@@ -33,6 +37,8 @@ status changes.
 | Area | Current result |
 |---|---|
 | Trading posture | Dry-run only; live-capital authority remains external and absent |
+| Program governance | **G0 COMPLETE** — contract + roadmap + enforcement (PR #643, #645) |
+| Active phase | **Phase A — State and Tracker Reconciliation** |
 | P0 evidence gate | `EVIDENCE_COMPLETE / RECONCILIATION_REQUIRED` |
 | UID-10000 executor v1 path | **PASS** |
 | Executor and fleet reachability | **PASS** |
@@ -45,6 +51,7 @@ status changes.
 | Kill switch | **NORMAL persisted and effective after bounded reconciliation** |
 | Bot-scoped freeze at strategy entry | **NOT WIRED** |
 | Runtime mutation during SEC-1, SEC-3, and post-merge reconciliation | **NONE** |
+| Governance-consistency CI | **GREEN** (enforced by G0.2) |
 
 The R5A deployment and the logical SI-v2 fleet are different sets and must not
 be conflated. R5A parity is satisfied by FreqForge, Canary, Regime, Webserver,
@@ -159,11 +166,21 @@ missing-file tests, and eventual bot-scoped entry integration.
 
 ## 6. Go / no-go
 
-**Allowed next repository work:** complete human review of this A1 SEC-3
-post-merge reconciliation. After it merges, SEC-1 and SEC-3 are
-repository-complete.
+**Allowed next repository work:** Phase A — State and Tracker Reconciliation.
+G0 (Canonical Program Governance) is complete. The canonical roadmap DAG
+(`config/governance/canonical-roadmap.yaml`) defines Phase A as the next
+unblocked phase. Phase A scope:
 
-A future executor deployment and runtime proof is a separate A2 task. It
+- Reconcile `docs/state/current-operational-state.md` with the G0 governance
+  contract and canonical roadmap.
+- Update the `roadmap-selected-task` marker in tracker issue #605 to reflect
+  Phase A as the active phase.
+- Reconcile open roadmap issues and their status against the canonical DAG.
+- Close or park superseded issues that are no longer in the canonical roadmap.
+- No runtime, Docker, executor, strategy, config, or live mutation.
+
+SEC-1 and SEC-3 are repository-complete. A future executor deployment and
+runtime proof is a separate A2 task (Phase B in the canonical roadmap). It
 requires a dedicated GitHub issue, explicit scope-specific A2 approval, exact
 commit/artifact identity, pre-deployment snapshot, command/action allowlist,
 time bound, rollback procedure, canary or bounded deployment order, service
@@ -172,8 +189,8 @@ intent-before-execution proofs, audit correlation and durability evidence, a
 secret scan, and confirmation that no trading, configuration, or kill-switch
 mutation occurred.
 
-**Not authorized:** executor deployment or restart, runtime proof, R5B
-continuation, strategy reload, container mutation, kill-switch clear/bypass,
+**Not authorized:** executor deployment or restart, runtime proof, Phase B
+start, strategy reload, container mutation, kill-switch clear/bypass,
 new root capabilities, live-capital changes, or any A2/A3 action not covered
 by a new explicit marker.
 
