@@ -33,3 +33,18 @@ def test_program_contract_validates_and_holds_safety_invariants():
     ci = {e["name"]: e for e in contract["execution"]["require_ci"]}
     assert ci["governance-consistency"]["enforcement"] == "pending"
     assert ci["governance-consistency"]["effective_after"] == "G0.2"
+
+
+def test_roadmap_schema_is_valid_jsonschema():
+    schema = _load_json("canonical-roadmap.schema.json")
+    jsonschema.Draft202012Validator.check_schema(schema)
+
+
+def test_roadmap_schema_rejects_unknown_execution_class():
+    schema = _load_json("canonical-roadmap.schema.json")
+    bad = {"roadmap_revision": 1, "governance_contract_revision": 1,
+           "phases": [{"id": "X", "title": "x", "status": "pending",
+                       "dependencies": [], "exit_gate": "g",
+                       "execution_class": "A9"}]}
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(bad, schema)
