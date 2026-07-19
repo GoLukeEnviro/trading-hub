@@ -44,6 +44,7 @@ def write_audit_entry(
     timeout: int,
     daemon_version: str,
     repository_commit: str,
+    legacy_classification: str | None = None,
 ) -> str:
     """Append one v2 audit entry and return its audit_id."""
     audit_id = str(uuid.uuid4())
@@ -62,6 +63,7 @@ def write_audit_entry(
         "peer_pid": peer_pid,
         "peer_uid": peer_uid,
         "legacy_protocol": legacy_protocol,
+        "legacy_classification": legacy_classification,
         "approval_reference_redacted": "[PRESENT]" if approval_reference else None,
         "decision": decision,
         "reason": reason,

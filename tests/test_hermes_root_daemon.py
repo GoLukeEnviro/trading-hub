@@ -137,7 +137,7 @@ class TestLegacyParity:
             raise subprocess.TimeoutExpired(cmd=argv, timeout=kwargs.get("timeout", 30))
 
         monkeypatch.setattr("hermes_root.daemon.subprocess.run", fake_run)
-        resp = _send(daemon, _legacy_payload(category="docker", args=["run", "-it", "img"]))
+        resp = _send(daemon, _legacy_payload(category="docker", args=["ps"]))
         assert resp == {"decision": "BLOCKED", "reason": "command_timeout"}
 
     def test_response_schema_allowed(self, daemon):
