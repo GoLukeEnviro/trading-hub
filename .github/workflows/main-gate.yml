@@ -111,3 +111,33 @@ jobs:
       - name: Gate passed
         run: |
           echo "Main Gate: all checks passed"
+
+  governance-consistency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Regenerate Derived View and check for drift
+        run: |
+          python orchestrator/scripts/render_canonical_roadmap.py
+          git diff --exit-code docs/roadmap/canonical-program-roadmap.md
+
+      - name: Governance consistency check
+        run: |
+          python orchestrator/scripts/governance_consistency_check.py
+
+      - name: Governance tests
+        run: |
+          python -m pytest tests/test_governance_consistency.py tests/test_render_canonical_roadmap.py tests/test_governance_contract_schema.py -q
