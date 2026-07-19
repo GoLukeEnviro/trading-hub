@@ -6,28 +6,27 @@ No real network access. No Freqtrade execution. A1 only.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
-
-from si_v2.research.gate0_strategy_provenance import PRE_COMPUTED, StrategyProvenance
 from si_v2.research.gate0_evaluation_integration import (
-    CALIBRATION, WALK_FORWARD_1, WALK_FORWARD_2, HOLDOUT,
-    EVAL_WINDOWS, PAIRS, BENCHMARK_PAIR,
-    aggregate_to_1h,
-    convert_to_freqtrade_format,
-    classify_regime,
-    classify_regime_for_candles,
-    build_manifest_v2,
+    BENCHMARK_PAIR,
+    CALIBRATION,
+    EVAL_WINDOWS,
+    HOLDOUT,
+    PAIRS,
+    WALK_FORWARD_1,
+    WALK_FORWARD_2,
+    CandleV1,
     FreqtradeExportAdapterV1,
     PartitionWindowV1,
-    CandleV1,
+    aggregate_to_1h,
+    classify_regime,
+    convert_to_freqtrade_format,
 )
-
+from si_v2.research.gate0_strategy_provenance import StrategyProvenance
 
 # ---------------------------------------------------------------------------
 # Partition correction tests (#6)
@@ -276,7 +275,6 @@ class TestExportAdapter:
 class TestEndToEnd:
     def test_manifest_v2_builds_without_runtime(self):
         """Manifest v2 must be constructable without runtime dependencies."""
-        import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             # Mock snapshot dir
             snap_dir = Path(tmp) / "gate0-snapshot"
@@ -289,8 +287,9 @@ class TestEndToEnd:
             # Can't actually load manifest without snapshot dir, but builder
             # should not raise on construction (only on load)
             # Just verify the function exists and has the right signature
-            from si_v2.research.gate0_evaluation_integration import build_manifest_v2
             import inspect
+
+            from si_v2.research.gate0_evaluation_integration import build_manifest_v2
             sig = inspect.signature(build_manifest_v2)
             params = list(sig.parameters.keys())
             assert "snapshot_id" in params

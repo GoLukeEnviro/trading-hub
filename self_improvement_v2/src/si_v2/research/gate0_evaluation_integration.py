@@ -20,13 +20,11 @@ import gzip
 import hashlib
 import json
 import logging
-import subprocess
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from si_v2.research.gate0_strategy_provenance import StrategyProvenance
 from si_v2.research.evaluation_bundle_v1 import (
     BoundaryPolicy,
     CandleV1,
@@ -40,6 +38,7 @@ from si_v2.research.evaluation_bundle_v1 import (
     PartitionWindowV1,
     RawTradeV1,
 )
+from si_v2.research.gate0_strategy_provenance import StrategyProvenance
 
 logger = logging.getLogger(__name__)
 
@@ -294,7 +293,6 @@ class FreqtradeExportAdapterV1:
             # Classify regime from partition candles
             regime = "unknown"
             if partition_candles:
-                from datetime import timedelta
                 trade_candles = [
                     c for c in partition_candles
                     if entry_ts <= c.timestamp <= exit_ts
@@ -369,7 +367,7 @@ def build_manifest_v2(
 
     return EvaluationManifestV1(
         manifest_version="evaluation-manifest/v1",
-        manifest_id=f"gate0-manifest-v2-20260719",
+        manifest_id="gate0-manifest-v2-20260719",
         approval_reference="issue-658-C51-CORRECTIVE",
         strategy_identifier=sp.strategy_class,
         provenance=FreqtradeProvenanceV1(
