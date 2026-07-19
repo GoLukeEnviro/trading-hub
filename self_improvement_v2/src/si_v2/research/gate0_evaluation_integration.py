@@ -24,7 +24,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-
 from si_v2.research.evaluation_bundle_v1 import (
     BoundaryPolicy,
     CandleV1,
