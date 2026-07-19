@@ -23,7 +23,7 @@ class StrategyProvenance:
 
     # --- Identity ---
     strategy_class: str = "FreqForge_Override"
-    strategy_file: str = "freqforge/user_data/strategies/FreqForge_Override.py"
+    strategy_file: str = "freqforge/strategies/FreqForge_Override.py"
     strategy_config: str = "freqforge/user_data/config.example.json"
     freqtrade_image: str = (
         "freqtradeorg/freqtrade@sha256:87aa5c6d65359b34e9d99a0bb260a38c0efe0315253811e6f48c2afe8f278a6a"
