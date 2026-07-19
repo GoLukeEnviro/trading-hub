@@ -149,5 +149,9 @@ def test_allowed_legacy_request_uses_server_built_argv_and_classification(daemon
     assert response["decision"] == "ALLOWED"
     assert captured["argv"] == ["systemctl", "status", "hermes-root-executor.service"]
     with open(daemon.audit_path) as audit_file:
-        entry = json.loads(audit_file.read())
-    assert entry["legacy_classification"] == "legacy:systemd:status:read_only"
+        entries = [json.loads(line) for line in audit_file if line.strip()]
+    assert [entry["event"] for entry in entries] == ["intent", "completion"]
+    assert entries[0]["audit_id"] == entries[1]["audit_id"]
+    assert {entry["legacy_classification"] for entry in entries} == {
+        "legacy:systemd:status:read_only"
+    }

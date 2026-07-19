@@ -151,7 +151,9 @@ class TestLegacyParity:
     def test_audit_entry_written_legacy(self, daemon):
         _send(daemon, _legacy_payload())
         entries = _read_audit(daemon)
-        assert len(entries) == 1
+        assert len(entries) == 2
+        assert [entry["event"] for entry in entries] == ["intent", "completion"]
+        assert entries[0]["audit_id"] == entries[1]["audit_id"]
         assert entries[0]["legacy_protocol"] is True
         assert entries[0]["category"] == "fs_stat"
 
@@ -268,7 +270,9 @@ class TestAuditV2:
         secret = "abcdefghijklmnopqrstuvwxyz0123456789ABCD"
         monkeypatch.setattr(
             "hermes_root.daemon.subprocess.run",
-            lambda argv, **kw: subprocess.CompletedProcess(argv, 0, stdout=f"AWS_SECRET_ACCESS_KEY={secret}", stderr=""),
+            lambda argv, **kw: subprocess.CompletedProcess(
+                argv, 0, stdout=f"AWS_SECRET_ACCESS_KEY={secret}", stderr=""
+            ),
         )
         _send(daemon, _v1_payload())
         entries = _read_audit(daemon)
@@ -604,17 +608,17 @@ class TestR5AComposeServiceAllowlist:
             assert svc in argv
 
     def test_unknown_service_rejected(self, daemon):
-        from hermes_root.actions import build_argv, ActionError
+        from hermes_root.actions import ActionError, build_argv
         with pytest.raises(ActionError, match="invalid_service"):
             build_argv("r5a_compose_build", ["nonexistent-service"])
 
     def test_rebel_service_blocked(self, daemon):
-        from hermes_root.actions import build_argv, ActionError
+        from hermes_root.actions import ActionError, build_argv
         with pytest.raises(ActionError, match="rebel_blocked"):
             build_argv("r5a_compose_build", ["freqai-rebel"])
 
     def test_rebel_in_mixed_list_blocked(self, daemon):
-        from hermes_root.actions import build_argv, ActionError
+        from hermes_root.actions import ActionError, build_argv
         with pytest.raises(ActionError, match="rebel_blocked"):
             build_argv("r5a_compose_up", ["freqtrade-freqforge", "freqai-rebel"])
 
@@ -623,12 +627,12 @@ class TestR5AComposeDownVolumesBlocked:
     """down -v / --volumes is explicitly blocked."""
 
     def test_down_v_flag_blocked(self, daemon):
-        from hermes_root.actions import build_argv, ActionError
+        from hermes_root.actions import ActionError, build_argv
         with pytest.raises(ActionError, match="down_volumes_flag_blocked"):
             build_argv("r5a_compose_down", ["-v"])
 
     def test_down_volumes_flag_blocked(self, daemon):
-        from hermes_root.actions import build_argv, ActionError
+        from hermes_root.actions import ActionError, build_argv
         with pytest.raises(ActionError, match="down_volumes_flag_blocked"):
             build_argv("r5a_compose_down", ["--volumes"])
 
