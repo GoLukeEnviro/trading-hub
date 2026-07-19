@@ -159,13 +159,40 @@ merge guard, but MUST stop at `READY_FOR_HUMAN_MERGE`. Only Luke merges. A
 future autonomous controller requires a separately proven identity, lock
 rehearsal and governance check; root or Hermes writer access is insufficient.
 
+**Bounded autonomous merge controller (shipped disabled; ADR-2026-07-19).**
+`orchestrator/scripts/roadmap_merge_controller.py` is a narrowly-scoped
+controller that may, once activated, merge a PR that fully satisfies the
+read-only `roadmap_merge_guard` **plus** additional invariants: an explicit
+controller identity, a file-based disable switch with fail-closed
+semantics, the global repository writer lock held across the entire
+decision, a two-snapshot TOCTOU re-check, exact head-SHA binding via
+`gh pr merge --squash --match-head-commit <sha>`, A1-only enforcement
+(any A2/A3/live-trading marker in the linked issue, PR body or comments
+blocks), and an append-only JSONL audit log on every decision.
+
+The controller is shipped **disabled**. The switch file
+`/opt/data/state/roadmap-merge-controller/enabled` is not created by the
+PR that introduces the controller and is not created by any agent. Until
+that file exists with the exact content `true\n` (created by an operator
+in a separate, audited activation step), the binding rule is unchanged:
+agents MUST NOT merge any PR. The controller is intentionally inert by
+default and fails closed with `CONTROLLER_DISABLED` on every invocation
+until activation.
+
+Activation prerequisites, rollback steps and the full contract are
+binding under ADR-2026-07-19. The read-only guard
+(`orchestrator/scripts/roadmap_merge_guard.py`), the writer contract
+(`orchestrator/scripts/repo_writer.py`), and the existing tests for both
+are **not** weakened by the controller.
+
 **No unrelated debug work.** No session outside an explicitly selected
 roadmap issue may write to the trading-hub repository. Manual writer sessions
 must hold the same lock and follow the same isolated-worktree contract.
 
-See `commands/trading-hub-roadmap-tick.md` for the per-tick algorithm and
-`tests/test_repo_writer.py`, `tests/test_repo_writer_hardening.py`, and
-`tests/test_roadmap_merge_guard.py` for the enforcement suites.
+See `commands/trading-hub-roadmap-tick.md` for the per-tick algorithm,
+`tests/test_repo_writer.py`, `tests/test_repo_writer_hardening.py`,
+`tests/test_roadmap_merge_guard.py`, and
+`tests/test_roadmap_merge_controller.py` for the enforcement suites.
 
 ### Codex Cloud A1 writer path
 
