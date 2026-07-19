@@ -498,12 +498,25 @@ After G0.1 is merged:
 - `roadmap_merge_guard.py` governance extension (broker hooks code-only);
 - consistency report in `docs/reports/`.
 
-A1 only. No runtime.
+A1 only. No runtime. Concretely, **G0.2 must not**: start, restart, install, or
+enable any service; create or bind any socket; touch any credential or `.env`;
+create any `enabled`/enable-switch file; or activate the merge broker/controller.
+The broker/controller hooks are added as inert code paths only.
+
+**CI wiring scope (correction 15):** the G0.2 PR may add the
+`governance-consistency` job to `main-gate.yml` as a non-soft-fail job, but the
+PR itself cannot flip GitHub branch-protection to make it a *required* status
+check — that is a separate GitHub configuration change, made by Luke, outside the
+PR diff. The spec assumes that follow-up; G0.2's diff stops at defining the job.
 
 ### 10.3 Tracker lifecycle (correction 5)
 
 G0 is two separate tasks. Each of G0.1, G0.2, and Phase A gets its **own** issue,
-branch, PR, report, CI run, and human-only merge.
+branch, PR, report, CI run, and **human-only merge**. Both G0.1 and G0.2 modify
+governance and/or guard files (`AGENTS.md`, `config/governance/`, schemas,
+validator, renderer, `roadmap_merge_guard.py`), which are human-only per §9 and
+§7.1 — so neither PR is eligible for any automated merge, regardless of broker
+state.
 
 ```text
 G0.1 issue
