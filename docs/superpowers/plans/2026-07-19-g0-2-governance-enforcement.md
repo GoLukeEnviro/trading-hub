@@ -33,8 +33,8 @@
 | `.github/workflows/main-gate.yml` | Add `governance-consistency` job + regenerate-and-diff | Modify |
 | `orchestrator/scripts/roadmap_merge_guard.py` | Live governance rules extension (spec §7.4) | Modify |
 | `tests/test_roadmap_merge_guard.py` | Extend for governance rules | Modify |
-| `<root-broker merge controller from PR #640>` / `orchestrator/scripts/repo_writer.py` | Code-only, disabled governance hook (spec §7.4) | Modify |
-| `tests/test_governance_broker_hook.py` | Integration test: inert path blocks non-compliant merge | Create |
+| `orchestrator/scripts/roadmap_merge_controller_broker.py` | Add `check_governance_scope` + wire into `evaluate_guard` (spec §7.4) | Modify |
+| `tests/test_roadmap_merge_controller.py` | Governance-scope check tests | Modify |
 | `docs/reports/g0-2-governance-enforcement-<date>.md` | Evidence report | Create |
 
 ---
@@ -544,20 +544,37 @@ git commit -m "ci(governance): add non-soft-fail governance-consistency job"
 
 ---
 
-## Task 6: Merge-guard governance extension + broker/writer code-only hook
+## Task 6: Merge-guard governance extension + broker code-only hook
+
+**Confirmed broker module (spec §10.4 lookup resolved):** merging `origin/main`
+(`ff791d69`) brought in PR #640's controller. The real files are:
+
+- `orchestrator/scripts/roadmap_merge_controller_broker.py` — root-owned broker;
+  already has a `GovernanceBlock(BrokerError)` exception (`message`, `blockers:
+  list[str]`), a `check_denylist`/`check_paths_allowlist`/`check_a1_triggers`
+  family of `check_X(...) -> list[str]` pure functions, and `evaluate_guard(...)
+  -> tuple[bool, list[str]]` which is called at the merge decision point
+  (`handle_merge_request`, around line 1016) and its blockers are folded into
+  `MergeResponse.blockers`.
+- `orchestrator/scripts/roadmap_merge_controller.py` — UID-10000 client.
+- Activation is already fail-closed via `is_controller_enabled(switch_path,
+  halt_path)`: requires a root:root-owned `0644`-or-stricter enable-switch file
+  containing exactly `true`, AND no halt file. **This PR creates neither file**,
+  so the whole controller stays disabled regardless of what code is added.
+
+This means the governance hook does not need its own bespoke "disabled" flag —
+it can follow the exact same `check_X(...) -> list[str]` convention as
+`check_denylist` and be wired into the real `evaluate_guard` blocker
+aggregation, and it is still inert because the broker service is never started
+or enabled by this PR.
 
 **Files:**
 - Modify: `orchestrator/scripts/roadmap_merge_guard.py`
 - Modify: `tests/test_roadmap_merge_guard.py`
-- Modify: `<root-broker merge controller from PR #640>` and/or `orchestrator/scripts/repo_writer.py`
-- Create: `tests/test_governance_broker_hook.py`
+- Modify: `orchestrator/scripts/roadmap_merge_controller_broker.py`
+- Modify: `tests/test_roadmap_merge_controller.py`
 
-- [ ] **Step 1: Locate the actual broker/controller module** (spec §10.4). Confirm PR #640's root-broker merge controller path on current `main`. Record the confirmed path in the report.
-
-Run: `git grep -lE "governed_merge|merge.?broker|roadmap.?merge.?controller" -- '*.py'`
-Expected: identify the controller/writer module(s).
-
-- [ ] **Step 2: Write failing merge-guard test** (guard blocks a PR whose selected task is roadmap-incompatible):
+- [ ] **Step 1: Write failing merge-guard test** (guard blocks a PR whose selected task is roadmap-incompatible):
 
 ```python
 # in tests/test_roadmap_merge_guard.py
@@ -568,44 +585,110 @@ def test_guard_blocks_roadmap_incompatible_task():
     assert governance_task_compatible(selected_phase="G0", roadmap_status={"G0": "in_progress"}) is True
 ```
 
-- [ ] **Step 3: Run to verify it fails**
+- [ ] **Step 2: Run to verify it fails**
 
 Run: `python3 -m pytest tests/test_roadmap_merge_guard.py -k roadmap_incompatible -q`
 Expected: FAIL (function missing).
 
-- [ ] **Step 4: Implement `governance_task_compatible`** in `roadmap_merge_guard.py` (read-only; loads canonical roadmap; a task is mergeable only if its phase is `in_progress`/`pending` and dependencies are complete). Keep the existing marker/check logic intact.
+- [ ] **Step 3: Implement `governance_task_compatible`** in `roadmap_merge_guard.py` (read-only; loads canonical roadmap; a task is mergeable only if its phase is `in_progress`/`pending` and dependencies are complete). Keep the existing marker/check logic intact.
 
-- [ ] **Step 5: Write the broker hook integration test (inert path blocks non-compliant merge)**
+- [ ] **Step 4: Run to verify it passes**
+
+Run: `python3 -m pytest tests/test_roadmap_merge_guard.py -q`
+Expected: PASS.
+
+- [ ] **Step 5: Write the broker governance-check test** (pure function, same shape as `check_denylist`):
 
 ```python
-# tests/test_governance_broker_hook.py
-def test_broker_governance_hook_is_disabled_but_blocks_when_invoked():
-    from <broker_module> import governance_precheck  # exact path from Step 1
-    # The hook exists, is disabled by default (no activation), and when explicitly
-    # invoked in test returns a blocking result for a non-compliant merge.
-    result = governance_precheck(pr_touches_governance=True, has_accepted_adr_scope=False)
-    assert result.allowed is False
-    assert result.reason  # explains governance violation
+# in tests/test_roadmap_merge_controller.py
+from orchestrator.scripts.roadmap_merge_controller_broker import check_governance_scope
+
+def test_check_governance_scope_blocks_governance_files_without_adr_scope():
+    blockers = check_governance_scope(
+        changed_files=["config/governance/program-contract.yaml"],
+        pr_has_accepted_adr_scope=False,
+        human_only_files=["AGENTS.md", "config/governance/program-contract.yaml"],
+    )
+    assert blockers  # non-empty: governance file changed without ADR scope
+
+
+def test_check_governance_scope_allows_status_reconciliation_with_adr_scope():
+    blockers = check_governance_scope(
+        changed_files=["config/governance/canonical-roadmap.yaml"],
+        pr_has_accepted_adr_scope=True,
+        human_only_files=["AGENTS.md", "config/governance/canonical-roadmap.yaml"],
+    )
+    assert blockers == []
 ```
 
 - [ ] **Step 6: Run to verify it fails**
 
-Run: `python3 -m pytest tests/test_governance_broker_hook.py -q`
-Expected: FAIL (hook missing).
+Run: `python3 -m pytest tests/test_roadmap_merge_controller.py -k check_governance_scope -q`
+Expected: FAIL (function missing).
 
-- [ ] **Step 7: Implement the inert broker/writer hook** — a `governance_precheck(...)` function that encodes the §7.1 live-guard governance rules (governance files only under Accepted-ADR scope; human-only files not touched by automated merge). It is **not wired into any active code path / not enabled**; only defined and unit-testable. Add a clear comment: `# DISABLED in G0.2: broker is not activated (spec §7.4). Code-only governance hook.`
+- [ ] **Step 7: Implement `check_governance_scope`** in `roadmap_merge_controller_broker.py`, next to `check_denylist`/`check_paths_allowlist`, following the exact same pure-function convention (returns `list[str]`, no side effects, no GitHub calls):
 
-- [ ] **Step 8: Run all guard/hook tests**
+```python
+def check_governance_scope(
+    changed_files: list[str],
+    *,
+    pr_has_accepted_adr_scope: bool,
+    human_only_files: list[str],
+) -> list[str]:
+    """Governance-file change control (spec §7.1, §9).
 
-Run: `python3 -m pytest tests/test_roadmap_merge_guard.py tests/test_governance_broker_hook.py -q`
+    Returns blocker strings. Empty = no governance-scope violation. A PR that
+    touches any human-only / governance file must carry an accepted-ADR scope
+    marker; this mirrors check_denylist's shape and is folded into
+    evaluate_guard's blockers the same way. Present, tested, callable — but
+    still inert: this PR does not create the enable-switch file, so
+    is_controller_enabled() keeps the whole broker disabled.
+    """
+    touched_governed = [f for f in changed_files if f in human_only_files]
+    if touched_governed and not pr_has_accepted_adr_scope:
+        return [f"GOVERNANCE_SCOPE:{f}:no_accepted_adr" for f in touched_governed]
+    return []
+```
+
+- [ ] **Step 8: Wire it into `evaluate_guard`'s blocker aggregation** (append at the end of `evaluate_guard`, before the `return`):
+
+```python
+    governance_blockers = check_governance_scope(
+        changed_files=snapshot.get("changed_files", []),
+        pr_has_accepted_adr_scope=snapshot.get("pr_has_accepted_adr_scope", False),
+        human_only_files=_HUMAN_ONLY_FILES,
+    )
+    blockers.extend(governance_blockers)
+```
+
+Add a module-level `_HUMAN_ONLY_FILES` list near the existing allowlist/denylist
+constants: `AGENTS.md`, `config/governance/program-contract.yaml`,
+`config/governance/program-contract.schema.json`,
+`config/governance/canonical-roadmap.yaml`,
+`config/governance/canonical-roadmap.schema.json`,
+`orchestrator/scripts/governance_consistency_check.py`,
+`orchestrator/scripts/roadmap_merge_guard.py`,
+`orchestrator/scripts/roadmap_merge_controller_broker.py`. Add a comment above
+the wiring: `# Present and active in evaluate_guard's pure logic, but the
+broker process itself stays disabled: is_controller_enabled() requires an
+enable-switch file this PR does not create (spec §7.4).`
+
+- [ ] **Step 9: Run to verify it passes**
+
+Run: `python3 -m pytest tests/test_roadmap_merge_controller.py -k governance -q`
 Expected: PASS.
 
-- [ ] **Step 9: Lint + commit**
+- [ ] **Step 10: Run the full broker/controller/guard suite (regression check)**
+
+Run: `python3 -m pytest tests/test_roadmap_merge_guard.py tests/test_roadmap_merge_controller.py -q`
+Expected: PASS, no regressions in existing `evaluate_guard`/`check_toctou` tests.
+
+- [ ] **Step 11: Lint + commit**
 
 ```bash
-ruff check orchestrator/scripts/roadmap_merge_guard.py
-git add orchestrator/scripts/roadmap_merge_guard.py tests/test_roadmap_merge_guard.py <broker_module> tests/test_governance_broker_hook.py
-git commit -m "feat(governance): extend merge-guard and add disabled broker governance hook"
+ruff check orchestrator/scripts/roadmap_merge_guard.py orchestrator/scripts/roadmap_merge_controller_broker.py
+git add orchestrator/scripts/roadmap_merge_guard.py tests/test_roadmap_merge_guard.py orchestrator/scripts/roadmap_merge_controller_broker.py tests/test_roadmap_merge_controller.py
+git commit -m "feat(governance): extend merge-guard and wire governance-scope check into broker evaluate_guard"
 ```
 
 ---
@@ -626,10 +709,10 @@ Expected: all tests PASS; validator prints `governance-consistency OK` (exit 0).
 
 - [ ] **Step 2: Confirm no activation happened** (no service/socket/enable-switch/credential change):
 
-Run: `git diff --name-only origin/main... | grep -Ev '^(orchestrator/scripts/(governance_consistency_check|roadmap_merge_guard|repo_writer)\.py|tests/|\.github/workflows/main-gate\.yml|docs/reports/|<broker_module>)$' || echo "only expected files changed"`
-Expected: only expected files changed; no `.env`, no `*.service`, no `enabled` files.
+Run: `git diff --name-only origin/main... | grep -Ev '^(orchestrator/scripts/(governance_consistency_check|roadmap_merge_guard|roadmap_merge_controller_broker)\.py|tests/|\.github/workflows/main-gate\.yml|docs/reports/)$' || echo "only expected files changed"`
+Expected: only expected files changed; no `.env`, no `*.service`, no enable-switch file created.
 
-- [ ] **Step 3: Write the evidence report** documenting: confirmed broker/controller module path, validator output, negative-test results (red→green), the CI job addition, and explicit confirmation that the broker remains disabled and no runtime/branch-protection change was made.
+- [ ] **Step 3: Write the evidence report** documenting: the confirmed broker module (`roadmap_merge_controller_broker.py`, discovered via the `origin/main` merge), validator output, negative-test results (red→green), the CI job addition, and explicit confirmation that `is_controller_enabled()`'s required enable-switch file was not created — the broker remains disabled — and no branch-protection change was made.
 
 - [ ] **Step 4: Commit**
 
