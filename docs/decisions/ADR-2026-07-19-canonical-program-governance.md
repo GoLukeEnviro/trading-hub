@@ -95,17 +95,21 @@ thing:
   changes require what governance." It is scoped to the machine-readable
   contract/roadmap and the promotion flow that changes them.
 - **`AGENTS.md`'s Source-of-truth order** governs **resolving stale or
-  conflicting factual claims about current runtime/operational state** — a
-  narrower, Operational-class (§2.1 item 4) question, such as "is SEC-1
-  actually deployed right now." Its ranking of fresh evidence above
-  `AGENTS.md`/`SOUL.md`/Active ADRs is correct for that purpose: a merged
-  ADR cannot override what CI or a live system actually shows to be true
-  today.
+  conflicting factual claims**, mostly Operational-class (§2.1 item 4)
+  questions such as "is SEC-1 actually deployed right now." Its ranking of
+  fresh evidence above `AGENTS.md`/`SOUL.md`/Active ADRs is correct for that
+  purpose: a merged ADR cannot override what CI or a live system actually
+  shows to be true today. Two of its six items reach further than pure
+  operational fact-checking — item 2 ("active roadmap PR") and item 4's
+  long-term-live-target component are direction-adjacent — and are flagged
+  here, not resolved, pending reconciliation with the Machine-readable class
+  in a later task.
 
 If a future situation appears to pit these two lists against each other,
 that is itself a direction-vs-operational-fact confusion, not a genuine
-conflict — escalate rather than silently picking one list. Batch E of the
-implementing plan adds a reference from `AGENTS.md` to this contract; it does
+conflict — escalate rather than silently picking one list. Task 8 of the
+implementing plan ("AGENTS.md canonical-source reference, minimal-touch")
+adds a reference from `AGENTS.md` to this contract; it does
 not resolve or restructure this pre-existing list, which is out of scope for
 G0.
 
