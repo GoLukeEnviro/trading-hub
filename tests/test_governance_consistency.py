@@ -197,11 +197,16 @@ def test_roadmap_only_status_change_warns_not_fails(tmp_path):
     revision must emit ROADMAP_RECONCILIATION_PENDING (warning), not a hard
     failure. The canonical YAML and Derived View are left consistent.
     """
+    import re
+
     repo = _clone_governance(tmp_path)
     st = repo / "docs/state/current-operational-state.md"
+    # Replace any observed value with 999 (regardless of the current revision)
     st.write_text(
-        st.read_text().replace(
-            "roadmap_revision_observed: 1", "roadmap_revision_observed: 999"
+        re.sub(
+            r"roadmap_revision_observed:\s*\d+",
+            "roadmap_revision_observed: 999",
+            st.read_text(),
         )
     )
     result = _run(cwd=repo)

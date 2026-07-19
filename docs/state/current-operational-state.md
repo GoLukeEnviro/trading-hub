@@ -1,10 +1,18 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-07-19 after Luke
-> squash-merged SEC-1 PR #632 at
+> **Canonical current-state snapshot.** Reconciled on 2026-07-19 after Phase A
+> (state and tracker reconciliation). G0 (Canonical Program Governance) is
+> **complete**: G0.1 (PR #640 + #642) and G0.2 (PR #645, merge
+> `8c590bf`) are merged, the bootstrap ADR is `Accepted`, and
+> `governance-consistency` is a required branch-protection check on `main`.
+> The roadmap revision is bumped to 2 (G0 complete, Phase A in_progress).
+> Phase B (#636, SEC-1/SEC-3 runtime deployment) remains blocked (A2).
+> Phase C (#604, Gate-0 strategy evidence) remains blocked (A1, depends on
+> Phase A). No runtime mutation performed by this reconciliation.
+>
+> **Previous:** SEC-1 PR #632 merged at
 > `450c58d15d2af89f8731cc8219c19da3dedae1b8` and SEC-3 PR #635 at
-> `a815fce782c039cbfc4f2935d5bc5f1e24f8c878`. The bounded P0 runtime
-> evidence remains the deployed-runtime baseline. SEC-1 containment and SEC-3
+> `a815fce782c039cbfc4f2935d5bc5f1e24f8c878`. SEC-1 containment and SEC-3
 > durable intent auditing are present in repository code on `main`, but
 > neither has been deployed or runtime-proven. Detailed evidence and
 > limitations are recorded in
@@ -19,14 +27,43 @@
 
 ```
 governance_contract_revision: 1
-roadmap_revision_observed: 1
-roadmap_observed_at_utc: 2026-07-19T00:00:00Z
+roadmap_revision_observed: 2
+roadmap_observed_at_utc: 2026-07-19T20:10:00Z
 ```
 
 `governance_contract_revision` is strictly checked against
 `config/governance/program-contract.yaml`; `roadmap_revision_observed` is
 informational only and does not force a state-file touch on ordinary roadmap
 status changes.
+
+## Phase A — State and Tracker Reconciliation (2026-07-19)
+
+Phase A is the first operational task executed under canonical program
+governance. It records G0 completion and advances the roadmap.
+
+- **G0 complete:** exit gate `governance_consistency_green` passed. The
+  governance layer (contract, roadmap, schemas, renderer, offline validator,
+  CI job, merge-guard extension, broker governance hook) is fully present on
+  `main` and enforced via branch protection.
+- **Branch protection:** `main` requires `main-gate`, `offline-smoke`, and
+  `governance-consistency` status checks (strict, up-to-date); linear history
+  enforced; force-push and deletion blocked.
+- **Roadmap revision 2:** G0 `complete`, Phase A `in_progress` (issue #647).
+  Derived View regenerated.
+- **Tracker #605:** repointed to Phase A (issue #647).
+- **No runtime mutation:** A1 documentation/roadmap/state only. No Docker,
+  Cron, trading, kill-switch, credential, `.env`, service, socket, broker, or
+  controller mutation.
+
+### Post-G0 operational state (unchanged by Phase A)
+
+- Live trading: `TARGET_ARCHITECTURE_NOT_ENABLED`
+- Execution mode: Dry-run only
+- Kill switch: `NORMAL`
+- C4 decision: `ROLLBACK_RECOMMENDED` (preserved)
+- Fleet: HermesTrader dry-run fleet (5/5 health per R5A); agent0 legacy
+  containers remain outside canonical governance
+- SEC-1/SEC-3: present in code, not deployed or runtime-proven
 
 ## 1. Executive state
 

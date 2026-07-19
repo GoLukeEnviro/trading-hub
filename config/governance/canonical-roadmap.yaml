@@ -1,15 +1,16 @@
-roadmap_revision: 1
+roadmap_revision: 2
 governance_contract_revision: 1
 phases:
   - id: G0
     title: Canonical Program Governance
-    status: in_progress
+    status: complete
     dependencies: []
     exit_gate: governance_consistency_green
   - id: A
     title: State and Tracker Reconciliation
-    status: pending
+    status: in_progress
     dependencies: [G0]
+    issue: 647
     exit_gate: canonical_state_reconciled
   - id: B
     title: SEC-1/SEC-3 Runtime Deployment
