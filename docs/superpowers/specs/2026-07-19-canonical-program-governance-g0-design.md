@@ -1,6 +1,11 @@
 # Meta-Spec: G0 — Canonical Program Governance
 
 - **Status:** Draft for review
+- **Authority:** `advisory / pre-bootstrap` — this design spec is advisory input,
+  not a normative source. After G0 is merged, the canonical authority is
+  `config/governance/` + the Accepted ADR; this meta-spec must **not** be treated
+  as a competing normative or roadmap source and is superseded as a directional
+  reference once G0.1 lands.
 - **Author:** Claude (brainstorming session with Luke / GoLukeEnviro)
 - **Created:** 2026-07-19
 - **Execution class:** A1 (repository-only, no runtime mutation)
@@ -43,10 +48,15 @@ G0 is itself a direction change, so it needs the very instrument it creates: an
 Accepted ADR. There is **no self-ratification**. An agent must never grant
 itself governance authority. The bootstrap sequence is:
 
-1. The governance ADR is authored with `Status: Proposed`.
+1. The governance ADR is authored with `Status: Proposed`. The G0.1 PR opens and
+   is reviewed with the ADR in this `Proposed` state.
 2. Luke explicitly confirms it in the G0.1 issue or PR.
-3. The merge that carries Luke's confirmation is what flips the ADR to
-   `Accepted`.
+3. **After** that confirmation, a commit on the **exact same PR head** changes the
+   ADR to `Status: Accepted`; CI re-runs and the merge-guard re-checks that exact
+   head before merge.
+4. Only then is the PR merged. **A merged ADR that still reads `Proposed` is a
+   contradiction and must never happen** — the acceptance flip and its re-check
+   precede the merge, they are not a post-merge step.
 
 The bootstrap is a one-time, human-ratified migration. It is not an exception
 to the no-self-ratification rule; it is an application of it.
@@ -169,12 +179,16 @@ execution:
   require_writer_lock: true
   require_isolated_worktree: true
   require_ci:
-    # Describes the post-G0.2 steady state. The `governance-consistency`
-    # job is created in G0.2 (§7); G0.1 only declares the target end-state
-    # and does not wire the job itself.
-    - Main Gate
-    - SI v2 Offline Smoke
-    - governance-consistency
+    # Enforced from G0.1 onward:
+    - name: Main Gate
+      enforcement: active
+    - name: SI v2 Offline Smoke
+      enforcement: active
+    # Declared in G0.1 but not yet enforcing: the job is created in G0.2 (§7).
+    # G0.1 must not claim this check is mandatory before it exists.
+    - name: governance-consistency
+      enforcement: pending
+      effective_after: G0.2
 authority:
   direction_change_requires:
     - accepted_adr
@@ -270,6 +284,11 @@ validate: allowed status values, required fields, execution classes, approval
 requirements, source path shape, DAG node shape, and the absence of ambiguous
 authority (e.g. exactly one authoritative roadmap source).
 
+Each `execution.require_ci` entry is an object `{ name, enforcement }` with
+optional `effective_after`. `enforcement` is `active` or `pending`; a `pending`
+entry (e.g. `governance-consistency` in G0.1) must carry `effective_after` and is
+not treated as a mandatory check until that phase lands (§4.1, correction 2).
+
 ---
 
 ## 5. Proposal → ADR → Config promotion
@@ -344,8 +363,10 @@ repository-only consistency, with no GitHub API or Issue #605 dependency:
 - `AGENTS.md` references the program contract.
 - `current-operational-state.md` declares a compatible
   `governance_contract_revision`.
-- No non-canonical document claims to be authoritative.
-- Superseded documents carry `superseded_by`.
+- No non-canonical document claims to be authoritative. This is checked **only
+  via structured frontmatter fields** (`authority`, `status`, `superseded_by`) —
+  see §7.2 scope limit. The validator does not free-text scan document bodies.
+- Superseded documents carry `superseded_by` (frontmatter field).
 - Contract does not contradict the safety rules in `AGENTS.md` / `SOUL.md`.
   This is a **mechanical** invariant, not semantic safety-diffing: the contract
   must contain `north_star.live_is_currently_authorized: false` and a non-empty
@@ -371,6 +392,15 @@ state:
 Implements all offline checks in §7.1. Exit non-zero on any hard failure; emit
 `ROADMAP_RECONCILIATION_PENDING` as a warning without failing.
 
+**Scope limit (correction 4):** the validator inspects **only structured
+metadata** — the two governance YAMLs against their JSON schemas, and the
+**defined frontmatter fields** of governed Markdown files (`authority`, `status`,
+`superseded_by`, and the proposal header fields in §5). It must **not** free-text
+search document bodies, historical reports, evidence files, or quoted legacy
+text. A document without governed frontmatter is out of scope, not a failure.
+This keeps the check deterministic and prevents false positives from historical
+prose that merely mentions words like "canonical" or "authoritative".
+
 ### 7.3 Renderer — `orchestrator/scripts/render_canonical_roadmap.py`
 
 Deterministic. Reads `canonical-roadmap.yaml`, writes
@@ -390,13 +420,28 @@ The **regenerate-and-diff CI enforcement** is wired in G0.2: the
 output; any drift fails the job. This split keeps G0.1's generated file
 byte-identical to what the G0.2 CI later regenerates.
 
-### 7.4 Merge-guard extension — `orchestrator/scripts/roadmap_merge_guard.py`
+### 7.4 Merge-guard and broker code integration — `orchestrator/scripts/roadmap_merge_guard.py` + broker/writer
 
-Extend the existing read-only guard (it already parses the
-`<!-- roadmap-selected-task:NNN -->` marker and requires the `main-gate` /
-`offline-smoke` checks) with the live governance rules in §7.1. **Broker /
-controller hooks are written as code only and are NOT activated.** G0 remains
-fully A1.
+The chosen option is "CI-gate + guard, broker code-only". That means **two**
+code touchpoints, both delivering tested but inert governance checks:
+
+1. **Merge-guard** `orchestrator/scripts/roadmap_merge_guard.py`: extend the
+   existing read-only guard (it already parses the
+   `<!-- roadmap-selected-task:NNN -->` marker and requires the `main-gate` /
+   `offline-smoke` checks) with the live governance rules in §7.1.
+2. **Broker / writer governance hook**: the governance check must also be present
+   as an inert code path in the root-broker merge controller / governed-merge
+   writer. In this worktree the governed-merge writer is
+   `orchestrator/scripts/repo_writer.py`; the **root-broker merge controller from
+   PR #640 is not in this worktree's base (`b18bbf0`)** — see §10.4. The
+   implementer branches from current `main` (`ff791d69`), locates the actual
+   broker/controller module there, and adds the governance check as a tested,
+   **disabled** code path.
+
+**Nothing is activated.** No broker service starts, no socket binds, no
+`enabled` switch is set. Only extending the merge-guard would **not** satisfy the
+committed broker-code integration; the broker/writer hook plus its tests are
+required. G0 remains fully A1.
 
 ### 7.5 Tests — `tests/test_governance_consistency.py`
 
@@ -483,6 +528,11 @@ Contents:
 - proposal header convention + `docs/proposals/README.md`;
 - `superseded_by` header on genuinely competing roadmaps (§11);
 - state-file governance revision fields (§6);
+- **schema-validation tests** for `program-contract.yaml` and
+  `canonical-roadmap.yaml` (both must validate against their schemas) and a
+  **renderer determinism test** (render is idempotent and the committed Markdown
+  equals the render output). G0.1 must not merge the canonical files unvalidated
+  and defer all validation to G0.2 (correction 4);
 - migration plan.
 
 A1 only. No runtime.
@@ -491,11 +541,16 @@ A1 only. No runtime.
 
 After G0.1 is merged:
 
-- `governance_consistency_check.py`;
-- `test_governance_consistency.py`;
-- `governance-consistency` required job in `main-gate.yml`, including the
+- `governance_consistency_check.py` (full offline consistency validator, §7.2);
+- `test_governance_consistency.py` (negative cases, §7.5);
+- `governance-consistency` job in `main-gate.yml`, including the
   regenerate-and-diff enforcement that invokes the G0.1 renderer (§7.3);
-- `roadmap_merge_guard.py` governance extension (broker hooks code-only);
+- `roadmap_merge_guard.py` governance extension (§7.4);
+- **broker/writer governance hook (code-only, disabled)** in the root-broker
+  merge controller from PR #640 and/or `orchestrator/scripts/repo_writer.py`
+  (§7.4, §10.4), **with integration tests** proving the check runs and blocks a
+  non-compliant merge on the inert path — extending
+  `tests/test_roadmap_merge_guard.py` and adding a broker-governance test;
 - consistency report in `docs/reports/`.
 
 A1 only. No runtime. Concretely, **G0.2 must not**: start, restart, install, or
@@ -537,6 +592,22 @@ Phase-A issue
 
 Tracker repointing is a separate step from each merge, never bundled into a PR.
 
+### 10.4 Base-branch caveat (worktree is behind main)
+
+This worktree's base is `b18bbf0`; local `origin/main` also reads `b18bbf0`,
+while the authoritative GitHub `main` is `ff791d69`. **PR #640's root-broker
+merge controller landed after `b18bbf0` and is therefore not present in this
+worktree.** The implementer must:
+
+- branch G0.1 and G0.2 from current `main` (`ff791d69`), not from this worktree's
+  base, so the broker/controller files from PR #640 are available for the §7.4
+  code-only hook;
+- verify the exact broker/controller module path at implementation time rather
+  than trusting a path from this spec, since it was authored against the older
+  base. Confirmed-present files in the base are
+  `orchestrator/scripts/roadmap_merge_guard.py` and
+  `orchestrator/scripts/repo_writer.py`.
+
 ---
 
 ## 11. Migration of existing roadmaps (correction / precision)
@@ -569,14 +640,30 @@ Rules:
 
 ## 12. Acceptance criteria
 
-- `governance_consistency_check.py` passes locally and in CI.
-- Every negative test in §7.5 is demonstrated red→green.
-- The generated Markdown is byte-identical to the renderer output.
+**G0.1:**
+
+- `program-contract.yaml` and `canonical-roadmap.yaml` validate against their
+  schemas (tests present in G0.1, not deferred to G0.2).
+- Renderer is deterministic; committed Derived-View Markdown equals its output.
+- The bootstrap ADR is flipped `Proposed → Accepted` on the **exact PR head**
+  after Luke's confirmation, CI/guard re-checked on that head, and only then
+  merged. No PR merges with the ADR still reading `Proposed` (§0.2).
+
+**G0.2:**
+
+- `governance_consistency_check.py` passes locally and in CI; every negative test
+  in §7.5 is demonstrated red→green.
+- The regenerate-and-diff CI enforcement fails on any Derived-View drift.
+- Broker/writer governance hook exists as a tested, **disabled** code path
+  (§7.4), with an integration test proving it blocks a non-compliant merge on the
+  inert path — not merely a merge-guard change.
+
+**Both PRs:**
+
 - Tracker #605 points to exactly one task that is compatible with the roadmap.
-- The bootstrap ADR is `Accepted` only after Luke's explicit confirmation is
-  carried by the merge.
-- Both PRs are A1; no runtime, Docker, trading, kill-switch, credential,
-  broker, or controller state changed.
+- Both PRs are A1 and human-only; no runtime, Docker, trading, kill-switch,
+  credential, service, socket, enable-switch, broker, or controller state
+  changed.
 
 ---
 
