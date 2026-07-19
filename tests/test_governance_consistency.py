@@ -119,3 +119,26 @@ def test_two_active_directions_fail(tmp_path):
     )
     c.write_text(yaml.safe_dump(data))
     assert _run(cwd=repo).returncode != 0
+
+
+# ── Task 3: source paths, frontmatter authority, superseded_by ─────────────
+
+
+def test_missing_source_path_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    (repo / "AGENTS.md").unlink()
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_advisory_claiming_canonical_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    p = repo / "docs/proposals/001-x.md"
+    p.write_text("---\nauthority: canonical\nstatus: proposed\n---\nbody\n")
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_superseded_without_superseded_by_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    p = repo / "docs/roadmap/old-roadmap.md"
+    p.write_text("---\nauthority: historical\nstatus: superseded\n---\nbody\n")
+    assert _run(cwd=repo).returncode != 0

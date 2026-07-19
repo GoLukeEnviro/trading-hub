@@ -68,11 +68,54 @@ def check_single_direction(contract: dict) -> None:
         )
 
 
+def _frontmatter(text: str) -> dict:
+    if not text.startswith("---"):
+        return {}
+    _, _, rest = text.partition("---")
+    fm, _, _ = rest.partition("---")
+    try:
+        return yaml.safe_load(fm) or {}
+    except yaml.YAMLError:
+        return {}
+
+
+def check_source_paths(contract: dict) -> None:
+    for group in contract["canonical_sources"].values():
+        paths = group if isinstance(group, list) else []
+        for rel in paths:
+            if not Path(rel).exists():
+                HARD_FAILURES.append(f"canonical source path missing: {rel}")
+
+
+def check_governed_frontmatter() -> None:
+    """Frontmatter-only checks across governed Markdown (spec §7.1/§7.2).
+
+    Scope: proposals plus the roadmap dirs G0.1 stamps as superseded. No body
+    scan, no historical reports/evidence/context.
+    """
+    scan_dirs = ["docs/proposals", "docs/roadmap", "docs/roadmaps"]
+    for d in scan_dirs:
+        if not Path(d).is_dir():
+            continue
+        for md in Path(d).glob("*.md"):
+            if md.name == "README.md":
+                continue
+            fm = _frontmatter(md.read_text())
+            if not fm:
+                continue  # no governed frontmatter -> out of scope, not a failure
+            if fm.get("authority") == "canonical":
+                HARD_FAILURES.append(f"advisory/historical doc claims canonical: {md}")
+            if fm.get("status") == "superseded" and not fm.get("superseded_by"):
+                HARD_FAILURES.append(f"superseded doc lacks superseded_by: {md}")
+
+
 def main() -> int:
     contract, roadmap = check_schemas()
     check_dag(roadmap)
     check_single_direction(contract)
-    # further checks added in later tasks (paths, frontmatter, render, revision)
+    check_source_paths(contract)
+    check_governed_frontmatter()
+    # further checks added in later tasks (render, state revision, authority, mandate)
     for w in WARNINGS:
         print(f"WARN {w}")
     if HARD_FAILURES:
