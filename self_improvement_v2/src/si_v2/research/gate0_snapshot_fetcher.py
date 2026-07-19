@@ -29,7 +29,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any  # noqa: F401  # used in casts below
 
 from si_v2.research.evaluation_bundle_v1 import CandleV1, canonical_candle_hash
 
@@ -386,9 +386,9 @@ class SnapshotManifest:
     timerange_start: datetime
     timerange_end: datetime
     created_at_utc: datetime
-    files: tuple[dict[str, Any], ...] = field(default_factory=tuple)
+    files: tuple[dict[str, object], ...] = field(default_factory=tuple)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         d = asdict(self)
         d["timerange_start"] = self.timerange_start.strftime("%Y-%m-%dT%H:%M:%SZ")
         d["timerange_end"] = self.timerange_end.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -406,7 +406,7 @@ def build_manifest(
     timeframe: str,
     timerange_start: datetime,
     timerange_end: datetime,
-    snapshot_files: list[dict[str, Any]],
+    snapshot_files: list[dict[str, object]],
     target_dir: Path,
     product_type: str = "USDT-FUTURES",
 ) -> SnapshotManifest:
