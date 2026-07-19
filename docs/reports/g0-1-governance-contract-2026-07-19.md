@@ -86,7 +86,7 @@ planning artifacts, not governance-contract runtime files:
 `docs/superpowers/specs/2026-07-19-canonical-program-governance-g0-design.md`
 (+1 line, commit `65f4616`, the phase-H `exit_gate` fix) and
 `docs/superpowers/plans/2026-07-19-g0-1-canonical-governance-contract.md`
-(+17/-11 lines across commits `2809a81` and `bebc81c`, syncing Task 13's
+(+16/-11 lines across commits `2809a81` and `bebc81c`, syncing Task 13's
 bootstrap-flip rule and the renderer's reference code to the hardened
 versions actually shipped).)
 
