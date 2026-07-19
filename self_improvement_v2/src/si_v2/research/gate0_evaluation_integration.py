@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+
 
 from si_v2.research.evaluation_bundle_v1 import (
     BoundaryPolicy,
@@ -78,7 +78,7 @@ PARTITIONS = [CALIBRATION, WALK_FORWARD_1, WALK_FORWARD_2, HOLDOUT]
 # ---------------------------------------------------------------------------
 
 
-def load_snapshot_manifest() -> dict[str, Any]:
+def load_snapshot_manifest() -> dict[str, object]:
     """Load the snapshot_manifest.json from the snapshot directory."""
     if not MANIFEST_PATH.is_file():
         raise FileNotFoundError(f"Snapshot manifest not found: {MANIFEST_PATH}")
