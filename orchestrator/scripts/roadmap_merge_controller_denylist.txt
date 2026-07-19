@@ -1,0 +1,57 @@
+# Human-only denylist for roadmap merge controller (ADR-2026-07-19)
+#
+# PRs touching ANY of these paths are BLOCKED from autonomous merge,
+# regardless of A1 classification or CI status.
+# Changes to these paths require human review and human merge.
+#
+# This file is self-protecting: it is listed below.
+# A PR that edits this file (or any allowlist/config/audit/broker file)
+# is blocked even if the edit is "just adding a new path".
+#
+# Format: one glob pattern per line. Lines starting with # are ignored.
+# Patterns match against the PR's changed-file list from GitHub API.
+
+# Governance and identity (root documents)
+AGENTS.md
+SOUL.md
+CLAUDE.md
+ORCHESTRATOR_CHARTER.md
+
+# Writer contract
+orchestrator/scripts/repo_writer.py
+
+# Merge guard (read-only, must stay read-only)
+orchestrator/scripts/roadmap_merge_guard.py
+
+# Controller itself (self-protecting)
+orchestrator/scripts/roadmap_merge_controller.py
+orchestrator/scripts/roadmap_merge_controller_broker.py
+orchestrator/scripts/roadmap_merge_controller_denylist.txt
+orchestrator/scripts/roadmap_merge_controller_allowlist.txt
+orchestrator/scripts/roadmap_merge_controller_paths_allowlist.txt
+orchestrator/scripts/roadmap_merge_controller_audit_helper.py
+
+# Roadmap command
+commands/trading-hub-roadmap-tick.md
+
+# Security ADRs (all governance-relevant decisions)
+docs/decisions/ADR-*.md
+
+# CI/CD and branch protection
+.github/workflows/**
+.github/CODEOWNERS
+.github/branch-protection*
+
+# Trading safety (kill switch, risk guard)
+freqtrade/shared/kill_switch*
+
+# Auth and identity
+services/auth/**
+services/identity/**
+
+# Controller state directory (documentation of paths)
+# /opt/data/state/roadmap-merge-controller/ is NOT in the repository;
+# it is a host-level path. Documenting its purpose in docs/context/
+# is allowed; the actual switch/audit files are never committed.
+# The denylist protects the docs/context/ notes about it.
+docs/context/roadmap-merge-controller-*.md
