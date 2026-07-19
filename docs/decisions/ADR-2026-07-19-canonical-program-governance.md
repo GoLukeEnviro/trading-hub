@@ -1,5 +1,5 @@
 ---
-Status: Proposed
+Status: Accepted
 Owner: Luke / GoLukeEnviro
 Date: 2026-07-19
 ---
