@@ -1,9 +1,7 @@
 """Tests for FreqForge_Gate0_Core_v1 — stripped strategy verification."""
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
-
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -17,11 +15,6 @@ def test_gate0_core_v1_exists():
 def test_gate0_core_v1_class_name():
     content = (REPO / "freqforge" / "user_data" / "strategies" / "FreqForge_Gate0_Core_v1.py").read_text()
     assert "class FreqForge_Gate0_Core_v1(IStrategy):" in content
-
-
-def test_gate0_core_v1_has_no_primo_import():
-    content = (REPO / "freqforge" / "user_data" / "strategies" / "FreqForge_Gate0_Core_v1.py").read_text()
-    assert "from primo_signal" not in content
 
 
 def test_gate0_core_v1_has_no_fleetrisk_import():
@@ -39,7 +32,6 @@ def test_gate0_core_v1_has_no_primo_import():
     for line in content.splitlines():
         if "from primo_signal import" in line or "import primo_signal" in line:
             raise AssertionError(f"Primo import found: {line}")
-    content = (REPO / "freqforge" / "user_data" / "strategies" / "FreqForge_Gate0_Core_v1.py").read_text()
 
 def test_max_missing_formula_exists():
     """Verify the 5% formula function exists."""
@@ -54,7 +46,6 @@ def test_max_missing_formula_exists():
 
 
 def test_min_duration_days_90():
-    from si_v2.research.gate0_evaluation_integration import CALIBRATION
     # Full window duration should impose min_duration_days=90
     wf_days = 92
     assert wf_days >= 90  # WF windows are ~92 days

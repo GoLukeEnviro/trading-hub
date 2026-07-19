@@ -357,7 +357,7 @@ class FreqtradeExportAdapterV1:
         raise ValueError(f"Cannot parse timestamp: {ts_str!r}")
 
 
-def classify_regime_for_candles(candles: list[CandleV1]) -> str:
+def classify_regime_at_entry(candles: list[CandleV1]) -> str:
     """Classify regime for a set of candles (used for per-trade regime)."""
     if not candles or len(candles) < 5:
         return "insufficient_data"
@@ -464,7 +464,6 @@ def build_manifest_v2(
             bootstrap_seed=42,
             initial_equity=10000.0,
     max_missing_candles=_compute_max_missing_candles(PAIRS, TIMEFRAME, CALIBRATION, HOLDOUT),  # 5% of total expected candles across all pairs
-            tail_quantile=0.1,
         ),
         boundary_policy=BoundaryPolicy.STRICT_CONTAINED,
         continuation_policy=ContinuationPolicy.REPORT_ONLY,
