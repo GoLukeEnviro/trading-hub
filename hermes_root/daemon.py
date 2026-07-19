@@ -1,11 +1,10 @@
 """Root-executor daemon: AF_UNIX server with legacy + hermes-root-executor.v1 dual-protocol dispatch.
 
-Phase A (legacy) replicates the production host daemon
-(/usr/local/sbin/hermes-root-executor) behaviour exactly: same categories,
-same socket contract, same locking/timeout/kill-switch/audit semantics.
+Phase A (legacy) retains the deployed wire format behind a fail-closed,
+read-only compatibility firewall.  It is not a generic root command path.
 Phase B (v1) adds the versioned protocol on top via protocol.py / policy.py /
-actions.py, without changing legacy behaviour or granting legacy requests any
-new capability.
+actions.py. V1 behaviour remains unchanged and legacy requests gain no new
+capability.
 
 This module is not installed or started against the production socket by
 this change — see scripts/install-hermes-root-executor.sh for the deployment
@@ -27,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from hermes_root import actions, audit, policy, protocol, redact
+from hermes_root import actions, audit, legacy, policy, protocol, redact
 from hermes_root.schema import MAX_RESPONSE_BYTES, SCHEMA_VERSION
 
 DAEMON_VERSION = "2.0.0-repo"
@@ -37,14 +36,6 @@ DEFAULT_KILL_SWITCH_PATH = "/etc/hermes-root-executor/DISABLED"
 DEFAULT_ALLOWED_UIDS = frozenset({10000})
 COMMAND_TIMEOUT_SECONDS = 30
 RECV_BUFFER = 65536
-
-LEGACY_CATEGORY_BINARIES: dict[str, list[str]] = {
-    "docker": ["docker"],
-    "systemd": ["systemctl"],
-    "fs_stat": ["stat"],
-    "fs_ls": ["ls", "-la"],
-}
-
 
 def _safe_key(resource_key: str) -> str:
     return "".join(c if c.isalnum() or c in "-_." else "_" for c in resource_key)
@@ -105,19 +96,34 @@ class RootExecutorDaemon:
         return self._handle_v1(norm, peer_pid=peer_pid, peer_uid=peer_uid)
 
     # ------------------------------------------------------------------
-    # Legacy path — must match the production host daemon exactly
+    # Legacy path — bounded read-only compatibility only
     # ------------------------------------------------------------------
 
     def _handle_legacy(self, norm: protocol.NormalizedRequest, *, peer_pid: int, peer_uid: int) -> dict[str, Any]:
-        binary = LEGACY_CATEGORY_BINARIES.get(norm.category)
-        if binary is None:
-            self._audit_legacy(norm, peer_pid, peer_uid, decision="BLOCKED", reason="unknown_category")
-            return {"decision": "BLOCKED", "reason": "unknown_category"}
+        try:
+            command = legacy.build_legacy_command(norm.category, norm.argv)
+        except legacy.LegacyCommandError as exc:
+            self._audit_legacy(
+                norm,
+                peer_pid,
+                peer_uid,
+                decision="BLOCKED",
+                reason=exc.reason,
+                legacy_classification=exc.audit_classification,
+            )
+            return {"decision": "BLOCKED", "reason": exc.reason}
 
-        argv = [*binary, *norm.argv]
+        argv = list(command.argv)
         lock_fd = self._acquire_lock(norm.resource_key)
         if lock_fd is None:
-            self._audit_legacy(norm, peer_pid, peer_uid, decision="BLOCKED", reason="resource_locked")
+            self._audit_legacy(
+                norm,
+                peer_pid,
+                peer_uid,
+                decision="BLOCKED",
+                reason="resource_locked",
+                legacy_classification=command.audit_classification,
+            )
             return {"decision": "BLOCKED", "reason": "resource_locked"}
 
         try:
@@ -125,7 +131,14 @@ class RootExecutorDaemon:
                 result = subprocess.run(argv, capture_output=True, text=True, timeout=self.command_timeout)
             except subprocess.TimeoutExpired:
                 self._cleanup_after_timeout(norm.category, norm.argv, norm.resource_key)
-                self._audit_legacy(norm, peer_pid, peer_uid, decision="BLOCKED", reason="command_timeout")
+                self._audit_legacy(
+                    norm,
+                    peer_pid,
+                    peer_uid,
+                    decision="BLOCKED",
+                    reason="command_timeout",
+                    legacy_classification=command.audit_classification,
+                )
                 return {"decision": "BLOCKED", "reason": "command_timeout"}
         finally:
             self._release_lock(lock_fd)
@@ -133,6 +146,7 @@ class RootExecutorDaemon:
         self._audit_legacy(
             norm, peer_pid, peer_uid, decision="ALLOWED", reason=None,
             returncode=result.returncode, stdout_len=len(result.stdout), stderr_len=len(result.stderr),
+            legacy_classification=command.audit_classification,
         )
         # Audit logs only the original lengths above (for accurate sizing);
         # the client-facing response is redacted — secrets in command
@@ -148,6 +162,7 @@ class RootExecutorDaemon:
     def _audit_legacy(
         self, norm, peer_pid, peer_uid, *, decision, reason,
         returncode=None, stdout_len=None, stderr_len=None,
+        legacy_classification=None,
     ) -> None:
         audit.write_audit_entry(
             self.audit_path,
@@ -172,6 +187,7 @@ class RootExecutorDaemon:
             timeout=self.command_timeout,
             daemon_version=DAEMON_VERSION,
             repository_commit=self.repository_commit,
+            legacy_classification=legacy_classification,
         )
 
     def _cleanup_after_timeout(self, category: str, args: list[str], resource_key: str) -> None:
