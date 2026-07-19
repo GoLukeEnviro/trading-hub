@@ -121,7 +121,7 @@ from contextlib import suppress
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 # ----------------------------------------------------------------------
 # Canonical paths (single source of truth)
@@ -613,6 +613,82 @@ class RepoWriterLock:
             return False
         finally:
             os.close(fd)
+
+    # ----- governed merge (ADR-2026-07-19) -----
+
+    def perform_governed_merge(
+        self,
+        *,
+        repo: str,
+        pr_number: int,
+        expected_issue: int,
+        expected_head_sha: str,
+        tracker_issue: int = 605,
+        controller_identity: str,
+        socket_path: Optional[Path] = None,
+    ) -> dict[str, Any]:
+        """Perform a governed merge via the root broker.
+
+        This method is the lock-bound primitive introduced by
+        ADR-2026-07-19. It MUST be called while the writer lock is held.
+
+        It sends the merge request to the root broker (which independently
+        verifies every invariant) and returns the broker's response.
+
+        Args:
+            repo: GitHub repository (``owner/name``).
+            pr_number: PR number to merge.
+            expected_issue: Linked issue number the PR should close.
+            expected_head_sha: Full 40-char SHA that the PR head MUST match.
+            tracker_issue: Roadmap tracker issue number (default 605).
+            controller_identity: Identity string for the audit log.
+            socket_path: Broker Unix socket path.
+
+        Returns:
+            The broker's response dict with keys: decision, status, merged,
+            merge_sha, blockers, intent_record_id, completion_record_id.
+
+        Raises:
+            RepoWriterError: If the lock is not held, or if the broker
+                communication fails.
+        """
+        self.assert_held()
+
+        # Re-verify lock inode immediately before the call.
+        self._assert_fd_matches_path(self._lock_fd)
+
+        from orchestrator.scripts.roadmap_merge_controller import (
+            run_controller,
+        )
+
+        if socket_path is not None:
+            result = run_controller(
+                repo=repo,
+                pr_number=pr_number,
+                expected_issue=expected_issue,
+                expected_head_sha=expected_head_sha,
+                tracker_issue=tracker_issue,
+                controller_identity=controller_identity,
+                socket_path=socket_path,
+            )
+        else:
+            result = run_controller(
+                repo=repo,
+                pr_number=pr_number,
+                expected_issue=expected_issue,
+                expected_head_sha=expected_head_sha,
+                tracker_issue=tracker_issue,
+                controller_identity=controller_identity,
+            )
+
+        return {
+            "decision": result.decision,
+            "status": result.status,
+            "merged": result.merged,
+            "merge_sha": result.merge_sha,
+            "blockers": result.blockers,
+            "broker_response": result.broker_response,
+        }
 
     # ----- context manager -----
 
