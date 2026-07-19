@@ -1,0 +1,17 @@
+# Identity allowlist for roadmap merge controller (ADR-2026-07-19)
+#
+# Format: <uid>:<gid>:<github_principal_login>
+# Only exact matches are allowed. Order is not significant.
+# Lines starting with # are ignored.
+#
+# Allowed combinations:
+#   UID 10000 = hermes (HermesTrader agent container)
+#   The broker verifies SO_PEERCRED returns exactly this UID+GID.
+#   The GitHub principal is resolved via `gh api user --jq .login`
+#   from the broker's root-only credential context.
+#
+# Over time, the allowlist may gain additional rows for additional
+# controller-capable principals. Each addition is a separate A1 PR
+# requiring human review (the allowlist is in the denylist).
+
+10000:10000:GoLukeEnviro

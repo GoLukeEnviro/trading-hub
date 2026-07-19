@@ -1,0 +1,19 @@
+# Canary positive path allowlist for roadmap merge controller (ADR-2026-07-19)
+#
+# Phase 0: extremely narrow. Only docs-reconciliation and report-only PRs.
+#   docs/state/*.md         - Canonical runtime state snapshots
+#   docs/reports/*.md       - Proof reports, audit reports
+#   docs/context/*.md       - Implementation notes, historical context
+#
+# Phase 1+: managed via separate governance PRs that update this file.
+# Each phase transition requires a human-merged PR (this file is in the
+# denylist, so auto-merge is impossible regardless of phase).
+#
+# Format: one glob pattern per line. Lines starting with # are ignored.
+# A PR must have ALL its changed files match at least one pattern below.
+# An empty allowlist = no PRs are eligible (fail-closed).
+
+# Phase 0 — docs-only (initial canary)
+docs/state/*.md
+docs/reports/*.md
+docs/context/*.md

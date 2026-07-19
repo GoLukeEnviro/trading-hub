@@ -141,6 +141,19 @@ for hermetic tests and is never valid for a roadmap tick.
    - Never print, copy or persist token values. Missing authentication is
      `GITHUB_FACT_COLLECTION_FAILED` and a hard stop.
 
+   **Bounded autonomous merge controller (ADR-2026-07-19, shipped disabled).**
+   A separate controller at `orchestrator/scripts/roadmap_merge_controller.py`
+   delegates merge execution to a root broker at
+   `orchestrator/scripts/roadmap_merge_controller_broker.py` for future
+   bounded autonomous merges of A1 PRs. The controller uses the read-only
+   guard result as a lower bound and adds credential isolation, independent
+   broker re-verification, self-protecting denylist, Phase-0 path allowlist,
+   full-field TOCTOU, and Intent+Completion audit. Until the disable switch
+   at `/opt/data/state/roadmap-merge-controller/enabled` exists with the exact
+   content `true\n` (operator-created, root-owned), agents MUST NOT invoke the
+   controller. Roadmap ticks continue to stop at `READY_FOR_HUMAN_MERGE`. See
+   ADR-2026-07-19 for the full contract, activation prerequisites and rollback.
+
 9. After human merge or formal abort, remove only the explicitly named
    worktree with `git worktree remove`. Never run a broad prune.
 
@@ -151,8 +164,10 @@ directly in the shared checkout, use `git add .`, `git reset --hard`,
 `git clean`, `git push -f`, or rewrite history.
 
 **Never:** merge a PR from an agent, tick, Hermes writer, root session or
-roadmap controller. Human-only remains binding until a separate controller
-identity and merge-check provenance are proven and explicitly activated.
+roadmap controller. Human-only remains binding. The shipped-disabled
+controller at `orchestrator/scripts/roadmap_merge_controller.py` is inert
+until a separate operator activation creates the enable switch. Even after
+activation, only A1 docs-PRs in the Phase-0 path allowlist are eligible.
 
 See `orchestrator/scripts/repo_writer.py` for the full API
 (`RepoWriterLock`, `IsolatedWorktree`, `RepoWriterError`).
