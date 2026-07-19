@@ -1,0 +1,209 @@
+"""Negative-case suite for the offline governance consistency validator.
+
+Covers spec §7.5 cases. Each case must be red→green demonstrable.
+"""
+
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+CHECK = "orchestrator/scripts/governance_consistency_check.py"
+
+# Files/dirs the tests mutate and the validator reads directly.
+_MUTABLE = [
+    "config/governance",
+    "docs/roadmap",
+    "docs/state",
+    "AGENTS.md",
+    "docs/proposals",
+    "orchestrator/scripts",
+]
+
+
+def _run(cwd=None):
+    """Run the validator against ``cwd`` (defaults to the real repo root)."""
+    repo = cwd or Path(__file__).resolve().parents[1]
+    return subprocess.run(
+        [sys.executable, str(repo / CHECK)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _canonical_source_paths():
+    """Every path listed under contract canonical_sources (spec §4.1)."""
+    contract = yaml.safe_load(
+        Path("config/governance/program-contract.yaml").read_text()
+    )
+    paths = []
+    for group in contract["canonical_sources"].values():
+        if isinstance(group, list):
+            paths.extend(group)
+    return paths
+
+
+def _clone_governance(tmp_path):
+    """Isolated repo the validator can run against.
+
+    Deep-copies the files the tests mutate, and ENSURES every canonical_sources
+    path exists (dirs are created empty, files copied) so check_source_paths
+    does not hard-fail on unrelated missing paths (e.g. SOUL.md,
+    docs/decisions/, docs/reports/, docs/context/). Large evidence/context
+    dirs are created empty on purpose — existence is all check_source_paths
+    requires.
+    """
+    dst = tmp_path / "repo"
+    for rel in _MUTABLE:
+        src, target = Path(rel), dst / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if src.is_dir():
+            shutil.copytree(src, target)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, target)
+    for rel in _canonical_source_paths():
+        src, target = Path(rel), dst / rel
+        if target.exists():
+            continue
+        if src.is_dir() or rel.endswith("/"):
+            target.mkdir(parents=True, exist_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if src.exists():
+                shutil.copy2(src, target)
+            else:
+                target.write_text("placeholder\n")
+    return dst
+
+
+# ── Task 1: schema validation ──────────────────────────────────────────────
+
+
+def test_real_repo_passes():
+    result = _run()
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_schema_invalid_contract_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    contract = repo / "config/governance/program-contract.yaml"
+    contract.write_text("schema_version: 1\nprogram_id: x\n")  # missing required
+    result = _run(cwd=repo)
+    assert result.returncode != 0
+
+
+# ── Task 2: DAG acyclicity, single direction ───────────────────────────────
+
+
+def test_cyclic_roadmap_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    rm = repo / "config/governance/canonical-roadmap.yaml"
+    data = yaml.safe_load(rm.read_text())
+    # A depends on H -> introduces a cycle (A->H->G->F->E->D->B->A)
+    data["phases"][1]["dependencies"].append("H")
+    rm.write_text(yaml.safe_dump(data))
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_two_active_directions_fail(tmp_path):
+    repo = _clone_governance(tmp_path)
+    c = repo / "config/governance/program-contract.yaml"
+    data = yaml.safe_load(c.read_text())
+    data["canonical_sources"]["roadmap"].append(
+        "config/governance/other-roadmap.yaml"
+    )
+    c.write_text(yaml.safe_dump(data))
+    assert _run(cwd=repo).returncode != 0
+
+
+# ── Task 3: source paths, frontmatter authority, superseded_by ─────────────
+
+
+def test_missing_source_path_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    (repo / "AGENTS.md").unlink()
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_advisory_claiming_canonical_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    p = repo / "docs/proposals/001-x.md"
+    p.write_text("---\nauthority: canonical\nstatus: proposed\n---\nbody\n")
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_superseded_without_superseded_by_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    p = repo / "docs/roadmap/old-roadmap.md"
+    p.write_text("---\nauthority: historical\nstatus: superseded\n---\nbody\n")
+    assert _run(cwd=repo).returncode != 0
+
+
+# ── Task 4: render-diff, state revision, authority rules, agents reference ─
+
+
+def test_render_drift_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    md = repo / "docs/roadmap/canonical-program-roadmap.md"
+    md.write_text(md.read_text() + "\nmanually edited\n")
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_state_contract_revision_mismatch_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    st = repo / "docs/state/current-operational-state.md"
+    st.write_text(
+        st.read_text().replace(
+            "governance_contract_revision: 1", "governance_contract_revision: 2"
+        )
+    )
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_a2_phase_without_approval_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    c = repo / "config/governance/program-contract.yaml"
+    data = yaml.safe_load(c.read_text())
+    data["authority"].pop("a2_requires", None)
+    c.write_text(yaml.safe_dump(data))
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_a3_phase_without_mandate_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    c = repo / "config/governance/program-contract.yaml"
+    data = yaml.safe_load(c.read_text())
+    data["authority"].pop("a3_requires", None)
+    c.write_text(yaml.safe_dump(data))
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_agents_reference_missing_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    agents = repo / "AGENTS.md"
+    agents.write_text("# AGENTS.md\nNo governance reference here.\n")
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_roadmap_only_status_change_warns_not_fails(tmp_path):
+    """A roadmap-only status drift (state observed revision stale) -> warning, exit 0.
+
+    Per spec §6: roadmap_revision_observed is informational. A stale observed
+    revision must emit ROADMAP_RECONCILIATION_PENDING (warning), not a hard
+    failure. The canonical YAML and Derived View are left consistent.
+    """
+    repo = _clone_governance(tmp_path)
+    st = repo / "docs/state/current-operational-state.md"
+    st.write_text(
+        st.read_text().replace(
+            "roadmap_revision_observed: 1", "roadmap_revision_observed: 999"
+        )
+    )
+    result = _run(cwd=repo)
+    assert result.returncode == 0
+    assert "ROADMAP_RECONCILIATION_PENDING" in result.stdout

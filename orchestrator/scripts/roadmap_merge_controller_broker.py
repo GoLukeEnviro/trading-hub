@@ -600,6 +600,44 @@ def check_formal_governance_block(pr_comments: list[str]) -> bool:
     return False
 
 
+# Human-only / governance files: a PR touching any of these must carry an
+# accepted-ADR scope marker (spec §7.1, §9). Present and wired into
+# evaluate_guard's pure logic, but the broker process itself stays disabled:
+# is_controller_enabled() requires a root-owned enable-switch file this PR
+# does not create (spec §7.4).
+_HUMAN_ONLY_FILES = (
+    "AGENTS.md",
+    "config/governance/program-contract.yaml",
+    "config/governance/program-contract.schema.json",
+    "config/governance/canonical-roadmap.yaml",
+    "config/governance/canonical-roadmap.schema.json",
+    "orchestrator/scripts/governance_consistency_check.py",
+    "orchestrator/scripts/roadmap_merge_guard.py",
+    "orchestrator/scripts/roadmap_merge_controller_broker.py",
+)
+
+
+def check_governance_scope(
+    changed_files: list[str],
+    *,
+    pr_has_accepted_adr_scope: bool,
+    human_only_files: list[str],
+) -> list[str]:
+    """Governance-file change control (spec §7.1, §9).
+
+    Returns blocker strings. Empty = no governance-scope violation. A PR that
+    touches any human-only / governance file must carry an accepted-ADR scope
+    marker; this mirrors check_denylist's shape and is folded into
+    evaluate_guard's blockers the same way. Present, tested, callable — but
+    still inert: this PR does not create the enable-switch file, so
+    is_controller_enabled() keeps the whole broker disabled.
+    """
+    touched_governed = [f for f in changed_files if f in human_only_files]
+    if touched_governed and not pr_has_accepted_adr_scope:
+        return [f"GOVERNANCE_SCOPE:{f}:no_accepted_adr" for f in touched_governed]
+    return []
+
+
 # ----------------------------------------------------------------------
 # GitHub fact collection (independent from the client)
 # ----------------------------------------------------------------------
@@ -793,6 +831,17 @@ def evaluate_guard(
         blockers.append("CHANGES_REQUESTED")
     if check_formal_governance_block(snapshot["comments"]):
         blockers.append("FORMAL_GOVERNANCE_BLOCK")
+
+    # Governance-scope check: human-only files require an accepted-ADR scope.
+    # Present and active in evaluate_guard's pure logic, but the broker process
+    # itself stays disabled: is_controller_enabled() requires an enable-switch
+    # file this PR does not create (spec §7.4).
+    governance_blockers = check_governance_scope(
+        changed_files=snapshot.get("changed_files", []),
+        pr_has_accepted_adr_scope=snapshot.get("pr_has_accepted_adr_scope", False),
+        human_only_files=list(_HUMAN_ONLY_FILES),
+    )
+    blockers.extend(governance_blockers)
 
     return (len(blockers) == 0, blockers)
 
