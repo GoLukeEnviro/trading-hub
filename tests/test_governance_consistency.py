@@ -142,3 +142,68 @@ def test_superseded_without_superseded_by_fails(tmp_path):
     p = repo / "docs/roadmap/old-roadmap.md"
     p.write_text("---\nauthority: historical\nstatus: superseded\n---\nbody\n")
     assert _run(cwd=repo).returncode != 0
+
+
+# ── Task 4: render-diff, state revision, authority rules, agents reference ─
+
+
+def test_render_drift_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    md = repo / "docs/roadmap/canonical-program-roadmap.md"
+    md.write_text(md.read_text() + "\nmanually edited\n")
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_state_contract_revision_mismatch_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    st = repo / "docs/state/current-operational-state.md"
+    st.write_text(
+        st.read_text().replace(
+            "governance_contract_revision: 1", "governance_contract_revision: 2"
+        )
+    )
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_a2_phase_without_approval_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    c = repo / "config/governance/program-contract.yaml"
+    data = yaml.safe_load(c.read_text())
+    data["authority"].pop("a2_requires", None)
+    c.write_text(yaml.safe_dump(data))
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_a3_phase_without_mandate_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    c = repo / "config/governance/program-contract.yaml"
+    data = yaml.safe_load(c.read_text())
+    data["authority"].pop("a3_requires", None)
+    c.write_text(yaml.safe_dump(data))
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_agents_reference_missing_fails(tmp_path):
+    repo = _clone_governance(tmp_path)
+    agents = repo / "AGENTS.md"
+    agents.write_text("# AGENTS.md\nNo governance reference here.\n")
+    assert _run(cwd=repo).returncode != 0
+
+
+def test_roadmap_only_status_change_warns_not_fails(tmp_path):
+    """A roadmap-only status drift (state observed revision stale) -> warning, exit 0.
+
+    Per spec §6: roadmap_revision_observed is informational. A stale observed
+    revision must emit ROADMAP_RECONCILIATION_PENDING (warning), not a hard
+    failure. The canonical YAML and Derived View are left consistent.
+    """
+    repo = _clone_governance(tmp_path)
+    st = repo / "docs/state/current-operational-state.md"
+    st.write_text(
+        st.read_text().replace(
+            "roadmap_revision_observed: 1", "roadmap_revision_observed: 999"
+        )
+    )
+    result = _run(cwd=repo)
+    assert result.returncode == 0
+    assert "ROADMAP_RECONCILIATION_PENDING" in result.stdout

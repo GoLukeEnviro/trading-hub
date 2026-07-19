@@ -109,13 +109,85 @@ def check_governed_frontmatter() -> None:
                 HARD_FAILURES.append(f"superseded doc lacks superseded_by: {md}")
 
 
+def check_render(roadmap_path=GOV / "canonical-roadmap.yaml") -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "render_canonical_roadmap",
+        "orchestrator/scripts/render_canonical_roadmap.py",
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    expected = mod.render(_load_yaml(roadmap_path))
+    actual = Path("docs/roadmap/canonical-program-roadmap.md").read_text()
+    if actual != expected:
+        HARD_FAILURES.append("Derived-View Markdown drifted from renderer output")
+
+
+def _first_fenced_yaml(text: str) -> dict:
+    """Parse the first fenced code block as YAML, tolerating an info-string line.
+
+    A ```yaml / ```text info-string is stripped before parsing; malformed YAML
+    yields {} rather than raising, so a valid repo never aborts the validator.
+    """
+    if "```" not in text:
+        return {}
+    body = text.split("```", 2)[1]
+    lines = body.splitlines()
+    if lines and lines[0].strip() and ":" not in lines[0]:
+        lines = lines[1:]  # drop bare info-string line (e.g. "yaml", "text")
+    try:
+        return yaml.safe_load("\n".join(lines)) or {}
+    except yaml.YAMLError:
+        return {}
+
+
+def check_state_revision(contract: dict) -> None:
+    st = Path("docs/state/current-operational-state.md").read_text()
+    fm_like = _first_fenced_yaml(st)
+    observed = fm_like.get("governance_contract_revision")
+    if observed != contract["governance_contract_revision"]:
+        HARD_FAILURES.append(
+            f"state governance_contract_revision {observed} != contract "
+            f"{contract['governance_contract_revision']}"
+        )
+
+
+def check_authority_rules(contract: dict, roadmap: dict) -> None:
+    auth = contract["authority"]
+    if not auth.get("a2_requires"):
+        HARD_FAILURES.append("authority.a2_requires missing/empty")
+    if not auth.get("a3_requires"):
+        HARD_FAILURES.append("authority.a3_requires missing/empty")
+    for p in roadmap["phases"]:
+        if p.get("requires_external_mandate") and not auth.get("a3_requires"):
+            HARD_FAILURES.append(f"phase {p['id']} needs mandate but a3_requires absent")
+
+
+def check_agents_reference() -> None:
+    if "config/governance/program-contract.yaml" not in Path("AGENTS.md").read_text():
+        HARD_FAILURES.append("AGENTS.md does not reference the program contract")
+
+
+def check_roadmap_reconciliation() -> None:
+    st = Path("docs/state/current-operational-state.md").read_text()
+    fm_like = _first_fenced_yaml(st)  # shared robust parser (info-string tolerant)
+    roadmap = _load_yaml(GOV / "canonical-roadmap.yaml")
+    if fm_like.get("roadmap_revision_observed") != roadmap["roadmap_revision"]:
+        WARNINGS.append("ROADMAP_RECONCILIATION_PENDING")
+
+
 def main() -> int:
     contract, roadmap = check_schemas()
     check_dag(roadmap)
     check_single_direction(contract)
     check_source_paths(contract)
     check_governed_frontmatter()
-    # further checks added in later tasks (render, state revision, authority, mandate)
+    check_render()
+    check_state_revision(contract)
+    check_authority_rules(contract, roadmap)
+    check_agents_reference()
+    check_roadmap_reconciliation()
     for w in WARNINGS:
         print(f"WARN {w}")
     if HARD_FAILURES:
