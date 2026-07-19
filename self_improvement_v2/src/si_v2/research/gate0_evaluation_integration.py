@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import csv
 import gzip
-import hashlib
 import json
 import subprocess
 from collections.abc import Sequence
