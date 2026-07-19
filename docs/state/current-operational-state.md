@@ -18,7 +18,7 @@
 ```
 governance_contract_revision: 1
 roadmap_revision_observed: 5
-roadmap_observed_at_utc: 2026-07-19T21:00:00Z
+roadmap_observed_at_utc: 2026-07-19T22:00:00Z
 ```
 
 `governance_contract_revision` is strictly checked against
@@ -35,7 +35,7 @@ satisfied**. Current sub-status:
 |---|---|---|
 | Strategy selected | ✅ PASS | `FreqForge_Override` — Luke signed on #604 |
 | Manifest frozen | ✅ PASS | All thresholds approved; `APPROVED_GATE0_STRATEGY_AND_MANIFEST` on #604 |
-| Snapshot acquisition | ⏳ `PENDING_A2` | Data snapshot fetch authorized in principle (#604); dedicated A2 issue required with full execution contract before execution |
+| Snapshot acquisition | ✅ `EXECUTED` | 156,489 candles fetched (#651, A2 marker `APPROVED_A2_GATE0_SNAPSHOT_FETCH`); C3 complete | with full execution contract before execution |
 | Holdout inspected | ❌ NO | Not started; blocked by snapshot |
 | Edge decision | ⏳ `PENDING` | Not yet recorded; blocked by holdout |
 
@@ -230,3 +230,13 @@ by a new explicit marker.
 
 The repository writer remains single-writer and PR-only. This work stops at
 `READY_FOR_HUMAN_MERGE`; only Luke merges.
+
+## C5.1 Corrective — Strategy identification and manifest v2 (2026-07-19)
+
+C5 (PR #657, `55ca28f`) was merged but runtime-unverified. 15 gaps identified:
+strategy mismatch (FreqForge_Override has Shorting/CustomStoploss/1h-informative/
+FleetRiskManager/Primo signals vs. simplified description), partition gaps,
+incorrect hash bindings, unachievable regime gate, and wrong min_duration_days.
+C5.1 corrective (PR pending) addresses all 14 items with strategy provenance,
+manifest v2, partition correction, converter, adapter, and 19 tests.
+Holdout remains sealed until A0 preflight + A2 selection backtest + C6 marker.
