@@ -463,7 +463,9 @@ def build_manifest_v2(
             confidence_level=0.95,
             bootstrap_seed=42,
             initial_equity=10000.0,
-    max_missing_candles=_compute_max_missing_candles(PAIRS, TIMEFRAME, CALIBRATION, HOLDOUT),  # 5% of total expected candles across all pairs
+    max_missing_candles=_compute_max_missing_candles(
+        PAIRS, TIMEFRAME, CALIBRATION, HOLDOUT,
+    ),  # 5% of total across all pairs
         ),
         boundary_policy=BoundaryPolicy.STRICT_CONTAINED,
         continuation_policy=ContinuationPolicy.REPORT_ONLY,
