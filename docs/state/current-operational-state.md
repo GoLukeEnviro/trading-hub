@@ -27,8 +27,8 @@
 
 ```
 governance_contract_revision: 1
-roadmap_revision_observed: 2
-roadmap_observed_at_utc: 2026-07-19T20:10:00Z
+roadmap_revision_observed: 3
+roadmap_observed_at_utc: 2026-07-19T20:30:00Z
 ```
 
 `governance_contract_revision` is strictly checked against
