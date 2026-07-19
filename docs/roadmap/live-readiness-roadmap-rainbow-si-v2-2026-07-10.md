@@ -1,3 +1,9 @@
+---
+authority: historical
+status: superseded
+superseded_by: config/governance/canonical-roadmap.yaml
+---
+
 # Live-Readiness-Roadmap — Rainbow/ai4trade-bot als Advisory-Signalquelle (2026-07-10)
 
 > **Status:** Vorschlag / Planungsdokument (L2, docs-only)

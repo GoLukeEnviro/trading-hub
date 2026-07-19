@@ -1,3 +1,9 @@
+---
+authority: historical
+status: superseded
+superseded_by: config/governance/canonical-roadmap.yaml
+---
+
 # Architekturvorschlag — Trading Hub Zielbild (Kandidat, v4 — 2026-07-14)
 
 > **Status:** Vorschlag / Planungsdokument (L2, docs-only). Kein beschlossenes
