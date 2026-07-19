@@ -29,7 +29,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any  # noqa: F401  # used in casts below
 
 from si_v2.research.evaluation_bundle_v1 import CandleV1, canonical_candle_hash
 
