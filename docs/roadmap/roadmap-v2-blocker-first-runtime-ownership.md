@@ -1,3 +1,9 @@
+---
+authority: historical
+status: superseded
+superseded_by: config/governance/canonical-roadmap.yaml
+---
+
 # trading-hub Roadmap v2 – Blocker-First Runtime Ownership
 
 > **⚠️ SUPERSEDED — Historical reference only.**

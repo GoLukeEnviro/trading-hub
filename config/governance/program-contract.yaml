@@ -1,0 +1,67 @@
+schema_version: 1
+program_id: trading-hub
+governance_contract_revision: 1
+revision: 2026-07-19.1
+status: active
+north_star:
+  current_target: safe_autonomous_dry_run
+  future_target: externally_mandated_micro_live
+  live_is_currently_authorized: false
+canonical_sources:
+  safety_policy:
+    - AGENTS.md
+    - SOUL.md
+  architecture:
+    - docs/decisions/
+  roadmap:
+    - config/governance/canonical-roadmap.yaml
+  roadmap_derived_view:
+    - docs/roadmap/canonical-program-roadmap.md
+  runtime_truth:
+    - docs/state/current-operational-state.md
+  active_task:
+    type: github_issue_marker
+    tracker_issue: 605
+    marker: roadmap-selected-task
+  evidence:
+    - docs/reports/
+  advisory_only:
+    - docs/proposals/
+    - docs/context/
+execution:
+  one_active_task: true
+  one_issue_one_branch_one_pr_one_report: true
+  require_exact_main_sha: true
+  require_writer_lock: true
+  require_isolated_worktree: true
+  require_ci:
+    - name: Main Gate
+      enforcement: active
+    - name: SI v2 Offline Smoke
+      enforcement: active
+    - name: governance-consistency
+      enforcement: pending
+      effective_after: G0.2
+authority:
+  direction_change_requires:
+    - accepted_adr
+    - program_contract_update
+    - canonical_roadmap_update
+    - owner_approval
+  status_reconciliation_requires:
+    - evidence_or_state_link
+    - change_class_declared
+  a2_requires:
+    - scoped_approval
+    - time_window
+    - snapshot
+    - rollback
+    - action_allowlist
+  a3_requires:
+    - external_signed_mandate
+forbidden_without_a3:
+  - dry_run_false
+  - live_orders
+  - live_credentials
+  - risk_limit_increase
+  - kill_switch_bypass

@@ -1,3 +1,9 @@
+---
+authority: historical
+status: superseded
+superseded_by: config/governance/canonical-roadmap.yaml
+---
+
 # Trading Hub — Implementation Roadmap
 
 > **SUPERSEDED:** This document is historical. Current roadmap is
