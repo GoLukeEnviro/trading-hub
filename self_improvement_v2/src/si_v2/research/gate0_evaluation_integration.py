@@ -224,10 +224,7 @@ def build_frozen_manifest(
     """Build the frozen EvaluationManifestV1 from Luke's ratified values."""
     snapshot = load_snapshot_manifest()
     pairs = tuple(sorted(snapshot["pairs"]))
-    cal_first = CALIBRATION.start
 
-    # Benchmark: BTCUSDT futures 15m (buy-and-hold baseline)
-    benchmark_pair = pairs[0]  # "BTC/USDT" is always first after sort
 
     return EvaluationManifestV1(
         manifest_version="evaluation-manifest/v1",
