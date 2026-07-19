@@ -15,6 +15,19 @@
 > and
 > [`sec3-post-merge-reconciliation-2026-07-19.md`](../reports/sec3-post-merge-reconciliation-2026-07-19.md).
 
+## Governance revision pointers
+
+```
+governance_contract_revision: 1
+roadmap_revision_observed: 1
+roadmap_observed_at_utc: 2026-07-19T00:00:00Z
+```
+
+`governance_contract_revision` is strictly checked against
+`config/governance/program-contract.yaml`; `roadmap_revision_observed` is
+informational only and does not force a state-file touch on ordinary roadmap
+status changes.
+
 ## 1. Executive state
 
 | Area | Current result |
