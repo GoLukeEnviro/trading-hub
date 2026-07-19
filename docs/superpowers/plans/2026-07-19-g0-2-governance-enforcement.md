@@ -62,18 +62,47 @@ def _run(cwd=None):
     return subprocess.run(["python3", CHECK], cwd=cwd, capture_output=True, text=True)
 
 
+import yaml
+
+# Files/dirs the tests mutate and the validator reads directly.
+_MUTABLE = ["config/governance", "docs/roadmap", "docs/state", "AGENTS.md",
+            "docs/proposals", "orchestrator/scripts"]
+
+
+def _canonical_source_paths():
+    """Every path listed under contract canonical_sources (spec §4.1)."""
+    contract = yaml.safe_load(Path("config/governance/program-contract.yaml").read_text())
+    paths = []
+    for group in contract["canonical_sources"].values():
+        if isinstance(group, list):
+            paths.extend(group)
+    return paths
+
+
 def _clone_governance(tmp_path):
-    """Copy the real governance tree into an isolated dir the check can target."""
+    """Isolated repo the validator can run against.
+
+    Deep-copies the files the tests mutate, and ENSURES every canonical_sources
+    path exists (dirs are created empty, files copied) so check_source_paths does
+    not hard-fail on unrelated missing paths (e.g. SOUL.md, docs/decisions/,
+    docs/reports/, docs/context/). Large evidence/context dirs are created empty
+    on purpose — existence is all check_source_paths requires.
+    """
     dst = tmp_path / "repo"
-    for rel in ["config/governance", "docs/roadmap", "docs/state", "AGENTS.md",
-                "docs/proposals", "orchestrator/scripts"]:
-        src = Path(rel)
-        target = dst / rel
+    for rel in _MUTABLE:
+        src, target = Path(rel), dst / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        if src.is_dir():
-            shutil.copytree(src, target)
+        shutil.copytree(src, target) if src.is_dir() else (
+            target.parent.mkdir(parents=True, exist_ok=True) or shutil.copy2(src, target))
+    for rel in _canonical_source_paths():
+        src, target = Path(rel), dst / rel
+        if target.exists():
+            continue
+        if src.is_dir() or rel.endswith("/"):
+            target.mkdir(parents=True, exist_ok=True)
         else:
-            shutil.copy2(src, target)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, target) if src.exists() else target.write_text("placeholder\n")
     return dst
 
 
@@ -296,15 +325,24 @@ def check_source_paths(contract: dict) -> None:
                 HARD_FAILURES.append(f"canonical source path missing: {rel}")
 
 
-def check_proposal_frontmatter() -> None:
-    for md in Path("docs/proposals").glob("*.md"):
-        if md.name == "README.md":
-            continue
-        fm = _frontmatter(md.read_text())
-        if fm.get("authority") == "canonical":
-            HARD_FAILURES.append(f"advisory doc claims canonical: {md}")
-        if fm.get("status") == "superseded" and not fm.get("superseded_by"):
-            HARD_FAILURES.append(f"superseded doc lacks superseded_by: {md}")
+def check_governed_frontmatter() -> None:
+    """Frontmatter-only checks across governed Markdown (spec §7.1/§7.2).
+
+    Scope: proposals plus the roadmap dirs G0.1 stamps as superseded. No body
+    scan, no historical reports/evidence/context.
+    """
+    scan_dirs = ["docs/proposals", "docs/roadmap", "docs/roadmaps"]
+    for d in scan_dirs:
+        for md in Path(d).glob("*.md"):
+            if md.name == "README.md":
+                continue
+            fm = _frontmatter(md.read_text())
+            if not fm:
+                continue  # no governed frontmatter -> out of scope, not a failure
+            if fm.get("authority") == "canonical":
+                HARD_FAILURES.append(f"advisory/historical doc claims canonical: {md}")
+            if fm.get("status") == "superseded" and not fm.get("superseded_by"):
+                HARD_FAILURES.append(f"superseded doc lacks superseded_by: {md}")
 ```
 
 Note: `check_source_paths` handles the `active_task` dict entry (skip non-list groups). Wire into `main()`.
@@ -389,9 +427,27 @@ def check_render(roadmap_path=GOV / "canonical-roadmap.yaml") -> None:
         HARD_FAILURES.append("Derived-View Markdown drifted from renderer output")
 
 
+def _first_fenced_yaml(text: str) -> dict:
+    """Parse the first fenced code block as YAML, tolerating an info-string line.
+
+    A ```yaml / ```text info-string is stripped before parsing; malformed YAML
+    yields {} rather than raising, so a valid repo never aborts the validator.
+    """
+    if "```" not in text:
+        return {}
+    body = text.split("```", 2)[1]
+    lines = body.splitlines()
+    if lines and lines[0].strip() and ":" not in lines[0]:
+        lines = lines[1:]  # drop bare info-string line (e.g. "yaml", "text")
+    try:
+        return yaml.safe_load("\n".join(lines)) or {}
+    except yaml.YAMLError:
+        return {}
+
+
 def check_state_revision(contract: dict) -> None:
     st = Path("docs/state/current-operational-state.md").read_text()
-    fm_like = yaml.safe_load(st.split("```")[1]) if "```" in st else {}
+    fm_like = _first_fenced_yaml(st)
     observed = fm_like.get("governance_contract_revision")
     if observed != contract["governance_contract_revision"]:
         HARD_FAILURES.append(
@@ -417,13 +473,13 @@ def check_agents_reference() -> None:
 
 def check_roadmap_reconciliation() -> None:
     st = Path("docs/state/current-operational-state.md").read_text()
-    fm_like = yaml.safe_load(st.split("```")[1]) if "```" in st else {}
+    fm_like = _first_fenced_yaml(st)  # shared robust parser (info-string tolerant)
     roadmap = _load_yaml(GOV / "canonical-roadmap.yaml")
     if fm_like.get("roadmap_revision_observed") != roadmap["roadmap_revision"]:
         WARNINGS.append("ROADMAP_RECONCILIATION_PENDING")
 ```
 
-Wire all into `main()`. Order: schemas → dag → single_direction → source_paths → proposal_frontmatter → render → state_revision (hard) → authority_rules → agents_reference → roadmap_reconciliation (warn).
+Wire all into `main()`. Order: schemas → dag → single_direction → source_paths → governed_frontmatter → render → state_revision (hard) → authority_rules → agents_reference → roadmap_reconciliation (warn).
 
 - [ ] **Step 4: Run to verify it passes**
 

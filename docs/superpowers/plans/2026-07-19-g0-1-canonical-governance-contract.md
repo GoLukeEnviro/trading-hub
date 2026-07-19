@@ -604,15 +604,17 @@ git commit -m "docs(proposals): add advisory proposal header convention"
 **Files:**
 - Modify: `docs/state/current-operational-state.md`
 
-- [ ] **Step 1: Add the decoupled revision fields** (spec §6) near the top, e.g. in a fenced block:
+- [ ] **Step 1: Add the decoupled revision fields** (spec §6) as the **first fenced code block** in the file (the G0.2 validator reads the first ` ``` ` fence — see G0.2 Task 4). Use a **plain** fence with **no info-string** (not ` ```yaml `), because the validator parses the fence content directly as YAML and a `yaml` info-string line would break parsing:
 
-```yaml
+````text
+```
 governance_contract_revision: 1
 roadmap_revision_observed: 1
 roadmap_observed_at_utc: 2026-07-19T00:00:00Z
 ```
+````
 
-Add a one-line note that `governance_contract_revision` is strictly checked while `roadmap_revision_observed` is informational and does not force a state touch on ordinary roadmap status changes.
+Place this block above any other fenced block already in the file (the existing snapshot contains a later ` ```text ` block). Add a one-line note that `governance_contract_revision` is strictly checked while `roadmap_revision_observed` is informational and does not force a state touch on ordinary roadmap status changes.
 
 - [ ] **Step 2: Verify the field is present and matches the contract**
 
