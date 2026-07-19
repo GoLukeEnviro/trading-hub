@@ -274,6 +274,7 @@ phases:
     status: blocked
     dependencies: [G]
     issue: 603
+    exit_gate: micro_live_canary_validated
     requires_external_mandate: true
 ```
 
