@@ -2,14 +2,18 @@
 
 > **Canonical current-state snapshot.** Reconciled on 2026-07-19 after Luke
 > squash-merged SEC-1 PR #632 at
-> `450c58d15d2af89f8731cc8219c19da3dedae1b8`. The bounded P0 runtime
-> evidence remains the runtime baseline. SEC-1 containment is now present on
-> `main`, but it has not been deployed. Detailed evidence and limitations are
-> recorded in
+> `450c58d15d2af89f8731cc8219c19da3dedae1b8` and SEC-3 PR #635 at
+> `a815fce782c039cbfc4f2935d5bc5f1e24f8c878`. The bounded P0 runtime
+> evidence remains the deployed-runtime baseline. SEC-1 containment and SEC-3
+> durable intent auditing are present in repository code on `main`, but
+> neither has been deployed or runtime-proven. Detailed evidence and
+> limitations are recorded in
 > [`p0-runtime-state-reconciliation-2026-07-18.md`](../reports/p0-runtime-state-reconciliation-2026-07-18.md),
 > [`sec1-legacy-readonly-firewall-2026-07-18.md`](../reports/sec1-legacy-readonly-firewall-2026-07-18.md),
+> [`sec1-post-merge-reconciliation-2026-07-19.md`](../reports/sec1-post-merge-reconciliation-2026-07-19.md),
+> [`sec3-durable-intent-audit-2026-07-19.md`](../reports/sec3-durable-intent-audit-2026-07-19.md),
 > and
-> [`sec1-post-merge-reconciliation-2026-07-19.md`](../reports/sec1-post-merge-reconciliation-2026-07-19.md).
+> [`sec3-post-merge-reconciliation-2026-07-19.md`](../reports/sec3-post-merge-reconciliation-2026-07-19.md).
 
 ## 1. Executive state
 
@@ -21,13 +25,13 @@
 | Executor and fleet reachability | **PASS** |
 | R5A HermesTrader stack | **PASS — 5/5 healthy** |
 | SI-v2 four-bot fleet on HermesTrader | **PARTIAL — 3/4; Rebel absent** |
-| Legacy executor protocol | **SEC-1 CONTAINMENT MERGED / RUNTIME NOT DEPLOYED** |
-| Audit schema/structure | **PASS** |
-| Audit completeness and durability | **FAIL** |
+| Legacy executor protocol | **SEC-1 MERGED / RUNTIME NOT DEPLOYED** |
+| Repository audit implementation | **SEC-3 MERGED / VALIDATED / NOT DEPLOYED** |
+| Deployed audit completeness and durability | **P0 FAIL remains authoritative; runtime proof pending A2** |
 | Deployment provenance | **PARTIAL** |
 | Kill switch | **NORMAL persisted and effective after bounded reconciliation** |
 | Bot-scoped freeze at strategy entry | **NOT WIRED** |
-| Runtime mutation during SEC-1 and this reconciliation | **NONE** |
+| Runtime mutation during SEC-1, SEC-3, and post-merge reconciliation | **NONE** |
 
 The R5A deployment and the logical SI-v2 fleet are different sets and must not
 be conflated. R5A parity is satisfied by FreqForge, Canary, Regime, Webserver,
@@ -72,23 +76,35 @@ workloads. It does not prove the absent Rebel configuration or Agent0 runtime.
   and six Systemd requests.
 - Legacy records do not preserve sufficient structured subcommand intent to
   establish that every historical request was read-only.
-- Audit durability is **FAIL**, not `UNVERIFIED`: the implementation has no
-  durable `fsync` boundary and no intent-audit record before execution.
-  Runtime inspection can prove that entries exist, but cannot close this
-  structural gap.
+- The bounded deployed-runtime audit result is **FAIL**: the inspected running
+  implementation had no durable `fsync` boundary and no intent-audit record
+  before execution. Repository changes cannot retroactively change that
+  observation.
 
-SEC-1 is merged on `main` through PR #632. The repository implementation now
-builds approved legacy command arguments server-side, permits only a bounded
-read-only compatibility subset, rejects mutation, injection, traversal, and
-unknown requests before subprocess execution, and records fixed non-secret
+SEC-1 is merged on `main` through PR #632. Repository code now builds approved
+legacy command arguments server-side, permits only a bounded read-only
+compatibility subset, rejects mutation, injection, traversal, and unknown
+requests before subprocess execution, and records fixed non-secret
 classifications. Its complete repository test suite passed with **1007 passed,
 52 skipped**; both required GitHub checks passed before Luke's merge.
 
-This is a repository fact, not a runtime deployment claim. The running
-executor was not restarted, replaced, or revalidated in SEC-1 or this
-post-merge reconciliation. Until a separately approved deployment and runtime
-proof occurs, the bounded P0 observation remains authoritative for deployed
-legacy behavior. SEC-3 still owns the durable intent-audit design gap.
+SEC-3 is merged on `main` through PR #635 at
+`a815fce782c039cbfc4f2935d5bc5f1e24f8c878`. Repository code now writes a
+redacted intent event before approved subprocess execution, establishes file
+flush/`fsync` and new-file parent-directory `fsync` boundaries, correlates
+terminal events through a stable audit ID, and fails closed on audit durability
+failure. Local validation included **1024 passed, 52 skipped**, and both
+required GitHub checks succeeded for the exact SEC-3 head
+`ed968fb428929343657cf0fca027f06ed681733e`.
+
+These are repository facts only. The executor service was not installed,
+restarted, reloaded, replaced, or runtime-revalidated during SEC-1, SEC-3, or
+either post-merge reconciliation. The running executor must not be claimed to
+have the SEC-1 firewall, pre-execution durable intent events, `fsync`
+durability, correlated completion records, or SEC-3 behavior. Until a
+separately approved A2 deployment and runtime-proof ceremony succeeds, the
+bounded P0 observation remains authoritative for deployed behavior and runtime
+audit durability remains unproven.
 
 ## 4. Deployment provenance
 
@@ -130,15 +146,23 @@ missing-file tests, and eventual bot-scoped entry integration.
 
 ## 6. Go / no-go
 
-**Allowed next repository work:** complete human review of this A1 post-merge
-reconciliation. After it merges, SEC-1 is repository-complete. Any executor
-deployment/runtime proof requires a separate, explicitly scoped A2 issue,
-approval, snapshot, rollback plan, audit evidence, and bounded verification.
-SEC-3 remains separate A1 design/implementation work.
+**Allowed next repository work:** complete human review of this A1 SEC-3
+post-merge reconciliation. After it merges, SEC-1 and SEC-3 are
+repository-complete.
 
-**Not authorized:** R5B continuation, executor deployment, strategy reload,
-container mutation, kill-switch clear/bypass, new root capabilities,
-live-capital changes, or any A2/A3 action not covered by a new explicit marker.
+A future executor deployment and runtime proof is a separate A2 task. It
+requires a dedicated GitHub issue, explicit scope-specific A2 approval, exact
+commit/artifact identity, pre-deployment snapshot, command/action allowlist,
+time bound, rollback procedure, canary or bounded deployment order, service
+health verification, SEC-1 runtime blocking proofs, SEC-3
+intent-before-execution proofs, audit correlation and durability evidence, a
+secret scan, and confirmation that no trading, configuration, or kill-switch
+mutation occurred.
+
+**Not authorized:** executor deployment or restart, runtime proof, R5B
+continuation, strategy reload, container mutation, kill-switch clear/bypass,
+new root capabilities, live-capital changes, or any A2/A3 action not covered
+by a new explicit marker.
 
 The repository writer remains single-writer and PR-only. This work stops at
 `READY_FOR_HUMAN_MERGE`; only Luke merges.
