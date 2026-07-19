@@ -1,4 +1,4 @@
-roadmap_revision: 2
+roadmap_revision: 3
 governance_contract_revision: 1
 phases:
   - id: G0
@@ -8,7 +8,7 @@ phases:
     exit_gate: governance_consistency_green
   - id: A
     title: State and Tracker Reconciliation
-    status: in_progress
+    status: complete
     dependencies: [G0]
     issue: 647
     exit_gate: canonical_state_reconciled
@@ -21,7 +21,7 @@ phases:
     exit_gate: executor_security_runtime_green
   - id: C
     title: Gate-0 Strategy Evidence
-    status: blocked
+    status: in_progress
     dependencies: [A]
     issue: 604
     execution_class: A1
