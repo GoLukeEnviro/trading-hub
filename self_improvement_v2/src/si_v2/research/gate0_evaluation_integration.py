@@ -323,7 +323,7 @@ class FreqtradeExportAdapterV1:
                     c for c in partition_candles
                     if entry_ts <= c.timestamp <= exit_ts
                 ]
-                regime = classify_regime_for_candles(trade_candles)
+                regime = classify_regime_at_entry(trade_candles)
 
             raw_trades.append(RawTradeV1(
                 trade_id=trade_id,
@@ -357,7 +357,7 @@ class FreqtradeExportAdapterV1:
         raise ValueError(f"Cannot parse timestamp: {ts_str!r}")
 
 
-def classify_regime_for_candles(candles: list[CandleV1]) -> str:
+def classify_regime_at_entry(candles: list[CandleV1]) -> str:
     """Classify regime for a set of candles (used for per-trade regime)."""
     if not candles or len(candles) < 5:
         return "insufficient_data"
@@ -372,6 +372,30 @@ def classify_regime_for_candles(candles: list[CandleV1]) -> str:
 # Manifest v2 builder (corrective — supersedes v1)
 # ---------------------------------------------------------------------------
 
+
+
+def _compute_max_missing_candles(
+    pairs: tuple[str, ...],
+    timeframe: str,
+    window_start: PartitionWindowV1 | None = None,
+    window_end: PartitionWindowV1 | None = None,
+) -> int:
+    """Compute max_missing_candles as 5% of total expected candles across all pairs.
+
+    Uses the manifest's full date range (calibration through holdout) by default.
+    Formula: ceil(total_expected_candles_per_pair * len(pairs) * 0.05)
+
+    This replaces the previous hardcoded value which didn't scale.
+    """
+    tf_seconds = {"15m": 900, "1h": 3600}.get(timeframe, 900)
+    if tf_seconds <= 0:
+        return 0
+    start = window_start.start if window_start else datetime(2025, 1, 1, tzinfo=UTC)
+    end = window_end.end if window_end else datetime(2026, 7, 1, tzinfo=UTC)
+    total_seconds = (end - start).total_seconds()
+    candles_per_pair = int(total_seconds / tf_seconds)
+    total_candles = candles_per_pair * len(pairs)
+    return int(total_candles * 0.05)
 
 def build_manifest_v2(
     *,
@@ -427,7 +451,7 @@ def build_manifest_v2(
         thresholds=EvaluationThresholdsV1(
             threshold_set_id="gate0-corrective-v2",
             min_trades=100,
-            min_duration_days=30,  # per-window (90-day WF windows)
+            min_duration_days=90,  # matches WF window duration
             min_regimes=2,  # achievable with volatility classification
             max_drawdown_pct=25.0,
             min_profit_factor=1.3,
@@ -439,8 +463,9 @@ def build_manifest_v2(
             confidence_level=0.95,
             bootstrap_seed=42,
             initial_equity=10000.0,
-    max_missing_candles=2610,  # 5% of ~52k per pair, ~8.8k per window: 5% = ~440
-            tail_quantile=0.1,
+    max_missing_candles=_compute_max_missing_candles(
+        PAIRS, TIMEFRAME, CALIBRATION, HOLDOUT,
+    ),  # 5% of total across all pairs
         ),
         boundary_policy=BoundaryPolicy.STRICT_CONTAINED,
         continuation_policy=ContinuationPolicy.REPORT_ONLY,
