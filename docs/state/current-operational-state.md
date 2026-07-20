@@ -1,11 +1,12 @@
 # Trading Hub — Current Operational State
 
 > **Canonical current-state snapshot.** Reconciled on 2026-07-20 after C5.2
-> merge. Phase C exit gate `edge_decision_recorded` is **not yet satisfied** —
-> strategy selection and manifest freeze are complete; snapshot acquired and
-> verified; C5.2 core strategy + manifest v3 merged. Holdout inspection and
-> edge decision remain pending. Phase C remains `in_progress`. Roadmap
-> revision 5. No runtime mutation performed by this reconciliation.
+> preflight inspection. Phase C exit gate `edge_decision_recorded` is **not yet
+> satisfied**. C5.2 merge (PR #662, `2875b67`) has been re-evaluated:
+> `GATE0_C52_PREFLIGHT_FAIL` — the committed `FreqForge_Gate0_Core_v1` still
+> contains AI/Shadow/FleetRisk references, uninitialized objects, undefined
+> functions, and 14 Ruff errors. A C5.3 corrective is required before any
+> A0 re-run or A2 selection backtest. Phase C remains `in_progress`.
 >
 > **Previous:** Phase A complete (#648, `2b6915d`). G0 complete: G0.1 (PR #640
 > + #642) and G0.2 (PR #645, `8c590bf`) merged; bootstrap ADR `Accepted`;
@@ -38,7 +39,7 @@ satisfied**. Current sub-status:
 | Strategy selected | ✅ PASS | `FreqForge_Override` — Luke signed on #604 |
 | Manifest frozen | ✅ PASS | All thresholds approved; `APPROVED_GATE0_STRATEGY_AND_MANIFEST` on #604 |
 | Snapshot acquisition | ✅ `EXECUTED` | 156,489 candles; A2 marker on #651. Data verified present at `/opt/data/gate0-snapshot/` |
-| C5.2 Core Strategy v1 | ✅ `MERGED` | PR #662 (`2875b67`): `FreqForge_Gate0_Core_v1` stripped strategy + manifest v3. 31 tests passing. |
+| C5.2 Core Strategy v1 | ❌ `A0-FAIL` | PR #662 (`2875b67`): preflight found 14 Ruff errors, undefined functions, residual AI/Shadow refs. See [gate0-c52-preflight-failure-2026-07-20.md](../reports/gate0-c52-preflight-failure-2026-07-20.md). Corrective C5.3 required. |
 | Holdout inspected | ❌ NO | Not started; blocked by Luke's C5.2 ratification + A0 preflight |
 | Edge decision | ⏳ `PENDING` | Not yet recorded; blocked by holdout |
 
@@ -68,10 +69,11 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 
 ### Next steps
 
-1. **Luke ratifies C5.2 strategy + manifest v3** — human action on #604
-2. **A0 preflight** — read-only verification of snapshot integrity, strategy code, and manifest consistency (agent-actionable)
-3. **A2 selection backtest** — requires Luke's A2 marker
-4. **C6 marker** — holdout inspection and edge decision
+1. **C5.3 corrective** — resolve all 14 items in the preflight failure report
+2. **A0 re-run** — re-verify snapshot integrity, strategy code, manifest after C5.3 merge
+3. **Luke ratifies corrected strategy + manifest** — human action on #604
+4. **A2 selection backtest** — requires Luke's A2 marker
+5. **C6 marker** — holdout inspection and edge decision
 
 ## Post-G0 operational state (unchanged)
 
@@ -214,9 +216,10 @@ missing-file tests, and eventual bot-scoped entry integration.
 
 ## 6. Go / no-go
 
-**Allowed next repository work:** A0 preflight — read-only verification of
-snapshot integrity, strategy code (`FreqForge_Gate0_Core_v1`), and manifest v3
-consistency. This is A0 read-only work, no mutation.
+**Allowed next repository work:** C5.3 corrective — resolve all 14 items
+identified in the [Gate-0 C5.2 preflight failure report](../reports/gate0-c52-preflight-failure-2026-07-20.md).
+This is A1 repository-only work. No A0 re-run, no A2 selection backtest, and
+no holdout inspection until C5.3 is merged.
 
 After A0 preflight passes, Luke must ratify C5.2 strategy + manifest v3 on
 #604. Then a separate A2 issue with Luke's A2 marker authorizes the selection
@@ -241,17 +244,21 @@ C5.1 corrective addresses all 14 items with strategy provenance,
 manifest v2, partition correction, converter, adapter, and 19 tests.
 Holdout remains sealed until A0 preflight + A2 selection backtest + C6 marker.
 
-## C5.2 Gate-0 Core Strategy v1 + Manifest v3 (2026-07-20)
+## C5.2 Gate-0 Core Strategy v1 — A0 Preflight Result (2026-07-20)
 
-PR #662 (`2875b67`) merged by Luke. Key changes:
+PR #662 (`2875b67`) merged by Luke, then re-evaluated via A0 preflight.
 
-| Item | Before | After |
-|---|---|---|
-| Strategy | `FreqForge_Override` (Primo/FleetRisk/AI/Shadow) | `FreqForge_Gate0_Core_v1` (stripped, isolated) |
-| max_missing_candles | hardcoded 2610 | 5% formula: `floor(total_expected * 0.05)` |
-| min_duration_days | 30 | 90 (matches WF windows) |
-| Regime | post-entry (lookahead) | entry-time, pre-entry data only |
+**Result: `GATE0_C52_PREFLIGHT_FAIL`**
 
-**31 tests passing.** No backtest, no holdout. A1 only.
+The committed `FreqForge_Gate0_Core_v1` contains:
+- 14 Ruff errors (3× F821 undefined names: `normalize_pair`, `long_risk_allowed`, `short_risk_allowed`)
+- Residual Primo/FleetRisk/AI/Shadow references
+- Uninitialized `risk_manager` and `_fleet_source`
+- Regime classification with post-entry lookahead
+- Selection runner evaluating holdout state
+- Manifest v1/v2 output (no v3)
 
-Luke must ratify strategy + manifest v3 before A2 marker.
+Full report: [`gate0-c52-preflight-failure-2026-07-20.md`](../reports/gate0-c52-preflight-failure-2026-07-20.md)
+
+**A C5.3 corrective is required.** No A0 re-run, A2 marker, or holdout
+inspection is valid until C5.3 is merged and re-validated.
