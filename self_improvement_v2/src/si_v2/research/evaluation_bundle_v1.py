@@ -1069,44 +1069,35 @@ class EvaluationRunnerV1:
         manifest: EvaluationManifestV1,
         metrics: Mapping[str, PartitionMetricsV1],
     ) -> tuple[Gate0Outcome, tuple[str, ...]]:
+        """Full evaluation outcome using unified guardrails (C5.4 corrective).
+
+        Uses the shared ``evaluate_guardrails`` function so Selection and Full
+        runners enforce the exact same strict boundaries:
+        ``<=100 trades -> EXTEND``, ``>=25% DD -> REJECT``,
+        ``finite <=1.3 PF -> REJECT``.  Success maps to ``PASS_CANDIDATE``
+        for the C6 holdout ceremony.
+        """
+        from si_v2.research.selection_pipeline import (
+            GuardrailResult,
+            SelectionOutcomeV1,
+            evaluate_guardrails,
+        )
+
         authoritative = [
             metrics[window.label]
             for window in (*manifest.walk_forward_windows, manifest.holdout)
+            if window.label in metrics
         ]
-        insufficient: set[str] = set()
-        for metric in authoritative:
-            if metric.trade_count < manifest.thresholds.min_trades:
-                insufficient.add("INSUFFICIENT_TRADES")
-            if metric.duration_days < manifest.thresholds.min_duration_days:
-                insufficient.add("INSUFFICIENT_DURATION")
-            if len(metric.regime_trade_counts) < manifest.thresholds.min_regimes:
-                insufficient.add("INSUFFICIENT_REGIMES")
-            if (
-                metric.bootstrap.width
-                > manifest.thresholds.max_confidence_interval_width
-            ):
-                insufficient.add("INSUFFICIENT_PRECISION")
-        if insufficient:
-            return Gate0Outcome.EXTEND, tuple(sorted(insufficient))
-        rejected: set[str] = set()
-        for metric in authoritative:
-            if metric.max_drawdown_pct > manifest.thresholds.max_drawdown_pct:
-                rejected.add("MAX_DRAWDOWN_GUARDRAIL")
-            if (
-                metric.profit_factor_state is ProfitFactorState.FINITE
-                and cast("float", metric.profit_factor)
-                < manifest.thresholds.min_profit_factor
-            ):
-                rejected.add("PROFIT_FACTOR_GUARDRAIL")
-            if (
-                metric.bootstrap.mean < manifest.thresholds.min_edge_mean
-                or metric.bootstrap.lower
-                <= manifest.thresholds.min_edge_lower_bound
-            ):
-                rejected.add("EDGE_THRESHOLD_NOT_MET")
-        if rejected:
-            return Gate0Outcome.REJECT, tuple(sorted(rejected))
-        return Gate0Outcome.PASS_CANDIDATE, ("ALL_PREDECLARED_RULES_MET",)
+        result: GuardrailResult = evaluate_guardrails(
+            manifest.thresholds, authoritative, selection_mode=False
+        )
+        if result.outcome == SelectionOutcomeV1.PASS_SELECTION:
+            return Gate0Outcome.PASS_CANDIDATE, result.reasons
+        if result.outcome == SelectionOutcomeV1.EXTEND:
+            return Gate0Outcome.EXTEND, result.reasons
+        if result.outcome == SelectionOutcomeV1.REJECT:
+            return Gate0Outcome.REJECT, result.reasons
+        return Gate0Outcome.INVALID, result.reasons
 
     def evaluate_selection(
         self, bundle: EvaluationBundleV1

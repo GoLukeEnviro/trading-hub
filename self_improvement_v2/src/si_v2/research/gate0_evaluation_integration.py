@@ -39,6 +39,18 @@ from si_v2.research.evaluation_bundle_v1 import (
     RawTradeV1,
 )
 from si_v2.research.gate0_strategy_provenance import StrategyProvenance
+from si_v2.research.selection_pipeline import (
+    CANONICAL_FUTURES_PAIRS,
+    EvaluationManifestV3,
+    EvaluationThresholdsV3,
+    FreqtradeProvenanceV3,
+    SelectionArtifactV1,
+    SelectionBundleV1,
+    SelectionOutcomeV1,
+    SelectionRunnerV1,
+    normalize_futures_pair,
+    pairs_equivalent,
+)
 
 
 def _fail_closed(name: str) -> str:
@@ -79,8 +91,8 @@ HOLDOUT = PartitionWindowV1(
 EVAL_WINDOWS = (CALIBRATION, WALK_FORWARD_1, WALK_FORWARD_2)
 PREFETCH_WINDOWS = (CALIBRATION, WALK_FORWARD_1, WALK_FORWARD_2, HOLDOUT)
 
-PAIRS = ("BTC/USDT", "ETH/USDT", "SOL/USDT")
-BENCHMARK_PAIR = "BTC/USDT"
+PAIRS = CANONICAL_FUTURES_PAIRS  # BTC/USDT:USDT, ETH/USDT:USDT, SOL/USDT:USDT
+BENCHMARK_PAIR = "BTC/USDT:USDT"
 
 # ---------------------------------------------------------------------------
 # Snapshot loading (corrected — total hash over all pairs, separate benchmark)
@@ -303,7 +315,8 @@ class FreqtradeExportAdapterV1:
 
         raw_trades: list[RawTradeV1] = []
         for i, t in enumerate(trades_raw):
-            pair = str(t.get("pair", "")).split(":")[0]
+            raw_pair = str(t.get("pair", ""))
+            pair = normalize_futures_pair(raw_pair)
 
             # Parse timestamps
             entry_ts = self._parse_timestamp(str(t.get("open_date", "")))
@@ -316,11 +329,16 @@ class FreqtradeExportAdapterV1:
                 row_key = f"{i}:{pair}:{t.get('open_date')}:{t.get('close_date')}"
                 trade_id = hashlib.sha256(row_key.encode()).hexdigest()[:16]
 
-            # Classify regime from entry-time-only partition candles
+            # Classify regime from entry-time-only candles of THIS PAIR ONLY.
+            # Foreign-pair candles must not contaminate the regime result.
             regime = "unknown"
             if partition_candles:
+                pair_candles = [
+                    c for c in partition_candles
+                    if pairs_equivalent(c.pair, pair)
+                ]
                 regime = classify_regime_at_entry(
-                    list(partition_candles), entry_ts
+                    pair_candles, entry_ts
                 )
 
             raw_trades.append(RawTradeV1(
@@ -445,44 +463,74 @@ def build_manifest_v3(
     snapshot_id: str,
     fetcher_commit_sha: str,
     strategy_provenance: StrategyProvenance | None = None,
-) -> EvaluationManifestV1:
-    """Build the canonical manifest v3 (C5.3 corrective).
+    candle_snapshot_sha256: str | None = None,
+    benchmark_snapshot_sha256: str | None = None,
+    image_digest: str | None = None,
+) -> EvaluationManifestV3:
+    """Build the canonical manifest v3 (C5.4 corrective).
 
-    Changes vs v2:
-    - manifest_id updated to gate0-manifest-v3-20260721
-    - approval_reference updated to issue-665-C53-CORRECTIVE
-    - strategy_identifier defaults to FreqForge_Gate0_Core_v1
-    - Threshold guards enforced: min_trades > 100, max_drawdown_pct < 25%, min_profit_factor > 1.3
-    - tail_quantile=0.05 added
-    - max_missing_candles uses the corrected 5% formula
+    Returns a real :class:`EvaluationManifestV3` with:
+    - ``manifest_version="evaluation-manifest/v3"``
+    - Full provenance including ``exporter_version`` and ``data_format_version``
+    - Canonical JSON serialization with deterministic roundtrip
+    - Detached ``.sha256`` sidecar support
+    - Futures pair identifiers (BTC/USDT:USDT, etc.)
+    - No circular/self-referential hash
 
-    This is the canonical manifest builder. ``build_manifest_v2`` is a
-    deprecated wrapper that delegates here.
+    All provenance inputs are explicit — no hidden snapshot or holdout reads.
+    Hashes default to computed values from the snapshot directory if present;
+    if the snapshot is not available, the caller must supply them.
+
+    ``build_manifest_v2()`` is a deprecated wrapper that delegates here.
     """
     sp = strategy_provenance or StrategyProvenance()
 
-    return EvaluationManifestV1(
-        manifest_version="evaluation-manifest/v1",
+    # Provenance hashes must be supplied; fail closed if missing
+    strategy_file_sha256 = sp.strategy_file_sha256
+    if not strategy_file_sha256:
+        _fail_closed("strategy_file_sha256")
+    config_sha256 = sp.config_file_sha256
+    if not config_sha256:
+        _fail_closed("config_sha256")
+
+    # Snapshot hashes: use provided or compute from snapshot dir
+    if candle_snapshot_sha256 is None:
+        try:
+            candle_snapshot_sha256 = compute_total_snapshot_hash()
+        except Exception:
+            _fail_closed("candle_snapshot_sha256")
+    if benchmark_snapshot_sha256 is None:
+        try:
+            benchmark_snapshot_sha256 = compute_benchmark_hash()
+        except Exception:
+            _fail_closed("benchmark_snapshot_sha256")
+
+    # Image digest from provenance or explicit override
+    img_digest = image_digest or sp.freqtrade_image
+
+    return EvaluationManifestV3(
+        manifest_version="evaluation-manifest/v3",
         manifest_id="gate0-manifest-v3-20260721",
-        approval_reference="issue-665-C53-CORRECTIVE",
+        approval_reference="issue-671-C54-CORRECTIVE",
         strategy_identifier=sp.strategy_class,
-        provenance=FreqtradeProvenanceV1(
-            freqtrade_version="2025.7",  # will be verified in A0 preflight
+        provenance=FreqtradeProvenanceV3(
+            freqtrade_version="2025.7",
             strategy_class=sp.strategy_class,
-            strategy_file_sha256=sp.strategy_file_sha256
-            or (_fail_closed("strategy_file_sha256") or ""),
+            strategy_file_sha256=strategy_file_sha256,
             strategy_commit_sha=fetcher_commit_sha,
-            config_sha256=sp.config_file_sha256
-            or (_fail_closed("config_sha256") or ""),
+            config_sha256=config_sha256,
+            exporter_version="freqtrade-export/v1",
+            data_format_version="ohlcv-json/v1",
         ),
         data_source="bitget",
         data_snapshot_id=snapshot_id,
-        candle_snapshot_sha256=compute_total_snapshot_hash(),
-        benchmark_snapshot_sha256=compute_benchmark_hash(),
+        candle_snapshot_sha256=candle_snapshot_sha256,
+        benchmark_snapshot_sha256=benchmark_snapshot_sha256,
         exchange="bitget",
         trading_mode="futures",
         market_type="linear",
         pairs=PAIRS,
+        pair_mapping_version="futures-pair-normalization/v1",
         timeframe=TIMEFRAME,
         timerange_start=CALIBRATION.start,
         timerange_end=HOLDOUT.end,
@@ -496,7 +544,7 @@ def build_manifest_v3(
             funding_rate_per_8h=0.0001,
             leverage=1.0,
         ),
-        thresholds=EvaluationThresholdsV1(
+        thresholds=EvaluationThresholdsV3(
             threshold_set_id="gate0-corrective-v3",
             min_trades=100,
             min_duration_days=90,
@@ -519,6 +567,7 @@ def build_manifest_v3(
         boundary_policy=BoundaryPolicy.STRICT_CONTAINED,
         continuation_policy=ContinuationPolicy.REPORT_ONLY,
         mark_to_market_price_field="close",
+        image_digest=img_digest,
     )
 
 
@@ -527,14 +576,12 @@ def build_manifest_v2(
     snapshot_id: str,
     fetcher_commit_sha: str,
     strategy_provenance: StrategyProvenance | None = None,
-) -> EvaluationManifestV1:
-    """Build EvaluationManifestV1 — deprecated wrapper (C5.3 corrective).
+) -> EvaluationManifestV3:
+    """Deprecated wrapper — delegates to build_manifest_v3 (C5.4 corrective).
 
     .. deprecated::
         Use :func:`build_manifest_v3` instead. This wrapper delegates to v3
-        without preserving old v2 semantics (different manifest_id,
-        approval_reference, and threshold_set_id). A DeprecationWarning is
-        emitted.
+        and emits a DeprecationWarning.
     """
     import warnings
 
@@ -566,21 +613,88 @@ class WindowResult:
 
 
 def run_calibration_and_walkforward(
-    manifest: EvaluationManifestV1,
+    manifest: EvaluationManifestV1 | EvaluationManifestV3,
     candles: Sequence[CandleV1],
     raw_trades: Sequence[RawTradeV1],
 ) -> list[WindowResult]:
     """Run evaluation for calibration + walk-forward windows.
 
-    v2 fix: validates per-window candle hashes against per-window bundles,
-    not against the full 18-month manifest.
+    C5.4 fix: uses :class:`SelectionRunnerV1` when a v3 manifest is supplied.
+    It does NOT call :meth:`EvaluationRunnerV1.evaluate` — that method
+    includes holdout in its full partition set and is reserved for C6.
+
+    For v3 manifests, the function creates a :class:`SelectionBundleV1`
+    from the selection-range candles (calibration + WF1 + WF2) and runs
+    the :class:`SelectionRunnerV1` on it. Per-window metrics are extracted
+    from the resulting :class:`SelectionArtifactV1`.
+
+    For v1 manifests (backward compatibility), the legacy per-window
+    evaluation path is preserved.
     """
+    if isinstance(manifest, EvaluationManifestV3):
+        return _run_selection_v3(manifest, candles, raw_trades)
+    return _run_selection_v1(manifest, candles, raw_trades)
+
+
+def _run_selection_v3(
+    manifest: EvaluationManifestV3,
+    candles: Sequence[CandleV1],
+    raw_trades: Sequence[RawTradeV1],
+) -> list[WindowResult]:
+    """C5.4 productive path: use SelectionRunnerV1 on a SelectionBundleV1."""
+    selection_end = manifest.holdout.start
+
+    # Filter to selection range only (no holdout candles)
+    selection_candles = tuple(
+        c for c in candles if c.timestamp < selection_end
+    )
+    selection_benchmark = tuple(
+        c for c in selection_candles if pairs_equivalent(c.pair, BENCHMARK_PAIR)
+    )
+    selection_trades = tuple(
+        t for t in raw_trades if t.entry_time < selection_end
+    )
+
+    bundle = SelectionBundleV1(
+        manifest=manifest,
+        candles=selection_candles,
+        benchmark_candles=selection_benchmark,
+        raw_trades=selection_trades,
+    )
+
+    runner = SelectionRunnerV1()
+    artifact = runner.evaluate(bundle)
+
+    results: list[WindowResult] = []
+    for window in manifest.selection_partitions:
+        pm = artifact.partition_metrics.get(window.label)
+        regime_label = classify_regime(
+            [c for c in selection_candles if window.start <= c.timestamp < window.end],
+            window,
+        )
+        results.append(WindowResult(
+            window_label=window.label,
+            outcome=artifact.outcome.value,
+            num_trades=pm.trade_count if pm else 0,
+            profit_factor=pm.profit_factor if pm else None,
+            max_drawdown_pct=pm.max_drawdown_pct if pm else None,
+            regime_label=regime_label,
+        ))
+    return results
+
+
+def _run_selection_v1(
+    manifest: EvaluationManifestV1,
+    candles: Sequence[CandleV1],
+    raw_trades: Sequence[RawTradeV1],
+) -> list[WindowResult]:
+    """Legacy v1 path for backward compatibility with existing tests."""
     runner = EvaluationRunnerV1()
     results: list[WindowResult] = []
 
-    for window in (CALIBRATION, WALK_FORWARD_1, WALK_FORWARD_2):
+    for window in (manifest.calibration, *manifest.walk_forward_windows):
         window_candles = [c for c in candles if window.start <= c.timestamp < window.end]
-        benchmark_candles = [c for c in window_candles if c.pair == BENCHMARK_PAIR]
+        benchmark_candles = [c for c in window_candles if c.pair == manifest.pairs[0]]
         window_trades = [t for t in raw_trades if window.start <= t.entry_time < window.end]
 
         regime_label = classify_regime(list(window_candles), window)
