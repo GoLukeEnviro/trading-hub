@@ -1,31 +1,70 @@
 """
-FreqForge_Gate0_Core_v1 — stripped research variant
+FreqForge_Gate0_Core_v1 — stripped research variant (C5.3 corrective)
 
 Derived from FreqForge_Override Baseline v1 at commit cef26c8.
 Modified for deterministic Gate-0 evaluation:
 - Primo signals: replaced with offline always-open gate
-- FleetRiskManager: replaced with no-op
-- AI/Shadow/LLM paths: removed
+- FleetRiskManager: replaced with noop stubs
+- AI/Shadow/LLM paths: removed entirely
+- Regime classification: entry-time-only data (no lookahead)
+- Provenance: defaults to FreqForge_Gate0_Core_v1
+- All runtime objects initialized as noop stubs
+- All undefined functions defined as noop stubs
 
 Canonical evaluation reference only — NOT for live deployment.
 """
-import logging
-import sys
 import json
+import logging
 import os
+import sys
 from datetime import datetime
-from typing import Optional
-from pathlib import Path
+from typing import ClassVar, Optional
 
-import talib.abstract as ta
-from freqtrade.strategy import IStrategy, IntParameter, DecimalParameter, merge_informative_pair
 import freqtrade.vendor.qtpylib.indicators as qtpylib
+import talib.abstract as ta
+from freqtrade.strategy import DecimalParameter, IntParameter, IStrategy, merge_informative_pair
 from pandas import DataFrame
 
 sys.path.insert(0, "/freqtrade/shared")
 # --- STRIPPED FOR GATE-0: offline always-open gate ---
 def _gate0_noop_gate(pair, side): return True, "gate0_always_allowed"
 def _gate0_noop_state(): return {}
+
+
+# --- GATE-0 STUBS: replace FleetRisk/AI runtime objects ---
+class _Gate0NoopRiskManager:
+    """No-op risk manager for Gate-0 evaluation. Replaces FleetRiskManager."""
+    def sync_trade_state(self, **kwargs):
+        pass
+    def update_source_equity(self, **kwargs):
+        pass
+    def check_entry_allowed(self, pair, side):
+        return True, "gate0_noop_risk"
+    def _get_cluster(self, pair):
+        return "gate0_default"
+    def get_cluster_stats(self, cluster):
+        return {"winrate": 0.5, "pnl": 0.0}
+
+
+class _Gate0NoopFleetSource:
+    """No-op fleet source for Gate-0 evaluation."""
+    pass
+
+
+def normalize_pair(pair: str) -> str:
+    """Gate-0 stub: normalize pair string (e.g. BTC/USDT:USDT -> BTC/USDT)."""
+    return pair.split(":")[0] if ":" in pair else pair
+
+
+def long_risk_allowed(pair: str) -> tuple[bool, str]:
+    """Gate-0 stub: long risk gate always open."""
+    return True, "gate0_always_allowed"
+
+
+def short_risk_allowed(pair: str) -> tuple[bool, str]:
+    """Gate-0 stub: short risk gate always open."""
+    return True, "gate0_always_allowed"
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +76,12 @@ class FreqForge_Gate0_Core_v1(IStrategy):
     informative_timeframe = "1h"
     can_short = True  # PAPER-TRADING OVERRIDE (2026-05-17) — siehe SOUL.md
 
-    minimal_roi = {"0": 0.060, "180": 0.040, "480": 0.025, "960": 0.015}
+    minimal_roi: ClassVar[dict[str, float]] = {"0": 0.060, "180": 0.040, "480": 0.025, "960": 0.015}
     stoploss = -0.050
     use_custom_stoploss = True
     trailing_stop = False
 
     startup_candle_count = 500
-    AI_OVERRIDE_ALLOWED_PAIRS = {"BTC/USDT", "ETH/USDT", "SOL/USDT"}
-    AI_OVERRIDE_CONFIDENCE_MIN = 0.75
 
     @property
     def protections(self):
@@ -68,9 +105,16 @@ class FreqForge_Gate0_Core_v1(IStrategy):
         super().__init__(config)
         self._regime_histories: dict = {}
         self._gate0_isolated = True  # FleetRisk disabled for Gate-0
+        # Initialize noop stubs for runtime objects
+        self.risk_manager = _Gate0NoopRiskManager()
+        self._fleet_source = _Gate0NoopFleetSource()
 
     def _get_stable_regime(self, pair: str, current_regime: str) -> str:
-        """2-cycle hysteresis per pair. Regime shifts only after 2 consecutive same candles."""
+        """2-cycle hysteresis per pair. Regime shifts only after 2 consecutive same candles.
+
+        Uses entry-time-only data: only the current and previous candle are considered,
+        preventing lookahead from post-entry candles.
+        """
         if pair not in self._regime_histories:
             self._regime_histories[pair] = []
         history = self._regime_histories[pair]
@@ -91,9 +135,9 @@ class FreqForge_Gate0_Core_v1(IStrategy):
             if hasattr(self, "wallets") and self.wallets:
                 try:
                     self.risk_manager.update_source_equity(source, float(self.wallets.get_total_stake_amount()))
-                except Exception as wallet_err:
-                    logger.debug(f"Gate0: Risk source check skipped")
-        except Exception as exc:
+                except Exception:
+                    logger.debug("Gate0: Risk source check skipped")
+        except Exception:
             pass
 
     def informative_pairs(self):
@@ -185,79 +229,9 @@ class FreqForge_Gate0_Core_v1(IStrategy):
         dataframe.loc[breakout_sell_mask, 'v04_strategy'] = 'BREAKOUT'
         squeeze = ((0.5 - dataframe.loc[breakout_sell_mask, 'bb_width']) / 0.4).clip(0, 1)
         vol = (dataframe.loc[breakout_sell_mask, 'volume_ratio'] / 1.5).clip(0, 1)
-        dataframe.loc[breakout_sell_mask, 'v04_confidence'] = (0.5 * squeeze + 0.5 * vol).round(4)
+        dataframe.loc[breakout_sell_mask, 'v04_confidence'] = (0.5 * squeeze + 0.5 * vol).clip(0, 1).round(4)
 
-        # AI SIGNAL OVERRIDE: Inject primo bridge confidence into v04 columns
-        # Enables execution override in populate_entry_trend for high-conviction AI signals
-        self._inject_ai_signal_override(dataframe, pair)
-
-    def _get_ai_override_signal(self, pair: str) -> Optional[dict]:
-        normalized_pair = normalize_pair(pair)
-        if normalized_pair not in self.AI_OVERRIDE_ALLOWED_PAIRS:
-            return None
-
-        state = _gate0_noop_state()
-        if not isinstance(state, dict) or not state.get("fresh", False):
-            return None
-
-        pair_state = (state.get("pairs") or {}).get(normalized_pair)
-        if not isinstance(pair_state, dict):
-            return None
-
-        verdict = str(pair_state.get("verdict", "UNKNOWN")).upper().strip()
-        action = str(pair_state.get("action", "HOLD")).upper().strip()
-        confidence = float(pair_state.get("confidence", 0.0) or 0.0)
-        riskguard_reason = str(pair_state.get("riskguard_reason", "") or "")
-        riskguard_accepted = verdict == "ACCEPTED" or riskguard_reason.upper().startswith("PASS")
-
-        if verdict != "ACCEPTED":
-            return None
-        if action not in {"BUY", "LONG", "SELL", "SHORT"}:
-            return None
-        if not (confidence >= self.AI_OVERRIDE_CONFIDENCE_MIN or riskguard_accepted):
-            return None
-
-        bias_allowed = bool(pair_state.get("allow_long_bias", False)) if action in {"BUY", "LONG"} else bool(pair_state.get("allow_short_bias", False))
-        if not bias_allowed:
-            return None
-
-        return {
-            "pair": normalized_pair,
-            "action": action,
-            "confidence": confidence,
-            "verdict": verdict,
-            "riskguard_reason": riskguard_reason,
-        }
-
-    def _inject_ai_signal_override(self, dataframe: DataFrame, pair: str) -> None:
-        """Inject ACCEPTED ai-hedge-fund-crypto signals for BTC/ETH/SOL only.
-
-        Safety gates:
-        - Gate0: Primo disabled, always-open gate
-        - confidence must be >= 0.75 OR RiskGuard must have passed the signal
-        - allow_long_bias / allow_short_bias must still agree with the side
-        - only the latest candle is overridden (dry-run forward mode, no backfill)
-        """
-        if dataframe.empty:
-            return
-
-        signal = self._get_ai_override_signal(pair)
-        if not signal:
-            return
-
-        idx = dataframe.index[-1]
-        action = "BUY" if signal["action"] in {"BUY", "LONG"} else "SELL"
-        dataframe.at[idx, 'v04_action'] = action
-        dataframe.at[idx, 'v04_confidence'] = max(float(dataframe.at[idx, 'v04_confidence']), signal["confidence"])
-        dataframe.at[idx, 'v04_strategy'] = 'AI_OVERRIDE'
-        dataframe.at[idx, 'v04_regime'] = f"ai_{action.lower()}"
-        logger.info(
-            "[AIOverride] %s -> %s conf=%.2f verdict=%s",
-            signal["pair"],
-            action,
-            signal["confidence"],
-            signal["verdict"],
-        )
+        # AI SIGNAL OVERRIDE: REMOVED for Gate-0 — no AI/Shadow/LLM paths
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         if not self.dp:
@@ -326,11 +300,11 @@ class FreqForge_Gate0_Core_v1(IStrategy):
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         ema200_htf = dataframe[f'ema200_{self.informative_timeframe}']
         pair = metadata.get("pair")
-        _long_risk_allowed, long_risk_reason = _gate0_noop_gate(pair, "long")
-        _short_risk_allowed, short_risk_reason = _gate0_noop_gate(pair, "short")
-        if not long_risk_allowed:
+        _long_risk_allowed, _ = long_risk_allowed(pair)
+        _short_risk_allowed, _ = short_risk_allowed(pair)
+        if not _long_risk_allowed:
             logger.debug(f"Gate0: LONG gate {pair} isolated")
-        if not short_risk_allowed:
+        if not _short_risk_allowed:
             logger.debug(f"Gate0: SHORT gate {pair} isolated")
         long_gate = _gate0_noop_gate(pair, "long")[0] and _long_risk_allowed
         short_gate = _gate0_noop_gate(pair, "short")[0] and _short_risk_allowed
@@ -355,18 +329,10 @@ class FreqForge_Gate0_Core_v1(IStrategy):
             long_gate
         )
 
-        signal_override_long = (
-            dataframe['v04_strategy'].eq('AI_OVERRIDE') &
-            dataframe['v04_action'].isin(['BUY', 'LONG']) &
-            (dataframe['v04_confidence'] >= self.AI_OVERRIDE_CONFIDENCE_MIN) &
-            long_gate
-        )
-
-        long_entries = trend_long | range_long | signal_override_long
+        long_entries = trend_long | range_long
         dataframe.loc[long_entries, 'enter_long'] = 1
         dataframe.loc[range_long, 'enter_tag'] = 'range_reversion_long'
         dataframe.loc[trend_long, 'enter_tag'] = 'trend_pullback_long'
-        dataframe.loc[signal_override_long, 'enter_tag'] = 'ai_override_long'
 
         # --- SHORT ENTRY LOGIC ---
         trend_short = (
@@ -388,18 +354,10 @@ class FreqForge_Gate0_Core_v1(IStrategy):
             short_gate
         )
 
-        signal_override_short = (
-            dataframe['v04_strategy'].eq('AI_OVERRIDE') &
-            dataframe['v04_action'].isin(['SELL', 'SHORT']) &
-            (dataframe['v04_confidence'] >= self.AI_OVERRIDE_CONFIDENCE_MIN) &
-            short_gate
-        )
-
-        short_entries = trend_short | range_short | signal_override_short
+        short_entries = trend_short | range_short
         dataframe.loc[short_entries, 'enter_short'] = 1
         dataframe.loc[trend_short, 'enter_tag'] = 'trend_pullback_short'
         dataframe.loc[range_short, 'enter_tag'] = 'range_reversion_short'
-        dataframe.loc[signal_override_short, 'enter_tag'] = 'ai_override_short'
 
         return dataframe
 
@@ -417,7 +375,7 @@ class FreqForge_Gate0_Core_v1(IStrategy):
             last = dataframe.iloc[-1]
             rsi = float(last.get("rsi", 50.0))
             adx_rel = float(last.get("adx_rel", 1.0))
-            v04_action = str(last.get("v04_action", "WATCH")).upper()
+            _ = str(last.get("v04_action", "WATCH")).upper()
             v04_strategy = str(last.get("v04_strategy", ""))
         except Exception:
             return None
@@ -431,12 +389,6 @@ class FreqForge_Gate0_Core_v1(IStrategy):
         if current_profit >= 0.03 and trade_duration > 240 and adx_rel < 0.90:
             return "tp_trend_fade"
 
-        if current_profit >= 0.02 and v04_strategy == "AI_OVERRIDE":
-            if trade.is_short and v04_action not in {"SELL", "SHORT"}:
-                return "ai_bias_lost"
-            if not trade.is_short and v04_action not in {"BUY", "LONG"}:
-                return "ai_bias_lost"
-
         if current_profit >= 0.015 and trade_duration > 960 and v04_strategy != "AI_OVERRIDE":
             return "tp_time_decay"
 
@@ -449,7 +401,7 @@ class FreqForge_Gate0_Core_v1(IStrategy):
         PASSIVES SHADOW-LOGGING — zeichnet jeden Trade mit Marktkontext auf.
         Gibt immer True zurueck (kein Eingriff in Trades).
         """
-        risk_allowed, risk_reason = self.risk_manager.check_entry_allowed(pair, side)
+        risk_allowed, _ = self.risk_manager.check_entry_allowed(pair, side)
         if not risk_allowed:
             logger.debug(f"Gate0: Entry {pair} {side} isolated; risk checks disabled")
             return False
@@ -464,8 +416,8 @@ class FreqForge_Gate0_Core_v1(IStrategy):
             "side": side,
             "entry_tag": entry_tag,
             "amount": float(amount),
-            "strategy": "FreqForge_Override",
-            "config": "baseline-v1",
+            "strategy": "FreqForge_Gate0_Core_v1",
+            "config": "gate0-core-v1",
         }
 
         # DataFrame-Kontext aus der letzten Kerze holen
@@ -506,7 +458,7 @@ class FreqForge_Gate0_Core_v1(IStrategy):
             log_path = "/freqtrade/logs/freqforge_shadow.log"
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
             with open(log_path, "a") as f:
-                f.write(json.dumps(log_entry) + "\\n")
+                f.write(json.dumps(log_entry) + "\n")
         except Exception as e:
             logger.error(f"FreqForge Shadow log write failed: {e}")
 

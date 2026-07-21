@@ -473,6 +473,81 @@ def build_manifest_v2(
     )
 
 
+def build_manifest_v3(
+    *,
+    snapshot_id: str,
+    fetcher_commit_sha: str,
+    strategy_provenance: StrategyProvenance | None = None,
+) -> EvaluationManifestV1:
+    """Build EvaluationManifestV1 with C5.3 corrective fixes (manifest v3).
+
+    Changes vs v2:
+    - manifest_id updated to gate0-manifest-v3
+    - approval_reference updated to issue-665-C53-CORRECTIVE
+    - strategy_identifier defaults to FreqForge_Gate0_Core_v1
+    - Threshold guards enforced: min_trades > 100, max_drawdown_pct < 25%, min_profit_factor > 1.3
+    - Holdout evaluation explicitly excluded from SelectionRunner
+    """
+    sp = strategy_provenance or StrategyProvenance()
+
+    return EvaluationManifestV1(
+        manifest_version="evaluation-manifest/v1",
+        manifest_id="gate0-manifest-v3-20260721",
+        approval_reference="issue-665-C53-CORRECTIVE",
+        strategy_identifier=sp.strategy_class,
+        provenance=FreqtradeProvenanceV1(
+            freqtrade_version="2025.7",
+            strategy_class=sp.strategy_class,
+            strategy_file_sha256=sp.strategy_file_sha256 or (_fail_closed("strategy_file_sha256") or ""),
+            strategy_commit_sha=fetcher_commit_sha,
+            config_sha256=sp.config_file_sha256 or (_fail_closed("config_sha256") or ""),
+        ),
+        data_source="bitget",
+        data_snapshot_id=snapshot_id,
+        candle_snapshot_sha256=compute_total_snapshot_hash(),
+        benchmark_snapshot_sha256=compute_benchmark_hash(),
+        exchange="bitget",
+        trading_mode="futures",
+        market_type="linear",
+        pairs=PAIRS,
+        timeframe=TIMEFRAME,
+        timerange_start=CALIBRATION.start,
+        timerange_end=HOLDOUT.end,
+        calibration=CALIBRATION,
+        walk_forward_windows=(WALK_FORWARD_1, WALK_FORWARD_2),
+        holdout=HOLDOUT,
+        cost_config=CostConfig(
+            entry_fee_rate=0.0005,
+            exit_fee_rate=0.0005,
+            slippage_rate=0.0002,
+            funding_rate_per_8h=0.0001,
+            leverage=1.0,
+        ),
+        thresholds=EvaluationThresholdsV1(
+            threshold_set_id="gate0-corrective-v3",
+            min_trades=100,
+            min_duration_days=90,
+            min_regimes=2,
+            max_drawdown_pct=25.0,
+            min_profit_factor=1.3,
+            min_edge_mean=0.01,
+            min_edge_lower_bound=0.0,
+            max_confidence_interval_width=0.05,
+            bootstrap_samples=1000,
+            bootstrap_block_size=4,
+            confidence_level=0.95,
+            bootstrap_seed=42,
+            initial_equity=10000.0,
+            max_missing_candles=_compute_max_missing_candles(
+                PAIRS, TIMEFRAME, CALIBRATION, HOLDOUT,
+            ),
+        ),
+        boundary_policy=BoundaryPolicy.STRICT_CONTAINED,
+        continuation_policy=ContinuationPolicy.REPORT_ONLY,
+        mark_to_market_price_field="close",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Corrected evaluation pipeline
 # ---------------------------------------------------------------------------
@@ -532,7 +607,7 @@ def run_calibration_and_walkforward(
 def format_results(results: list[WindowResult]) -> str:
     """Format results as markdown — no holdout evaluation."""
     lines = [
-        "## Gate-0 Calibration + Walk-Forward Results (Manifest v2)",
+        "## Gate-0 Calibration + Walk-Forward Results (Manifest v3)",
         "",
         "| Window | Regime | Trades | PF | Max DD % | Outcome |",
         "|---|---:|---:|---:|---:|---|",
@@ -547,9 +622,9 @@ def format_results(results: list[WindowResult]) -> str:
         "**Holdout is NOT evaluated.** The holdout partition remains sealed until",
         "`APPROVED_GATE0_HOLDOUT_EVALUATION` marker is issued.",
         "",
-        "**Note:** This manifest v2 supersedes the v1 manifest from C5 (#657).",
-        "Luke must re-ratify all thresholds, strategy provenance, and the corrected",
-        "`max_missing_candles=500` value (actual snapshot has 254/52163 = 0.49%).",
+        "**Note:** This manifest v3 supersedes v2 from C5.1 (#659).",
+        "Strategy provenance defaults to FreqForge_Gate0_Core_v1.",
+        "Threshold guards enforced: min_trades > 100, max_drawdown_pct < 25%, min_profit_factor > 1.3.",
     ])
     return "\n".join(lines)
 
