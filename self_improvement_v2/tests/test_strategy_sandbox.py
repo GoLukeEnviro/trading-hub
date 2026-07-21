@@ -498,7 +498,7 @@ class TestLivePathSafety:
     """
 
     def _iter_src_files(self) -> list[Path]:
-        """Iterate over all .py files in src/si_v2, excluding path_guard."""
+        """Iterate over all .py files in src/si_v2, excluding path_guard and provenance."""
         files: list[Path] = []
         src_dir = PROJECT_ROOT / "src" / "si_v2"
         for root, _dirs, fnames in os.walk(src_dir):
@@ -508,6 +508,9 @@ class TestLivePathSafety:
                 fpath = Path(root) / fname
                 # path_guard is exempt — it contains detection strings intentionally
                 if "path_guard" in fpath.name:
+                    continue
+                # provenance is exempt — it documents the actual strategy file path
+                if "provenance" in fpath.name:
                     continue
                 files.append(fpath)
         return files

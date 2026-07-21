@@ -5,9 +5,6 @@ All tests are A1 (repository-only, no runtime mutation).
 """
 from __future__ import annotations
 
-import json
-import tempfile
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -126,7 +123,8 @@ class TestRuffClean:
     """Item 4: ruff check reports 0 errors on Gate-0 strategy code."""
 
     def test_ruff_check_strategy(self):
-        import subprocess, sys
+        import subprocess
+        import sys
         result = subprocess.run(
             [sys.executable, "-m", "ruff", "check", str(self.STRATEGY_PATH)],
             capture_output=True, text=True, timeout=30,
@@ -189,18 +187,20 @@ class TestManifestV3:
     """Item 7: Manifest v3 artifact exists and is serializable."""
 
     def test_build_manifest_v3_exists(self):
-        from si_v2.research.gate0_evaluation_integration import build_manifest_v3
         import inspect
+
+        from si_v2.research.gate0_evaluation_integration import build_manifest_v3
         sig = inspect.signature(build_manifest_v3)
         params = list(sig.parameters.keys())
         assert "snapshot_id" in params
         assert "fetcher_commit_sha" in params
 
     def test_manifest_v3_id_is_gate0_manifest_v3(self):
-        from si_v2.research.gate0_evaluation_integration import build_manifest_v3
         # We can't call build_manifest_v3 without snapshot data, but we can
         # verify the function exists and has the right structure
         import inspect
+
+        from si_v2.research.gate0_evaluation_integration import build_manifest_v3
         source = inspect.getsource(build_manifest_v3)
         assert "gate0-manifest-v3-20260721" in source, (
             "manifest_id should be gate0-manifest-v3-20260721"
@@ -227,10 +227,11 @@ class TestNoHoldoutInSelectionRunner:
 
     def test_run_calibration_only_eval_windows(self):
         """Verify run_calibration_and_walkforward only uses EVAL_WINDOWS."""
+        import inspect
+
         from si_v2.research.gate0_evaluation_integration import (
             run_calibration_and_walkforward,
         )
-        import inspect
         source = inspect.getsource(run_calibration_and_walkforward)
         # Should iterate over calibration + WF windows, not holdout
         assert "CALIBRATION" in source, (
@@ -258,8 +259,9 @@ class TestThresholdGuards:
     """Item 9: Threshold guards enforced in manifest v3."""
 
     def test_manifest_v3_thresholds_enforced(self):
-        from si_v2.research.gate0_evaluation_integration import build_manifest_v3
         import inspect
+
+        from si_v2.research.gate0_evaluation_integration import build_manifest_v3
         source = inspect.getsource(build_manifest_v3)
         assert "min_trades=100" in source, (
             "manifest v3 must enforce min_trades > 100"
@@ -310,12 +312,10 @@ class TestExistingTestsPass:
 
     def test_c52_tests_importable(self):
         """Verify the C5.2 test module is importable."""
+        import contextlib
         import importlib
-        try:
+        with contextlib.suppress(ModuleNotFoundError):
             importlib.import_module("test_c52_gate0_core_strategy")
-        except ModuleNotFoundError:
-            # The test module may not be on the path; that's OK for CI
-            pass
 
 
 # ---------------------------------------------------------------------------
