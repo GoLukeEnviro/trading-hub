@@ -1108,6 +1108,204 @@ class EvaluationRunnerV1:
             return Gate0Outcome.REJECT, tuple(sorted(rejected))
         return Gate0Outcome.PASS_CANDIDATE, ("ALL_PREDECLARED_RULES_MET",)
 
+    def evaluate_selection(
+        self, bundle: EvaluationBundleV1
+    ) -> EvaluationArtifactV1:
+        """Selection-only evaluation: calibration + walk-forward windows only.
+
+        This method:
+        - Processes calibration, walk-forward 1, and walk-forward 2.
+        - Calibration is treated as descriptive only.
+        - Walk-forward partitions are authoritative for the outcome.
+        - Rejects any holdout candles or holdout trades in the bundle
+          (fail-closed INVALID).
+        - Never materializes holdout metrics or holdout hashes.
+
+        The full :meth:`evaluate` method is reserved for the later C6
+        holdout ceremony.
+        """
+        holdout = bundle.manifest.holdout
+
+        # Fail-closed: reject any holdout candles in the bundle
+        holdout_candle_count = sum(
+            1
+            for c in bundle.candles
+            if holdout.start <= c.timestamp < holdout.end
+        )
+        if holdout_candle_count > 0:
+            quality = _data_quality(bundle)
+            return EvaluationArtifactV1(
+                manifest_id=bundle.manifest.manifest_id,
+                outcome=Gate0Outcome.INVALID,
+                outcome_reasons=(),
+                invalid_reasons=("HOLDOUT_CANDLES_IN_SELECTION_BUNDLE",),
+                data_quality=quality,
+                partition_metrics={},
+                partition_hashes={},
+                continuation_trade_ids=(),
+                selection_fingerprint=_sha256(bundle.manifest.to_dict()),
+            )
+
+        # Fail-closed: reject any holdout trades in the bundle
+        holdout_trade_count = sum(
+            1
+            for t in bundle.raw_trades
+            if holdout.start <= t.entry_time < holdout.end
+        )
+        if holdout_trade_count > 0:
+            quality = _data_quality(bundle)
+            return EvaluationArtifactV1(
+                manifest_id=bundle.manifest.manifest_id,
+                outcome=Gate0Outcome.INVALID,
+                outcome_reasons=(),
+                invalid_reasons=("HOLDOUT_TRADES_IN_SELECTION_BUNDLE",),
+                data_quality=quality,
+                partition_metrics={},
+                partition_hashes={},
+                continuation_trade_ids=(),
+                selection_fingerprint=_sha256(bundle.manifest.to_dict()),
+            )
+
+        # Standard validation
+        quality = _data_quality(bundle)
+        try:
+            invalid = list(bundle.validate())
+        except InvalidEvaluationError as exc:
+            invalid = [exc.code]
+
+        if invalid:
+            return EvaluationArtifactV1(
+                manifest_id=bundle.manifest.manifest_id,
+                outcome=Gate0Outcome.INVALID,
+                outcome_reasons=(),
+                invalid_reasons=tuple(sorted(set(invalid))),
+                data_quality=quality,
+                partition_metrics={},
+                partition_hashes={},
+                continuation_trade_ids=(),
+                selection_fingerprint=_sha256(bundle.manifest.to_dict()),
+            )
+
+        # Partition trades for selection windows only
+        selection_windows = [
+            bundle.manifest.calibration,
+            *bundle.manifest.walk_forward_windows,
+        ]
+        selection_labels = [w.label for w in selection_windows]
+        partition_trades: dict[str, list[RawTradeV1]] = {
+            label: [] for label in selection_labels
+        }
+        continuations: list[str] = []
+        for trade in bundle.raw_trades:
+            labels = [
+                w.label for w in selection_windows if w.contains(trade)
+            ]
+            if len(labels) == 1:
+                partition_trades[labels[0]].append(trade)
+            elif bundle.manifest.continuation_policy is ContinuationPolicy.REPORT_ONLY:
+                continuations.append(trade.trade_id)
+            else:
+                invalid.append("CROSS_PARTITION_TRADE")
+
+        if invalid:
+            return EvaluationArtifactV1(
+                manifest_id=bundle.manifest.manifest_id,
+                outcome=Gate0Outcome.INVALID,
+                outcome_reasons=(),
+                invalid_reasons=tuple(sorted(set(invalid))),
+                data_quality=quality,
+                partition_metrics={},
+                partition_hashes={},
+                continuation_trade_ids=tuple(sorted(continuations)),
+                selection_fingerprint=_sha256(bundle.manifest.to_dict()),
+            )
+
+        # Compute metrics for selection windows only (no holdout)
+        metrics: dict[str, PartitionMetricsV1] = {}
+        hashes: dict[str, str] = {}
+        for window in selection_windows:
+            rows = tuple(partition_trades[window.label])
+            metrics[window.label] = _partition_metrics(bundle, window, rows)
+            hashes[window.label] = _partition_view_hash(bundle, window, rows)
+
+        selection_fingerprint = _sha256(
+            {
+                "manifest": bundle.manifest.to_dict(),
+                "selection_partition_hashes": {
+                    label: hashes[label] for label in selection_labels
+                },
+            }
+        )
+
+        # Outcome from walk-forward windows only (calibration is descriptive)
+        outcome, reasons = self._selection_outcome(bundle.manifest, metrics)
+
+        return EvaluationArtifactV1(
+            manifest_id=bundle.manifest.manifest_id,
+            outcome=outcome,
+            outcome_reasons=reasons,
+            invalid_reasons=(),
+            data_quality=quality,
+            partition_metrics=dict(sorted(metrics.items())),
+            partition_hashes=dict(sorted(hashes.items())),
+            continuation_trade_ids=tuple(sorted(continuations)),
+            selection_fingerprint=selection_fingerprint,
+        )
+
+    @staticmethod
+    def _selection_outcome(
+        manifest: EvaluationManifestV1,
+        metrics: Mapping[str, PartitionMetricsV1],
+    ) -> tuple[Gate0Outcome, tuple[str, ...]]:
+        """Selection outcome: walk-forward windows are authoritative.
+
+        Calibration metrics are descriptive only — they do not gate the
+        outcome. Only walk-forward partitions decide EXTEND/REJECT/PASS.
+        """
+        authoritative = [
+            metrics[window.label]
+            for window in manifest.walk_forward_windows
+            if window.label in metrics
+        ]
+        if not authoritative:
+            return Gate0Outcome.INVALID, ("NO_WALK_FORWARD_METRICS",)
+
+        insufficient: set[str] = set()
+        for metric in authoritative:
+            if metric.trade_count <= manifest.thresholds.min_trades:
+                insufficient.add("INSUFFICIENT_TRADES")
+            if metric.duration_days < manifest.thresholds.min_duration_days:
+                insufficient.add("INSUFFICIENT_DURATION")
+            if len(metric.regime_trade_counts) < manifest.thresholds.min_regimes:
+                insufficient.add("INSUFFICIENT_REGIMES")
+            if (
+                metric.bootstrap.width
+                > manifest.thresholds.max_confidence_interval_width
+            ):
+                insufficient.add("INSUFFICIENT_PRECISION")
+        if insufficient:
+            return Gate0Outcome.EXTEND, tuple(sorted(insufficient))
+
+        rejected: set[str] = set()
+        for metric in authoritative:
+            if metric.max_drawdown_pct >= manifest.thresholds.max_drawdown_pct:
+                rejected.add("MAX_DRAWDOWN_GUARDRAIL")
+            if (
+                metric.profit_factor_state is ProfitFactorState.FINITE
+                and cast("float", metric.profit_factor)
+                <= manifest.thresholds.min_profit_factor
+            ):
+                rejected.add("PROFIT_FACTOR_GUARDRAIL")
+            if (
+                metric.bootstrap.mean < manifest.thresholds.min_edge_mean
+                or metric.bootstrap.lower
+                <= manifest.thresholds.min_edge_lower_bound
+            ):
+                rejected.add("EDGE_THRESHOLD_NOT_MET")
+        if rejected:
+            return Gate0Outcome.REJECT, tuple(sorted(rejected))
+        return Gate0Outcome.PASS_CANDIDATE, ("ALL_PREDECLARED_RULES_MET",)
+
 
 class FreqtradeExportAdapterV1:
     """Pure importer for already-exported Freqtrade trade artifacts."""

@@ -1,20 +1,15 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-07-20 after C5.2
-> preflight inspection. Phase C exit gate `edge_decision_recorded` is **not yet
-> satisfied**. C5.2 merge (PR #662, `2875b67`) has been re-evaluated:
-> `GATE0_C52_PREFLIGHT_FAIL` — the committed `FreqForge_Gate0_Core_v1` still
-> contains AI/Shadow/FleetRisk references, uninitialized objects, undefined
-> functions, and 14 Ruff errors. A C5.3 corrective is required before any
-> A0 re-run or A2 selection backtest. Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-07-21 after C5.3
+> corrective implementation. Phase C exit gate `edge_decision_recorded` is **not
+> yet satisfied**. C5.3 corrective resolves all 14 items from the C5.2 A0
+> preflight failure. After C5.3 merges, a fresh A0 preflight re-run is required.
+> Phase C remains `in_progress`.
 >
-> **Previous:** Phase A complete (#648, `2b6915d`). G0 complete: G0.1 (PR #640
-> + #642) and G0.2 (PR #645, `8c590bf`) merged; bootstrap ADR `Accepted`;
-> `governance-consistency` is a required branch-protection check. Phase C
-> inventory and manifest proposal merged (#649, `eca7923`); Luke signed
-> strategy selection (`FreqForge_Override`) and frozen manifest on #604.
-> C5.1 corrective merged (#659, `cef26c8`). C5.2 Gate-0 Core Strategy v1 +
-> manifest v3 merged (#662, `2875b67`).
+> **Previous:** C5.2 A0-FAIL documented (#664, `01b7fb2`). C5.3 corrective
+> fully strips FreqForge_Gate0_Core_v1 of all dependencies, introduces manifest
+> v3, entry-time regime classification, and selection-only evaluation with
+> holdout isolation. 67 tests pass. Tracker #423 on #665.
 
 ## Governance revision pointers
 

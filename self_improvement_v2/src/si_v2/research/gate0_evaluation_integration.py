@@ -316,14 +316,12 @@ class FreqtradeExportAdapterV1:
                 row_key = f"{i}:{pair}:{t.get('open_date')}:{t.get('close_date')}"
                 trade_id = hashlib.sha256(row_key.encode()).hexdigest()[:16]
 
-            # Classify regime from partition candles
+            # Classify regime from entry-time-only partition candles
             regime = "unknown"
             if partition_candles:
-                trade_candles = [
-                    c for c in partition_candles
-                    if entry_ts <= c.timestamp <= exit_ts
-                ]
-                regime = classify_regime_at_entry(trade_candles)
+                regime = classify_regime_at_entry(
+                    list(partition_candles), entry_ts
+                )
 
             raw_trades.append(RawTradeV1(
                 trade_id=trade_id,
@@ -357,15 +355,60 @@ class FreqtradeExportAdapterV1:
         raise ValueError(f"Cannot parse timestamp: {ts_str!r}")
 
 
-def classify_regime_at_entry(candles: list[CandleV1]) -> str:
-    """Classify regime for a set of candles (used for per-trade regime)."""
-    if not candles or len(candles) < 5:
+def classify_regime_at_entry(
+    pair_candles: list[CandleV1],
+    entry_timestamp: datetime,
+    lookback: int = 96,
+) -> str:
+    """Classify volatility regime using entry-time-only data (no lookahead).
+
+    Semantics:
+    - Only candles of the same pair.
+    - Only fully closed candles with timestamp < entry_timestamp.
+    - Last ``lookback`` pre-entry candles (default 96).
+    - ATR(14) / close as the volatility measure.
+    - Current ATR pct compared to the median of valid ATR pcts in the lookback.
+    - Returns ``high_volatility`` or ``low_volatility``.
+    - Returns ``insufficient_data`` if not enough candles.
+
+    Changes to post-entry candles must never change the result.
+    """
+    import statistics
+
+    # Filter: same pair, timestamp strictly before entry
+    pre_entry = [c for c in pair_candles if c.timestamp < entry_timestamp]
+    pre_entry.sort(key=lambda c: c.timestamp)
+
+    # Take last ``lookback`` candles
+    if len(pre_entry) > lookback:
+        pre_entry = pre_entry[-lookback:]
+
+    if len(pre_entry) < 15:
         return "insufficient_data"
 
-    # Simple volatility check on trade's candle range
-    prices = [c.close for c in candles]
-    pct_change = (max(prices) - min(prices)) / min(prices)
-    return "trending" if pct_change > 0.05 else "ranging"
+    # Compute ATR(14) for each candle where possible
+    atr_pcts: list[float] = []
+    period = 14
+    for i in range(period, len(pre_entry)):
+        trs: list[float] = []
+        for j in range(i - period + 1, i + 1):
+            hi = pre_entry[j].high
+            lo = pre_entry[j].low
+            prev_close = pre_entry[j - 1].close
+            tr = max(hi - lo, abs(hi - prev_close), abs(lo - prev_close))
+            trs.append(tr)
+        atr = sum(trs) / len(trs)
+        close = pre_entry[i].close
+        if close > 0:
+            atr_pcts.append(atr / close)
+
+    if len(atr_pcts) < 2:
+        return "insufficient_data"
+
+    median_atr_pct = statistics.median(atr_pcts)
+    current_atr_pct = atr_pcts[-1]
+
+    return "high_volatility" if current_atr_pct > median_atr_pct else "low_volatility"
 
 
 # ---------------------------------------------------------------------------
@@ -397,35 +440,40 @@ def _compute_max_missing_candles(
     total_candles = candles_per_pair * len(pairs)
     return int(total_candles * 0.05)
 
-def build_manifest_v2(
+def build_manifest_v3(
     *,
     snapshot_id: str,
     fetcher_commit_sha: str,
     strategy_provenance: StrategyProvenance | None = None,
 ) -> EvaluationManifestV1:
-    """Build EvaluationManifestV1 with all corrective fixes.
+    """Build the canonical manifest v3 (C5.3 corrective).
 
-    Changes vs v1:
-    - Total multi-pair snapshot hash (not single file)
-    - Separate benchmark hash (BTCUSDT only)
-    - Corrected half-open partitions
-    - Strategy provenance from actual code
-    - max_missing_candles noted but requires Luke's re-ratification
-    - min_duration_days per-window (not global 180)
+    Changes vs v2:
+    - manifest_id updated to gate0-manifest-v3-20260721
+    - approval_reference updated to issue-665-C53-CORRECTIVE
+    - strategy_identifier defaults to FreqForge_Gate0_Core_v1
+    - Threshold guards enforced: min_trades > 100, max_drawdown_pct < 25%, min_profit_factor > 1.3
+    - tail_quantile=0.05 added
+    - max_missing_candles uses the corrected 5% formula
+
+    This is the canonical manifest builder. ``build_manifest_v2`` is a
+    deprecated wrapper that delegates here.
     """
     sp = strategy_provenance or StrategyProvenance()
 
     return EvaluationManifestV1(
         manifest_version="evaluation-manifest/v1",
-        manifest_id="gate0-manifest-v2-20260719",
-        approval_reference="issue-658-C51-CORRECTIVE",
+        manifest_id="gate0-manifest-v3-20260721",
+        approval_reference="issue-665-C53-CORRECTIVE",
         strategy_identifier=sp.strategy_class,
         provenance=FreqtradeProvenanceV1(
             freqtrade_version="2025.7",  # will be verified in A0 preflight
             strategy_class=sp.strategy_class,
-            strategy_file_sha256=sp.strategy_file_sha256 or (_fail_closed("strategy_file_sha256") or ""),
+            strategy_file_sha256=sp.strategy_file_sha256
+            or (_fail_closed("strategy_file_sha256") or ""),
             strategy_commit_sha=fetcher_commit_sha,
-            config_sha256=sp.config_file_sha256 or (_fail_closed("config_sha256") or ""),
+            config_sha256=sp.config_file_sha256
+            or (_fail_closed("config_sha256") or ""),
         ),
         data_source="bitget",
         data_snapshot_id=snapshot_id,
@@ -449,10 +497,10 @@ def build_manifest_v2(
             leverage=1.0,
         ),
         thresholds=EvaluationThresholdsV1(
-            threshold_set_id="gate0-corrective-v2",
+            threshold_set_id="gate0-corrective-v3",
             min_trades=100,
-            min_duration_days=90,  # matches WF window duration
-            min_regimes=2,  # achievable with volatility classification
+            min_duration_days=90,
+            min_regimes=2,
             max_drawdown_pct=25.0,
             min_profit_factor=1.3,
             min_edge_mean=0.01,
@@ -463,13 +511,42 @@ def build_manifest_v2(
             confidence_level=0.95,
             bootstrap_seed=42,
             initial_equity=10000.0,
-    max_missing_candles=_compute_max_missing_candles(
-        PAIRS, TIMEFRAME, CALIBRATION, HOLDOUT,
-    ),  # 5% of total across all pairs
+            max_missing_candles=_compute_max_missing_candles(
+                PAIRS, TIMEFRAME, CALIBRATION, HOLDOUT,
+            ),
+            tail_quantile=0.05,
         ),
         boundary_policy=BoundaryPolicy.STRICT_CONTAINED,
         continuation_policy=ContinuationPolicy.REPORT_ONLY,
         mark_to_market_price_field="close",
+    )
+
+
+def build_manifest_v2(
+    *,
+    snapshot_id: str,
+    fetcher_commit_sha: str,
+    strategy_provenance: StrategyProvenance | None = None,
+) -> EvaluationManifestV1:
+    """Build EvaluationManifestV1 — deprecated wrapper (C5.3 corrective).
+
+    .. deprecated::
+        Use :func:`build_manifest_v3` instead. This wrapper delegates to v3
+        without preserving old v2 semantics (different manifest_id,
+        approval_reference, and threshold_set_id). A DeprecationWarning is
+        emitted.
+    """
+    import warnings
+
+    warnings.warn(
+        "build_manifest_v2 is deprecated; use build_manifest_v3 instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return build_manifest_v3(
+        snapshot_id=snapshot_id,
+        fetcher_commit_sha=fetcher_commit_sha,
+        strategy_provenance=strategy_provenance,
     )
 
 

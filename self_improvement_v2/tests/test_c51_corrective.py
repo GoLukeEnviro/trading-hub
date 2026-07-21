@@ -72,18 +72,19 @@ class TestPartitions:
 class TestStrategyProvenance:
     def test_default_instance_has_expected_characteristics(self):
         sp = StrategyProvenance()
-        assert sp.strategy_class == "FreqForge_Override"
+        # C5.3 corrective: provenance now defaults to FreqForge_Gate0_Core_v1
+        assert sp.strategy_class == "FreqForge_Gate0_Core_v1"
         assert sp.timeframe == "15m"
         assert sp.informative_timeframe == "1h"
         assert sp.can_short is True
         assert sp.use_custom_stoploss is True
         assert sp.requires_informative_data is True
-        assert sp.uses_fleet_risk_manager is True
-        assert sp.uses_primo_signal is True
+        # C5.3 corrective: all dependencies removed (stripped variant)
+        assert sp.uses_fleet_risk_manager is False
+        assert sp.uses_primo_signal is False
 
     def test_re_ratification_note_present(self):
         sp = StrategyProvenance()
-        assert "FleetRiskManager" in sp.re_ratification_note
         assert "re-ratify" in sp.re_ratification_note
 
 

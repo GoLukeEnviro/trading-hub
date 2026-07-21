@@ -509,6 +509,10 @@ class TestLivePathSafety:
                 # path_guard is exempt — it contains detection strings intentionally
                 if "path_guard" in fpath.name:
                     continue
+                # gate0_strategy_provenance is exempt — it documents the
+                # actual strategy file path (freqforge/user_data/strategies/)
+                if "gate0_strategy_provenance" in fpath.name:
+                    continue
                 files.append(fpath)
         return files
 
