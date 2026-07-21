@@ -16,8 +16,7 @@ All tests are A1 (repository-only, no runtime mutation).
 from __future__ import annotations
 
 import ast
-import hashlib
-import json
+import contextlib
 import warnings
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -49,12 +48,13 @@ class TestStrategyAstContract:
         """No sys.path.insert, sys.path.append, or sys.path manipulation."""
         tree = ast.parse(STRATEGY_PATH.read_text())
         for node in ast.walk(tree):
-            if isinstance(node, ast.Attribute):
-                if isinstance(node.value, ast.Name) and node.value.id == "sys":
-                    if node.attr == "path":
-                        pytest.fail(
-                            f"sys.path reference at line {node.lineno}"
-                        )
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "sys"
+                and node.attr == "path"
+            ):
+                pytest.fail(f"sys.path reference at line {node.lineno}")
 
     def test_no_primo_import(self, source: str):
         """No primo_signal import."""
@@ -93,9 +93,12 @@ class TestStrategyAstContract:
         # Check for open() calls (not in comments/docstrings)
         tree = ast.parse(source)
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                if node.func.id == "open":
-                    pytest.fail(f"File I/O found: open() at line {node.lineno}")
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "open"
+            ):
+                pytest.fail(f"File I/O found: open() at line {node.lineno}")
 
     def test_no_json_import(self, source: str):
         """No json import — no JSONL logging."""
@@ -304,13 +307,11 @@ class TestManifestV3:
         # It should warn but still work (will fail-closed without snapshot)
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            try:
+            with contextlib.suppress(RuntimeError, OSError, FileNotFoundError):
                 build_manifest_v2(
                     snapshot_id="test",
                     fetcher_commit_sha="0" * 40,
                 )
-            except (RuntimeError, OSError, FileNotFoundError):
-                pass  # Expected fail-closed without real snapshot
             deprecation_warnings = [
                 x for x in w if issubclass(x.category, DeprecationWarning)
             ]
@@ -355,11 +356,11 @@ class TestEntryTimeRegime:
 
     def test_classify_regime_at_entry_exists(self):
         """Function exists with correct signature."""
+        import inspect
+
         from si_v2.research.gate0_evaluation_integration import (
             classify_regime_at_entry,
         )
-
-        import inspect
 
         sig = inspect.signature(classify_regime_at_entry)
         params = list(sig.parameters.keys())
@@ -512,7 +513,6 @@ class TestSelectionEvaluation:
         """Holdout candles in bundle → INVALID."""
         from si_v2.research.evaluation_bundle_v1 import (
             CandleV1,
-            EvaluationRunnerV1,
         )
 
         # Create a minimal bundle with holdout candles
@@ -575,7 +575,7 @@ class TestThresholdBoundaries:
         metric.bootstrap.mean = 0.05
         metric.bootstrap.lower = 0.02
 
-        outcome, reasons = EvaluationRunnerV1._selection_outcome(
+        _outcome, reasons = EvaluationRunnerV1._selection_outcome(
             manifest, {"walk_forward_1": metric}
         )
         # 100 trades is <= 100 → INSUFFICIENT_TRADES → EXTEND
@@ -610,10 +610,10 @@ class TestThresholdBoundaries:
         metric.bootstrap.mean = 0.05
         metric.bootstrap.lower = 0.02
 
-        outcome, reasons = EvaluationRunnerV1._selection_outcome(
+        _outcome, _reasons = EvaluationRunnerV1._selection_outcome(
             manifest, {"walk_forward_1": metric}
         )
-        assert outcome.value == "PASS_CANDIDATE"
+        assert _outcome.value == "PASS_CANDIDATE"
 
     def test_drawdown_25_rejects(self):
         """>= 25% drawdown → REJECT."""
