@@ -1,6 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-07-21 after C5.3
+> **Canonical current-state snapshot.** Reconciled on 2026-07-25 after native Hermes 0.19.0 migration evidence close-out; Phase C narrative below remains historical until next Phase-C reconcile.
+>
+> Prior reconcile 2026-07-21 after C5.3
 > corrective implementation. Phase C exit gate `edge_decision_recorded` is **not
 > yet satisfied**. C5.3 corrective resolves all 14 items from the C5.2 A0
 > preflight failure. After C5.3 merges, a fresh A0 preflight re-run is required.
@@ -10,6 +12,53 @@
 > fully strips FreqForge_Gate0_Core_v1 of all dependencies, introduces manifest
 > v3, entry-time regime classification, and selection-only evaluation with
 > holdout isolation. 67 tests pass. Tracker #423 on #665.
+
+## Hermes runtime — native migration (2026-07-25)
+
+> **Status:** `NATIVE_MIGRATION_LOOP_CLOSED` / `LIFECYCLE_CONTRACT_GREEN`
+>
+> Reconciled on 2026-07-25 after host-native cutover and lifecycle-contract fix.
+> Hermes no longer runs as Docker Compose service for production gateway/dashboard.
+
+| Field | Value | Evidence |
+|---|---|---|
+| Hermes version | **0.19.0** (2026.7.20) | `hermes --version` on host as uid 10000 |
+| Install path | `/opt/hermes-native/current` → `releases/0.19.0` | `readlink -f` |
+| Runtime | native systemd (`hermes-gateway`, `hermes-dashboard`, `hermes-native.target`) | `systemctl is-active` |
+| Profile | `trading-hub-orchestrator` | `active_profile` + gateway list |
+| User | `hermes` uid/gid **10000** (+ docker) | `id hermes` / process owner |
+| State schema | **22** (migrated from 19) | `state.db` `schema_version` |
+| Sessions | **57** preserved | `SELECT COUNT(*) FROM sessions` |
+| SQLite integrity | ok | `PRAGMA integrity_check` |
+| Telegram | connected | `gateway_state.json` platforms.telegram |
+| Dashboard bind | `127.0.0.1:9119` only | `ss -lntp` |
+| Port 8642 | no unexpected listener | `ss -lntp` |
+| Caddy | reverse_proxy → 127.0.0.1:9119 | HTTPS reachable (auth/app status codes) |
+| GitHub CLI | GoLukeEnviro authenticated | `gh auth status` with `GH_CONFIG_DIR` |
+| Trading fleet | HermesTrader dry-run **5/5 healthy** | `docker ps` hermestrader-dryrun-* |
+| Legacy container | present, **stopped**, `Restart=no` | `docker inspect hermes` |
+| Legacy rollback retained | container + volumes + release 0.18.2 + restic + Hetzner snapshot | ops artefacts under `/root` and `/opt/hermes-native/releases/0.18.2` |
+
+### Lifecycle contract
+
+- Permanent `ExecStart` for gateway is:
+  `/opt/hermes-native/current/bin/hermes -p trading-hub-orchestrator gateway run`
+- **`--replace` is not** in the permanent unit (removed 2026-07-25 after audit).
+- Optional CLI flag remains available for one-shot operator use; systemd Restart policy owns restarts.
+- Post-fix MainPID ran as uid 10000 without `--replace`; Telegram reconnected without cutover.
+
+### Reports
+
+- Final migration report: `/root/reports/hermestrader-native-migration-final-20260725T003141Z.md` (on HermesTrader host)
+- 15-minute observation log: `/root/reports/hermes-0.19.0-observe.log` (15/15 green, 0 restarts)
+- Issue tracker: #423
+
+### Not changed by this migration
+
+- No trading-bot configs or bot databases mutated
+- Live trading remains disabled / dry-run only
+- Kill switch posture unchanged
+
 
 ## Governance revision pointers
 
@@ -76,7 +125,7 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 - Execution mode: Dry-run only
 - Kill switch: `NORMAL`
 - C4 decision: `ROLLBACK_RECOMMENDED` (preserved)
-- Fleet: HermesTrader dry-run fleet (5/5 health per R5A); agent0 legacy
+- Fleet: HermesTrader dry-run fleet (5/5 health); Hermes agent runtime is **native systemd 0.19.0** (see section above); agent0 legacy
   containers remain outside canonical governance
 - SEC-1/SEC-3: present in code, not deployed or runtime-proven
 
