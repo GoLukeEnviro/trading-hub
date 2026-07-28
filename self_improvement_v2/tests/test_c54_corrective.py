@@ -4,7 +4,7 @@ These tests verify the C5.4 corrective implementation with REAL
 constructions and executions — no MagicMock, no inspect.getsource,
 no hasattr-only checks. Every test exercises actual code paths.
 
-Covers defects A–I from the C5.3 post-merge A0 preflight:
+Covers defects A-I from the C5.3 post-merge A0 preflight:
   A) Manifest v3 name-only — must be real EvaluationManifestV3
   B) Builder callability — must include exporter_version, data_format_version
   C) Selection bundle structural contradiction — must validate without holdout
@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -30,30 +30,23 @@ _SRC = os.path.join(os.path.dirname(__file__), "..", "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from si_v2.research.evaluation_bundle_v1 import (
+from si_v2.research.evaluation_bundle_v1 import (  # noqa: E402
     CandleV1,
-    PartitionWindowV1,
     RawTradeV1,
 )
-from si_v2.research.gate0_evaluation_integration import (
-    PAIRS,
-    BENCHMARK_PAIR,
+from si_v2.research.gate0_evaluation_integration import (  # noqa: E402
     CALIBRATION,
     HOLDOUT,
-    WALK_FORWARD_1,
-    WALK_FORWARD_2,
-    FreqtradeExportAdapterV1,
+    PAIRS,
     build_manifest_v3,
     classify_regime_at_entry,
     run_calibration_and_walkforward,
 )
-from si_v2.research.gate0_strategy_provenance import StrategyProvenance
-from si_v2.research.selection_pipeline import (
+from si_v2.research.gate0_strategy_provenance import StrategyProvenance  # noqa: E402
+from si_v2.research.selection_pipeline import (  # noqa: E402
     CANONICAL_FUTURES_PAIRS,
     EvaluationManifestV3,
     EvaluationThresholdsV3,
-    FreqtradeProvenanceV3,
-    GuardrailResult,
     SelectionArtifactV1,
     SelectionBundleV1,
     SelectionOutcomeV1,
@@ -62,7 +55,6 @@ from si_v2.research.selection_pipeline import (
     normalize_futures_pair,
     pairs_equivalent,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test helpers — construct real candles and trades
@@ -151,7 +143,7 @@ def make_test_manifest(
 # ===========================================================================
 
 
-class TestDefectA_ManifestV3:
+class TestDefectAManifestV3:
     """Verify build_manifest_v3 returns a real EvaluationManifestV3."""
 
     def test_returns_evaluation_manifest_v3_type(self):
@@ -206,7 +198,7 @@ class TestDefectA_ManifestV3:
 # ===========================================================================
 
 
-class TestDefectB_BuilderCallable:
+class TestDefectBBuilderCallable:
     """Verify builder includes all required provenance fields."""
 
     def test_exporter_version_present(self):
@@ -256,7 +248,7 @@ class TestDefectB_BuilderCallable:
 # ===========================================================================
 
 
-class TestDefectC_SelectionBundle:
+class TestDefectCSelectionBundle:
     """Verify SelectionBundleV1 validates without holdout data."""
 
     def test_selection_bundle_validates_clean(self):
@@ -361,7 +353,7 @@ class TestDefectC_SelectionBundle:
 # ===========================================================================
 
 
-class TestDefectD_ProductivePath:
+class TestDefectDProductivePath:
     """Verify run_calibration_and_walkforward uses SelectionRunnerV1."""
 
     def test_v3_manifest_uses_selection_runner(self):
@@ -445,7 +437,7 @@ class TestDefectD_ProductivePath:
 # ===========================================================================
 
 
-class TestDefectE_PairIsolation:
+class TestDefectEPairIsolation:
     """Verify pair isolation in regime classification."""
 
     def test_foreign_pair_does_not_contaminate(self):
@@ -480,9 +472,6 @@ class TestDefectE_PairIsolation:
 
     def test_pair_filter_in_adapter(self):
         """FreqtradeExportAdapterV1 must filter partition_candles by pair."""
-        from si_v2.research.gate0_evaluation_integration import (
-            FreqtradeExportAdapterV1,
-        )
         from si_v2.research.selection_pipeline import pairs_equivalent
 
         # Create candles for two pairs
@@ -492,7 +481,7 @@ class TestDefectE_PairIsolation:
         eth_candles = make_candle_sequence(
             "ETH/USDT:USDT", CALIBRATION.start, 100, volatility=0.5
         )
-        all_candles = btc_candles + eth_candles
+        btc_candles + eth_candles
 
         # Verify pairs_equivalent works
         assert pairs_equivalent("BTC/USDT:USDT", "BTC/USDT:USDT")
@@ -504,7 +493,7 @@ class TestDefectE_PairIsolation:
 # ===========================================================================
 
 
-class TestDefectF_UnifiedThresholds:
+class TestDefectFUnifiedThresholds:
     """Verify unified strict threshold semantics — no < vs <= divergence."""
 
     def _make_thresholds(self) -> EvaluationThresholdsV3:
@@ -543,7 +532,7 @@ class TestDefectF_UnifiedThresholds:
 # ===========================================================================
 
 
-class TestDefectG_PassSelection:
+class TestDefectGPassSelection:
     """Verify selection success returns PASS_SELECTION, not PASS_CANDIDATE."""
 
     def test_pass_selection_token_exists(self):
@@ -587,7 +576,7 @@ class TestDefectG_PassSelection:
 # ===========================================================================
 
 
-class TestDefectH_FuturesPairNormalization:
+class TestDefectHFuturesPairNormalization:
     """Verify explicit, versioned futures pair mapping."""
 
     def test_btc_usdt_normalizes(self):
@@ -642,7 +631,7 @@ class TestDefectH_FuturesPairNormalization:
 # ===========================================================================
 
 
-class TestDefectI_ExecutableQuality:
+class TestDefectIExecutableQuality:
     """Verify these tests are executable, not mock-based.
 
     These meta-tests verify the test suite itself uses real constructions.

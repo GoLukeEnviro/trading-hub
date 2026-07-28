@@ -38,21 +38,17 @@ trading/runtime process.
 
 from __future__ import annotations
 
-import hashlib
 import itertools
-import json
 import math
-import random
 import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import cast
 
 from backtests.cost_model import (
     CostConfig,
-    TradeInput,
     calc_mark_to_market_pnl,
     compute_trade_result,
 )
@@ -71,7 +67,6 @@ from .evaluation_bundle_v1 import (
     _correlation,
     _iso,
     _parse_datetime,
-    _quantile,
     _regular_returns,
     _require_finite,
     _require_hash,
@@ -79,8 +74,6 @@ from .evaluation_bundle_v1 import (
     _sha256,
     _timeframe_delta,
 )
-from .gate0_strategy_provenance import StrategyProvenance
-
 
 # ---------------------------------------------------------------------------
 # Futures pair normalization (Check H resolution)
@@ -152,13 +145,15 @@ def pairs_equivalent(pair_a: str, pair_b: str) -> bool:
 class SelectionOutcomeV1(StrEnum):
     """Outcome of a selection-only evaluation.
 
-    These are distinct from :class:`Gate0Outcome` because selection success
-    must never return ``PASS_CANDIDATE`` (that token is reserved for
-    post-holdout evaluation). Selection success returns ``PASS_SELECTION``.
+    ``PASS_SELECTION`` is for selection-only (C5.4); ``PASS_CANDIDATE`` is
+    for Full Evaluation / C6 holdout ceremony without holdout leakage.
     """
 
     PASS_SELECTION = "PASS_SELECTION"
     """Selection thresholds met. Candidate may proceed to holdout ceremony."""
+
+    PASS_CANDIDATE = "PASS_CANDIDATE"
+    """Full evaluation pass — all guardrails met for post-holdout ceremony."""
 
     EXTEND = "EXTEND"
     """Insufficient trades, duration, regimes, or precision."""
@@ -249,7 +244,7 @@ def evaluate_guardrails(
             SelectionOutcomeV1.PASS_SELECTION, ("ALL_PREDECLARED_RULES_MET",)
         )
     return GuardrailResult(
-        "PASS_CANDIDATE", ("ALL_PREDECLARED_RULES_MET",)
+        SelectionOutcomeV1.PASS_CANDIDATE, ("ALL_PREDECLARED_RULES_MET",)
     )
 
 
@@ -814,7 +809,7 @@ class SelectionRunnerV1:
             invalid = [f"VALIDATION_ERROR: {exc}"]
 
         if invalid:
-            _, dq_errors = _selection_data_quality(
+            _, _dq_errors = _selection_data_quality(
                 bundle.candles,
                 manifest.pairs,
                 manifest.timeframe,

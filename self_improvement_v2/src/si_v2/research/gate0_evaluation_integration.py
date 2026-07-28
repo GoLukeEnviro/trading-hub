@@ -33,8 +33,6 @@ from si_v2.research.evaluation_bundle_v1 import (
     EvaluationBundleV1,
     EvaluationManifestV1,
     EvaluationRunnerV1,
-    EvaluationThresholdsV1,
-    FreqtradeProvenanceV1,
     PartitionWindowV1,
     RawTradeV1,
 )
@@ -44,9 +42,7 @@ from si_v2.research.selection_pipeline import (
     EvaluationManifestV3,
     EvaluationThresholdsV3,
     FreqtradeProvenanceV3,
-    SelectionArtifactV1,
     SelectionBundleV1,
-    SelectionOutcomeV1,
     SelectionRunnerV1,
     normalize_futures_pair,
     pairs_equivalent,

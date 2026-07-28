@@ -344,10 +344,14 @@ def test_profitable_but_insufficient_sample_extends() -> None:
 
 
 def test_precise_nonpositive_edge_rejects() -> None:
+    """Full evaluation with holdout — edge guardrail must reject negative edge."""
     losses = (
-        trade("wf1", 26, 28, entry_price=100.0, exit_price=99.0),
-        trade("wf2", 50, 52, entry_price=100.0, exit_price=99.0),
-        trade("holdout", 74, 76, entry_price=100.0, exit_price=99.0),
+        trade("wf1-a", 26, 27, entry_price=100.0, exit_price=99.0),
+        trade("wf1-b", 30, 31, entry_price=100.0, exit_price=99.0),
+        trade("wf2-a", 50, 51, entry_price=100.0, exit_price=99.0),
+        trade("wf2-b", 54, 55, entry_price=100.0, exit_price=99.0),
+        trade("holdout-a", 74, 75, entry_price=100.0, exit_price=99.0),
+        trade("holdout-b", 78, 79, entry_price=100.0, exit_price=99.0),
     )
     result = EvaluationRunnerV1().evaluate(
         bundle(
@@ -391,7 +395,18 @@ def test_wide_confidence_interval_extends_instead_of_rejecting() -> None:
 
 
 def test_all_predeclared_oos_and_holdout_rules_can_pass_candidate() -> None:
-    result = EvaluationRunnerV1().evaluate(bundle())
+    """Full evaluation with holdout — all guardrails must pass with profitable trades."""
+    trades = (
+        trade("wf1-a", 26, 28),
+        trade("wf1-b", 30, 32),
+        trade("wf2-a", 50, 52),
+        trade("wf2-b", 54, 56),
+        trade("holdout-a", 74, 76),
+        trade("holdout-b", 78, 80),
+    )
+    result = EvaluationRunnerV1().evaluate(
+        bundle(trades=trades)
+    )
     assert result.outcome is Gate0Outcome.PASS_CANDIDATE
     assert result.live_authorization is False
 

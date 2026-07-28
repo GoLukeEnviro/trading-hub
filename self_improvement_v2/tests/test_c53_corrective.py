@@ -327,7 +327,7 @@ class TestManifestV3:
 
         source = inspect.getsource(build_manifest_v3)
         assert "gate0-manifest-v3-20260721" in source
-        assert "issue-665-C53-CORRECTIVE" in source
+        assert "issue-671-C54-CORRECTIVE" in source
 
     def test_manifest_v3_has_tail_quantile(self):
         """Manifest v3 includes tail_quantile=0.05."""

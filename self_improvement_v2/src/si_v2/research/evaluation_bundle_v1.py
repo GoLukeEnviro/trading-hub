@@ -1093,6 +1093,8 @@ class EvaluationRunnerV1:
         )
         if result.outcome == SelectionOutcomeV1.PASS_SELECTION:
             return Gate0Outcome.PASS_CANDIDATE, result.reasons
+        if result.outcome == SelectionOutcomeV1.PASS_CANDIDATE:
+            return Gate0Outcome.PASS_CANDIDATE, result.reasons
         if result.outcome == SelectionOutcomeV1.EXTEND:
             return Gate0Outcome.EXTEND, result.reasons
         if result.outcome == SelectionOutcomeV1.REJECT:

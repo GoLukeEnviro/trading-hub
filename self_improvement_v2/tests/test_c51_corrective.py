@@ -221,7 +221,7 @@ class TestExportAdapter:
         trades = adapter.parse_trades(path)
         assert len(trades) == 1
         assert trades[0].trade_id == "abc123"
-        assert trades[0].pair == "BTC/USDT"
+        assert trades[0].pair == "BTC/USDT:USDT"
 
     def test_generates_deterministic_ids_when_missing(self, tmp_path):
         export = {
@@ -265,8 +265,7 @@ class TestExportAdapter:
         adapter = FreqtradeExportAdapterV1()
         trades = adapter.parse_trades(path)
         assert len(trades) == 1
-        assert trades[0].pair == "ETH/USDT"
-
+        assert trades[0].pair == "ETH/USDT:USDT"
 
 # ---------------------------------------------------------------------------
 # End-to-end fixture test (#13)
@@ -304,8 +303,8 @@ class TestEndToEnd:
 
 class TestConstants:
     def test_pairs_match_manifest(self):
-        assert PAIRS == ("BTC/USDT", "ETH/USDT", "SOL/USDT")
-        assert BENCHMARK_PAIR == "BTC/USDT"
+        assert PAIRS == ("BTC/USDT:USDT", "ETH/USDT:USDT", "SOL/USDT:USDT")
+        assert BENCHMARK_PAIR == "BTC/USDT:USDT"
 
     def test_roi_and_stoploss_values(self):
         """Document the actual FreqForge_Override values."""
