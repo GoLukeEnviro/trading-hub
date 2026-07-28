@@ -59,6 +59,27 @@ Mutating actions (A2, requires --approval):
     git_reset --repo <path> --ref <ref>
     git_push --repo <path> [--remote <remote>] [--branch <branch>]
 
+Runtime actions (read-only, A0/A1):
+    caddy_validate --config <path>
+    ufw_status
+    hostname_get
+    sysctl_get --key <key>
+
+Runtime actions (mutating, A2, requires --approval):
+    caddy_reload --config <path>
+    caddy_fmt --config <path>
+    ufw_allow --rule <rule>
+    ufw_deny --rule <rule>
+    ufw_enable
+    ufw_disable
+    hostname_set --name <name>
+    sysctl_set --key <key> --value <value>
+    user_create --name <name> [--args <args>]
+    user_modify --name <name> [--args <args>]
+    user_delete --name <name>
+    group_create --name <name>
+    group_delete --name <name>
+
 R5A compose fleet actions (A2, requires --approval):
     r5a_compose_build [--service <svc>]...
     r5a_compose_up [--service <svc>]...
@@ -171,6 +192,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--all", dest="all_flag", action="store_true",
                         help="Show all (containers/images)")
     parser.add_argument("--format", default=None, help="Output format (for docker_ps)")
+    # Runtime arguments
+    parser.add_argument("--config", default=None, help="Config file path (for Caddy)")
+    parser.add_argument("--rule", default=None, help="Firewall rule (for UFW)")
+    parser.add_argument("--key", default=None, help="sysctl key")
+    parser.add_argument("--value", default=None, help="sysctl value")
+    parser.add_argument("--args", default=None, help="Extra arguments (for user_create/modify)")
 
     return parser
 
@@ -430,6 +457,74 @@ def _build_argv(action: str, args: argparse.Namespace) -> list[str]:
         if args.branch:
             extras.append(args.branch)
         return extras
+
+    # Runtime — Caddy
+    if action in ("caddy_validate", "caddy_reload", "caddy_fmt"):
+        config = args.config
+        if not config:
+            raise ValueError(f"--config is required for {action}")
+        return [config]
+
+    # Runtime — UFW
+    if action == "ufw_status":
+        return []
+
+    if action in ("ufw_allow", "ufw_deny"):
+        rule = args.rule
+        if not rule:
+            raise ValueError(f"--rule is required for {action}")
+        return [rule]
+
+    if action in ("ufw_enable", "ufw_disable"):
+        return []
+
+    # Runtime — Hostname
+    if action == "hostname_get":
+        return []
+
+    if action == "hostname_set":
+        name = args.name
+        if not name:
+            raise ValueError("--name is required for hostname_set")
+        return [name]
+
+    # Runtime — sysctl
+    if action == "sysctl_get":
+        key = args.key
+        if not key:
+            raise ValueError("--key is required for sysctl_get")
+        return [key]
+
+    if action == "sysctl_set":
+        key = args.key
+        value = args.value
+        if not key:
+            raise ValueError("--key is required for sysctl_set")
+        if value is None:
+            raise ValueError("--value is required for sysctl_set")
+        return [key, value]
+
+    # Runtime — User / Group
+    if action in ("user_create", "user_modify"):
+        name = args.name
+        if not name:
+            raise ValueError(f"--name is required for {action}")
+        extras = [name]
+        if args.args:
+            extras.extend(args.args.split())
+        return extras
+
+    if action == "user_delete":
+        name = args.name
+        if not name:
+            raise ValueError("--name is required for user_delete")
+        return [name]
+
+    if action in ("group_create", "group_delete"):
+        name = args.name
+        if not name:
+            raise ValueError(f"--name is required for {action}")
+        return [name]
 
     raise ValueError(f"Unknown action: {action}")
 

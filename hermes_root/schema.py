@@ -56,6 +56,11 @@ READONLY_ACTIONS = frozenset({
     "git_branch",
     "git_log",
     "git_tag_list",
+    # Runtime read-only
+    "caddy_validate",
+    "ufw_status",
+    "hostname_get",
+    "sysctl_get",
 })
 
 # Mutating actions (require A2 approval)
@@ -103,6 +108,20 @@ MUTATING_ACTIONS = frozenset({
     "git_clean",
     "git_reset",
     "git_push",
+    # Runtime mutating
+    "caddy_reload",
+    "caddy_fmt",
+    "ufw_allow",
+    "ufw_deny",
+    "ufw_enable",
+    "ufw_disable",
+    "hostname_set",
+    "sysctl_set",
+    "user_create",
+    "user_modify",
+    "user_delete",
+    "group_create",
+    "group_delete",
 })
 
 # All known actions

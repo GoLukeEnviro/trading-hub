@@ -518,6 +518,96 @@ def build_argv(action: str, argv: list[str]) -> list[str]:
             cmd.append(argv[2])
         return cmd
 
+    # ------------------------------------------------------------------
+    # Runtime — Caddy
+    # ------------------------------------------------------------------
+    if action == "caddy_validate":
+        _require_argv_len(argv, 1)
+        return ["caddy", "validate", "--config", argv[0]]
+
+    if action == "caddy_reload":
+        _require_argv_len(argv, 1)
+        return ["caddy", "reload", "--config", argv[0]]
+
+    if action == "caddy_fmt":
+        _require_argv_len(argv, 1)
+        return ["caddy", "fmt", "--overwrite", argv[0]]
+
+    # ------------------------------------------------------------------
+    # Runtime — UFW / Firewall
+    # ------------------------------------------------------------------
+    if action == "ufw_status":
+        if argv:
+            raise ActionError("invalid_argv_for_action")
+        return ["ufw", "status", "verbose"]
+
+    if action == "ufw_allow":
+        _require_argv_len(argv, 1)
+        return ["ufw", "allow", argv[0]]
+
+    if action == "ufw_deny":
+        _require_argv_len(argv, 1)
+        return ["ufw", "deny", argv[0]]
+
+    if action == "ufw_enable":
+        if argv:
+            raise ActionError("invalid_argv_for_action")
+        return ["ufw", "--force", "enable"]
+
+    if action == "ufw_disable":
+        if argv:
+            raise ActionError("invalid_argv_for_action")
+        return ["ufw", "--force", "disable"]
+
+    # ------------------------------------------------------------------
+    # Runtime — Hostname
+    # ------------------------------------------------------------------
+    if action == "hostname_get":
+        if argv:
+            raise ActionError("invalid_argv_for_action")
+        return ["hostnamectl", "status", "--static"]
+
+    if action == "hostname_set":
+        _require_argv_len(argv, 1)
+        return ["hostnamectl", "set-hostname", argv[0]]
+
+    # ------------------------------------------------------------------
+    # Runtime — sysctl
+    # ------------------------------------------------------------------
+    if action == "sysctl_get":
+        _require_argv_len(argv, 1)
+        return ["sysctl", "-n", argv[0]]
+
+    if action == "sysctl_set":
+        if len(argv) != 2:
+            raise ActionError("invalid_argv_for_action")
+        return ["sysctl", "-w", f"{argv[0]}={argv[1]}"]
+
+    # ------------------------------------------------------------------
+    # Runtime — User / Group management
+    # ------------------------------------------------------------------
+    if action == "user_create":
+        if len(argv) < 1:
+            raise ActionError("invalid_argv_for_action")
+        return ["useradd", *argv]
+
+    if action == "user_modify":
+        if len(argv) < 1:
+            raise ActionError("invalid_argv_for_action")
+        return ["usermod", *argv]
+
+    if action == "user_delete":
+        _require_argv_len(argv, 1)
+        return ["userdel", "-r", argv[0]]
+
+    if action == "group_create":
+        _require_argv_len(argv, 1)
+        return ["groupadd", argv[0]]
+
+    if action == "group_delete":
+        _require_argv_len(argv, 1)
+        return ["groupdel", argv[0]]
+
     raise ActionError("unknown_action")
 
 
