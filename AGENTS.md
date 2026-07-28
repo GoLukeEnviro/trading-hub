@@ -304,8 +304,9 @@ Every autonomous agent session acting on the roadmap MUST:
   reachability from Hermes must be verified against
   [`docs/state/current-operational-state.md`](docs/state/current-operational-state.md)
   before use — deployment state and reachability can change independently
-  of this document. D1/D2/D3 remain documented and may keep running as a
-  fallback path. Live-capital trading authority remains separate and
+  of this document. **D1/D2/D3 are RETIRED as of 2026-07-28** (PR #677 + #678).
+  The root executor is the single privileged path. No parallel privileged
+  paths exist. Live-capital trading authority remains separate and
   externally signature-gated regardless of root runtime authority — see the
   ADR's External Live Authority Boundary section.
 

@@ -119,7 +119,51 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 4. **A2 selection backtest** — requires Luke's A2 marker
 5. **C6 marker** — holdout inspection and edge decision
 
-## Post-G0 operational state (unchanged)
+## Root Runtime Authority — Variante B Complete (2026-07-28)
+
+> **Status:** `ROOT_RUNTIME_AUTHORITY_COMPLETE` / `READY_FOR_RUNTIME_OPERATIONS`
+>
+> Reconciled on 2026-07-28 after PR #677 (`c4dbeea`) and PR #678 (`b675708`).
+
+| Field | Value | Evidence |
+|---|---|---|
+| Executor service | **active (running)** | `systemctl is-active hermes-root-executor.service` |
+| Executor binary | `/usr/local/sbin/hermes-root-executor` (root:root, 0750) | `ls -la` |
+| Socket | `/run/hermes-root-executor/executor.sock` (root:hermes, 0660) | `ls -la` |
+| Hermes UID | **10000** (unprivilegiert) | `id hermes` |
+| Total actions | **75** (17 readonly, 58 mutating) | `hermes_root/schema.py` |
+| D1/D2/D3 | **RETIRED** | All inactive, no systemd units |
+| sudo for Hermes | **Nicht vorhanden** | `sudo -l` |
+| docker.sock for Hermes | **Nicht vorhanden** | `ls -la /var/run/docker.sock` (root:docker) |
+| Audit | **AUDIT_RUNTIME_COMPLETE** | JSONL mit fsync-Durability |
+| Kill switch | **Active** | `/etc/hermes-root-executor/DISABLED` |
+
+### Capability coverage
+
+| Domain | Actions | Status |
+|--------|---------|--------|
+| systemd | status, is-active, is-enabled, start, stop, restart, daemon-reload, enable, disable | ✅ |
+| Docker | ps, inspect, logs, images, compose-config, create, start, stop, remove, pull, network, volume, exec | ✅ |
+| R5A Compose | build, up, stop, down | ✅ |
+| Filesystem | stat, ls, read, checksum, write, copy, move, remove, mkdir, chmod, chown, backup, restore | ✅ |
+| Git | status, branch, log, tag-list, clone, fetch, checkout, merge, tag, clean, reset, push | ✅ |
+| Caddy | validate, reload, fmt | ✅ |
+| UFW | status, allow, deny, enable, disable | ✅ |
+| Hostname | get, set | ✅ |
+| sysctl | get, set | ✅ |
+| Users/Groups | create, modify, delete, group create, group delete | ✅ |
+
+### D1/D2/D3 retirement
+
+- `hermes-runtime-runner` (D2): binary at `/usr/local/sbin/hermes-runtime-runner`, **inactive**, no systemd unit
+- `hermes-bridge` (D3): service **inactive**, no systemd unit; client binary at `/opt/data/hermes/bin/hermes-bridge-client`
+- Docker socket proxy (D1): **no container running**, no systemd unit
+- All three preserved as historical reference only — not removed
+
+### Final report
+
+- `/root/reports/hermes-runtime-authority-final-20260728.md` (on HermesTrader host)
+- `docs/reports/hermes-runtime-authority-final-20260728.md` (in repository)
 
 - Live trading: `TARGET_ARCHITECTURE_NOT_ENABLED`
 - Execution mode: Dry-run only
