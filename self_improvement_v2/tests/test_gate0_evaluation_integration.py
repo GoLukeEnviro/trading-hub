@@ -93,7 +93,7 @@ class TestParseBacktestTrades:
         path.write_text(json.dumps(export))
         trades = parse_backtest_trades(path)
         assert len(trades) == 1
-        assert trades[0].pair == "BTC/USDT"
+        assert trades[0].pair == "BTC/USDT:USDT"
         assert trades[0].entry_price == 100.0
         assert trades[0].side == "long"
 
@@ -105,7 +105,7 @@ class TestParseBacktestTrades:
     def test_strategy_nested_format(self, tmp_path):
         """Some Freqtrade versions nest trades under strategy."""
         export = {"strategy": {"trades": [{
-            "trade_id": "a", "pair": "ETH/USDT",
+            "trade_id": "a", "pair": "ETH/USDT:USDT",
             "open_date": "2025-01-01T00:00:00Z",
             "close_date": "2025-01-01T01:00:00Z",
             "open_rate": 2000, "close_rate": 2010,
@@ -115,8 +115,7 @@ class TestParseBacktestTrades:
         path.write_text(json.dumps(export))
         trades = parse_backtest_trades(path)
         assert len(trades) == 1
-        assert trades[0].pair == "ETH/USDT"
-
+        assert trades[0].pair == "ETH/USDT:USDT"
     def test_handles_missing_fields_defaults(self, tmp_path):
         export = {"trades": [{
             "trade_id": "1", "pair": "SOL/USDT",

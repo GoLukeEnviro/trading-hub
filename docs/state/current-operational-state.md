@@ -1,6 +1,6 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-07-25 after native Hermes 0.19.0 migration evidence close-out; Phase C narrative below remains historical until next Phase-C reconcile.
+> **Canonical current-state snapshot.** Reconciled on 2026-07-28 after C5.4 corrective implementation. Phase C exit gate `edge_decision_recorded` is **not yet satisfied**. C5.3 merged (`da60da3`), C5.4 corrective in PR #675 (`db8ecca`) — locally validated, CI pending.
 >
 > Prior reconcile 2026-07-21 after C5.3
 > corrective implementation. Phase C exit gate `edge_decision_recorded` is **not
@@ -83,7 +83,7 @@ satisfied**. Current sub-status:
 | Strategy selected | ✅ PASS | `FreqForge_Override` — Luke signed on #604 |
 | Manifest frozen | ✅ PASS | All thresholds approved; `APPROVED_GATE0_STRATEGY_AND_MANIFEST` on #604 |
 | Snapshot acquisition | ✅ `EXECUTED` | 156,489 candles; A2 marker on #651. Data verified present at `/opt/data/gate0-snapshot/` |
-| C5.2 Core Strategy v1 | ❌ `A0-FAIL` | PR #662 (`2875b67`): preflight found 14 Ruff errors, undefined functions, residual AI/Shadow refs. See [gate0-c52-preflight-failure-2026-07-20.md](../reports/gate0-c52-preflight-failure-2026-07-20.md). Corrective C5.3 required. |
+| C5.2 Core Strategy v1 | ❌ `A0-FAIL` → ✅ resolved by C5.3 | PR #662 (`2875b67`): preflight found 14 Ruff errors. C5.3 corrective PR #668 (`da60da3`) resolved all 14 items. |\n| C5.3 Corrective | ✅ MERGED | PR #668 (`da60da3`): stripped strategy, manifest v3, entry-time regime, selection isolation. 67 tests pass. |\n| C5.4 Corrective | ✅ local validation | PR #675 (`db8ecca`): SelectionOutcomeV1.PASS_CANDIDATE fix, pair normalization, unified guardrails, Ruff clean. 47/47 C5.4 + 25/25 eval_bundle. CI pending. |
 | Holdout inspected | ❌ NO | Not started; blocked by Luke's C5.2 ratification + A0 preflight |
 | Edge decision | ⏳ `PENDING` | Not yet recorded; blocked by holdout |
 
