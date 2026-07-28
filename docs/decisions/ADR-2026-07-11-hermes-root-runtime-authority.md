@@ -174,28 +174,30 @@ above:
 
 ---
 
-## 6. Relationship to D1/D2/D3 (SEC-1 Predecessor Architecture)
+## 6. Relationship to D1/D2/D3 (SEC-1 Predecessor Architecture) — RETIRED
 
 D1 (read-only Docker proxy), D2 (allowlisted host runner), and D3 (audited
-operator bridge) are **not deleted and not retroactively wrong** — they were
-the correct conservative first step and remain documented, working
-infrastructure. Their status changes as follows:
+operator bridge) are **retired as of 2026-07-28** (PR #677 + #678). The
+root executor (`hermes-root-executor.service`) is now the **single privileged
+path** for all host administration.
 
-- **Status: superseded as the primary Hermes access path**, effective with
-  this ADR (R0) and full effect after Phase R1 ships.
-  - `hermes-runtime-runner` (D2), `hermes-bridge` (D3), and the read-only
-    Docker proxy (D1) may continue running during the R1–R2 transition and
-    can serve as a fallback/rollback path if the root executor needs to be
-    disabled.
-  - Once the root executor (R1) is implemented, audited (R2), and load-bearing,
-    D1/D2/D3 are expected to be retired in favor of the single root-executor
-    path — that retirement is itself a future decision, not made by this
-    ADR.
+- **Status: RETIRED.** D1/D2/D3 are no longer running, no longer deployed, and
+  no longer available as a fallback path.
+  - `hermes-runtime-runner` (D2): binary still present at
+    `/usr/local/sbin/hermes-runtime-runner` but inactive and not managed by
+    systemd. Not removed — preserved for historical reference.
+  - `hermes-bridge` (D3): service inactive, no systemd unit file present.
+    Client binary at `/opt/data/hermes/bin/hermes-bridge-client` preserved
+    for historical reference.
+  - Docker socket proxy (D1): no container running, no systemd unit.
 - Historical implementation detail for D1/D2/D3 remains in the memory
   records `hermestrader-d1-readonly-docker-visibility.md`,
   `hermestrader-d2-impl.md`, and the D3 bridge series
   (`hermestrader-d3-bridge-slice1.md` through
   `hermestrader-d3-bridge-protocol-fix.md`) and is not reproduced here.
+- **No parallel privileged paths exist.** The root executor is the sole
+  privileged runtime component. Hermes (UID 10000) has no `docker.sock`,
+  no `sudo`, no SUID, no `pkexec` access of its own.
 
 ---
 
@@ -216,6 +218,9 @@ infrastructure. Their status changes as follows:
   the previous model, which had no explicit statement of this boundary.
 - D1/D2/D3 remain available as a conservative fallback path during the
   transition.
+- **D1/D2/D3 are now RETIRED** (as of 2026-07-28, PR #677 + #678). The
+  root executor is the single privileged path. No parallel privileged
+  paths exist.
 
 ### Risks
 
