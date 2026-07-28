@@ -522,7 +522,10 @@ from hermes_root.actions import build_argv as daemon_build_argv
 def _namespace(**overrides):
     """Minimal argparse.Namespace stand-in with the fields _build_argv reads."""
     import argparse
-    defaults = dict(container=None, unit=None, file=None, image=None, name=None, cmd=None, service=None)
+    defaults = dict(container=None, unit=None, file=None, image=None, name=None, cmd=None, service=None,
+                    path=None, content=None, source=None, dest=None, mode=None, owner=None,
+                    repo=None, url=None, ref=None, tag=None, remote=None, branch=None,
+                    tail=100, driver=None, n=10, all_flag=False, format=None)
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
 

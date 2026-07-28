@@ -42,21 +42,67 @@ READONLY_ACTIONS = frozenset({
     "executor_health",
     "docker_ps",
     "docker_inspect",
+    "docker_logs",
+    "docker_images",
     "systemctl_status",
+    "systemctl_is_active",
+    "systemctl_is_enabled",
     "docker_compose_config",
+    "fs_stat",
+    "fs_ls",
+    "fs_read",
+    "fs_checksum",
+    "git_status",
+    "git_branch",
+    "git_log",
+    "git_tag_list",
 })
 
 # Mutating actions (require A2 approval)
 MUTATING_ACTIONS = frozenset({
+    # Docker
     "docker_create",
     "docker_stop",
+    "docker_start",
     "docker_remove",
+    "docker_pull",
+    "docker_network_create",
+    "docker_network_remove",
+    "docker_volume_create",
+    "docker_volume_remove",
+    "docker_exec",
+    # systemd
+    "systemctl_start",
+    "systemctl_stop",
     "systemctl_restart",
+    "systemctl_daemon_reload",
+    "systemctl_enable",
+    "systemctl_disable",
     # R5A — HermesTrader dry-run compose fleet management (Issue #527)
     "r5a_compose_build",
     "r5a_compose_up",
     "r5a_compose_stop",
     "r5a_compose_down",
+    # Filesystem
+    "fs_write",
+    "fs_copy",
+    "fs_move",
+    "fs_remove",
+    "fs_mkdir",
+    "fs_chmod",
+    "fs_chown",
+    "fs_backup",
+    "fs_restore",
+    # Git
+    "git_clone",
+    "git_fetch",
+    "git_checkout",
+    "git_merge",
+    "git_tag_create",
+    "git_tag_delete",
+    "git_clean",
+    "git_reset",
+    "git_push",
 })
 
 # All known actions
