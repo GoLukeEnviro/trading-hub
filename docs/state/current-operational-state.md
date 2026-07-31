@@ -1,17 +1,18 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-07-28 after C5.4 corrective implementation. Phase C exit gate `edge_decision_recorded` is **not yet satisfied**. C5.3 merged (`da60da3`), C5.4 corrective in PR #675 (`db8ecca`) — locally validated, CI pending.
+> **Canonical current-state snapshot.** Reconciled on 2026-07-31 after C5.4 and Variante-B completion. Phase C exit gate `edge_decision_recorded` is **not yet satisfied**. C5.3 merged (`da60da3`), C5.4 corrective merged (`8b4dace`), Variante-B complete (PRs #677, #678, #679). Phase C remains `in_progress`.
 >
-> Prior reconcile 2026-07-21 after C5.3
+> Prior reconcile 2026-07-28 after C5.4
 > corrective implementation. Phase C exit gate `edge_decision_recorded` is **not
-> yet satisfied**. C5.3 corrective resolves all 14 items from the C5.2 A0
-> preflight failure. After C5.3 merges, a fresh A0 preflight re-run is required.
+> yet satisfied**. C5.3 merged, C5.4 corrective merged, Variante-B complete.
 > Phase C remains `in_progress`.
 >
 > **Previous:** C5.2 A0-FAIL documented (#664, `01b7fb2`). C5.3 corrective
 > fully strips FreqForge_Gate0_Core_v1 of all dependencies, introduces manifest
 > v3, entry-time regime classification, and selection-only evaluation with
-> holdout isolation. 67 tests pass. Tracker #423 on #665.
+> holdout isolation. 67 tests pass. C5.4 corrective merged (`8b4dace`):
+> SelectionOutcomeV1.PASS_CANDIDATE fix, pair normalization, unified guardrails.
+> Variante-B complete (PRs #677, #678, #679). Tracker #423 closed.
 
 ## Hermes runtime — native migration (2026-07-25)
 
@@ -73,7 +74,7 @@ roadmap_observed_at_utc: 2026-07-20T05:00:00Z
 informational only and does not force a state-file touch on ordinary roadmap
 status changes.
 
-## Phase C — Gate-0 Strategy Evidence (2026-07-20, in progress)
+## Phase C — Gate-0 Strategy Evidence (2026-07-31, in progress)
 
 Phase C exit gate is `edge_decision_recorded`. The exit gate is **not yet
 satisfied**. Current sub-status:
@@ -83,8 +84,11 @@ satisfied**. Current sub-status:
 | Strategy selected | ✅ PASS | `FreqForge_Override` — Luke signed on #604 |
 | Manifest frozen | ✅ PASS | All thresholds approved; `APPROVED_GATE0_STRATEGY_AND_MANIFEST` on #604 |
 | Snapshot acquisition | ✅ `EXECUTED` | 156,489 candles; A2 marker on #651. Data verified present at `/opt/data/gate0-snapshot/` |
-| C5.2 Core Strategy v1 | ❌ `A0-FAIL` → ✅ resolved by C5.3 | PR #662 (`2875b67`): preflight found 14 Ruff errors. C5.3 corrective PR #668 (`da60da3`) resolved all 14 items. |\n| C5.3 Corrective | ✅ MERGED | PR #668 (`da60da3`): stripped strategy, manifest v3, entry-time regime, selection isolation. 67 tests pass. |\n| C5.4 Corrective | ✅ local validation | PR #675 (`db8ecca`): SelectionOutcomeV1.PASS_CANDIDATE fix, pair normalization, unified guardrails, Ruff clean. 47/47 C5.4 + 25/25 eval_bundle. CI pending. |
-| Holdout inspected | ❌ NO | Not started; blocked by Luke's C5.2 ratification + A0 preflight |
+| C5.2 Core Strategy v1 | ❌ `A0-FAIL` → ✅ resolved by C5.3 | PR #662 (`2875b67`): preflight found 14 Ruff errors. C5.3 corrective PR #668 (`da60da3`) resolved all 14 items. |
+| C5.3 Corrective | ✅ MERGED | PR #668 (`da60da3`): stripped strategy, manifest v3, entry-time regime, selection isolation. 67 tests pass. |
+| C5.4 Corrective | ✅ MERGED | PR #675 (`8b4dace`): SelectionOutcomeV1.PASS_CANDIDATE fix, pair normalization, unified guardrails, Ruff clean. 47/47 C5.4 + 25/25 eval_bundle. |
+| A0 preflight re-run | ⏳ `PENDING` | Not yet executed after C5.4 merge |
+| Holdout inspected | ❌ NO | Not started; blocked by A0 preflight + Luke ratification |
 | Edge decision | ⏳ `PENDING` | Not yet recorded; blocked by holdout |
 
 Phase C remains `in_progress` until the edge decision is recorded. Issue #604
@@ -113,11 +117,10 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 
 ### Next steps
 
-1. **C5.3 corrective** — resolve all 14 items in the preflight failure report
-2. **A0 re-run** — re-verify snapshot integrity, strategy code, manifest after C5.3 merge
-3. **Luke ratifies corrected strategy + manifest** — human action on #604
-4. **A2 selection backtest** — requires Luke's A2 marker
-5. **C6 marker** — holdout inspection and edge decision
+1. **A0 preflight re-run** — re-verify snapshot integrity, strategy code, manifest after C5.4 merge
+2. **Luke ratifies corrected strategy + manifest** — human action on #604
+3. **A2 selection backtest** — requires Luke's A2 marker
+4. **C6 marker** — holdout inspection and edge decision
 
 ## Root Runtime Authority — Variante B Complete (2026-07-28)
 
@@ -304,10 +307,10 @@ missing-file tests, and eventual bot-scoped entry integration.
 
 ## 6. Go / no-go
 
-**Allowed next repository work:** C5.3 corrective — resolve all 14 items
-identified in the [Gate-0 C5.2 preflight failure report](../reports/gate0-c52-preflight-failure-2026-07-20.md).
-This is A1 repository-only work. No A0 re-run, no A2 selection backtest, and
-no holdout inspection until C5.3 is merged.
+**Allowed next repository work:** A0 preflight re-run — re-verify snapshot
+integrity, strategy code, and manifest after C5.4 merge. This is A0 read-only
+work. No A2 selection backtest and no holdout inspection until A0 preflight
+passes and Luke ratifies the corrected strategy + manifest on #604.
 
 After A0 preflight passes, Luke must ratify C5.2 strategy + manifest v3 on
 #604. Then a separate A2 issue with Luke's A2 marker authorizes the selection
