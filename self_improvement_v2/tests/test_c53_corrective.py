@@ -17,10 +17,13 @@ from __future__ import annotations
 
 import ast
 import contextlib
+import importlib.util
+import sys
+import types
 import warnings
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -169,121 +172,238 @@ class TestRuffClean:
 
 
 class TestFreqtradeImport:
-    """Verify the strategy can be imported with Freqtrade-compatible stubs."""
+    """Verify the strategy can be imported with controlled Freqtrade stubs.
+
+    The test always creates a complete controlled import environment so it is
+    independent of:
+    - the current working directory (repo root vs subdirectory)
+    - a local ``freqtrade/`` namespace package at the repo root
+    - an installed Freqtrade package
+    - pre-existing ``sys.modules`` entries
+    """
+
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_freqtrade_stubs() -> dict[str, types.ModuleType]:
+        """Build a complete set of controlled Freqtrade stub modules.
+
+        Returns a dict mapping fully-qualified module names to
+        ``types.ModuleType`` instances that satisfy the import contract
+        of ``FreqForge_Gate0_Core_v1``.
+        """
+        # --- freqtrade root ---
+        freqtrade_mod = types.ModuleType("freqtrade")
+        freqtrade_mod.__path__ = []  # mark as package
+
+        # --- freqtrade.strategy ---
+        strategy_mod = types.ModuleType("freqtrade.strategy")
+        strategy_mod.IStrategy = type(
+            "IStrategy", (), {"__init__": lambda self, config: None}
+        )
+        strategy_mod.IntParameter = type(
+            "IntParameter", (), {"__init__": lambda self, *a, **kw: None}
+        )
+        strategy_mod.DecimalParameter = type(
+            "DecimalParameter", (), {"__init__": lambda self, *a, **kw: None}
+        )
+        strategy_mod.merge_informative_pair = lambda *a, **kw: a[0] if a else None
+        freqtrade_mod.strategy = strategy_mod
+
+        # --- freqtrade.vendor ---
+        vendor_mod = types.ModuleType("freqtrade.vendor")
+        vendor_mod.__path__ = []
+
+        # --- freqtrade.vendor.qtpylib ---
+        qtpylib_mod = types.ModuleType("freqtrade.vendor.qtpylib")
+        qtpylib_mod.__path__ = []
+        qtpylib_mod.bollinger_bands = lambda *a, **kw: {
+            "lower": 0,
+            "mid": 0,
+            "upper": 0,
+        }
+        qtpylib_mod.typical_price = lambda df: df
+
+        # --- freqtrade.vendor.qtpylib.indicators ---
+        indicators_mod = types.ModuleType("freqtrade.vendor.qtpylib.indicators")
+        indicators_mod.bollinger_bands = qtpylib_mod.bollinger_bands
+        indicators_mod.typical_price = qtpylib_mod.typical_price
+        qtpylib_mod.indicators = indicators_mod
+
+        vendor_mod.qtpylib = qtpylib_mod
+        freqtrade_mod.vendor = vendor_mod
+
+        return {
+            "freqtrade": freqtrade_mod,
+            "freqtrade.strategy": strategy_mod,
+            "freqtrade.vendor": vendor_mod,
+            "freqtrade.vendor.qtpylib": qtpylib_mod,
+            "freqtrade.vendor.qtpylib.indicators": indicators_mod,
+        }
+
+    @staticmethod
+    def _make_talib_stubs() -> dict[str, types.ModuleType]:
+        """Build controlled TA-Lib stubs."""
+        talib_mod = types.ModuleType("talib")
+        talib_abstract = types.ModuleType("talib.abstract")
+        talib_mod.abstract = talib_abstract
+        return {"talib": talib_mod, "talib.abstract": talib_abstract}
+
+    @staticmethod
+    def _make_pandas_stub() -> dict[str, types.ModuleType]:
+        """Build a minimal pandas stub."""
+        pandas_mod = types.ModuleType("pandas")
+        pandas_mod.DataFrame = type("DataFrame", (), {})
+        return {"pandas": pandas_mod}
+
+    @staticmethod
+    def _import_strategy() -> types.ModuleType:
+        """Load the Gate-0 strategy from file and return the module."""
+        spec = importlib.util.spec_from_file_location(
+            "FreqForge_Gate0_Core_v1", str(STRATEGY_PATH)
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    # ------------------------------------------------------------------
+    # tests
+    # ------------------------------------------------------------------
 
     def test_strategy_imports_with_stubs(self):
         """Import the strategy with controlled Freqtrade/TA-Lib stubs.
 
         This proves the strategy file has no external runtime dependencies
-        beyond Freqtrade and TA-Lib.
+        beyond Freqtrade and TA-Lib, regardless of the current working
+        directory or the presence of a local ``freqtrade/`` namespace
+        package.
         """
-        import importlib
+        stubs = {}
+        stubs.update(self._make_freqtrade_stubs())
+        stubs.update(self._make_talib_stubs())
+        stubs.update(self._make_pandas_stub())
 
-        # Create minimal stubs for freqtrade and talib if not installed
-        import sys
+        with patch.dict("sys.modules", stubs, clear=False):
+            module = self._import_strategy()
 
-        stubs_created = []
+        # Verify class exists
+        assert hasattr(module, "FreqForge_Gate0_Core_v1")
 
-        try:
-            import freqtrade  # noqa: F401
-        except ImportError:
-            # Create minimal freqtrade stubs
-            import types
+        # Verify it can be instantiated
+        strategy_cls = module.FreqForge_Gate0_Core_v1
+        instance = strategy_cls.__new__(strategy_cls)
+        instance._regime_histories = {}
+        assert instance._regime_histories == {}
 
-            freqtrade_mod = types.ModuleType("freqtrade")
-            freqtrade_mod.__path__ = []  # mark as package
+    def test_strategy_import_with_namespace_package_shadow(self):
+        """Import succeeds even when a local freqtrade/ namespace package exists.
 
-            strategy_mod = types.ModuleType("freqtrade.strategy")
-            strategy_mod.IStrategy = type(
-                "IStrategy", (), {"__init__": lambda self, config: None}
-            )
-            strategy_mod.IntParameter = type(
-                "IntParameter", (), {"__init__": lambda self, *a, **kw: None}
-            )
-            strategy_mod.DecimalParameter = type(
-                "DecimalParameter", (), {"__init__": lambda self, *a, **kw: None}
-            )
-            strategy_mod.merge_informative_pair = lambda *a, **kw: a[0] if a else None
-            freqtrade_mod.strategy = strategy_mod
+        This simulates the scenario where ``freqtrade/`` is a directory
+        without ``__init__.py`` on ``sys.path`` (a namespace package) that
+        would make ``import freqtrade`` succeed without providing
+        ``freqtrade.vendor``.
+        """
+        # Simulate a namespace package: freqtrade exists in sys.modules
+        # as a bare namespace without vendor submodules.
+        ns_pkg = types.ModuleType("freqtrade")
+        ns_pkg.__path__ = ["/fake/freqtrade"]
+        ns_pkg.__file__ = "/fake/freqtrade/__init__.py"
 
-            vendor_mod = types.ModuleType("freqtrade.vendor")
-            vendor_mod.__path__ = []
+        stubs = {**self._make_freqtrade_stubs(), **self._make_talib_stubs(), **self._make_pandas_stub()}
 
-            qtpylib_mod = types.ModuleType("freqtrade.vendor.qtpylib")
-            qtpylib_mod.__path__ = []
-            qtpylib_mod.bollinger_bands = lambda *a, **kw: {
-                "lower": 0,
-                "mid": 0,
-                "upper": 0,
-            }
-            qtpylib_mod.typical_price = lambda df: df
+        with patch.dict("sys.modules", stubs, clear=False):
+            # Pre-insert the namespace package to simulate the real condition
+            sys.modules["freqtrade"] = ns_pkg
+            module = self._import_strategy()
 
-            indicators_mod = types.ModuleType("freqtrade.vendor.qtpylib.indicators")
-            indicators_mod.bollinger_bands = qtpylib_mod.bollinger_bands
-            indicators_mod.typical_price = qtpylib_mod.typical_price
-            qtpylib_mod.indicators = indicators_mod
+        assert hasattr(module, "FreqForge_Gate0_Core_v1")
 
-            vendor_mod.qtpylib = qtpylib_mod
-            freqtrade_mod.vendor = vendor_mod
+    def test_strategy_import_restores_sys_modules(self):
+        """After the test, pre-existing sys.modules entries are unchanged."""
+        # Use an outer patch.dict to guarantee sentinel cleanup even on
+        # assertion failure or import exception.
+        sentinel_freqtrade = object()
+        sentinel_talib = object()
+        sentinel_modules = {"freqtrade": sentinel_freqtrade, "talib": sentinel_talib}
 
-            sys.modules["freqtrade"] = freqtrade_mod
-            sys.modules["freqtrade.strategy"] = strategy_mod
-            sys.modules["freqtrade.vendor"] = vendor_mod
-            sys.modules["freqtrade.vendor.qtpylib"] = qtpylib_mod
-            sys.modules["freqtrade.vendor.qtpylib.indicators"] = indicators_mod
-            stubs_created.extend([
-                "freqtrade",
-                "freqtrade.strategy",
-                "freqtrade.vendor",
-                "freqtrade.vendor.qtpylib",
-                "freqtrade.vendor.qtpylib.indicators",
-            ])
+        stubs = {**self._make_freqtrade_stubs(), **self._make_talib_stubs(), **self._make_pandas_stub()}
 
-        try:
-            import talib  # noqa: F401
-        except ImportError:
-            import types
+        with patch.dict("sys.modules", sentinel_modules, clear=False):
+            with patch.dict("sys.modules", stubs, clear=False):
+                self._import_strategy()
+            # After inner patch restores, sentinels must be visible again
+            assert sys.modules["freqtrade"] is sentinel_freqtrade
+            assert sys.modules["talib"] is sentinel_talib
+        # After outer patch restores, original sys.modules state is back
 
-            talib_mod = types.ModuleType("talib")
-            talib_abstract = types.ModuleType("talib.abstract")
-            talib_mod.abstract = talib_abstract
-            sys.modules["talib"] = talib_mod
-            sys.modules["talib.abstract"] = talib_abstract
-            stubs_created.extend(["talib", "talib.abstract"])
+    def test_strategy_import_restores_sys_modules_on_exception(self):
+        """A raising import must not leak sentinels or stubs into sys.modules.
 
-        try:
-            import pandas  # noqa: F401
-        except ImportError:
-            import types
+        If ``_import_strategy`` raises mid-test, the nested ``patch.dict``
+        contexts must still restore the pre-existing entries exactly — no
+        sentinel or stub module may remain behind.
+        """
+        _missing = object()
+        sentinel_freqtrade = object()
+        sentinel_talib = object()
+        sentinel_modules = {
+            "freqtrade": sentinel_freqtrade,
+            "talib": sentinel_talib,
+        }
 
-            pandas_mod = types.ModuleType("pandas")
-            pandas_mod.DataFrame = type("DataFrame", (), {})
-            sys.modules["pandas"] = pandas_mod
-            stubs_created.append("pandas")
+        stubs = {**self._make_freqtrade_stubs(), **self._make_talib_stubs(), **self._make_pandas_stub()}
 
-        try:
-            # Import the strategy module
-            import importlib.util
+        # Snapshot the real pre-test state for the guarded keys
+        before = {
+            name: sys.modules.get(name, _missing)
+            for name in ("freqtrade", "talib")
+        }
 
-            spec = importlib.util.spec_from_file_location(
-                "FreqForge_Gate0_Core_v1", str(STRATEGY_PATH)
-            )
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+        # Each nesting level restores its own pre-entry state on exit,
+        # including when the inner import probe raises.
+        with patch.dict("sys.modules", sentinel_modules, clear=False):
+            with patch.dict("sys.modules", stubs, clear=False):  # noqa: SIM117 - nested levels restore separately
+                with patch.object(
+                    TestFreqtradeImport,
+                    "_import_strategy",
+                    side_effect=RuntimeError("forced import failure"),
+                ):
+                    with pytest.raises(RuntimeError):
+                        self._import_strategy()
+            # Stub context exited via the exception: sentinels visible again
+            assert sys.modules["freqtrade"] is sentinel_freqtrade
+            assert sys.modules["talib"] is sentinel_talib
+        # Outer context exited via the exception: original state restored
+        for name, expected in before.items():
+            if expected is _missing:
+                assert name not in sys.modules, f"{name} leaked into sys.modules"
+            else:
+                assert sys.modules[name] is expected, f"{name} not restored exactly"
 
-            # Verify class exists
-            assert hasattr(module, "FreqForge_Gate0_Core_v1")
+    def test_strategy_import_no_module_leak(self):
+        """No stub modules remain in sys.modules after the test."""
+        stub_names = set(self._make_freqtrade_stubs())
+        stub_names.update(self._make_talib_stubs())
+        stub_names.update(self._make_pandas_stub())
 
-            # Verify it can be instantiated
-            strategy_cls = module.FreqForge_Gate0_Core_v1
-            instance = strategy_cls.__new__(strategy_cls)
-            instance._regime_histories = {}
-            assert instance._regime_histories == {}
+        # Snapshot before
+        before = set(sys.modules)
 
-        finally:
-            # Clean up stubs
-            for mod_name in stubs_created:
-                sys.modules.pop(mod_name, None)
+        stubs = {**self._make_freqtrade_stubs(), **self._make_talib_stubs(), **self._make_pandas_stub()}
+
+        with patch.dict("sys.modules", stubs, clear=False):
+            self._import_strategy()
+
+        # Snapshot after
+        after = set(sys.modules)
+
+        # Only the strategy module itself may be new
+        new_modules = after - before
+        strategy_module = "FreqForge_Gate0_Core_v1"
+        unexpected = new_modules - {strategy_module}
+        assert not unexpected, f"Unexpected modules leaked: {unexpected}"
 
 
 # ---------------------------------------------------------------------------
