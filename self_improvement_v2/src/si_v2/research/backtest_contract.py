@@ -233,7 +233,8 @@ def _pair_data_filename(
     Duplicated from the native data contract module to avoid a circular
     import (that module imports from this one).
     """
-    pair_s = pair.replace("/", "_").replace(":", "_").replace(" ", "_").replace(".", "_").replace("@", "_").replace("$", "_").replace("+", "_")
+    pair_s = pair.replace("/", "_").replace(":", "_").replace(" ", "_")
+    pair_s = pair_s.replace(".", "_").replace("@", "_").replace("$", "_").replace("+", "_")
     tf = timeframe.replace("M", "Mo")
     base = datadir or Path()
     if candle_type == "futures":
