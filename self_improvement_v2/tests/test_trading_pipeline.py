@@ -6,11 +6,29 @@ Tests cover:
     - EMERGENCY mode: WATCH_ONLY + exit_signal flag
     - Edge cases: empty signal list, missing pair keys, dict-vs-list input
     - Import guard: fallback when kill_switch module unavailable
+
+Isolation contract (issue #674):
+    - Tests NEVER read, write, or remove the physical kill-switch file
+      (``freqtrade/shared/kill_switch.json`` or any ``var/kill_switch.json``).
+    - The import-guard test simulates the ``ImportError`` deterministically
+      by placing ``None`` in ``sys.modules["freqtrade.shared.kill_switch"]``
+      (Python halts imports with ``None`` in ``sys.modules``), then loads the
+      pipeline module in an isolated namespace via
+      ``importlib.util.spec_from_file_location``.
+    - Every ``sys.modules`` entry created by the test is removed in a
+      ``finally:`` block; ``monkeypatch`` restores the blocked kill-switch
+      entry automatically.
 """
 from __future__ import annotations
 
+import importlib.util
+import sys
+from pathlib import Path
+from types import ModuleType
+
 import pytest
 
+import si_v2.loop.trading_pipeline as pipeline
 from si_v2.loop.trading_pipeline import (
     VERDICT_WATCH_ONLY,
     _check_kill_switch,
@@ -296,13 +314,99 @@ class TestCheckKillSwitch:
 # ── Import guard ────────────────────────────────────────────────────────
 
 
+def _load_pipeline_isolated(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """Load ``trading_pipeline`` in an isolated namespace.
+
+    Simulates the ``ImportError`` of ``freqtrade.shared.kill_switch``
+    deterministically by placing ``None`` in ``sys.modules`` for the
+    kill-switch module path (Python's import system raises ``ImportError``
+    when it finds ``None`` in ``sys.modules`` during an import).
+
+    The physical kill-switch file is NEVER read, written, or removed.
+
+    Returns:
+        The freshly loaded pipeline module object.
+
+    Raises:
+        AssertionError: if the module under test still imported the real
+            kill-switch module (i.e. the isolation did not take effect).
+    """
+    ks_fq_name = "freqtrade.shared.kill_switch"
+    monkeypatch.setitem(sys.modules, ks_fq_name, None)
+
+    # Import the module under test in an isolated namespace. Importing via
+    # its package path would re-use the possibly-already-imported instance,
+    # so load it fresh from file with a unique module name.
+    source_path = Path(pipeline.__file__).resolve()
+    module_name = f"_pipeline_isolated_{abs(hash(source_path))}"
+    spec = importlib.util.spec_from_file_location(module_name, source_path)
+    assert spec is not None and spec.loader is not None
+    loaded = importlib.util.module_from_spec(spec)
+    created: list[str] = []
+    try:
+        sys.modules[module_name] = loaded
+        created.append(module_name)
+        # Ensure the parent package is importable for relative imports inside
+        # the module under test.
+        sys.modules.setdefault("si_v2", sys.modules["si_v2"])
+        sys.modules.setdefault("si_v2.loop", sys.modules["si_v2.loop"])
+        sys.modules.setdefault(ks_fq_name, None)  # re-assert block (defense)
+        spec.loader.exec_module(loaded)
+    finally:
+        # Restore every sys.modules entry this test created. Entries patched
+        # by monkeypatch (ks_fq_name) are restored by monkeypatch teardown.
+        for name in created:
+            sys.modules.pop(name, None)
+
+    # Prove the fallback actually engaged: the module must have defined the
+    # fallback functions, not the real ones.
+    assert loaded._get_kill_mode() == "NORMAL"
+    assert loaded._is_kill_active() is False
+    assert loaded._is_emergency() is False
+    return loaded
+
+
 class TestImportGuard:
-    """When kill_switch module cannot be imported, fallback values are used."""
+    """When kill_switch module cannot be imported, fallback values are used.
 
-    def test_kill_switch_disabled_fallback(self) -> None:
+    The physical kill-switch file state (NORMAL, HALT_NEW, EMERGENCY, or
+    missing) must not influence this test — it is deterministic by
+    construction (``sys.modules`` block, isolated module load).
+    """
+
+    def test_kill_switch_disabled_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Fallback functions return safe defaults when kill_switch unreachable."""
-        import si_v2.loop.trading_pipeline as pipeline
+        loaded = _load_pipeline_isolated(monkeypatch)
 
-        assert pipeline._is_kill_active() is False
-        assert pipeline._is_emergency() is False
-        assert pipeline._get_kill_mode() == "NORMAL"
+        assert loaded._is_kill_active() is False
+        assert loaded._is_emergency() is False
+        assert loaded._get_kill_mode() == "NORMAL"
+
+    def test_fallback_process_signals_normal(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """process_signals with fallback module behaves like NORMAL mode."""
+        loaded = _load_pipeline_isolated(monkeypatch)
+
+        result = loaded.process_signals(
+            [{"pair": "BTC/USDT", "confidence": 0.8}],
+            kill_switch_check=None,
+        )
+        assert result["override_active"] is False
+        assert result["kill_mode"] == "NORMAL"
+        assert result["exit_signal"] is False
+        assert result["pairs"][0]["kill_switched"] is False
+
+    def test_fallback_never_touches_physical_file(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The isolated load never reads the physical kill-switch file.
+
+        The ``sys.modules`` block makes the import fail before any file I/O
+        of the kill-switch path can occur. This test additionally asserts the
+        module's kill-switch path resolution constants are NOT used by the
+        fallback path.
+        """
+        loaded = _load_pipeline_isolated(monkeypatch)
+
+        # The fallback module carries its own mode constants; it must not
+        # have imported the real kill_switch module (which would expose the
+        # physical file path constant).
+        assert not hasattr(loaded, "KILL_SWITCH_PATH")
+        assert loaded.MODE_NORMAL == "NORMAL"
