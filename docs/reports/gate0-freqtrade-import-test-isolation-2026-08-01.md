@@ -5,6 +5,8 @@
 **Issue:** #681
 **Branch:** `fix/gate0-freqtrade-import-test-isolation-2026-08-01`
 **Base SHA:** `95519773068e55a0b0719d6cb06bdd481d0c1947` (origin/main)
+**Final PR head:** `2101cd937428c3b6cbd4256a7ae7308e4eb5d0bd`
+**Finalization commit:** `2101cd9` — `test(gate0): make sys.modules sentinel restoration exception-safe`
 
 ## Observation
 
@@ -85,6 +87,11 @@ environment** using `unittest.mock.patch.dict()` on `sys.modules`.
 - Use `patch.dict("sys.modules", stubs, clear=False)` to inject stubs
   without removing pre-existing modules
 - `patch.dict()` automatically restores original `sys.modules` entries on exit
+- Sentinel restoration is exception-safe (finalization commit `2101cd9`):
+  `test_strategy_import_restores_sys_modules` nests an outer `patch.dict`
+  for the sentinel modules around the inner stub context, so `sys.modules`
+  is restored exactly even when an assertion or import raises. No manual
+  `del sys.modules[...]` cleanup is used.
 - No production strategy code changed
 
 ### New regression tests
@@ -95,6 +102,7 @@ environment** using `unittest.mock.patch.dict()` on `sys.modules`.
 | `test_strategy_import_with_namespace_package_shadow` | Simulates local `freqtrade/` namespace package |
 | `test_strategy_import_restores_sys_modules` | Sentinel modules restored after test |
 | `test_strategy_import_no_module_leak` | No stub modules leak into `sys.modules` |
+| `test_strategy_import_restores_sys_modules_on_exception` | A raising import still restores `freqtrade`/`talib` exactly — exception-safety regression (finalization commit `2101cd9`) |
 
 ## Validation
 
@@ -120,7 +128,7 @@ uv run -p 3.11 python -B -m pytest \
 ```
 
 **Exit code:** 0
-**Result:** 45 passed, 0 failed
+**Result:** 46 passed, 0 failed
 
 ### Single test from subdirectory
 
@@ -148,7 +156,7 @@ uv run -p 3.11 python -B -m pytest \
 ```
 
 **Exit code:** 0
-**Result:** 145 passed, 0 failed
+**Result:** 146 passed, 0 failed
 
 ### Ruff
 
@@ -181,4 +189,6 @@ PHASE_C_STATUS=IN_PROGRESS
 
 - `self_improvement_v2/tests/test_c53_corrective.py` — refactored
   `TestFreqtradeImport` to use controlled import environment with
-  `patch.dict("sys.modules", ...)` and added 3 new regression tests
+  `patch.dict("sys.modules", ...)` and added 4 new regression tests
+  (including the exception-safety regression in finalization commit
+  `2101cd9`)
