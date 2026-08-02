@@ -130,6 +130,32 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 12. **Execute #600 ADR**
 13. **Reassess #496**
 
+## Issue #683 — Runtime Closure Reconciliation (2026-08-02)
+
+**Status:** `BLOCKED_BY_MISSING_A2_MARKER` — runtime baseline NOT green.
+
+Read-only reconciliation (A0) on 2026-08-02 found the runtime baseline from
+Issue #683 is **not restored**:
+
+| Criterion | Result | Evidence |
+|---|---|---|
+| Executor service active | ✅ PASS | `systemctl is-active` = active; `executor_health` ALLOWED (audit `76a974ba`) |
+| Executor action surface | ❌ FAIL | `fs_stat`, `fs_ls`, `systemctl_is_active`, `executor_version`, `executor_provenance` → `unknown_action`; deployed daemon ≠ repo (PR #677/#678) |
+| SO_PEERCRED | ✅ PASS | UID-10000 client → root daemon audited responses |
+| Writer lock | ❌ FAIL | `/opt/data/state/repo-writer/` missing |
+| Dry-run fleet | ❌ FAIL | 5/5 containers **stopped** (Exited ~4 days ago) |
+| dry_run=true configs | ✅ PASS | 5/5 configs `dry_run=True futures` |
+| Native gateway | ✅ PASS | hermes-gateway/dashboard/target active; PID 1609337 |
+| Roadmap cron | ❌ FAIL | **0 jobs**; `trading-hub-roadmap-tick` missing |
+| Kill switch / live | ✅ PASS | `NORMAL`; live_trading=NO; holdout=NO |
+
+**Blocker:** The original A2 marker
+(`APPROVED_A2_HERMESTRADER_RUNTIME_RECOVERY`, valid until 2026-08-01T18:00:00Z)
+has expired. A fresh time-limited A2 marker from Luke is required before any
+runtime mutation. No self-approval possible.
+
+**Full report:** [`issue-683-closure-reconciliation-2026-08-02.md`](../reports/issue-683-closure-reconciliation-2026-08-02.md)
+
 ## Root Runtime Authority — Variante B Complete (2026-07-28)
 
 > **Status:** `ROOT_RUNTIME_AUTHORITY_COMPLETE` / `READY_FOR_RUNTIME_OPERATIONS`
