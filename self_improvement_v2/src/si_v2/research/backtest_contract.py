@@ -221,6 +221,26 @@ def _validate_file_hash(path: Path, expected_sha256: str, label: str) -> None:
         )
 
 
+def _pair_data_filename(
+    pair: str,
+    timeframe: str,
+    candle_type: str,
+    *,
+    datadir: Path | None = None,
+) -> Path:
+    """Deterministic Freqtrade ``_pair_data_filename`` equivalent.
+
+    Duplicated from the native data contract module to avoid a circular
+    import (that module imports from this one).
+    """
+    pair_s = pair.replace("/", "_").replace(":", "_").replace(" ", "_").replace(".", "_").replace("@", "_").replace("$", "_").replace("+", "_")
+    tf = timeframe.replace("M", "Mo")
+    base = datadir or Path()
+    if candle_type == "futures":
+        return base / "futures" / f"{pair_s}-{tf}.feather"
+    return base / "futures" / f"{pair_s}-{tf}-{candle_type}.feather"
+
+
 def validate_mount_contract(
     *,
     project_dir: Path | str,
@@ -279,10 +299,8 @@ def validate_mount_contract(
             )
 
     # Required data files via real IDataHandler file layout.
-    from si_v2.research.freqtrade_native_data_contract import (
-        _pair_data_filename,
-    )
-
+    # pair_to_filename("BTC/USDT:USDT") → "BTC_USDT_USDT"
+    # _pair_data_filename() → flat futures/<pair_s>-<tf>[-<candle_type>].feather
     for pair in ("BTC/USDT:USDT", "ETH/USDT:USDT", "SOL/USDT:USDT"):
         for ct in ("futures", "mark", "funding_rate"):
             tf = "15m" if ct == "futures" else "1h"
