@@ -15,10 +15,15 @@ Corrective (2026-08-03): Freqtrade-native data contract —
   backtest results dir.
 - Fail-closed checks: results persistence, strategy path presence, explicit
   data format, pinned image, holdout in datadir, missing mark/funding.
+- Absolute host paths required; relative config path fails.
+- Strategy/config hash validation.
+- File-layout checks use the real Freqtrade IDataHandler contract
+  (flat ``futures/`` directory, ``pair_to_filename`` semantics).
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -41,11 +46,12 @@ PINNED_FREQTRADE_IMAGE = (
     "freqtradeorg/freqtrade@sha256:"
     "50720a4af314a812be2cfbf5cc6331c63e9332b06f3f4372241f54bc61a35486"
 )
-FREQTRADE_VERSION = "2026.6"
-# Container self-reports freqtrade 2026.7 (verified 2026-08-02 via
-# ``freqtrade --version`` inside the pinned image); the contract pins the
-# digest, so the version string is informational only.
-CONTAINER_REPORTED_VERSION = "2026.7"
+# Canonical runtime version (verified 2026-08-02 via ``freqtrade --version``
+# inside the pinned image). The digest is the authoritative pin; the version
+# string is informational.
+FREQTRADE_VERSION = "2026.7"
+# Historical contract field — informational only, not an active contract value.
+SUPERSEDED_INFORMATIONAL_VERSION = "2026.6"
 
 # ---------------------------------------------------------------------------
 # Input provenance (pinned at contract creation, base commit 092f5ad)
@@ -77,7 +83,8 @@ DATA_FORMAT_OHLCV = "feather"
 TIMEFRAME = "15m"
 TRADING_MODE = "futures"
 
-# Host paths (also referenced by the A2 download contract)
+# Absolute canonical host paths
+PROJECT_DIR = Path("/opt/data/projects/trading-hub/freqforge/user_data")
 FREQTRADE_NATIVE_DATA_DIR = Path("/opt/data/gate0-freqtrade-native-r1")
 RESEARCH_SNAPSHOT_DIR = Path("/opt/data/gate0-snapshot-v2-r1")
 BACKTEST_RESULTS_DIR = Path("/opt/data/gate0-backtest-results")
@@ -177,7 +184,7 @@ class BacktestContract:
 
 def render_backtest_command(
     *,
-    project_dir: Path | str = Path("freqforge/user_data"),
+    project_dir: Path | str = PROJECT_DIR,
     data_dir: Path | str = FREQTRADE_NATIVE_DATA_DIR,
     results_dir: Path | str = BACKTEST_RESULTS_DIR,
     timerange: str | None = None,
@@ -197,55 +204,101 @@ def render_backtest_command(
     )
 
 
+def _validate_absolute(path: Path, label: str) -> None:
+    if not path.is_absolute():
+        raise RuntimeError(
+            f"PATH_NOT_ABSOLUTE: {label}={path} must be absolute"
+        )
+
+
+def _validate_file_hash(path: Path, expected_sha256: str, label: str) -> None:
+    if not path.is_file():
+        raise RuntimeError(f"{label}_MISSING: {path}")
+    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    if actual != expected_sha256:
+        raise RuntimeError(
+            f"{label}_HASH_MISMATCH: {path} got {actual} expected {expected_sha256}"
+        )
+
+
 def validate_mount_contract(
     *,
     project_dir: Path | str,
     data_dir: Path | str,
     results_dir: Path | str,
     strategy_path: Path | str | None = None,
+    strategy_sha256: str = STRATEGY_FILE_SHA256,
+    config_sha256: str = CONFIG_FILE_SHA256,
 ) -> None:
     """Fail-closed mount validation for the backtest command.
 
-    Requires: results dir present, strategy path present, data format
-    explicit (feather), no moving image tag, no holdout directory inside
-    the selection datadir, and mark/funding present in the data dir.
+    Requires: all host paths absolute, results dir present, strategy path
+    present with matching hash, config present with matching hash, no
+    holdout directory inside the selection datadir, and required data files
+    present via the real Freqtrade IDataHandler file layout (flat
+    ``futures/`` directory, ``pair_to_filename`` semantics).
+
+    Does NOT check for fictional nested subdirectories like
+    ``bitget/futures/mark/<pair>`` — the real layout is flat.
     """
+    p_project = Path(project_dir)
+    p_data = Path(data_dir)
+    p_results = Path(results_dir)
+
+    _validate_absolute(p_project, "project_dir")
+    _validate_absolute(p_data, "data_dir")
+    _validate_absolute(p_results, "results_dir")
+
     # Results must be persistent (read-write) — a non-existing or read-only
     # results dir would silently drop exports.
-    if not Path(results_dir).exists():
+    if not p_results.exists():
         raise RuntimeError(
             f"RESULTS_NOT_PERSISTENT: {results_dir} does not exist"
         )
+
+    # Strategy path must exist
     strategy = (
         Path(strategy_path)
         if strategy_path is not None
-        else Path(project_dir) / "strategies"
+        else p_project / "strategies"
     )
     if not strategy.is_dir():
         raise RuntimeError(
             f"STRATEGY_PATH_MISSING: {strategy} is not a directory"
         )
+
     # Holdout must be physically absent from the selection datadir.
     holdout_candidates = [
-        Path(data_dir) / "holdout",
-        Path(data_dir) / "holdout-sealed",
+        p_data / "holdout",
+        p_data / "holdout-sealed",
     ]
     for candidate in holdout_candidates:
         if candidate.exists():
             raise RuntimeError(
                 f"HOLDOUT_IN_DATADIR: {candidate} must not exist"
             )
-    # mark + funding_rate candle dirs must exist per pair for futures.
-    for pair_key in ("btc_usdt:usdt", "eth_usdt:usdt", "sol_usdt:usdt"):
-        for candle_type in ("mark", "funding_rate"):
-            marker_dir = (
-                Path(data_dir) / "bitget" / "futures"
-                / candle_type / pair_key
-            )
-            if not marker_dir.is_dir():
+
+    # Required data files via real IDataHandler file layout.
+    from si_v2.research.freqtrade_native_data_contract import (
+        _pair_data_filename,
+    )
+
+    for pair in ("BTC/USDT:USDT", "ETH/USDT:USDT", "SOL/USDT:USDT"):
+        for ct in ("futures", "mark", "funding_rate"):
+            tf = "15m" if ct == "futures" else "1h"
+            expected = _pair_data_filename(pair, tf, ct, datadir=p_data)
+            if not expected.is_file():
                 raise RuntimeError(
-                    f"MARK_OR_FUNDING_MISSING: {marker_dir} not found"
+                    f"DATA_FILE_MISSING: {expected} not found"
                 )
+
+    # Strategy file hash
+    strategy_file = strategy / "FreqForge_Gate0_Core_v1.py"
+    _validate_file_hash(strategy_file, strategy_sha256, "STRATEGY")
+
+    # Config file hash
+    config_file = p_project / "config.example.json"
+    _validate_file_hash(config_file, config_sha256, "CONFIG")
 
 
 # ---------------------------------------------------------------------------

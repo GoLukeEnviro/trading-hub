@@ -1,7 +1,9 @@
 """Freqtrade-native Bitget futures data contract (A1; no execution).
 
 Defines the immutable, reproducible download contract for the Gate-0
-selection backtest dataset:
+selection backtest dataset. All file-layout and pair-filename rules are
+derived from the real Freqtrade IDataHandler upstream contract (verified
+2026-08-03 against the pinned image).
 
 - pinned image digest
 - exchange = bitget (USDT-FUTURES, isolated)
@@ -21,6 +23,7 @@ validation so tests can run offline.
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -38,8 +41,9 @@ IMAGE_DIGEST = (
     "sha256:50720a4af314a812be2cfbf5cc6331c63e9332b06f3f4372241f54bc61a35486"
 )
 PINNED_IMAGE = f"freqtradeorg/freqtrade@{IMAGE_DIGEST}"
-FREQTRADE_VERSION = "2026.6"
-CONTAINER_REPORTED_VERSION = "2026.7"
+FREQTRADE_VERSION = "2026.7"
+# Historical contract field — informational only, not an active contract value.
+SUPERSEDED_INFORMATIONAL_VERSION = "2026.6"
 
 EXCHANGE = "bitget"
 TRADING_MODE = "futures"
@@ -72,10 +76,69 @@ SELECTION_TIMERANGE_END = datetime(2026, 1, 1, tzinfo=UTC)
 HOST_DATA_DIR = FREQTRADE_NATIVE_DATA_DIR
 CONTAINER_DATA_DIR = Path("/freqtrade/user_data/data")
 
-# Required list-data coverage windows (inclusive lower bounds; the download
-# run must cover at least these ranges per pair / candle type).
+# ---------------------------------------------------------------------------
+# Pair filename contract — derived from upstream IDataHandler
+# ---------------------------------------------------------------------------
+# pair_to_filename("BTC/USDT:USDT") → "BTC_USDT_USDT"
+# (replaces /, :, ' ', '.', '@', '$', '+' with '_')
+# _pair_data_filename() → flat futures/<pair_s>-<tf>-<candle_type>.feather
+# _OHLCV_REGEX = ^([\w-]+)\-(\d+[a-zA-Z]{1,2})\-?([a-zA-Z_]*)?(?=\.)
+# rebuild_pair_from_filename("BTC_USDT_USDT") → "BTC/USDT:USDT"
+#   (first _ → /, second _ → :)
+
+
+def pair_to_filename(pair: str) -> str:
+    """Freqtrade upstream ``pair_to_filename`` (misc.py)."""
+    for ch in ["/", " ", ".", "@", "$", "+", ":"]:
+        pair = pair.replace(ch, "_")
+    return pair
+
+
+def rebuild_pair_from_filename(filename_pair: str) -> str:
+    """Freqtrade upstream ``rebuild_pair_from_filename``."""
+    return filename_pair.replace("_", "/", 1).replace("_", ":", 1)
+
+
+def _pair_data_filename(
+    pair: str,
+    timeframe: str,
+    candle_type: str,
+    *,
+    datadir: Path | None = None,
+) -> Path:
+    """Deterministic Freqtrade ``_pair_data_filename`` equivalent.
+
+    ``candle_type`` is the string value (e.g. ``"futures"``, ``"mark"``,
+    ``"funding_rate"``). For ``"futures"`` (which maps to ``CandleType.SPOT``
+    in Freqtrade's enum), no candle suffix is appended and the file lives
+    directly in the ``futures/`` directory. For all other candle types, the
+    file lives in ``futures/`` with a ``-<candle_type>`` suffix.
+    """
+    pair_s = pair_to_filename(pair)
+    tf = timeframe.replace("M", "Mo")  # timeframe_to_file
+    base = datadir or Path()
+    if candle_type == "futures":
+        # CandleType.SPOT → no suffix, but still in futures/ dir
+        return base / "futures" / f"{pair_s}-{tf}.feather"
+    return base / "futures" / f"{pair_s}-{tf}-{candle_type}.feather"
+
+
+PAIR_FILENAMES: tuple[str, ...] = tuple(pair_to_filename(p) for p in PAIRS)
+
+
+def full_timerange() -> str:
+    return f"{FULL_TIMERANGE_START:%Y%m%d}-{FULL_TIMERANGE_END:%Y%m%d}"
+
+
+def selection_timerange() -> str:
+    return f"{FULL_TIMERANGE_START:%Y%m%d}-{SELECTION_TIMERANGE_END:%Y%m%d}"
+
+
+# ---------------------------------------------------------------------------
+# Required coverage windows (inclusive lower bounds)
+# ---------------------------------------------------------------------------
+
 REQUIRED_COVERAGE: dict[str, dict[str, dict[str, str]]] = {
-    # candle_type -> timeframe -> {from, to} (ISO, inclusive-ish)
     "futures": {
         "15m": {"from": "2024-12-01T00:00:00Z", "to": "2026-06-30T23:45:00Z"},
     },
@@ -86,26 +149,6 @@ REQUIRED_COVERAGE: dict[str, dict[str, dict[str, str]]] = {
         "1h": {"from": "2024-12-01T00:00:00Z", "to": "2026-06-30T23:00:00Z"},
     },
 }
-
-# Pair directory key used by Freqtrade on disk (lowercase, / -> _; the
-# colon in the futures pair suffix is KEPT, matching Freqtrade layout).
-def pair_dir_key(pair: str) -> str:
-    return pair.replace("/", "_").lower()
-
-
-PAIR_DIR_KEYS: tuple[str, ...] = tuple(pair_dir_key(p) for p in PAIRS)
-
-
-def full_timerange() -> str:
-    return (
-        f"{FULL_TIMERANGE_START:%Y%m%d}-{FULL_TIMERANGE_END:%Y%m%d}"
-    )
-
-
-def selection_timerange() -> str:
-    return (
-        f"{FULL_TIMERANGE_START:%Y%m%d}-{SELECTION_TIMERANGE_END:%Y%m%d}"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -172,42 +215,66 @@ def render_list_data_command(
     )
 
 
-# ---------------------------------------------------------------------------
-# list-data coverage parser + fail-closed validation
-# ---------------------------------------------------------------------------
-
-# Marker lines emitted by ``freqtrade list-data --show-timerange``.
-# Example (2026.7):
-#   btc_usdt:usdt 15m futures  2024-12-01 00:00:00 -> 2026-06-30 23:45:00
-# We parse a compact, documented format so tests can run offline.
-COVERAGE_LINE_PREFIX = "freqtrade_native_coverage "
-
-
-def coverage_line(
-    pair: str, timeframe: str, candle_type: str, first: str, last: str
+def render_inventory_command(
+    *,
+    datadir_host: Path | str = HOST_DATA_DIR,
+    inventory_script_host: Path | str = (
+        "self_improvement_v2/src/si_v2/research/datahandler_inventory.py"
+    ),
 ) -> str:
-    """Deterministic coverage line (documented parser input for tests)."""
+    """Render the pinned DataHandler inventory command (read-only).
+
+    Runs ``datahandler_inventory.py`` inside the pinned container against
+    the mounted datadir. Output is canonical JSON.
+    """
     return (
-        f"{COVERAGE_LINE_PREFIX}{pair} {timeframe} {candle_type} "
-        f"{first} {last}"
+        "docker run --rm \\\n"
+        "  --user 10000:10000 \\\n"
+        f"  -v {datadir_host}:/freqtrade/user_data/data:ro \\\n"
+        f"  -v {inventory_script_host}:/inventory.py:ro \\\n"
+        f"  --entrypoint python3 {PINNED_IMAGE} \\\n"
+        "  /inventory.py /freqtrade/user_data/data"
     )
 
 
-def parse_coverage_line(line: str) -> dict[str, str] | None:
-    """Parse a coverage line into ``{pair, timeframe, candle_type, first,
-    last}``. Returns None for non-coverage lines."""
-    if not line.startswith(COVERAGE_LINE_PREFIX):
-        return None
-    parts = line[len(COVERAGE_LINE_PREFIX):].split()
-    if len(parts) != 5:
-        raise ValueError(f"MALFORMED_COVERAGE_LINE: {line!r}")
-    return {
-        "pair": parts[0],
-        "timeframe": parts[1],
-        "candle_type": parts[2],
-        "first": parts[3],
-        "last": parts[4],
-    }
+# ---------------------------------------------------------------------------
+# DataHandler inventory parser + fail-closed validation
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class InventoryEntry:
+    """One entry from the DataHandler inventory JSON."""
+
+    pair: str
+    timeframe: str
+    candle_type: str
+    first: str | None
+    last: str | None
+    count: int
+    relative_path: str
+    sha256: str | None
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "InventoryEntry":
+        return cls(
+            pair=str(d["pair"]),
+            timeframe=str(d["timeframe"]),
+            candle_type=str(d["candle_type"]),
+            first=str(d["first"]) if d.get("first") else None,
+            last=str(d["last"]) if d.get("last") else None,
+            count=int(d.get("count", 0)),
+            relative_path=str(d["relative_path"]),
+            sha256=str(d["sha256"]) if d.get("sha256") else None,
+        )
+
+
+def parse_inventory(json_text: str) -> list[InventoryEntry]:
+    """Parse the canonical DataHandler inventory JSON."""
+    data = json.loads(json_text)
+    if not isinstance(data, list):
+        raise ValueError("INVENTORY_NOT_LIST")
+    return [InventoryEntry.from_dict(item) for item in data]
 
 
 def _parse_iso(value: str) -> datetime:
@@ -217,58 +284,64 @@ def _parse_iso(value: str) -> datetime:
         raise ValueError(f"INVALID_TIMESTAMP: {value!r}") from exc
 
 
+def _interval_grace(timeframe: str) -> timedelta:
+    if timeframe == "1h":
+        return timedelta(hours=1)
+    return timedelta(minutes=15)
+
+
 def validate_coverage(
-    coverage: dict[str, dict[str, dict[str, str]]],
+    inventory: list[InventoryEntry],
     *,
     required: dict[str, dict[str, dict[str, str]]] | None = None,
 ) -> None:
-    """Fail-closed coverage validation.
+    """Fail-closed coverage validation against the DataHandler inventory.
 
-    ``coverage`` maps ``candle_type -> timeframe -> {pair: {first,last}}``.
     Every required pair / timeframe / candle type must be present with
     ``first <= required.from`` and ``last >= required.to`` (with a grace of
     one funding interval / one candle interval for auxiliary data).
     """
     required = required or REQUIRED_COVERAGE
+    # Build lookup: candle_type -> timeframe -> pair -> entry
+    lookup: dict[str, dict[str, dict[str, InventoryEntry]]] = {}
+    for entry in inventory:
+        lookup.setdefault(entry.candle_type, {}).setdefault(
+            entry.timeframe, {}
+        )[entry.pair] = entry
+
     for candle_type, tf_map in required.items():
         for timeframe, window in tf_map.items():
             req_from = _parse_iso(window["from"])
             req_to = _parse_iso(window["to"])
             for pair in PAIRS:
-                key = pair_dir_key(pair)
-                got = coverage.get(candle_type, {}).get(timeframe, {}).get(key)
+                got = (
+                    lookup.get(candle_type, {})
+                    .get(timeframe, {})
+                    .get(pair)
+                )
                 if got is None:
                     raise RuntimeError(
                         f"COVERAGE_MISSING: {pair} {timeframe} {candle_type}"
                     )
-                first = _parse_iso(got["first"])
-                last = _parse_iso(got["last"])
-                # Grace: one interval for 1h aux, one candle for 15m main.
-                grace = (
-                    (req_to - req_from) * 0
-                    + _interval_grace(timeframe)
-                )
+                if got.first is None or got.last is None:
+                    raise RuntimeError(
+                        f"COVERAGE_EMPTY: {pair} {timeframe} {candle_type}"
+                    )
+                first = _parse_iso(got.first)
+                last = _parse_iso(got.last)
+                grace = _interval_grace(timeframe)
                 if first > req_from + grace:
                     raise RuntimeError(
                         f"COVERAGE_START_LATE: {pair} {timeframe} "
-                        f"{candle_type} first={got['first']} "
+                        f"{candle_type} first={got.first} "
                         f"required<={window['from']}"
                     )
                 if last < req_to - grace:
                     raise RuntimeError(
                         f"COVERAGE_END_EARLY: {pair} {timeframe} "
-                        f"{candle_type} last={got['last']} "
+                        f"{candle_type} last={got.last} "
                         f"required>={window['to']}"
                     )
-
-
-def _interval_grace(timeframe: str) -> timedelta:
-    """Return a small timedelta grace for coverage bounds."""
-    from datetime import timedelta
-
-    if timeframe == "1h":
-        return timedelta(hours=1)
-    return timedelta(minutes=15)
 
 
 # ---------------------------------------------------------------------------

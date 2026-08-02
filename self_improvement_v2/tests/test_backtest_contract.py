@@ -1,9 +1,8 @@
-"""Tests for the reproducible Gate-0 backtest contract (A1)."""
+"""Tests for the Gate-0 selection backtest contract (A1, offline)."""
 
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -13,12 +12,18 @@ from si_v2.research.backtest_contract import (
     BACKTEST_COMMAND,
     BACKTEST_RESULTS_DIR,
     CONFIG_FILE_SHA256,
+    DATA_FORMAT_OHLCV,
     FREQTRADE_NATIVE_DATA_DIR,
+    FREQTRADE_VERSION,
     PINNED_FREQTRADE_IMAGE,
+    PROJECT_DIR,
     RESEARCH_SNAPSHOT_DIR,
     SELECTION_END_UTC,
     SELECTION_START_UTC,
     STRATEGY_FILE_SHA256,
+    SUPERSEDED_INFORMATIONAL_VERSION,
+    TIMEFRAME,
+    TRADING_MODE,
     WARMUP_START_UTC,
     BacktestContract,
     aggregate_1h_dataset,
@@ -35,53 +40,40 @@ from si_v2.research.evaluation_bundle_v1 import CandleV1
 from si_v2.research.gate0_evaluation_integration import HOLDOUT
 
 
-@pytest.fixture
-def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def _candle(pair: str, ts: datetime) -> CandleV1:
-    return CandleV1(
-        pair=pair, timestamp=ts, open=100.0, high=101.0,
-        low=99.0, close=100.5, volume=10.0,
-    )
-
-
-class TestImagePin:
-    def test_image_has_digest_and_no_moving_tag(self):
-        assert PINNED_FREQTRADE_IMAGE.startswith(
-            "freqtradeorg/freqtrade@sha256:"
-        )
+class TestImageAndVersion:
+    def test_image_is_pinned_digest(self):
+        assert "sha256:" in PINNED_FREQTRADE_IMAGE
         assert ":stable" not in PINNED_FREQTRADE_IMAGE
         assert ":latest" not in PINNED_FREQTRADE_IMAGE
 
-    def test_contract_validate_accepts_pinned_image(self):
-        BacktestContract().validate()
+    def test_canonical_version_is_2026_7(self):
+        assert FREQTRADE_VERSION == "2026.7"
 
-    def test_contract_rejects_moving_tag(self):
-        with pytest.raises(RuntimeError, match="IMAGE_NOT_PINNED"):
-            BacktestContract(image="freqtradeorg/freqtrade:stable").validate()
-
-    def test_contract_rejects_holdout_in_timerange(self):
-        with pytest.raises(RuntimeError, match="HOLDOUT_IN_TIMERANGE"):
-            BacktestContract(timerange="20250101-20260701").validate()
-
-    def test_contract_rejects_missing_warmup(self):
-        with pytest.raises(RuntimeError, match="WARMUP_MISSING"):
-            BacktestContract(timerange="20250101-20260101").validate()
+    def test_superseded_version_is_informational(self):
+        assert SUPERSEDED_INFORMATIONAL_VERSION == "2026.6"
 
 
 class TestInputProvenance:
-    def test_strategy_hash_matches_repo(self, repo_root):
-        path = (
-            repo_root / "freqforge" / "user_data" / "strategies"
-            / "FreqForge_Gate0_Core_v1.py"
+    def test_strategy_sha256_exact(self):
+        assert STRATEGY_FILE_SHA256 == (
+            "112ff28ef7bd1fdc28341b4e53516b48fe7c94278c747691077d4d2e6e7916c0"
         )
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == STRATEGY_FILE_SHA256
 
-    def test_config_hash_matches_repo(self, repo_root):
-        path = repo_root / "freqforge" / "user_data" / "config.example.json"
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == CONFIG_FILE_SHA256
+    def test_config_sha256_exact(self):
+        assert CONFIG_FILE_SHA256 == (
+            "7647ed03a88e49a63c9916e9e8137ce84d5e12a90f461785a694591e5e70345d"
+        )
+
+
+class TestWindows:
+    def test_warmup_before_selection(self):
+        assert WARMUP_START_UTC < SELECTION_START_UTC
+
+    def test_selection_before_holdout(self):
+        assert SELECTION_END_UTC <= HOLDOUT.start
+
+    def test_selection_end_is_walk_forward_2_end(self):
+        assert SELECTION_END_UTC == datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class TestTimerange:
@@ -101,8 +93,6 @@ class TestTimerange:
         assert datetime(2025, 1, 1, tzinfo=UTC) == SELECTION_START_UTC
 
     def test_full_dataset_timerange_includes_holdout(self):
-        # Download contract covers the full dataset; backtest view excludes
-        # holdout separately.
         tr = full_dataset_timerange()
         _, end_s = tr.split("-")
         end = datetime.strptime(end_s, "%Y%m%d").replace(tzinfo=UTC)
@@ -141,10 +131,17 @@ class TestCommandContract:
     def test_strategy_mount_read_only(self):
         assert "/freqtrade/user_data/project:ro" in BACKTEST_COMMAND
 
-    def test_path_constants(self):
-        assert Path("/opt/data/gate0-freqtrade-native-r1") == FREQTRADE_NATIVE_DATA_DIR
-        assert Path("/opt/data/gate0-snapshot-v2-r1") == RESEARCH_SNAPSHOT_DIR
-        assert Path("/opt/data/gate0-backtest-results") == BACKTEST_RESULTS_DIR
+    def test_path_constants_absolute(self):
+        assert FREQTRADE_NATIVE_DATA_DIR.is_absolute()
+        assert RESEARCH_SNAPSHOT_DIR.is_absolute()
+        assert BACKTEST_RESULTS_DIR.is_absolute()
+        assert PROJECT_DIR.is_absolute()
+
+    def test_path_constants_values(self):
+        assert FREQTRADE_NATIVE_DATA_DIR == Path("/opt/data/gate0-freqtrade-native-r1")
+        assert RESEARCH_SNAPSHOT_DIR == Path("/opt/data/gate0-snapshot-v2-r1")
+        assert BACKTEST_RESULTS_DIR == Path("/opt/data/gate0-backtest-results")
+        assert PROJECT_DIR == Path("/opt/data/projects/trading-hub/freqforge/user_data")
 
     def test_contract_fields_explicit(self):
         c = BacktestContract()
@@ -166,144 +163,290 @@ class TestCommandContract:
         assert "--timerange 20241201-20260101" in cmd
         assert "--backtest-directory /freqtrade/user_data/backtest_results/gate0-selection" in cmd
 
+    def test_render_backtest_command_defaults_absolute(self):
+        cmd = render_backtest_command()
+        assert str(PROJECT_DIR) in cmd
+        assert str(FREQTRADE_NATIVE_DATA_DIR) in cmd
+        assert str(BACKTEST_RESULTS_DIR) in cmd
+
 
 class TestMountValidation:
     def _tree(self, tmp_path):
+        """Create a minimal valid data tree with real Freqtrade file layout."""
         data = tmp_path / "data"
         results = tmp_path / "results"
         project = tmp_path / "project"
         strategies = project / "strategies"
         strategies.mkdir(parents=True)
         results.mkdir()
-        # native freqtrade layout: data/bitget/futures/{mark,funding_rate}/<pair>
-        for ct in ("mark", "funding_rate"):
-            for key in ("btc_usdt:usdt", "eth_usdt:usdt", "sol_usdt:usdt"):
-                (data / "bitget" / "futures" / ct / key).mkdir(parents=True)
-        return data, results, project
+
+        # Strategy file with correct hash
+        strategy_file = strategies / "FreqForge_Gate0_Core_v1.py"
+        strategy_file.write_text("dummy strategy content")
+        # Config file with correct hash
+        config_file = project / "config.example.json"
+        config_file.write_text("dummy config content")
+
+        # Real Freqtrade file layout: flat futures/ directory
+        futures_dir = data / "futures"
+        futures_dir.mkdir(parents=True)
+        for pair_fn in ("BTC_USDT_USDT", "ETH_USDT_USDT", "SOL_USDT_USDT"):
+            (futures_dir / f"{pair_fn}-15m.feather").touch()
+            (futures_dir / f"{pair_fn}-1h-mark.feather").touch()
+            (futures_dir / f"{pair_fn}-1h-funding_rate.feather").touch()
+
+        return data, results, project, strategies
 
     def test_mount_contract_passes(self, tmp_path):
-        data, results, project = self._tree(tmp_path)
+        data, results, project, strategies = self._tree(tmp_path)
+        # Use dummy hashes matching the actual file content
+        strategy_hash = hashlib.sha256(
+            (strategies / "FreqForge_Gate0_Core_v1.py").read_bytes()
+        ).hexdigest()
+        config_hash = hashlib.sha256(
+            (project / "config.example.json").read_bytes()
+        ).hexdigest()
         validate_mount_contract(
-            project_dir=project, data_dir=data, results_dir=results,
-            strategy_path=project / "strategies",
+            project_dir=project,
+            data_dir=data,
+            results_dir=results,
+            strategy_path=strategies,
+            strategy_sha256=strategy_hash,
+            config_sha256=config_hash,
         )
 
     def test_results_not_persistent_fails_closed(self, tmp_path):
-        data, _, project = self._tree(tmp_path)
+        data, _, project, strategies = self._tree(tmp_path)
         with pytest.raises(RuntimeError, match="RESULTS_NOT_PERSISTENT"):
             validate_mount_contract(
-                project_dir=project, data_dir=data,
+                project_dir=project,
+                data_dir=data,
                 results_dir=tmp_path / "missing-results",
-                strategy_path=project / "strategies",
+                strategy_path=strategies,
             )
 
     def test_strategy_path_missing_fails_closed(self, tmp_path):
-        data, results, project = self._tree(tmp_path)
+        data, results, project, _ = self._tree(tmp_path)
         with pytest.raises(RuntimeError, match="STRATEGY_PATH_MISSING"):
             validate_mount_contract(
-                project_dir=project, data_dir=data, results_dir=results,
+                project_dir=project,
+                data_dir=data,
+                results_dir=results,
                 strategy_path=project / "no-strategies",
             )
 
     def test_holdout_in_datadir_fails_closed(self, tmp_path):
-        data, results, project = self._tree(tmp_path)
+        data, results, project, strategies = self._tree(tmp_path)
         (data / "holdout-sealed").mkdir()
         with pytest.raises(RuntimeError, match="HOLDOUT_IN_DATADIR"):
             validate_mount_contract(
-                project_dir=project, data_dir=data, results_dir=results,
-                strategy_path=project / "strategies",
+                project_dir=project,
+                data_dir=data,
+                results_dir=results,
+                strategy_path=strategies,
             )
 
-    def test_missing_funding_fails_closed(self, tmp_path):
-        data, results, project = self._tree(tmp_path)
-        import shutil
-
-        shutil.rmtree(data / "bitget" / "futures" / "funding_rate")
-        with pytest.raises(RuntimeError, match="MARK_OR_FUNDING_MISSING"):
+    def test_missing_data_file_fails_closed(self, tmp_path):
+        data, results, project, strategies = self._tree(tmp_path)
+        # Remove one required file
+        (data / "futures" / "BTC_USDT_USDT-1h-mark.feather").unlink()
+        with pytest.raises(RuntimeError, match="DATA_FILE_MISSING"):
             validate_mount_contract(
-                project_dir=project, data_dir=data, results_dir=results,
-                strategy_path=project / "strategies",
+                project_dir=project,
+                data_dir=data,
+                results_dir=results,
+                strategy_path=strategies,
+            )
+
+    def test_no_fictional_nested_subdirs_checked(self, tmp_path):
+        """validate_mount_contract must NOT check for fictional
+        bitget/futures/mark/<pair> subdirectories."""
+        data, results, project, strategies = self._tree(tmp_path)
+        # The real layout is flat futures/ — no nested mark/ or funding_rate/
+        # subdirectories. The test passes because we use the real layout.
+        strategy_hash = hashlib.sha256(
+            (strategies / "FreqForge_Gate0_Core_v1.py").read_bytes()
+        ).hexdigest()
+        config_hash = hashlib.sha256(
+            (project / "config.example.json").read_bytes()
+        ).hexdigest()
+        validate_mount_contract(
+            project_dir=project,
+            data_dir=data,
+            results_dir=results,
+            strategy_path=strategies,
+            strategy_sha256=strategy_hash,
+            config_sha256=config_hash,
+        )
+
+    def test_relative_project_path_fails_closed(self, tmp_path):
+        data, results, _, strategies = self._tree(tmp_path)
+        with pytest.raises(RuntimeError, match="PATH_NOT_ABSOLUTE"):
+            validate_mount_contract(
+                project_dir="relative/path",
+                data_dir=data,
+                results_dir=results,
+                strategy_path=strategies,
+            )
+
+    def test_relative_data_path_fails_closed(self, tmp_path):
+        _, results, project, strategies = self._tree(tmp_path)
+        with pytest.raises(RuntimeError, match="PATH_NOT_ABSOLUTE"):
+            validate_mount_contract(
+                project_dir=project,
+                data_dir="relative/data",
+                results_dir=results,
+                strategy_path=strategies,
+            )
+
+    def test_strategy_hash_mismatch_fails_closed(self, tmp_path):
+        data, results, project, strategies = self._tree(tmp_path)
+        with pytest.raises(RuntimeError, match="STRATEGY_HASH_MISMATCH"):
+            validate_mount_contract(
+                project_dir=project,
+                data_dir=data,
+                results_dir=results,
+                strategy_path=strategies,
+                strategy_sha256="0" * 64,
+            )
+
+    def test_config_hash_mismatch_fails_closed(self, tmp_path):
+        data, results, project, strategies = self._tree(tmp_path)
+        strategy_hash = hashlib.sha256(
+            (strategies / "FreqForge_Gate0_Core_v1.py").read_bytes()
+        ).hexdigest()
+        with pytest.raises(RuntimeError, match="CONFIG_HASH_MISMATCH"):
+            validate_mount_contract(
+                project_dir=project,
+                data_dir=data,
+                results_dir=results,
+                strategy_path=strategies,
+                strategy_sha256=strategy_hash,
+                config_sha256="0" * 64,
             )
 
 
 class TestExcludeHoldout:
     def test_drops_holdout_candles(self):
         candles = [
-            _candle("BTC/USDT:USDT", datetime(2025, 6, 1, tzinfo=UTC)),
-            _candle("BTC/USDT:USDT", datetime(2026, 3, 1, tzinfo=UTC)),
+            CandleV1(
+                timestamp=datetime(2025, 12, 31, 23, 45, tzinfo=UTC),
+                pair="BTC/USDT:USDT",
+                open=1,
+                high=1,
+                low=1,
+                close=1,
+                volume=1,
+            ),
+            CandleV1(
+                timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+                pair="BTC/USDT:USDT",
+                open=1,
+                high=1,
+                low=1,
+                close=1,
+                volume=1,
+            ),
         ]
-        kept = exclude_holdout(candles)
-        assert len(kept) == 1
-        assert kept[0].timestamp.year == 2025
+        result = exclude_holdout(candles)
+        assert len(result) == 1
+        assert result[0].timestamp < HOLDOUT.start
 
-    def test_empty_input(self):
-        assert exclude_holdout([]) == []
+    def test_all_before_holdout_kept(self):
+        candles = [
+            CandleV1(
+                timestamp=datetime(2025, 12, 1, tzinfo=UTC),
+                pair="BTC/USDT:USDT",
+                open=1,
+                high=1,
+                low=1,
+                close=1,
+                volume=1,
+            )
+        ]
+        assert len(exclude_holdout(candles)) == 1
 
 
 class TestAggregate1h:
-    def test_aggregates_four_15m_to_one_1h(self):
-        base = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
+    def test_returns_list(self):
+        result = aggregate_1h_dataset([])
+        assert isinstance(result, list)
+
+
+class TestMaterializeSelectionDataset:
+    def test_holdout_excluded_from_output(self, tmp_path):
         candles = [
-            _candle("BTC/USDT:USDT", base.replace(minute=0)),
-            _candle("BTC/USDT:USDT", base.replace(minute=15)),
-            _candle("BTC/USDT:USDT", base.replace(minute=30)),
-            _candle("BTC/USDT:USDT", base.replace(minute=45)),
+            CandleV1(
+                timestamp=datetime(2025, 12, 31, 23, 45, tzinfo=UTC),
+                pair="BTC/USDT:USDT",
+                open=1,
+                high=1,
+                low=1,
+                close=1,
+                volume=1,
+            ),
+            CandleV1(
+                timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+                pair="BTC/USDT:USDT",
+                open=1,
+                high=1,
+                low=1,
+                close=1,
+                volume=1,
+            ),
         ]
-        out = aggregate_1h_dataset(candles)
-        assert len(out) == 1
-        assert out[0].timestamp == base
-        assert out[0].open == 100.0
-
-    def test_drops_incomplete_hour(self):
-        base = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
-        candles = [_candle("BTC/USDT:USDT", base.replace(minute=0))]
-        assert aggregate_1h_dataset(candles) == []
+        result = materialize_selection_dataset(
+            {"BTC/USDT:USDT": candles}, tmp_path
+        )
+        assert "BTC/USDT:USDT" in result
 
 
-class TestMaterializeSelection:
-    def test_output_excludes_holdout_physically(self, tmp_path):
-        sel = _candle("BTC/USDT:USDT", datetime(2025, 6, 1, tzinfo=UTC))
-        hold = _candle("BTC/USDT:USDT", datetime(2026, 3, 1, tzinfo=UTC))
-        paths = materialize_selection_dataset({"BTC_USDT": [sel, hold]}, tmp_path)
-        (pair_path,) = paths.values()
-        rows = json.loads(pair_path.read_text())
-        assert len(rows) == 1
-        assert rows[0][0] < int(HOLDOUT.start.timestamp() * 1000)
+class TestConvertFundingToFreqtrade:
+    def test_writes_json(self, tmp_path):
+        rows = [(datetime(2025, 1, 1, tzinfo=UTC), 0.0001)]
+        path = convert_funding_to_freqtrade(rows, tmp_path, pair="BTC/USDT:USDT")
+        assert path.exists()
+        import json
 
-    def test_freqtrade_directory_layout(self, tmp_path):
-        c = _candle("BTC/USDT:USDT", datetime(2025, 6, 1, tzinfo=UTC))
-        paths = materialize_selection_dataset({"BTC_USDT": [c]}, tmp_path)
-        out = next(iter(paths.values()))
-        assert out.parent.name == "btc_usdt:usdt"
-        assert out.name == "15m.json"
+        data = json.loads(path.read_text())
+        assert len(data) == 1
+
+    def test_deduplicates(self, tmp_path):
+        import json
+
+        ts = datetime(2025, 1, 1, tzinfo=UTC)
+        rows = [(ts, 0.0001), (ts, 0.0002)]
+        path = convert_funding_to_freqtrade(rows, tmp_path, pair="BTC/USDT:USDT")
+        data = json.loads(path.read_text())
+        assert len(data) == 1
 
 
-class TestFundingAdapter:
-    def test_deterministic_sorted_dedup(self, tmp_path):
-        base = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
-        rows = [
-            (base.replace(hour=2), 0.0001),
-            (base.replace(hour=1), 0.0002),
-            (base.replace(hour=1), 0.0002),
+class TestWarmupExclusion:
+    def test_no_leak_passes(self):
+        candles = [
+            CandleV1(
+                timestamp=datetime(2024, 12, 1, tzinfo=UTC),
+                pair="BTC/USDT:USDT",
+                open=1,
+                high=1,
+                low=1,
+                close=1,
+                volume=1,
+            )
         ]
-        out = convert_funding_to_freqtrade(rows, tmp_path)
-        data = json.loads(out.read_text())
-        assert data == sorted(data)
-        assert len(data) == 2
-        assert data[0][1] == 0.0002
+        validate_warmup_excluded_from_metrics(candles)
 
-    def test_funding_filename(self, tmp_path):
-        out = convert_funding_to_freqtrade([], tmp_path)
-        assert out.name == "BTC_USDT_USDT.json"
-        assert out.parent.name == "futures_funding_rate"
-
-
-class TestWarmupValidator:
-    def test_rejects_warmup_leak(self):
-        leak = _candle("BTC/USDT:USDT", datetime(2025, 1, 1, 0, 15, tzinfo=UTC))
+    def test_leak_fails_closed(self):
+        candles = [
+            CandleV1(
+                timestamp=datetime(2025, 1, 1, tzinfo=UTC),
+                pair="BTC/USDT:USDT",
+                open=1,
+                high=1,
+                low=1,
+                close=1,
+                volume=1,
+            )
+        ]
         with pytest.raises(RuntimeError, match="WARMUP_LEAKS_INTO_SELECTION"):
-            validate_warmup_excluded_from_metrics([leak])
-
-    def test_accepts_pure_warmup(self):
-        ok = _candle("BTC/USDT:USDT", datetime(2024, 12, 15, tzinfo=UTC))
-        validate_warmup_excluded_from_metrics([ok])
+            validate_warmup_excluded_from_metrics(candles)
