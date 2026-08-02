@@ -59,8 +59,37 @@ logger = logging.getLogger(__name__)
 # Constants (corrected — proper half-open intervals, no gaps)
 # ---------------------------------------------------------------------------
 
-SNAPSHOT_DIR = Path("/opt/data/gate0-snapshot")
+DEFAULT_SNAPSHOT_DIR = Path("/opt/data/hermes/gate0-snapshot")
 TIMEFRAME = "15m"
+
+
+def resolve_snapshot_dir(snapshot_dir: Path | None = None) -> Path:
+    """Resolve and validate the snapshot directory (fail-closed).
+
+    Defaults to the native canonical path ``/opt/data/hermes/gate0-snapshot``.
+    Raises ``RuntimeError`` (``SNAPSHOT_DIR_NOT_FOUND``) when the directory
+    does not exist — callers must never silently fall back to a phantom path.
+    """
+    candidate = (
+        snapshot_dir if snapshot_dir is not None else DEFAULT_SNAPSHOT_DIR
+    )
+    resolved = candidate.expanduser().resolve()
+    if not resolved.is_dir():
+        raise RuntimeError(f"SNAPSHOT_DIR_NOT_FOUND: {resolved}")
+    return resolved
+
+
+def _snapshot_file(snapshot_dir: Path, filename: str) -> Path:
+    """Return a validated path strictly inside ``snapshot_dir``.
+
+    Rejects traversal (``../``) and absolute paths with
+    ``SNAPSHOT_PATH_ESCAPE`` so snapshot reads stay path-confined.
+    """
+    base = snapshot_dir.expanduser().resolve()
+    candidate = (base / filename).resolve()
+    if candidate != base and not str(candidate).startswith(str(base) + "/"):
+        raise RuntimeError(f"SNAPSHOT_PATH_ESCAPE: {filename}")
+    return candidate
 
 # CORRECTED: Proper half-open intervals [start, end) — no 23:59:59 gap
 CALIBRATION = PartitionWindowV1(
@@ -95,14 +124,18 @@ BENCHMARK_PAIR = "BTC/USDT:USDT"
 # ---------------------------------------------------------------------------
 
 
-def load_snapshot_manifest() -> dict:
-    """Load snapshot_manifest.json."""
-    return json.loads((SNAPSHOT_DIR / "snapshot_manifest.json").read_text())
+def load_snapshot_manifest(snapshot_dir: Path | None = None) -> dict:
+    """Load snapshot_manifest.json from the validated snapshot directory."""
+    d = resolve_snapshot_dir(snapshot_dir)
+    return json.loads(_snapshot_file(d, "snapshot_manifest.json").read_text())
 
 
-def load_snapshot_candles(pair_label: str) -> list[CandleV1]:
+def load_snapshot_candles(
+    pair_label: str, snapshot_dir: Path | None = None
+) -> list[CandleV1]:
     """Load candles for one pair from gzipped CSV, deduplicated."""
-    csv_gz = SNAPSHOT_DIR / f"{pair_label}_15m.csv.gz"
+    d = resolve_snapshot_dir(snapshot_dir)
+    csv_gz = _snapshot_file(d, f"{pair_label}_15m.csv.gz")
     candles: list[CandleV1] = []
     with gzip.open(csv_gz, "rt") as f:
         for row in csv.DictReader(f):
@@ -119,11 +152,12 @@ def load_snapshot_candles(pair_label: str) -> list[CandleV1]:
     return sorted(seen.values(), key=lambda c: (c.pair, c.timestamp))
 
 
-def compute_total_snapshot_hash() -> str:
+def compute_total_snapshot_hash(snapshot_dir: Path | None = None) -> str:
     """SHA-256 of all 3 pair files concatenated (deterministic)."""
+    d = resolve_snapshot_dir(snapshot_dir)
     h = hashlib.sha256()
     for pair_label in ("BTC_USDT", "ETH_USDT", "SOL_USDT"):
-        h.update((SNAPSHOT_DIR / f"{pair_label}_15m.csv.gz").read_bytes())
+        h.update(_snapshot_file(d, f"{pair_label}_15m.csv.gz").read_bytes())
     return h.hexdigest()
 
 
@@ -143,9 +177,12 @@ def compute_benchmark_canonical_hash(candles_btc):
     from si_v2.research.evaluation_bundle_v1 import canonical_candle_hash
     return canonical_candle_hash(candles_btc)
 
-def compute_benchmark_hash() -> str:
+def compute_benchmark_hash(snapshot_dir: Path | None = None) -> str:
     """SHA-256 of BTCUSDT benchmark file only."""
-    return hashlib.sha256((SNAPSHOT_DIR / "BTC_USDT_15m.csv.gz").read_bytes()).hexdigest()
+    d = resolve_snapshot_dir(snapshot_dir)
+    return hashlib.sha256(
+        _snapshot_file(d, "BTC_USDT_15m.csv.gz").read_bytes()
+    ).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -456,6 +493,7 @@ def _compute_max_missing_candles(
 
 def build_manifest_v3(
     *,
+    snapshot_dir: Path | None = None,
     snapshot_id: str,
     fetcher_commit_sha: str,
     strategy_provenance: StrategyProvenance | None = None,
@@ -492,12 +530,12 @@ def build_manifest_v3(
     # Snapshot hashes: use provided or compute from snapshot dir
     if candle_snapshot_sha256 is None:
         try:
-            candle_snapshot_sha256 = compute_total_snapshot_hash()
+            candle_snapshot_sha256 = compute_total_snapshot_hash(snapshot_dir)
         except Exception:
             _fail_closed("candle_snapshot_sha256")
     if benchmark_snapshot_sha256 is None:
         try:
-            benchmark_snapshot_sha256 = compute_benchmark_hash()
+            benchmark_snapshot_sha256 = compute_benchmark_hash(snapshot_dir)
         except Exception:
             _fail_closed("benchmark_snapshot_sha256")
 
