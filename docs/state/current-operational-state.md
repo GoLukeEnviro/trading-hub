@@ -83,7 +83,7 @@ satisfied**. Current sub-status:
 |---|---|---|
 | Strategy selected | ✅ PASS | `FreqForge_Override` — Luke signed on #604 |
 | Manifest frozen | ✅ PASS | All thresholds approved; `APPROVED_GATE0_STRATEGY_AND_MANIFEST` on #604 |
-| Snapshot acquisition | ✅ `EXECUTED` | 156,489 candles; A2 marker on #651. Data verified present at `/opt/data/gate0-snapshot/` |
+| Snapshot acquisition | ✅ `EXECUTED` | 156,489 candles; A2 marker on #651. Data verified present at `/opt/data/hermes/gate0-snapshot/` (native path contract, issue #684) |
 | C5.2 Core Strategy v1 | ❌ `A0-FAIL` → ✅ resolved by C5.3 | PR #662 (`2875b67`): preflight found 14 Ruff errors. C5.3 corrective PR #668 (`da60da3`) resolved all 14 items. |
 | C5.3 Corrective | ✅ MERGED | PR #668 (`da60da3`): stripped strategy, manifest v3, entry-time regime, selection isolation. 67 tests pass. |
 | C5.4 Corrective | ✅ MERGED | PR #675 (`8b4dace`): SelectionOutcomeV1.PASS_CANDIDATE fix, pair normalization, unified guardrails, Ruff clean. 47/47 C5.4 + 25/25 eval_bundle. |

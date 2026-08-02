@@ -7,19 +7,29 @@ backtest execution (not available on this container).
 
 from __future__ import annotations
 
+import gzip
+import hashlib
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
 from si_v2.research.evaluation_bundle_v1 import CandleV1, PartitionWindowV1
 from si_v2.research.gate0_evaluation_integration import (
     CALIBRATION,
+    DEFAULT_SNAPSHOT_DIR,
     HOLDOUT,
     WALK_FORWARD_1,
     WALK_FORWARD_2,
     _partition_candles,
+    _snapshot_file,
+    compute_benchmark_hash,
+    compute_total_snapshot_hash,
+    load_snapshot_candles,
+    load_snapshot_manifest,
     parse_backtest_trades,
+    resolve_snapshot_dir,
 )
 
 # ---------------------------------------------------------------------------
@@ -154,3 +164,60 @@ class TestConstants:
         assert 180 <= cal_days <= 181  # ~6 months
         assert 91 <= wf_days <= 92     # ~3 months
         assert 180 <= holdout_days <= 181  # ~6 months
+
+
+# ---------------------------------------------------------------------------
+# Snapshot dir contract (A1 — native path /opt/data/hermes/gate0-snapshot)
+# ---------------------------------------------------------------------------
+
+
+class TestSnapshotDirContract:
+    """Validated snapshot_dir contract: native default, fail-closed, confined."""
+
+    def test_default_points_to_native_canonical_path(self):
+        assert Path("/opt/data/hermes/gate0-snapshot") == DEFAULT_SNAPSHOT_DIR
+
+    def test_resolve_valid_dir(self, tmp_path):
+        assert resolve_snapshot_dir(tmp_path) == tmp_path.resolve()
+
+    def test_resolve_missing_dir_fails_closed(self, tmp_path):
+        missing = tmp_path / "does-not-exist"
+        with pytest.raises(RuntimeError, match="SNAPSHOT_DIR_NOT_FOUND"):
+            resolve_snapshot_dir(missing)
+
+    def test_snapshot_file_traversal_rejected(self, tmp_path):
+        with pytest.raises(RuntimeError, match="SNAPSHOT_PATH_ESCAPE"):
+            _snapshot_file(tmp_path, "../escape.csv.gz")
+
+    def test_snapshot_file_absolute_path_rejected(self, tmp_path):
+        with pytest.raises(RuntimeError, match="SNAPSHOT_PATH_ESCAPE"):
+            _snapshot_file(tmp_path, "/etc/passwd")
+
+    def test_manifest_load_does_not_touch_candle_files(self, tmp_path):
+        """Manifest loading must not read candle/holdout data implicitly."""
+        manifest = {"snapshot_id": "contract-test", "files": []}
+        (tmp_path / "snapshot_manifest.json").write_text(json.dumps(manifest))
+        loaded = load_snapshot_manifest(tmp_path)
+        assert loaded["snapshot_id"] == "contract-test"
+
+    def test_load_candles_from_minimal_gz(self, tmp_path):
+        csv_body = (
+            "pair,timestamp,open,high,low,close,volume\n"
+            "BTC/USDT,2025-01-01T00:00:00Z,100.0,101.0,99.0,100.5,10.0\n"
+        )
+        (tmp_path / "BTC_USDT_15m.csv.gz").write_bytes(
+            gzip.compress(csv_body.encode())
+        )
+        candles = load_snapshot_candles("BTC_USDT", snapshot_dir=tmp_path)
+        assert len(candles) == 1
+        assert candles[0].pair == "BTC/USDT"
+        assert candles[0].timestamp.year == 2025
+
+    def test_compute_hashes_accept_snapshot_dir(self, tmp_path):
+        for label in ("BTC_USDT", "ETH_USDT", "SOL_USDT"):
+            (tmp_path / f"{label}_15m.csv.gz").write_bytes(b"x")
+        assert (
+            compute_total_snapshot_hash(tmp_path)
+            == hashlib.sha256(b"xxx").hexdigest()
+        )
+        assert compute_benchmark_hash(tmp_path) == hashlib.sha256(b"x").hexdigest()
