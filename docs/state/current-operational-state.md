@@ -1,8 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-08-02 after issue backlog reconciliation. Phase C exit gate `edge_decision_recorded` is **not yet satisfied**. A0 preflight GREEN (PR #682, `72421de`). Backtest Contract GREEN (PR #687, `79ad6dd`). Issue backlog reconciled: 27→6 open issues. Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-08-02 after #674 completion. Phase C exit gate `edge_decision_recorded` is **not yet satisfied**. A0 preflight GREEN (PR #682, `72421de`). Backtest Contract GREEN (PR #687, `79ad6dd`). Issue backlog reconciled: 27→5 open issues. #674 complete (PR #690, `ea04ca2`). Phase C remains `in_progress`.
 >
-> **Previous:** 2026-07-31 after C5.4 and Variante-B completion. C5.3 merged (`da60da3`), C5.4 corrective merged (`8b4dace`), Variante-B complete (PRs #677, #678, #679). Phase C remains `in_progress`.
+> **Previous:** 2026-08-02 after issue backlog reconciliation (27→6). A0 preflight GREEN, Backtest Contract GREEN.
 >
 > **Previous:** C5.2 A0-FAIL documented (#664, `01b7fb2`). C5.3 corrective
 > fully strips FreqForge_Gate0_Core_v1 of all dependencies, introduces manifest
@@ -86,7 +86,8 @@ satisfied**. Current sub-status:
 | C5.4 Corrective | ✅ MERGED | PR #675 (`8b4dace`): SelectionOutcomeV1.PASS_CANDIDATE fix, pair normalization, unified guardrails, Ruff clean. 47/47 C5.4 + 25/25 eval_bundle. |
 | A0 preflight re-run | ✅ `GREEN` | PR #682 (`72421de`): 146/146 Gate-0 suite passed. Snapshot integrity OK. Ruff clean. |
 | Backtest Contract | ✅ `GREEN` | PR #687 (`79ad6dd`): pinned image digest, selection dataset, funding adapter. |
-| Issue backlog reconciled | ✅ `RECONCILED` | 27→6 open issues. See `docs/reports/repository-issue-backlog-reconciliation-2026-08-02.md` |
+| Issue backlog reconciled | ✅ `RECONCILED` | 27→5 open issues. See `docs/reports/repository-issue-backlog-reconciliation-2026-08-02.md` |
+| #674 import-guard isolation | ✅ COMPLETE | PR #690 (`ea04ca2`): deterministic ImportError simulation, 18/18 tests. See `docs/reports/trading_pipeline-import-guard-isolation-2026-08-02.md` |
 | Holdout inspected | ❌ NO | Not started; blocked by Luke ratification on #604 |
 | Edge decision | ⏳ `PENDING` | Not yet recorded; blocked by holdout |
 
@@ -116,7 +117,7 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 
 ### Next steps
 
-1. **#683 read-only closure reconciliation** — verify executor, fleet, cron, writer lock
+1. **#683** — DONE (reconciled 2026-08-02: `BLOCKED_BY_MISSING_A2_MARKER`, runtime baseline NOT green — see section below). **Awaiting Luke's fresh A2 marker** (`APPROVED_A2_HERMESTRADER_RUNTIME_RECOVERY_V2`).
 2. **Luke ratifies corrected strategy + manifest v3** — human action on #604
 3. **Create A2 Bitget Snapshot v2 issue** — warm-up + funding + selection windows, new path, new A2 marker
 4. **Luke issues time-limited A2 marker** — `APPROVED_A2_BITGET_SNAPSHOT_V2`
