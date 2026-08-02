@@ -11,12 +11,10 @@ import pytest
 
 from si_v2.research.backtest_contract import (
     CONFIG_FILE_SHA256,
-    CONFIG_REPO_PATH,
     PINNED_FREQTRADE_IMAGE,
     SELECTION_END_UTC,
     SELECTION_START_UTC,
     STRATEGY_FILE_SHA256,
-    STRATEGY_REPO_PATH,
     WARMUP_START_UTC,
     BacktestContract,
     aggregate_1h_dataset,
@@ -68,11 +66,14 @@ class TestImagePin:
 
 class TestInputProvenance:
     def test_strategy_hash_matches_repo(self, repo_root):
-        path = repo_root / STRATEGY_REPO_PATH
+        path = (
+            repo_root / "freqforge" / "user_data" / "strategies"
+            / "FreqForge_Gate0_Core_v1.py"
+        )
         assert hashlib.sha256(path.read_bytes()).hexdigest() == STRATEGY_FILE_SHA256
 
     def test_config_hash_matches_repo(self, repo_root):
-        path = repo_root / CONFIG_REPO_PATH
+        path = repo_root / "freqforge" / "user_data" / "config.example.json"
         assert hashlib.sha256(path.read_bytes()).hexdigest() == CONFIG_FILE_SHA256
 
 

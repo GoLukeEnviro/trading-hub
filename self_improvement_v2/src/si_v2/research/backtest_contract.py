@@ -43,8 +43,6 @@ STRATEGY_FILE_SHA256 = (
 CONFIG_FILE_SHA256 = (
     "7647ed03a88e49a63c9916e9e8137ce84d5e12a90f461785a694591e5e70345d"
 )
-STRATEGY_REPO_PATH = "freqforge/user_data/strategies/FreqForge_Gate0_Core_v1.py"
-CONFIG_REPO_PATH = "freqforge/user_data/config.example.json"
 
 # ---------------------------------------------------------------------------
 # Windows (warm-up feeds indicators only; selection excludes holdout)
