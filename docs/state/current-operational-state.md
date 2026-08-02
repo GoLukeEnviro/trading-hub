@@ -1,11 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-07-31 after C5.4 and Variante-B completion. Phase C exit gate `edge_decision_recorded` is **not yet satisfied**. C5.3 merged (`da60da3`), C5.4 corrective merged (`8b4dace`), Variante-B complete (PRs #677, #678, #679). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-08-02 after issue backlog reconciliation. Phase C exit gate `edge_decision_recorded` is **not yet satisfied**. A0 preflight GREEN (PR #682, `72421de`). Backtest Contract GREEN (PR #687, `79ad6dd`). Issue backlog reconciled: 27→6 open issues. Phase C remains `in_progress`.
 >
-> Prior reconcile 2026-07-28 after C5.4
-> corrective implementation. Phase C exit gate `edge_decision_recorded` is **not
-> yet satisfied**. C5.3 merged, C5.4 corrective merged, Variante-B complete.
-> Phase C remains `in_progress`.
+> **Previous:** 2026-07-31 after C5.4 and Variante-B completion. C5.3 merged (`da60da3`), C5.4 corrective merged (`8b4dace`), Variante-B complete (PRs #677, #678, #679). Phase C remains `in_progress`.
 >
 > **Previous:** C5.2 A0-FAIL documented (#664, `01b7fb2`). C5.3 corrective
 > fully strips FreqForge_Gate0_Core_v1 of all dependencies, introduces manifest
@@ -74,7 +71,7 @@ roadmap_observed_at_utc: 2026-07-20T05:00:00Z
 informational only and does not force a state-file touch on ordinary roadmap
 status changes.
 
-## Phase C — Gate-0 Strategy Evidence (2026-07-31, in progress)
+## Phase C — Gate-0 Strategy Evidence (2026-08-02, in progress)
 
 Phase C exit gate is `edge_decision_recorded`. The exit gate is **not yet
 satisfied**. Current sub-status:
@@ -87,8 +84,10 @@ satisfied**. Current sub-status:
 | C5.2 Core Strategy v1 | ❌ `A0-FAIL` → ✅ resolved by C5.3 | PR #662 (`2875b67`): preflight found 14 Ruff errors. C5.3 corrective PR #668 (`da60da3`) resolved all 14 items. |
 | C5.3 Corrective | ✅ MERGED | PR #668 (`da60da3`): stripped strategy, manifest v3, entry-time regime, selection isolation. 67 tests pass. |
 | C5.4 Corrective | ✅ MERGED | PR #675 (`8b4dace`): SelectionOutcomeV1.PASS_CANDIDATE fix, pair normalization, unified guardrails, Ruff clean. 47/47 C5.4 + 25/25 eval_bundle. |
-| A0 preflight re-run | ⏳ `PENDING` | Not yet executed after C5.4 merge |
-| Holdout inspected | ❌ NO | Not started; blocked by A0 preflight + Luke ratification |
+| A0 preflight re-run | ✅ `GREEN` | PR #682 (`72421de`): 146/146 Gate-0 suite passed. Snapshot integrity OK. Ruff clean. |
+| Backtest Contract | ✅ `GREEN` | PR #687 (`79ad6dd`): pinned image digest, selection dataset, funding adapter. |
+| Issue backlog reconciled | ✅ `RECONCILED` | 27→6 open issues. See `docs/reports/repository-issue-backlog-reconciliation-2026-08-02.md` |
+| Holdout inspected | ❌ NO | Not started; blocked by Luke ratification on #604 |
 | Edge decision | ⏳ `PENDING` | Not yet recorded; blocked by holdout |
 
 Phase C remains `in_progress` until the edge decision is recorded. Issue #604
@@ -117,10 +116,19 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 
 ### Next steps
 
-1. **A0 preflight re-run** — re-verify snapshot integrity, strategy code, manifest after C5.4 merge
-2. **Luke ratifies corrected strategy + manifest** — human action on #604
-3. **A2 selection backtest** — requires Luke's A2 marker
-4. **C6 marker** — holdout inspection and edge decision
+1. **#683 read-only closure reconciliation** — verify executor, fleet, cron, writer lock
+2. **Luke ratifies corrected strategy + manifest v3** — human action on #604
+3. **Create A2 Bitget Snapshot v2 issue** — warm-up + funding + selection windows, new path, new A2 marker
+4. **Luke issues time-limited A2 marker** — `APPROVED_A2_BITGET_SNAPSHOT_V2`
+5. **Fetch/freeze warm-up + selection + sealed holdout + funding**
+6. **Create A2 Selection Backtest issue**
+7. **Luke issues time-limited selection-backtest marker**
+8. **Execute selection-only backtest**
+9. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
+10. **C6 holdout ceremony** — only after separate human marker
+11. **Record canonical Gate-0 edge decision**
+12. **Execute #600 ADR**
+13. **Reassess #496**
 
 ## Root Runtime Authority — Variante B Complete (2026-07-28)
 
@@ -307,15 +315,15 @@ missing-file tests, and eventual bot-scoped entry integration.
 
 ## 6. Go / no-go
 
-**Allowed next repository work:** A0 preflight re-run — re-verify snapshot
-integrity, strategy code, and manifest after C5.4 merge. This is A0 read-only
-work. No A2 selection backtest and no holdout inspection until A0 preflight
-passes and Luke ratifies the corrected strategy + manifest on #604.
+**Allowed next repository work:** #683 read-only closure reconciliation — verify
+executor, fleet, cron, writer lock. This is A0/A1 work. No A2 selection backtest
+and no holdout inspection until Luke ratifies the corrected strategy + manifest
+v3 on #604.
 
-After A0 preflight passes, Luke must ratify C5.2 strategy + manifest v3 on
-#604. Then a separate A2 issue with Luke's A2 marker authorizes the selection
-backtest. After backtest, C6 marker enables holdout inspection and edge
-decision.
+After Luke's ratification, a new A2 Bitget Snapshot v2 issue with a fresh A2
+marker authorizes warm-up + funding + selection data fetch. Then a separate A2
+selection-backtest issue. After backtest, C6 marker enables holdout inspection
+and edge decision.
 
 **Not authorized:** executor deployment or restart, runtime proof, R5B
 continuation, strategy reload, container mutation, kill-switch clear/bypass,
