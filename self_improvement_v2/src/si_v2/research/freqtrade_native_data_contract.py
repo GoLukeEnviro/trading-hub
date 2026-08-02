@@ -256,7 +256,7 @@ class InventoryEntry:
     sha256: str | None
 
     @classmethod
-    def from_dict(cls, d: dict) -> "InventoryEntry":
+    def from_dict(cls, d: dict) -> InventoryEntry:
         return cls(
             pair=str(d["pair"]),
             timeframe=str(d["timeframe"]),

@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 from freqtrade.data.history.datahandlers import get_datahandlerclass
-from freqtrade.enums import CandleType, TradingMode
+from freqtrade.enums import TradingMode
 
 
 def inventory(datadir: Path) -> list[dict]:

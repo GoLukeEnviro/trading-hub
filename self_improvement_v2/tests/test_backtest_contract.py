@@ -12,7 +12,6 @@ from si_v2.research.backtest_contract import (
     BACKTEST_COMMAND,
     BACKTEST_RESULTS_DIR,
     CONFIG_FILE_SHA256,
-    DATA_FORMAT_OHLCV,
     FREQTRADE_NATIVE_DATA_DIR,
     FREQTRADE_VERSION,
     PINNED_FREQTRADE_IMAGE,
@@ -22,8 +21,6 @@ from si_v2.research.backtest_contract import (
     SELECTION_START_UTC,
     STRATEGY_FILE_SHA256,
     SUPERSEDED_INFORMATIONAL_VERSION,
-    TIMEFRAME,
-    TRADING_MODE,
     WARMUP_START_UTC,
     BacktestContract,
     aggregate_1h_dataset,
@@ -70,10 +67,10 @@ class TestWindows:
         assert WARMUP_START_UTC < SELECTION_START_UTC
 
     def test_selection_before_holdout(self):
-        assert SELECTION_END_UTC <= HOLDOUT.start
+        assert HOLDOUT.start >= SELECTION_END_UTC
 
     def test_selection_end_is_walk_forward_2_end(self):
-        assert SELECTION_END_UTC == datetime(2026, 1, 1, tzinfo=UTC)
+        assert datetime(2026, 1, 1, tzinfo=UTC) == SELECTION_END_UTC
 
 
 class TestTimerange:
@@ -138,10 +135,10 @@ class TestCommandContract:
         assert PROJECT_DIR.is_absolute()
 
     def test_path_constants_values(self):
-        assert FREQTRADE_NATIVE_DATA_DIR == Path("/opt/data/gate0-freqtrade-native-r1")
-        assert RESEARCH_SNAPSHOT_DIR == Path("/opt/data/gate0-snapshot-v2-r1")
-        assert BACKTEST_RESULTS_DIR == Path("/opt/data/gate0-backtest-results")
-        assert PROJECT_DIR == Path("/opt/data/projects/trading-hub/freqforge/user_data")
+        assert Path("/opt/data/gate0-freqtrade-native-r1") == FREQTRADE_NATIVE_DATA_DIR
+        assert Path("/opt/data/gate0-snapshot-v2-r1") == RESEARCH_SNAPSHOT_DIR
+        assert Path("/opt/data/gate0-backtest-results") == BACKTEST_RESULTS_DIR
+        assert Path("/opt/data/projects/trading-hub/freqforge/user_data") == PROJECT_DIR
 
     def test_contract_fields_explicit(self):
         c = BacktestContract()

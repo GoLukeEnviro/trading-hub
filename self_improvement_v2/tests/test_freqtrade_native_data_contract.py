@@ -13,20 +13,19 @@ from si_v2.research.freqtrade_native_data_contract import (
     AUX_TIMEFRAMES,
     DATA_FORMAT_OHLCV,
     EXCHANGE,
+    FREQTRADE_VERSION,
     FULL_TIMERANGE_END,
     FULL_TIMERANGE_START,
     IMAGE_DIGEST,
     MAIN_CANDLE_TYPES,
     MAIN_TIMEFRAME,
     MARGIN_MODE,
-    PAIRS,
     PAIR_FILENAMES,
+    PAIRS,
     PINNED_IMAGE,
-    REQUIRED_COVERAGE,
     SELECTION_TIMERANGE_END,
     SUPERSEDED_INFORMATIONAL_VERSION,
     TRADING_MODE,
-    FREQTRADE_VERSION,
     InventoryEntry,
     NativeDataFile,
     _pair_data_filename,
@@ -89,7 +88,7 @@ class TestTimeranges:
 
     def test_selection_view_before_holdout(self):
         end = datetime(2026, 1, 1, tzinfo=UTC)
-        assert SELECTION_TIMERANGE_END == end
+        assert end == SELECTION_TIMERANGE_END
         assert FULL_TIMERANGE_START < SELECTION_TIMERANGE_END < FULL_TIMERANGE_END
 
 
