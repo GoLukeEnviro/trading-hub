@@ -322,24 +322,65 @@ class TestFreqtradeImport:
 
     def test_strategy_import_restores_sys_modules(self):
         """After the test, pre-existing sys.modules entries are unchanged."""
-        # Insert sentinel modules
+        # Use an outer patch.dict to guarantee sentinel cleanup even on
+        # assertion failure or import exception.
         sentinel_freqtrade = object()
         sentinel_talib = object()
-        sys.modules["freqtrade"] = sentinel_freqtrade
-        sys.modules["talib"] = sentinel_talib
+        sentinel_modules = {"freqtrade": sentinel_freqtrade, "talib": sentinel_talib}
 
         stubs = {**self._make_freqtrade_stubs(), **self._make_talib_stubs(), **self._make_pandas_stub()}
 
-        with patch.dict("sys.modules", stubs, clear=False):
-            self._import_strategy()
+        with patch.dict("sys.modules", sentinel_modules, clear=False):
+            with patch.dict("sys.modules", stubs, clear=False):
+                self._import_strategy()
+            # After inner patch restores, sentinels must be visible again
+            assert sys.modules["freqtrade"] is sentinel_freqtrade
+            assert sys.modules["talib"] is sentinel_talib
+        # After outer patch restores, original sys.modules state is back
 
-        # Verify sentinels are restored
-        assert sys.modules["freqtrade"] is sentinel_freqtrade
-        assert sys.modules["talib"] is sentinel_talib
+    def test_strategy_import_restores_sys_modules_on_exception(self):
+        """A raising import must not leak sentinels or stubs into sys.modules.
 
-        # Clean up sentinels
-        del sys.modules["freqtrade"]
-        del sys.modules["talib"]
+        If ``_import_strategy`` raises mid-test, the nested ``patch.dict``
+        contexts must still restore the pre-existing entries exactly — no
+        sentinel or stub module may remain behind.
+        """
+        _missing = object()
+        sentinel_freqtrade = object()
+        sentinel_talib = object()
+        sentinel_modules = {
+            "freqtrade": sentinel_freqtrade,
+            "talib": sentinel_talib,
+        }
+
+        stubs = {**self._make_freqtrade_stubs(), **self._make_talib_stubs(), **self._make_pandas_stub()}
+
+        # Snapshot the real pre-test state for the guarded keys
+        before = {
+            name: sys.modules.get(name, _missing)
+            for name in ("freqtrade", "talib")
+        }
+
+        # Each nesting level restores its own pre-entry state on exit,
+        # including when the inner import probe raises.
+        with patch.dict("sys.modules", sentinel_modules, clear=False):
+            with patch.dict("sys.modules", stubs, clear=False):  # noqa: SIM117 - nested levels restore separately
+                with patch.object(
+                    TestFreqtradeImport,
+                    "_import_strategy",
+                    side_effect=RuntimeError("forced import failure"),
+                ):
+                    with pytest.raises(RuntimeError):
+                        self._import_strategy()
+            # Stub context exited via the exception: sentinels visible again
+            assert sys.modules["freqtrade"] is sentinel_freqtrade
+            assert sys.modules["talib"] is sentinel_talib
+        # Outer context exited via the exception: original state restored
+        for name, expected in before.items():
+            if expected is _missing:
+                assert name not in sys.modules, f"{name} leaked into sys.modules"
+            else:
+                assert sys.modules[name] is expected, f"{name} not restored exactly"
 
     def test_strategy_import_no_module_leak(self):
         """No stub modules remain in sys.modules after the test."""
