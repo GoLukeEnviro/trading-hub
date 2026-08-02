@@ -176,7 +176,7 @@ services:
         max-size: 20m
         max-file: '3'
   freqtrade-freqforge:
-    image: freqtradeorg/freqtrade:stable
+    image: freqtradeorg/freqtrade@sha256:50720a4af314a812be2cfbf5cc6331c63e9332b06f3f4372241f54bc61a35486
     ports:
     - 127.0.0.1:8086:8080
     command: trade --config /freqtrade/user_data/config.json --config /freqtrade/user_data/overlay_65502d13.json --strategy FreqForge_Override
@@ -199,7 +199,7 @@ services:
     networks:
     - hermes-net
   freqtrade-regime-hybrid:
-    image: freqtradeorg/freqtrade:stable
+    image: freqtradeorg/freqtrade@sha256:50720a4af314a812be2cfbf5cc6331c63e9332b06f3f4372241f54bc61a35486
     command: trade --config /freqtrade/user_data/config.json --strategy RegimeSwitchingHybrid_v7_v04_Integration
     ports:
     - 127.0.0.1:8085:8080
@@ -222,7 +222,7 @@ services:
     networks:
     - hermes-net
   freqtrade-freqforge-canary:
-    image: freqtradeorg/freqtrade:stable
+    image: freqtradeorg/freqtrade@sha256:50720a4af314a812be2cfbf5cc6331c63e9332b06f3f4372241f54bc61a35486
     command: trade --config /freqtrade/user_data/config.json --strategy FreqForge_Override
     ports:
     - 127.0.0.1:8081:8080
@@ -268,7 +268,7 @@ services:
     networks:
     - hermes-net
   freqtrade-webserver:
-    image: freqtradeorg/freqtrade:stable
+    image: freqtradeorg/freqtrade@sha256:50720a4af314a812be2cfbf5cc6331c63e9332b06f3f4372241f54bc61a35486
     ports:
     - 127.0.0.1:8180:8080
     command: webserver --config /freqtrade/user_data/config.json
