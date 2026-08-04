@@ -1,5 +1,5 @@
-roadmap_revision: 5
-governance_contract_revision: 1
+roadmap_revision: 6
+governance_contract_revision: 2
 phases:
   - id: G0
     title: Canonical Program Governance
@@ -23,7 +23,7 @@ phases:
     title: Gate-0 Strategy Evidence
     status: in_progress
     dependencies: [A]
-    issue: 604
+    issues: [604, 697]
     execution_class: A1
     exit_gate: edge_decision_recorded
   - id: D

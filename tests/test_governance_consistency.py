@@ -8,7 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 import yaml
 
 CHECK = "orchestrator/scripts/governance_consistency_check.py"
@@ -157,9 +156,10 @@ def test_render_drift_fails(tmp_path):
 def test_state_contract_revision_mismatch_fails(tmp_path):
     repo = _clone_governance(tmp_path)
     st = repo / "docs/state/current-operational-state.md"
+    # Set a definitely-drifted revision (999) so the check is revision-independent.
     st.write_text(
         st.read_text().replace(
-            "governance_contract_revision: 1", "governance_contract_revision: 2"
+            "governance_contract_revision: 2", "governance_contract_revision: 999"
         )
     )
     assert _run(cwd=repo).returncode != 0

@@ -166,11 +166,42 @@ worktree must be clean before branch creation and before commit.
 **Stop condition.** `BLOCKED_BY_ACTIVE_REPO_WRITER` is a hard stop — do not
 override without explicit operator approval.
 
-**Human-only merge boundary.** Roadmap ticks and autonomous merge invocations
-remain disabled. Agents may commit, push, open a PR and run the executable
-merge guard, but MUST stop at `READY_FOR_HUMAN_MERGE`. Only Luke merges. A
-future autonomous controller requires a separately proven identity, lock
-rehearsal and governance check; root or Hermes writer access is insufficient.
+**Standing Owner Authorization (ADR-2026-08-04).** Luke has granted a durable
+standing authorization for the whole Trading Hub project (#605 comment
+`5179703046`, `OWNER_STANDING_AUTHORIZATION_V1`):
+
+- All recurring human gates are standing-approved; individual per-task human
+  markers are **not** required.
+- An agent must **not** stop because a per-task marker is missing.
+- A1 PRs may be merged autonomously **after green CI and a green merge guard**
+  (path: `CI_GREEN → MERGE_GUARD_READY → EXACT_HEAD_REVERIFIED → MERGE →
+  POST_MERGE_RECONCILIATION`).
+- A2 may run within an explicit issue scope once all technical guardrails
+  (snapshot, canary, allowlist, rollback, audit, measurement) exist.
+- A3 needs no new individual human confirmation but remains technically fully
+  blocked until every live prerequisite is green (C4 KEEP, live candidate
+  report PASS, runtime baseline GREEN, breakglass operational, revocation
+  proven, isolated canary, bounded capital, rollback, audit).
+- The standing authorization is **not** a technical gate bypass: CI, merge
+  guard, writer lock, branch protection, RiskGuard, kill switch and all other
+  technical gates remain binding.
+- Only an explicit newer owner marker (`OWNER_STANDING_AUTHORIZATION_REVOKED`
+  or `OWNER_STANDING_AUTHORIZATION_SUPERSEDED`) deactivates it.
+
+`READY_FOR_HUMAN_MERGE` is **not** a terminal state while the standing
+authorization is active. Missing per-task markers
+(`BLOCKED_BY_MISSING_A2_MARKER`, `BLOCKED_BY_MISSING_A2_APPROVAL`,
+`BLOCKED_BY_MISSING_A3_MARKER`, `BLOCKED_BY_MISSING_A3_APPROVAL`,
+`READY_FOR_HUMAN_MERGE`) are no longer valid human-gate blockers. Technical
+blockers (`BLOCKED_BY_CI`, `BLOCKED_BY_MERGE_GUARD`, `BLOCKED_BY_HEAD_DRIFT`,
+`BLOCKED_BY_BRANCH_PROTECTION`, `BLOCKED_BY_ACTIVE_REPO_WRITER`,
+`BLOCKED_BY_OPEN_PR`, `BLOCKED_BY_DIRTY_WORKTREE`) remain hard stops.
+
+**Human-only merge boundary (superseded).** The former rule that agents MUST
+stop at `READY_FOR_HUMAN_MERGE` and that only Luke merges is **superseded by
+ADR-2026-08-04** while the Standing Owner Authorization is active. The
+read-only merge guard remains the lower bound: no merge without
+`MERGE_GUARD=READY`.
 
 **Bounded autonomous merge controller (ADR-2026-07-19, shipped disabled).**
 `orchestrator/scripts/roadmap_merge_controller.py` and the root broker at
@@ -189,8 +220,10 @@ completion-audit failure.
 The controller is shipped **disabled**. The switch file
 `/opt/data/state/roadmap-merge-controller/enabled` is not created by this PR
 and is not created by any agent. Until that file exists with the exact content
-`true\n` (operator-created, root-owned), the binding rule is unchanged:
-agents MUST NOT merge any PR. The controller is intentionally inert by default.
+`true\n` (operator-created, root-owned), the controller is intentionally inert
+by default. Autonomous merges under the Standing Owner Authorization
+(ADR-2026-08-04) use the normal protected GitHub merge path, not the
+controller.
 
 The read-only guard (`orchestrator/scripts/roadmap_merge_guard.py`), the
 writer contract (`orchestrator/scripts/repo_writer.py`), and the existing
@@ -257,13 +290,17 @@ Every autonomous agent session acting on the roadmap MUST:
 1. Read `AGENTS.md`, `SOUL.md`, `docs/state/current-operational-state.md`,
    and issue #423.
 2. Inspect open PRs and linked active issues.
-3. Validate the existing roadmap PR to `READY_FOR_HUMAN_MERGE` or formally
-   block it before selecting another task. Never merge it autonomously.
+3. Validate the existing roadmap PR with the merge guard (or formally block
+   it) before selecting another task. Under the Standing Owner Authorization
+   (ADR-2026-08-04), merge autonomously once CI and the merge guard are green;
+   otherwise stop at `READY_FOR_HUMAN_MERGE`.
 4. Select the first truly unblocked task.
 5. Execute one GOAL, one branch, one PR and one report.
-6. After Luke's human merge, reconcile issue and state in a later bounded
-   session.
-7. Stop at every missing A2 or A3 approval.
+6. After merge, reconcile issue and state (same run or immediate next bounded
+   session).
+7. Stop only at missing technical prerequisites or hard technical blockers;
+   missing per-task human markers are not blockers while the standing
+   authorization is active.
 
 ## System architecture boundaries
 

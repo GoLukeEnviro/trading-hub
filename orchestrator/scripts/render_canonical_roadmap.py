@@ -23,7 +23,7 @@ HEADER = (
 
 def render(data: dict) -> str:
     lines = [HEADER, "# Canonical Program Roadmap\n",
-             f"Roadmap revision: {data['roadmap_revision']}  ",
+             f"Roadmap revision: {data['roadmap_revision']}",
              f"Governance contract revision: {data['governance_contract_revision']}\n",
              "| Phase | Title | Status | Depends on | Exit gate | Issue(s) | Class | External mandate |",
              "|---|---|---|---|---|---|---|---|"]
