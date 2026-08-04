@@ -2,13 +2,15 @@
 
 > Execute exactly **one bounded** Trading Hub roadmap iteration.
 > A0 read-only and A1 repository-only work are authorized.
-> Stop without mutation at every missing A2 or A3 approval.
+> The Standing Owner Authorization (ADR-2026-08-04) is active: missing
+> per-task human markers are not blockers. Technical gates remain binding.
 
 ## Purpose
 
 Drive one issue selected by the canonical roadmap tracker (#605). Each run
-executes at most one task, one branch, one PR and one report, then stops at the
-human merge boundary.
+executes at most one task, one branch, one PR and one report, then reconciles
+after merge (autonomous merge under the Standing Owner Authorization once CI
+and the merge guard are green).
 
 ## Inputs (read-only)
 
@@ -31,8 +33,12 @@ non-authoritative workspace orientation. Its absence is not an error.
 4. Verify all dependency gates are GREEN.
 5. Execute one GOAL, one branch, one PR and one report.
 6. Run the read-only merge guard against the expected issue, head SHA and
-   tracker selection. Stop at `READY_FOR_HUMAN_MERGE`.
-7. After Luke merges manually, reconcile issue and state in a later run.
+   tracker selection. Under the Standing Owner Authorization
+   (ADR-2026-08-04, active until revoked/superseded), merge autonomously
+   after green CI and a green guard; then reconcile issue and state in the
+   same run or the immediate next run.
+7. If the standing authorization is revoked/superseded, stop at
+   `READY_FOR_HUMAN_MERGE` for a human merge.
 
 ## Output
 
@@ -57,12 +63,19 @@ Exactly one of:
 - `BLOCKED_BY_OPEN_PR`
 - `BLOCKED_BY_DIRTY_WORKTREE`
 - `BLOCKED_BY_CI`
-- `BLOCKED_BY_MISSING_A2_APPROVAL`
-- `BLOCKED_BY_MISSING_A3_APPROVAL`
+- `BLOCKED_BY_MERGE_GUARD`
+- `BLOCKED_BY_HEAD_DRIFT`
+- `BLOCKED_BY_BRANCH_PROTECTION`
+- `BLOCKED_BY_MISSING_A2_TECHNICAL_PREREQUISITE`
+- `BLOCKED_BY_MISSING_A3_TECHNICAL_PREREQUISITE`
 - `BLOCKED_BY_RUNTIME_CLIENT_NOT_LOAD_BEARING`
 - `READY_FOR_REVIEW`
-- `READY_FOR_HUMAN_MERGE`
+- `MERGE_ELIGIBLE` (standing authorization active, all gates green)
 - `HUMAN_MERGE_RECONCILED`
+
+(`BLOCKED_BY_MISSING_A2_APPROVAL`, `BLOCKED_BY_MISSING_A3_APPROVAL` and
+`READY_FOR_HUMAN_MERGE` are only valid while the Standing Owner Authorization
+has been explicitly revoked or superseded.)
 
 ## Stop conditions
 
@@ -133,8 +146,11 @@ for hermetic tests and is never valid for a roadmap tick.
 8. Run `orchestrator/scripts/roadmap_merge_guard.py` with the PR number,
    expected issue, exact head SHA and #605 selection. Red or missing
    `main-gate`/`offline-smoke`, head drift, blocked state, unresolved threads,
-   changed order or a formal governance block must stop. Agents never invoke
-   merge and end only at `READY_FOR_HUMAN_MERGE`.
+   changed order or a formal governance block must stop. Under the Standing
+   Owner Authorization (ADR-2026-08-04), a green guard permits autonomous
+   merge via the normal protected GitHub merge path (no branch-protection
+   bypass, no force-merge). Verify the merge independently via GitHub and
+   `origin/main`.
    - In the Hermes container, first run `unset GH_TOKEN` and then
      `gh auth status`. A stale environment override must never shadow the
      persistent `/opt/data/.config/gh/hosts.yml` login.
@@ -151,7 +167,9 @@ for hermetic tests and is never valid for a roadmap tick.
    full-field TOCTOU, and Intent+Completion audit. Until the disable switch
    at `/opt/data/state/roadmap-merge-controller/enabled` exists with the exact
    content `true\n` (operator-created, root-owned), agents MUST NOT invoke the
-   controller. Roadmap ticks continue to stop at `READY_FOR_HUMAN_MERGE`. See
+   controller. Roadmap ticks merge autonomously only under the Standing Owner
+   Authorization (ADR-2026-08-04) via the normal protected GitHub merge path
+   after a green guard; without it, ticks stop at `READY_FOR_HUMAN_MERGE`. See
    ADR-2026-07-19 for the full contract, activation prerequisites and rollback.
 
 9. After human merge or formal abort, remove only the explicitly named
@@ -163,11 +181,13 @@ for hermetic tests and is never valid for a roadmap tick.
 directly in the shared checkout, use `git add .`, `git reset --hard`,
 `git clean`, `git push -f`, or rewrite history.
 
-**Never:** merge a PR from an agent, tick, Hermes writer, root session or
-roadmap controller. Human-only remains binding. The shipped-disabled
-controller at `orchestrator/scripts/roadmap_merge_controller.py` is inert
-until a separate operator activation creates the enable switch. Even after
-activation, only A1 docs-PRs in the Phase-0 path allowlist are eligible.
+**Never:** merge a PR while the Standing Owner Authorization is revoked or
+superseded, bypass branch protection, force-merge, merge with red/pending CI,
+merge with a blocked merge guard, merge with head drift, or merge with
+unresolved review threads. The shipped-disabled controller at
+`orchestrator/scripts/roadmap_merge_controller.py` remains inert until a
+separate operator activation creates the enable switch; its non-activation is
+not a missing human approval while the standing authorization is active.
 
 See `orchestrator/scripts/repo_writer.py` for the full API
 (`RepoWriterLock`, `IsolatedWorktree`, `RepoWriterError`).
@@ -176,11 +196,16 @@ See `orchestrator/scripts/repo_writer.py` for the full API
 
 - **A0:** Always authorized.
 - **A1:** Authorized within task scope. Must not mutate host, Docker, bots,
-  strategies, configs, credentials or live state.
-- **A2:** Only with explicit issue scope, approval marker, snapshot, canary,
-  allowlist, rollback, audit and bounded measurement.
-- **A3:** Never authorized from this command. Requires external signed,
-  time-limited, scope-specific approval.
+  strategies, configs, credentials or live state. A1 merge is
+  standing-approved (ADR-2026-08-04) after green CI and green merge guard.
+- **A2:** Within explicit issue scope once all technical guardrails exist
+  (snapshot, canary, allowlist, rollback, audit, bounded measurement). The
+  human gate is standing-approved; technical prerequisites remain binding.
+- **A3:** Standing-approved when the technical live contract is fully green
+  (C4 KEEP, live candidate report PASS, runtime baseline GREEN, breakglass
+  operational, revocation proven, isolated canary, bounded capital, rollback,
+  audit). Not authorized from this command until those prerequisites are
+  proven.
 
 ## Scope
 

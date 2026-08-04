@@ -1,7 +1,7 @@
 schema_version: 1
 program_id: trading-hub
-governance_contract_revision: 1
-revision: 2026-07-19.1
+governance_contract_revision: 2
+revision: 2026-08-04.1
 status: active
 north_star:
   current_target: safe_autonomous_dry_run
@@ -43,22 +43,52 @@ execution:
       enforcement: pending
       effective_after: G0.2
 authority:
+  standing_owner_authorization:
+    status: active
+    owner: Luke
+    github_identity: GoLukeEnviro
+    source_issue: 605
+    source_comment_id: 5179703046
+    adr: docs/decisions/ADR-2026-08-04-standing-owner-authorization.md
+    effective_from: "2026-08-04"
+    valid_until: revoked_or_superseded
+    per_task_human_marker_required: false
+    applies_to:
+      - a0_read_only
+      - a1_repository
+      - a1_merge
+      - a2_dry_run_runtime
+      - roadmap_decisions
+      - issue_reconciliation
+      - a3_when_technical_prerequisites_green
   direction_change_requires:
     - accepted_adr
     - program_contract_update
     - canonical_roadmap_update
-    - owner_approval
   status_reconciliation_requires:
     - evidence_or_state_link
     - change_class_declared
   a2_requires:
-    - scoped_approval
-    - time_window
+    - standing_owner_authorization
+    - explicit_issue_scope
+    - bounded_time_window
     - snapshot
     - rollback
     - action_allowlist
+    - canary
+    - audit
+    - bounded_measurement
   a3_requires:
-    - external_signed_mandate
+    - standing_owner_authorization
+    - c4_keep
+    - live_candidate_report_pass
+    - runtime_baseline_green
+    - breakglass_operational
+    - revocation_proven
+    - isolated_canary
+    - bounded_capital
+    - rollback
+    - audit
 forbidden_without_a3:
   - dry_run_false
   - live_orders

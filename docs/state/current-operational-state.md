@@ -61,9 +61,9 @@
 ## Governance revision pointers
 
 ```
-governance_contract_revision: 1
-roadmap_revision_observed: 5
-roadmap_observed_at_utc: 2026-07-20T05:00:00Z
+governance_contract_revision: 2
+roadmap_revision_observed: 6
+roadmap_observed_at_utc: 2026-08-04T14:00:00Z
 ```
 
 `governance_contract_revision` is strictly checked against
@@ -71,7 +71,46 @@ roadmap_observed_at_utc: 2026-07-20T05:00:00Z
 informational only and does not force a state-file touch on ordinary roadmap
 status changes.
 
-## Phase C — Gate-0 Strategy Evidence (2026-08-02, in progress)
+## Standing Owner Authorization (2026-08-04)
+
+```text
+OWNER_STANDING_AUTHORIZATION=ACTIVE
+OWNER_STANDING_AUTHORIZATION_SOURCE=#605_COMMENT_5179703046
+PER_TASK_HUMAN_MARKER_REQUIRED=NO
+A1_MERGE_HUMAN_GATE=STANDING_APPROVED
+A2_HUMAN_GATE=STANDING_APPROVED
+A3_HUMAN_GATE=STANDING_APPROVED_WHEN_TECHNICAL_CONTRACT_IS_GREEN
+```
+
+Luke granted the Standing Owner Authorization on 2026-08-04 (#605 comment
+`5179703046`, `OWNER_STANDING_AUTHORIZATION_V1`). Missing per-task human
+markers are no longer valid blockers. All technical guardrails (CI, merge
+guard, writer lock, branch protection, snapshot, canary, allowlist, rollback,
+audit, measurement, RiskGuard, kill switch, C4 KEEP, runtime baseline,
+breakglass, revocation) remain required. See
+`docs/decisions/ADR-2026-08-04-standing-owner-authorization.md`.
+
+## Issue #697 — Freqtrade-native dataset (A2 run complete)
+
+```text
+ISSUE_697_A2_RUN=COMPLETE
+RUN_ID=issue697-20260803T155723Z
+DATASET_PATH=/opt/data/gate0-freqtrade-native-r1
+FUNDING_CONTRACT_DECISION=REJECT_INCOMPLETE_FUNDING
+GATE0_DISPOSITION=EXTEND
+SELECTION_BACKTEST_AUTHORIZED=NO
+HOLDOUT_INSPECTED=NO
+LIVE_TRADING=NO
+```
+
+The A2 download/freeze run completed with accepted outcome B: native
+Freqtrade/CCXT funding history is reproducibly capped (~90 days; the run
+persisted one page of ~33 days per pair). The human funding decision
+(#697 comment `5179705029`) rejects incomplete funding for the canonical
+Gate-0 selection, sets Gate-0 disposition `EXTEND`, and prohibits any
+selection backtest until a new canonical funding data contract exists.
+
+## Phase C — Gate-0 Strategy Evidence (2026-08-04, in progress)
 
 Phase C exit gate is `edge_decision_recorded`. The exit gate is **not yet
 satisfied**. Current sub-status:
@@ -88,11 +127,14 @@ satisfied**. Current sub-status:
 | Backtest Contract | ✅ `GREEN` | PR #687 (`79ad6dd`): pinned image digest, selection dataset, funding adapter. |
 | Issue backlog reconciled | ✅ `RECONCILED` | 27→5 open issues. See `docs/reports/repository-issue-backlog-reconciliation-2026-08-02.md` |
 | #674 import-guard isolation | ✅ COMPLETE | PR #690 (`ea04ca2`): deterministic ImportError simulation, 18/18 tests. See `docs/reports/trading_pipeline-import-guard-isolation-2026-08-02.md` |
-| Holdout inspected | ❌ NO | Not started; blocked by Luke ratification on #604 |
-| Edge decision | ⏳ `PENDING` | Not yet recorded; blocked by holdout |
+| #604 ratification | ✅ COMPLETE | Luke ratified V3_1 (comment 5168056708, 2026-08-03); issue closed completed |
+| #697 native dataset | ✅ `EXECUTED` | RUN `issue697-20260803T155723Z`, 12 files / 254,425 rows, frozen at `/opt/data/gate0-freqtrade-native-r1`; funding incomplete (native + REST ~90d cap) |
+| Funding contract decision | ✅ `REJECT_INCOMPLETE_FUNDING` | Luke (#697 comment 5179705029); Gate-0 disposition `EXTEND`; selection backtest NOT authorized |
+| Holdout inspected | ❌ NO | Not started; blocked by funding contract decision (no valid selection backtest) |
+| Edge decision | ⏳ `PENDING` | Not yet recorded; requires new canonical funding data contract first |
 
 Phase C remains `in_progress` until the edge decision is recorded. Issue #604
-remains open.
+is closed (ratified); #697 is reconciled (accepted outcome B).
 
 ### Frozen manifest summary (approved by Luke on #604, updated by C5.2)
 
@@ -117,17 +159,16 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 
 ### Next steps
 
-1. **#683** — DONE (reconciled 2026-08-02: `BLOCKED_BY_MISSING_A2_MARKER`, runtime baseline NOT green — see section below). **Awaiting Luke's fresh A2 marker** (`APPROVED_A2_HERMESTRADER_RUNTIME_RECOVERY_V2`).
-2. **Luke ratifies corrected strategy + manifest v3** — human action on #604
-3. **Create A2 Bitget Snapshot v2 issue** — warm-up + funding + selection windows, new path, new A2 marker
-4. **Luke issues time-limited A2 marker** — `APPROVED_A2_BITGET_SNAPSHOT_V2`
-5. **Fetch/freeze warm-up + selection + sealed holdout + funding**
-6. **Create A2 Selection Backtest issue**
-7. **Luke issues time-limited selection-backtest marker**
-8. **Execute selection-only backtest**
-9. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
-10. **C6 holdout ceremony** — only after separate human marker
-11. **Record canonical Gate-0 edge decision**
+1. **#683** — DONE (reconciled 2026-08-02: runtime baseline NOT green — see section below). Standing Owner Authorization applies; next selected roadmap task (post-merge reconciliation of #697).
+2. **#604 ratification** — ✅ COMPLETE (Luke ratified V3_1, comment 5168056708, 2026-08-03)
+3. **#697 native dataset** — ✅ EXECUTED (RUN `issue697-20260803T155723Z`, frozen; funding incomplete)
+4. **Funding contract decision** — ✅ `REJECT_INCOMPLETE_FUNDING` (Luke, #697 comment 5179705029); Gate-0 disposition `EXTEND`
+5. **Define new canonical funding data contract** — next Gate-0 follow-up requirement (not implemented yet)
+6. **Create A2 Selection Backtest issue** — blocked until new funding contract exists
+7. **Execute selection-only backtest** — NOT authorized
+8. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
+9. **C6 holdout ceremony** — only after valid selection outcome
+10. **Record canonical Gate-0 edge decision**
 12. **Execute #600 ADR**
 13. **Reassess #496**
 
@@ -343,22 +384,21 @@ missing-file tests, and eventual bot-scoped entry integration.
 ## 6. Go / no-go
 
 **Allowed next repository work:** #683 read-only closure reconciliation — verify
-executor, fleet, cron, writer lock. This is A0/A1 work. No A2 selection backtest
-and no holdout inspection until Luke ratifies the corrected strategy + manifest
-v3 on #604.
-
-After Luke's ratification, a new A2 Bitget Snapshot v2 issue with a fresh A2
-marker authorizes warm-up + funding + selection data fetch. Then a separate A2
-selection-backtest issue. After backtest, C6 marker enables holdout inspection
-and edge decision.
+executor, fleet, cron, writer lock. This is A0/A1 work (Standing Owner
+Authorization active; see ADR-2026-08-04). No A2 selection backtest and no
+holdout inspection until a new canonical funding data contract exists and
+Gate-0 disposition advances beyond `EXTEND`.
 
 **Not authorized:** executor deployment or restart, runtime proof, R5B
 continuation, strategy reload, container mutation, kill-switch clear/bypass,
-new root capabilities, live-capital changes, or any A2/A3 action not covered
-by a new explicit marker.
+new root capabilities, live-capital changes, selection backtest on the frozen
+dataset, synthetic funding, `funding_rate=0`, external data mixing.
 
-The repository writer remains single-writer and PR-only. This work stops at
-`READY_FOR_HUMAN_MERGE`; only Luke merges.
+The repository writer remains single-writer and PR-only. Under the Standing
+Owner Authorization (ADR-2026-08-04), A1 merges follow the path
+`CI_GREEN → MERGE_GUARD_READY → EXACT_HEAD_REVERIFIED → MERGE →
+POST_MERGE_RECONCILIATION`; `READY_FOR_HUMAN_MERGE` is no longer a terminal
+state while the authorization is active.
 
 ## C5.1 Corrective — Strategy identification and manifest v2 (2026-07-19)
 
