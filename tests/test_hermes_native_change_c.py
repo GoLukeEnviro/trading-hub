@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +30,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "hermes-native-change-c.sh"
 
 STAGE_TIMEOUT = 300
+
+# `stage` shells out to the real `uv` (matching the production install path
+# exactly). Not every CI runner has it preinstalled -- this repo's shared
+# main-gate.yml does not -- so, like the shellcheck check below, tests that
+# actually invoke `stage` skip cleanly instead of failing when `uv` is
+# absent, rather than this test file reaching into shared CI config to add
+# it. Verified locally with a real `uv` install: 17 passed, 1 skipped
+# (shellcheck only).
+requires_uv = pytest.mark.skipif(
+    shutil.which("uv") is None, reason="uv not installed in this test environment"
+)
 
 PYPROJECT_TOML = """\
 [build-system]
@@ -241,6 +253,7 @@ class TestPlanNeverMutates:
 
 
 class TestStage:
+    @requires_uv
     def test_stage_against_fake_remote_creates_release_without_touching_current(self, tmp_path):
         bare_repo, sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.20.0")
         env = _base_env(tmp_path, target_sha=sha, target_tag="vtest-0.20.0", upstream_repo=str(bare_repo))
@@ -272,6 +285,7 @@ class TestStage:
         assert os.readlink(native_root / "current") == current_target_before
         assert _snapshot_tree(release_019) == before_019
 
+    @requires_uv
     def test_wrong_sha_aborts_with_target_sha_mismatch_and_cleans_up(self, tmp_path):
         bare_repo, real_sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.20.0")
         bogus_sha = "0" * 40 if real_sha != "0" * 40 else "1" * 40
@@ -307,6 +321,7 @@ class TestPreCutover:
         assert result.returncode != 0
         assert "BACKUP_PROOF_MISSING" in result.stderr
 
+    @requires_uv
     def test_passes_and_writes_manifest_when_gates_are_green(self, tmp_path):
         bare_repo, sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.20.0")
         env = _base_env(tmp_path, target_sha=sha, target_tag="vtest-0.20.0", upstream_repo=str(bare_repo))
