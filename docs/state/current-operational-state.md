@@ -1,6 +1,6 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-08-13 after #708 completion (canonical funding data contract v2 options analysis, PR #709 `90fb9d9`) and #705 completion (canonical funding data contract, PR #706 `96f1865`). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (funding contract decision `REJECT_INCOMPLETE_FUNDING`, Gate-0 `EXTEND`). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-08-13 after #708 reopen (auto-close corrected; options analysis PR #709 `90fb9d9` merged; **Luke decision pending**) and #705 completion (canonical funding data contract, PR #706 `96f1865`). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (funding contract decision `REJECT_INCOMPLETE_FUNDING`, Gate-0 `EXTEND`). Phase C remains `in_progress`.
 >
 > **Previous:** 2026-08-13 after #708 creation (new canonical funding data contract v2 — options analysis, A1) and #705 completion (canonical funding data contract, PR #706 `96f1865`).
 >
@@ -168,7 +168,7 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 5. **#699 A1 prerequisite (PR #700)** — ✅ MERGED (`a5c1d99`, 2026-08-13): `scripts/hermes-native-change-c.sh` on `main`
 6. **#699 A2 host execution (Hermes 0.19.0 → 0.20.0 via Change C)** — ⏳ `BLOCKED_BY_MISSING_A2_TECHNICAL_PREREQUISITES` (see section below)
 7. **#705 canonical funding data contract** — ✅ COMPLETE (PR #706 `96f1865`, 2026-08-13)
-8. **#708 new canonical funding data contract (longer history)** — ✅ COMPLETE (PR #709 `90fb9d9`, 2026-08-13): A1 options analysis delivered; issue closed. **Luke decision required** on funding-gap handling (FUNDING_CONTRACT_V2_OPTION)
+8. **#708 new canonical funding data contract (longer history)** — ⏳ `AWAITING_LUKE_DECISION` (PR #709 `90fb9d9` merged 2026-08-13; issue **reopened** after auto-close correction — decision not yet signed). **Luke decision required** on funding-gap handling (FUNDING_CONTRACT_V2_OPTION, options A/B/C/D; default C)
 9. **Create A2 Selection Backtest issue** — ✅ DONE (#702 created 2026-08-13); execution blocked until new funding contract exists
 10. **Execute selection-only backtest** — NOT authorized
 11. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
@@ -202,9 +202,11 @@ until a new canonical funding data contract (longer history) exists.
 
 ## Issue #708 — New Canonical Funding Data Contract v2 (2026-08-13)
 
-**Status:** `COMPLETE` — PR #709 merged `90fb9d9` (2026-08-13T19:48:58Z),
-issue closed. A1 options analysis delivered; **Luke decision required** on
-funding-gap handling (`FUNDING_CONTRACT_V2_OPTION`).
+**Status:** `AWAITING_LUKE_DECISION` — PR #709 merged `90fb9d9`
+(2026-08-13T19:48:58Z); issue **reopened** 2026-08-13 (auto-close by
+`Closes #708` corrected — a closed issue cannot receive the signed
+decision). A1 options analysis delivered; **Luke's signed comment is the
+sole authority** for funding-gap handling (`FUNDING_CONTRACT_V2_OPTION`).
 
 The #705 contract confirmed no policy-compliant fallback source for longer
 funding history exists. Issue #708 (created 2026-08-13) delivers the
