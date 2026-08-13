@@ -44,9 +44,11 @@ TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 # These are the only files deployed from the hermes_root/ package.
 REQUIRED_MODULES=(
   "__init__.py"
+  "__main__.py"
   "actions.py"
   "audit.py"
   "client.py"
+  "legacy.py"
   "policy.py"
   "protocol.py"
   "redact.py"
