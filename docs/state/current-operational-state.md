@@ -1,8 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-08-13 after #705 completion (canonical funding data contract, PR #706 `96f1865`) and #683 recovery (RUNTIME_BASELINE_GREEN). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (funding contract decision `REJECT_INCOMPLETE_FUNDING`, Gate-0 `EXTEND`). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-08-13 after #708 creation (new canonical funding data contract v2 — options analysis, A1) and #705 completion (canonical funding data contract, PR #706 `96f1865`). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (funding contract decision `REJECT_INCOMPLETE_FUNDING`, Gate-0 `EXTEND`). Phase C remains `in_progress`.
 >
-> **Previous:** 2026-08-13 after #683 recovery (RUNTIME_BASELINE_GREEN) and PR #700 merge (host-native 0.20.0 side-by-side upgrade path, issue #699 A1 prerequisite).
+> **Previous:** 2026-08-13 after #705 completion (canonical funding data contract, PR #706 `96f1865`) and #683 recovery (RUNTIME_BASELINE_GREEN).
 >
 > **Previous:** 2026-08-02 after #674 completion. A0 preflight GREEN (PR #682, `72421de`). Backtest Contract GREEN (PR #687, `79ad6dd`). Issue backlog reconciled: 27→5 open issues. #674 complete (PR #690, `ea04ca2`).
 >
@@ -168,8 +168,8 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 5. **#699 A1 prerequisite (PR #700)** — ✅ MERGED (`a5c1d99`, 2026-08-13): `scripts/hermes-native-change-c.sh` on `main`
 6. **#699 A2 host execution (Hermes 0.19.0 → 0.20.0 via Change C)** — ⏳ `BLOCKED_BY_MISSING_A2_TECHNICAL_PREREQUISITES` (see section below)
 7. **#705 canonical funding data contract** — ✅ COMPLETE (PR #706 `96f1865`, 2026-08-13)
-8. **Define new canonical funding data contract (longer history)** — next Gate-0 follow-up requirement (not implemented yet)
-9. **Create A2 Selection Backtest issue** — blocked until new funding contract exists
+8. **#708 new canonical funding data contract (longer history)** — 🔄 IN PROGRESS (A1 options analysis, PR pending; Luke decision required on funding-gap handling)
+9. **Create A2 Selection Backtest issue** — ✅ DONE (#702 created 2026-08-13); execution blocked until new funding contract exists
 10. **Execute selection-only backtest** — NOT authorized
 11. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
 12. **C6 holdout ceremony** — only after valid selection outcome
@@ -199,6 +199,29 @@ required window `2024-12-01T00:00:00Z` → `2026-06-30T00:00:00Z` (no grace).
 criterion. Per Luke's decision (`REJECT_INCOMPLETE_FUNDING`, Gate-0
 disposition `EXTEND`), the selection backtest (#702) is **not authorized**
 until a new canonical funding data contract (longer history) exists.
+
+## Issue #708 — New Canonical Funding Data Contract v2 (2026-08-13)
+
+**Status:** `IN_PROGRESS` — A1 options analysis delivered (PR pending);
+**Luke decision required** on funding-gap handling.
+
+The #705 contract confirmed no policy-compliant fallback source for longer
+funding history exists. Issue #708 (created 2026-08-13) delivers the
+read-only options analysis and decision framework:
+
+| Option | Description | Policy fit | Gate-0 progress |
+|---|---|---|---|
+| A | Documented gap, best-effort funding estimate in cost model | ⚠️ needs narrow Luke confirmation (estimate ≠ `synthetic_funding`) | ✅ with uncertainty band |
+| B | Window reduction to available funding coverage | ✅ | ✅ weaker evidence (manifest change) |
+| C | Keep `REJECT_INCOMPLETE_FUNDING` / `EXTEND` (no backtest) | ✅ | ❌ stall |
+| D | Narrow policy amendment for external funding archive | ❌ needs amendment | ✅ strongest |
+
+**Recommended default (no new decision):** Option C. If Luke wants Gate-0
+progress: **Option A** (smallest compliant step, needs explicit confirmation).
+
+**Decision framework:** `docs/reports/canonical-funding-data-contract-v2-options-2026-08-13.md`.
+No option is selected and no contract value is frozen in this PR — Luke's
+signed comment on #708 is the sole authority for the final selection.
 
 ## Issue #699 — Hermes 0.20.0 upgrade via Change C (A2 gate status)
 
