@@ -97,6 +97,27 @@ CONTAINER_RESULTS_DIR = Path("/freqtrade/user_data/backtest_results")
 # Selection results subdirectory (inside the results mount)
 RESULTS_SUBDIR = "gate0-selection"
 
+# ---------------------------------------------------------------------------
+# Canonical funding data contract (issue #705; verified 2026-08-02/#697 A2 run)
+# ---------------------------------------------------------------------------
+
+# Funding status after the #697 A2 run (accepted outcome B). Bitget REST and
+# the native CCXT path both cap funding history at ~90 days; the required
+# start 2024-12-01 is unreachable. Human decision on #697:
+# REJECT_INCOMPLETE_FUNDING, Gate-0 disposition EXTEND. Synthetic funding,
+# funding_rate=0 fill and external data mixes are PROHIBITED.
+FUNDING_STATUS = "INCOMPLETE_CONFIRMED_NATIVE_LIMIT"
+# Canonical source identifier (Bitget REST history-fund-rate, ~90 day cap).
+FUNDING_SOURCE = "bitget_rest"
+# Reproducible empirical cap in days (REST v2/v3 probes 2026-08-02; native
+# CCXT fetch_funding_rate_history in the #697 run: 2026-07-01..2026-08-03).
+FUNDING_HISTORY_LIMIT_DAYS = 90
+# Required coverage window for the Gate-0 selection backtest (warm-up start
+# through selection end; aligned with REQUIRED_COVERAGE["funding_rate"]["1h"]
+# in freqtrade_native_data_contract).
+FUNDING_COVERAGE_REQUIRED_FROM = datetime(2024, 12, 1, tzinfo=UTC)
+FUNDING_COVERAGE_REQUIRED_TO = datetime(2026, 6, 30, tzinfo=UTC)
+
 BACKTEST_COMMAND = (
     "docker run --rm "
     "--user 10000:10000 "
@@ -389,6 +410,125 @@ def convert_funding_to_freqtrade(
         unique[int(ts.timestamp() * 1000)] = float(rate)
     out.write_text(json.dumps(sorted(unique.items()), separators=(",", ":")))
     return out
+
+
+# ---------------------------------------------------------------------------
+# Funding coverage detection + reporting (issue #705; no silent gaps)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FundingCoverage:
+    """Measured funding coverage for one pair against the required window."""
+
+    pair: str
+    first: datetime | None
+    last: datetime | None
+    rate_count: int
+
+
+def compute_funding_coverage(
+    funding_rows: Sequence[tuple[datetime, float]],
+    *,
+    pair: str = "BTC/USDT:USDT",
+) -> FundingCoverage:
+    """Measure the coverage window of ``(timestamp, rate)`` funding rows.
+
+    Deterministic and read-only: min/max timestamp over the unique
+    millisecond-keyed rows and the deduplicated rate count.
+    """
+    unique: dict[int, float] = {}
+    for ts, rate in funding_rows:
+        unique[int(ts.timestamp() * 1000)] = float(rate)
+    if not unique:
+        return FundingCoverage(pair=pair, first=None, last=None, rate_count=0)
+    stamps = sorted(unique)
+    return FundingCoverage(
+        pair=pair,
+        first=datetime.fromtimestamp(stamps[0] / 1000, tz=UTC),
+        last=datetime.fromtimestamp(stamps[-1] / 1000, tz=UTC),
+        rate_count=len(stamps),
+    )
+
+
+def validate_funding_coverage(
+    coverage: FundingCoverage,
+    *,
+    required_from: datetime = FUNDING_COVERAGE_REQUIRED_FROM,
+    required_to: datetime = FUNDING_COVERAGE_REQUIRED_TO,
+) -> None:
+    """Fail-closed funding coverage validation.
+
+    Raises ``RuntimeError`` when the measured window does not span the full
+    required window (``FUNDING_COVERAGE_EMPTY`` / ``FUNDING_COVERAGE_START_LATE``
+    / ``FUNDING_COVERAGE_END_EARLY``). There is deliberately no grace: the
+    selection backtest cost model needs the complete funding history, and
+    partial funding is the confirmed native limit (issue #705).
+    """
+    if coverage.first is None or coverage.last is None:
+        raise RuntimeError(
+            f"FUNDING_COVERAGE_EMPTY: {coverage.pair} has no funding rows"
+        )
+    if coverage.first > required_from:
+        raise RuntimeError(
+            f"FUNDING_COVERAGE_START_LATE: {coverage.pair} first="
+            f"{coverage.first.isoformat()} required<={required_from.isoformat()}"
+        )
+    if coverage.last < required_to:
+        raise RuntimeError(
+            f"FUNDING_COVERAGE_END_EARLY: {coverage.pair} last="
+            f"{coverage.last.isoformat()} required>={required_to.isoformat()}"
+        )
+
+
+def funding_coverage_report(
+    funding_rows: Sequence[tuple[datetime, float]],
+    *,
+    pair: str = "BTC/USDT:USDT",
+) -> dict[str, object]:
+    """Build the canonical funding coverage report dict (no exceptions).
+
+    Deterministic: always returns the measured window, the required window,
+    the source identifier, the funding status and a boolean ``coverage_ok``.
+    This is the no-silent-gap evidence record for the adapter.
+    """
+    coverage = compute_funding_coverage(funding_rows, pair=pair)
+    return {
+        "pair": pair,
+        "status": FUNDING_STATUS,
+        "source": FUNDING_SOURCE,
+        "history_limit_days": FUNDING_HISTORY_LIMIT_DAYS,
+        "first": coverage.first.isoformat() if coverage.first else None,
+        "last": coverage.last.isoformat() if coverage.last else None,
+        "rate_count": coverage.rate_count,
+        "required_from": FUNDING_COVERAGE_REQUIRED_FROM.isoformat(),
+        "required_to": FUNDING_COVERAGE_REQUIRED_TO.isoformat(),
+        "coverage_ok": (
+            coverage.first is not None
+            and coverage.last is not None
+            and coverage.first <= FUNDING_COVERAGE_REQUIRED_FROM
+            and coverage.last >= FUNDING_COVERAGE_REQUIRED_TO
+        ),
+    }
+
+
+def convert_funding_to_freqtrade_with_coverage(
+    funding_rows: Sequence[tuple[datetime, float]],
+    output_dir: Path,
+    *,
+    pair: str = "BTC/USDT:USDT",
+) -> tuple[Path, dict[str, object]]:
+    """Fail-closed funding conversion: validate coverage, then materialize.
+
+    Raises ``RuntimeError`` (``FUNDING_COVERAGE_*``) when the funding window
+    is incomplete — no partial funding file is written. On success returns
+    ``(json_path, report)`` with the coverage report as evidence.
+    """
+    report = funding_coverage_report(funding_rows, pair=pair)
+    if not report["coverage_ok"]:
+        validate_funding_coverage(compute_funding_coverage(funding_rows, pair=pair))
+    out = convert_funding_to_freqtrade(funding_rows, output_dir, pair=pair)
+    return out, report
 
 
 def validate_warmup_excluded_from_metrics(

@@ -14,6 +14,11 @@ from si_v2.research.backtest_contract import (
     CONFIG_FILE_SHA256,
     FREQTRADE_NATIVE_DATA_DIR,
     FREQTRADE_VERSION,
+    FUNDING_COVERAGE_REQUIRED_FROM,
+    FUNDING_COVERAGE_REQUIRED_TO,
+    FUNDING_HISTORY_LIMIT_DAYS,
+    FUNDING_SOURCE,
+    FUNDING_STATUS,
     PINNED_FREQTRADE_IMAGE,
     PROJECT_DIR,
     RESEARCH_SNAPSHOT_DIR,
@@ -23,18 +28,28 @@ from si_v2.research.backtest_contract import (
     SUPERSEDED_INFORMATIONAL_VERSION,
     WARMUP_START_UTC,
     BacktestContract,
+    FundingCoverage,
     aggregate_1h_dataset,
+    compute_funding_coverage,
     convert_funding_to_freqtrade,
+    convert_funding_to_freqtrade_with_coverage,
     exclude_holdout,
     full_dataset_timerange,
+    funding_coverage_report,
     materialize_selection_dataset,
     render_backtest_command,
     selection_timerange,
+    validate_funding_coverage,
     validate_mount_contract,
     validate_warmup_excluded_from_metrics,
 )
 from si_v2.research.evaluation_bundle_v1 import CandleV1
+from si_v2.research.freqtrade_native_data_contract import REQUIRED_COVERAGE
 from si_v2.research.gate0_evaluation_integration import HOLDOUT
+
+
+def _parse_ts(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 class TestImageAndVersion:
@@ -447,3 +462,131 @@ class TestWarmupExclusion:
         ]
         with pytest.raises(RuntimeError, match="WARMUP_LEAKS_INTO_SELECTION"):
             validate_warmup_excluded_from_metrics(candles)
+
+
+class TestFundingContractConstants:
+    """Canonical funding data contract constants (issue #705)."""
+
+    def test_funding_status_documented(self):
+        assert FUNDING_STATUS == "INCOMPLETE_CONFIRMED_NATIVE_LIMIT"
+
+    def test_funding_source_is_bitget_rest(self):
+        assert FUNDING_SOURCE == "bitget_rest"
+
+    def test_funding_history_limit_days(self):
+        assert FUNDING_HISTORY_LIMIT_DAYS == 90
+
+    def test_required_window_matches_contract(self):
+        assert datetime(2024, 12, 1, tzinfo=UTC) == FUNDING_COVERAGE_REQUIRED_FROM
+        assert datetime(2026, 6, 30, tzinfo=UTC) == FUNDING_COVERAGE_REQUIRED_TO
+
+    def test_required_window_aligned_with_native_contract(self):
+        funding_required = REQUIRED_COVERAGE["funding_rate"]["1h"]
+        # Native contract uses last-candle timestamps: "from" must equal the
+        # midnight boundary; "to" (2026-06-30T23:00:00Z) must cover the day
+        # boundary required here (2026-06-30T00:00:00Z).
+        assert funding_required["from"] == FUNDING_COVERAGE_REQUIRED_FROM.isoformat().replace("+00:00", "Z")
+        assert _parse_ts(funding_required["to"]) >= FUNDING_COVERAGE_REQUIRED_TO
+
+    def test_limit_matches_empirically_confirmed_native_cap(self):
+        # #697 A2 run: native CCXT fetch_funding_rate_history returned ~90 days.
+        assert FUNDING_HISTORY_LIMIT_DAYS == 90
+
+
+class TestFundingCoverage:
+    def test_full_coverage_passes(self):
+        cov = FundingCoverage(
+            pair="BTC/USDT:USDT",
+            first=datetime(2024, 12, 1, tzinfo=UTC),
+            last=datetime(2026, 6, 30, tzinfo=UTC),
+            rate_count=13888,
+        )
+        validate_funding_coverage(cov)
+
+    def test_partial_coverage_fails_closed(self):
+        cov = FundingCoverage(
+            pair="BTC/USDT:USDT",
+            first=datetime(2026, 5, 5, tzinfo=UTC),
+            last=datetime(2026, 8, 3, tzinfo=UTC),
+            rate_count=101,
+        )
+        with pytest.raises(RuntimeError, match="FUNDING_COVERAGE_START_LATE"):
+            validate_funding_coverage(cov)
+
+    def test_missing_window_fails_closed(self):
+        cov = FundingCoverage(
+            pair="BTC/USDT:USDT",
+            first=None,
+            last=None,
+            rate_count=0,
+        )
+        with pytest.raises(RuntimeError, match="FUNDING_COVERAGE_EMPTY"):
+            validate_funding_coverage(cov)
+
+    def test_compute_full_coverage(self):
+        rows = [
+            (datetime(2024, 12, 1, tzinfo=UTC), 0.0001),
+            (datetime(2026, 6, 30, tzinfo=UTC), 0.0002),
+        ]
+        cov = compute_funding_coverage(rows, pair="BTC/USDT:USDT")
+        assert cov.rate_count == 2
+        assert cov.first == datetime(2024, 12, 1, tzinfo=UTC)
+        assert cov.last == datetime(2026, 6, 30, tzinfo=UTC)
+        validate_funding_coverage(cov)
+
+    def test_compute_empty(self):
+        cov = compute_funding_coverage([], pair="BTC/USDT:USDT")
+        assert cov.rate_count == 0
+        assert cov.first is None
+        assert cov.last is None
+
+    def test_report_dict_shape(self):
+        rows = [(datetime(2026, 5, 5, tzinfo=UTC), 0.0001)]
+        report = funding_coverage_report(rows, pair="BTC/USDT:USDT")
+        assert report["pair"] == "BTC/USDT:USDT"
+        assert report["status"] == "INCOMPLETE_CONFIRMED_NATIVE_LIMIT"
+        assert report["first"] == "2026-05-05T00:00:00+00:00"
+        assert report["required_from"] == "2024-12-01T00:00:00+00:00"
+        assert report["required_to"] == "2026-06-30T00:00:00+00:00"
+        assert report["source"] == "bitget_rest"
+        assert report["coverage_ok"] is False
+
+    def test_report_full_coverage_ok(self):
+        rows = [
+            (datetime(2024, 12, 1, tzinfo=UTC), 0.0001),
+            (datetime(2026, 6, 30, tzinfo=UTC), 0.0002),
+        ]
+        report = funding_coverage_report(rows, pair="ETH/USDT:USDT")
+        assert report["coverage_ok"] is True
+        # The dataset-level funding status stays at the confirmed native limit
+        # even when a single pair's measured window is complete — per Luke's
+        # decision (#697) the canonical dataset remains incomplete.
+        assert report["status"] == "INCOMPLETE_CONFIRMED_NATIVE_LIMIT"
+
+
+class TestConvertFundingWithCoverage:
+    def test_full_coverage_writes_json_and_report(self, tmp_path):
+        rows = [
+            (datetime(2024, 12, 1, tzinfo=UTC), 0.0001),
+            (datetime(2026, 6, 30, tzinfo=UTC), 0.0002),
+        ]
+        out, report = convert_funding_to_freqtrade_with_coverage(
+            rows, tmp_path, pair="BTC/USDT:USDT"
+        )
+        assert out.exists()
+        assert report["coverage_ok"] is True
+
+    def test_partial_coverage_fails_closed_no_output(self, tmp_path):
+        rows = [(datetime(2026, 5, 5, tzinfo=UTC), 0.0001)]
+        with pytest.raises(RuntimeError, match="FUNDING_COVERAGE_START_LATE"):
+            convert_funding_to_freqtrade_with_coverage(
+                rows, tmp_path, pair="BTC/USDT:USDT"
+            )
+        # Fail-closed: no partial funding file may be materialized.
+        assert not (tmp_path / "futures_funding_rate").exists()
+
+    def test_existing_converter_unchanged_default_behavior(self, tmp_path):
+        # Backward compatibility: plain converter writes JSON without validation.
+        rows = [(datetime(2026, 5, 5, tzinfo=UTC), 0.0001)]
+        path = convert_funding_to_freqtrade(rows, tmp_path, pair="BTC/USDT:USDT")
+        assert path.exists()
