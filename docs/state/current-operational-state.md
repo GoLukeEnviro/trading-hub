@@ -1,6 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-08-13 after #683 recovery (RUNTIME_BASELINE_GREEN) and PR #700 merge (host-native 0.20.0 side-by-side upgrade path, issue #699 A1 prerequisite). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (funding contract decision `REJECT_INCOMPLETE_FUNDING`, Gate-0 `EXTEND`). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-08-13 after #705 completion (canonical funding data contract, PR #706 `96f1865`) and #683 recovery (RUNTIME_BASELINE_GREEN). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (funding contract decision `REJECT_INCOMPLETE_FUNDING`, Gate-0 `EXTEND`). Phase C remains `in_progress`.
+>
+> **Previous:** 2026-08-13 after #683 recovery (RUNTIME_BASELINE_GREEN) and PR #700 merge (host-native 0.20.0 side-by-side upgrade path, issue #699 A1 prerequisite).
 >
 > **Previous:** 2026-08-02 after #674 completion. A0 preflight GREEN (PR #682, `72421de`). Backtest Contract GREEN (PR #687, `79ad6dd`). Issue backlog reconciled: 27→5 open issues. #674 complete (PR #690, `ea04ca2`).
 >
@@ -165,14 +167,38 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 4. **Funding contract decision** — ✅ `REJECT_INCOMPLETE_FUNDING` (Luke, #697 comment 5179705029); Gate-0 disposition `EXTEND`
 5. **#699 A1 prerequisite (PR #700)** — ✅ MERGED (`a5c1d99`, 2026-08-13): `scripts/hermes-native-change-c.sh` on `main`
 6. **#699 A2 host execution (Hermes 0.19.0 → 0.20.0 via Change C)** — ⏳ `BLOCKED_BY_MISSING_A2_TECHNICAL_PREREQUISITES` (see section below)
-7. **Define new canonical funding data contract** — next Gate-0 follow-up requirement (not implemented yet)
-8. **Create A2 Selection Backtest issue** — blocked until new funding contract exists
-9. **Execute selection-only backtest** — NOT authorized
-10. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
-11. **C6 holdout ceremony** — only after valid selection outcome
-12. **Record canonical Gate-0 edge decision**
-13. **Execute #600 ADR**
-14. **Reassess #496**
+7. **#705 canonical funding data contract** — ✅ COMPLETE (PR #706 `96f1865`, 2026-08-13)
+8. **Define new canonical funding data contract (longer history)** — next Gate-0 follow-up requirement (not implemented yet)
+9. **Create A2 Selection Backtest issue** — blocked until new funding contract exists
+10. **Execute selection-only backtest** — NOT authorized
+11. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
+12. **C6 holdout ceremony** — only after valid selection outcome
+13. **Record canonical Gate-0 edge decision**
+14. **Execute #600 ADR**
+15. **Reassess #496**
+
+## Issue #705 — Canonical Funding Data Contract (2026-08-13)
+
+**Status:** `COMPLETE` — PR #706 merged `96f1865` (2026-08-13T19:09:16Z), issue closed.
+
+The canonical funding data contract for the Gate-0 selection backtest is
+defined and implemented (A1, repository-only):
+
+| Deliverable | Result | Evidence |
+|---|---|---|
+| Funding contract documented | ✅ | `docs/reports/canonical-funding-data-contract-2026-08-13.md` (source, ~90-day limit, coverage criterion, fail-closed gap handling) |
+| Fallback source evaluated | ✅ VERWORFEN | Bitget WS replay (real-time only); external archives (Tardis.dev/CryptoHFTData) + synthetic/zero-fill (`external_data_mix=PROHIBITED`, `synthetic_funding=PROHIBITED`, `funding_rate_zero=PROHIBITED` — Luke #697 `5179705029`) |
+| Adapter hardening | ✅ | `FundingCoverage`, `compute_funding_coverage()`, `validate_funding_coverage()` (fail-closed), `funding_coverage_report()`, `convert_funding_to_freqtrade_with_coverage()` (no partial file on incomplete coverage) |
+| Tests | ✅ | 18 new tests; 63/63 `test_backtest_contract.py`; 138/138 contract suites from repo root; 29/29 safety scanners; Ruff clean |
+
+**Contract values:** `FUNDING_STATUS=INCOMPLETE_CONFIRMED_NATIVE_LIMIT`,
+`FUNDING_SOURCE=bitget_rest`, `FUNDING_HISTORY_LIMIT_DAYS=90`,
+required window `2024-12-01T00:00:00Z` → `2026-06-30T00:00:00Z` (no grace).
+
+**Consequence:** the canonical dataset does **not** satisfy the coverage
+criterion. Per Luke's decision (`REJECT_INCOMPLETE_FUNDING`, Gate-0
+disposition `EXTEND`), the selection backtest (#702) is **not authorized**
+until a new canonical funding data contract (longer history) exists.
 
 ## Issue #699 — Hermes 0.20.0 upgrade via Change C (A2 gate status)
 
