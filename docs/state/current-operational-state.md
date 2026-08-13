@@ -1,8 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-08-13 after #708 creation (new canonical funding data contract v2 — options analysis, A1) and #705 completion (canonical funding data contract, PR #706 `96f1865`). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (funding contract decision `REJECT_INCOMPLETE_FUNDING`, Gate-0 `EXTEND`). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-08-13 after #708 completion (canonical funding data contract v2 options analysis, PR #709 `90fb9d9`) and #705 completion (canonical funding data contract, PR #706 `96f1865`). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (funding contract decision `REJECT_INCOMPLETE_FUNDING`, Gate-0 `EXTEND`). Phase C remains `in_progress`.
 >
-> **Previous:** 2026-08-13 after #705 completion (canonical funding data contract, PR #706 `96f1865`) and #683 recovery (RUNTIME_BASELINE_GREEN).
+> **Previous:** 2026-08-13 after #708 creation (new canonical funding data contract v2 — options analysis, A1) and #705 completion (canonical funding data contract, PR #706 `96f1865`).
 >
 > **Previous:** 2026-08-02 after #674 completion. A0 preflight GREEN (PR #682, `72421de`). Backtest Contract GREEN (PR #687, `79ad6dd`). Issue backlog reconciled: 27→5 open issues. #674 complete (PR #690, `ea04ca2`).
 >
@@ -168,7 +168,7 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 5. **#699 A1 prerequisite (PR #700)** — ✅ MERGED (`a5c1d99`, 2026-08-13): `scripts/hermes-native-change-c.sh` on `main`
 6. **#699 A2 host execution (Hermes 0.19.0 → 0.20.0 via Change C)** — ⏳ `BLOCKED_BY_MISSING_A2_TECHNICAL_PREREQUISITES` (see section below)
 7. **#705 canonical funding data contract** — ✅ COMPLETE (PR #706 `96f1865`, 2026-08-13)
-8. **#708 new canonical funding data contract (longer history)** — 🔄 IN PROGRESS (A1 options analysis, PR pending; Luke decision required on funding-gap handling)
+8. **#708 new canonical funding data contract (longer history)** — ✅ COMPLETE (PR #709 `90fb9d9`, 2026-08-13): A1 options analysis delivered; issue closed. **Luke decision required** on funding-gap handling (FUNDING_CONTRACT_V2_OPTION)
 9. **Create A2 Selection Backtest issue** — ✅ DONE (#702 created 2026-08-13); execution blocked until new funding contract exists
 10. **Execute selection-only backtest** — NOT authorized
 11. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
@@ -202,8 +202,9 @@ until a new canonical funding data contract (longer history) exists.
 
 ## Issue #708 — New Canonical Funding Data Contract v2 (2026-08-13)
 
-**Status:** `IN_PROGRESS` — A1 options analysis delivered (PR pending);
-**Luke decision required** on funding-gap handling.
+**Status:** `COMPLETE` — PR #709 merged `90fb9d9` (2026-08-13T19:48:58Z),
+issue closed. A1 options analysis delivered; **Luke decision required** on
+funding-gap handling (`FUNDING_CONTRACT_V2_OPTION`).
 
 The #705 contract confirmed no policy-compliant fallback source for longer
 funding history exists. Issue #708 (created 2026-08-13) delivers the
@@ -483,9 +484,11 @@ missing-file tests, and eventual bot-scoped entry integration.
 0.20.0 via Change C) once its technical prerequisites are green — verified
 backup + restore drill and an executor action path for
 `scripts/hermes-native-change-c.sh` (or an equivalent operator execution
-channel). A1 state reconciliation is complete (this tick). No A2 selection
-backtest and no holdout inspection until a new canonical funding data contract
-exists and Gate-0 disposition advances beyond `EXTEND`.
+channel). A1 state reconciliation is complete (this tick). The next Gate-0
+gate is **Luke's signed `FUNDING_CONTRACT_V2_OPTION` decision on #708**
+(options A/B/C/D, delivered in PR #709 `90fb9d9`); no A2 selection backtest
+and no holdout inspection until a new canonical funding data contract exists
+and Gate-0 disposition advances beyond `EXTEND`.
 
 **Not authorized:** executor deployment or restart, runtime proof, R5B
 continuation, strategy reload, container mutation, kill-switch clear/bypass,
