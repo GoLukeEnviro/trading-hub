@@ -1,8 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-08-02 after #674 completion. Phase C exit gate `edge_decision_recorded` is **not yet satisfied**. A0 preflight GREEN (PR #682, `72421de`). Backtest Contract GREEN (PR #687, `79ad6dd`). Issue backlog reconciled: 27→5 open issues. #674 complete (PR #690, `ea04ca2`). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-08-13 after #683 recovery (RUNTIME_BASELINE_GREEN) and PR #700 merge (host-native 0.20.0 side-by-side upgrade path, issue #699 A1 prerequisite). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (funding contract decision `REJECT_INCOMPLETE_FUNDING`, Gate-0 `EXTEND`). Phase C remains `in_progress`.
 >
-> **Previous:** 2026-08-02 after issue backlog reconciliation (27→6). A0 preflight GREEN, Backtest Contract GREEN.
+> **Previous:** 2026-08-02 after #674 completion. A0 preflight GREEN (PR #682, `72421de`). Backtest Contract GREEN (PR #687, `79ad6dd`). Issue backlog reconciled: 27→5 open issues. #674 complete (PR #690, `ea04ca2`).
 >
 > **Previous:** C5.2 A0-FAIL documented (#664, `01b7fb2`). C5.3 corrective
 > fully strips FreqForge_Gate0_Core_v1 of all dependencies, introduces manifest
@@ -159,20 +159,67 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 
 ### Next steps
 
-1. **#683** — DONE (reconciled 2026-08-02: runtime baseline NOT green — see section below). Standing Owner Authorization applies; next selected roadmap task (post-merge reconciliation of #697).
+1. **#683** — ✅ DONE (recovery executed 2026-08-13, `RUNTIME_BASELINE_GREEN`; issue closed)
 2. **#604 ratification** — ✅ COMPLETE (Luke ratified V3_1, comment 5168056708, 2026-08-03)
 3. **#697 native dataset** — ✅ EXECUTED (RUN `issue697-20260803T155723Z`, frozen; funding incomplete)
 4. **Funding contract decision** — ✅ `REJECT_INCOMPLETE_FUNDING` (Luke, #697 comment 5179705029); Gate-0 disposition `EXTEND`
-5. **Define new canonical funding data contract** — next Gate-0 follow-up requirement (not implemented yet)
-6. **Create A2 Selection Backtest issue** — blocked until new funding contract exists
-7. **Execute selection-only backtest** — NOT authorized
-8. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
-9. **C6 holdout ceremony** — only after valid selection outcome
-10. **Record canonical Gate-0 edge decision**
-12. **Execute #600 ADR**
-13. **Reassess #496**
+5. **#699 A1 prerequisite (PR #700)** — ✅ MERGED (`a5c1d99`, 2026-08-13): `scripts/hermes-native-change-c.sh` on `main`
+6. **#699 A2 host execution (Hermes 0.19.0 → 0.20.0 via Change C)** — ⏳ `BLOCKED_BY_MISSING_A2_TECHNICAL_PREREQUISITES` (see section below)
+7. **Define new canonical funding data contract** — next Gate-0 follow-up requirement (not implemented yet)
+8. **Create A2 Selection Backtest issue** — blocked until new funding contract exists
+9. **Execute selection-only backtest** — NOT authorized
+10. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
+11. **C6 holdout ceremony** — only after valid selection outcome
+12. **Record canonical Gate-0 edge decision**
+13. **Execute #600 ADR**
+14. **Reassess #496**
 
-## Issue #683 — Runtime Closure Reconciliation (2026-08-02)
+## Issue #699 — Hermes 0.20.0 upgrade via Change C (A2 gate status)
+
+**Status:** `A1_PREREQUISITE_MERGED` — A2 host execution NOT started.
+
+| Gate | Status | Evidence |
+|---|---|---|
+| A1 prerequisite PR #700 | ✅ MERGED | `a5c1d99` (2026-08-13T13:32:52Z); CI green on head `0a026006` |
+| Change-C script on `main` | ✅ PRESENT | `scripts/hermes-native-change-c.sh` (plan/stage/pre-cutover/cutover/validate/rollback/report) |
+| Target release pinned | ✅ PRESENT | 0.20.0 / `v2026.8.3` / `3c27eb62…` (script constants) |
+| Backup + restore drill | ❌ NOT PROVEN | no `backup-proof.json` at `/var/lib/hermes-native-change-c/`; no restore-drill evidence found on host |
+| Executor action to run change-c | ❌ ABSENT | deployed executor @ `9551977` has no `run_script`/`change_c` action (registry: systemd/docker/fs/git/caddy/ufw/hostname/sysctl/users only) |
+| Staged 0.20.0 release | ❌ NOT STAGED | `/opt/hermes-native/releases/` contains only 0.18.2 + 0.19.0; `current` → 0.19.0 |
+| Snapshot / rollback / audit | ⏳ PENDING | required by issue contract; not yet in place for this upgrade |
+
+**Blocker:** `BLOCKED_BY_MISSING_A2_TECHNICAL_PREREQUISITES` — the issue's own
+acceptance criteria require (a) a verified backup + restore drill and (b) an
+execution path for the Change-C script. The deployed root executor has no
+action that can run `scripts/hermes-native-change-c.sh` (no generic shell
+execution by design), and no backup proof exists. The A2 host execution must
+not start until these technical prerequisites are green. No runtime mutation
+was performed by this tick.
+
+## Issue #683 — Runtime Closure Reconciliation (2026-08-13)
+
+**Status:** `RUNTIME_BASELINE_GREEN` — recovery executed 2026-08-13, issue closed.
+
+The 2026-08-02 read-only reconciliation (below) found the runtime baseline NOT
+restored. The recovery run on 2026-08-13 (issue #683,
+`APPROVED_A2_HERMESTRADER_RUNTIME_RECOVERY` + Standing Owner Authorization)
+restored the control plane. Verified live on 2026-08-13 (this tick):
+
+| Criterion | Result | Evidence |
+|---|---|---|
+| Executor service active | ✅ PASS | `systemctl is-active hermes-root-executor.service` = active; `executor_health` ALLOWED (audit `a43672d3`) |
+| Executor action surface | ✅ PASS | Deployed @ `9551977`; `systemctl_is_active`, `docker_ps`, `fs_*` ALLOWED (audits `9ade2e61`, `5b1524d8`, `5c2b4e7d`, `dd835a4e`) |
+| Writer lock | ✅ PASS | `/opt/data/state/repo-writer/hermes-repo-writer.lock` present (10000:10000, 0600); acquired by this tick |
+| Dry-run fleet | ✅ PASS | 5/5 `Up (healthy)` via `docker_ps` (freqforge, freqforge-canary, regime-hybrid, webserver, rainbow) |
+| dry_run=true configs | ✅ PASS | 5/5 configs `dry_run=True futures` (recovery report) |
+| Native gateway | ✅ PASS | hermes-gateway/dashboard/desktop-serve all `active` (audits `9ade2e61`, `5b1524d8`, `5c2b4e7d`) |
+| Roadmap cron | ✅ PASS | exactly 1 job `trading-hub-roadmap-tick` (`*/30 * * * *`, next run 2026-08-13T15:00Z) |
+| Kill switch / live | ✅ PASS | `NORMAL`; live_trading=NO; holdout=NO |
+
+**Full recovery report:** `/opt/data/hermes/recovery-683/recovery-report-2026-08-13.md`
+(host-resident; pre/post hashes, backup manifest, smoke results, mutation inventory).
+
+### Historical (2026-08-02) — superseded by the 2026-08-13 recovery
 
 **Status:** `BLOCKED_BY_MISSING_A2_MARKER` — runtime baseline NOT green.
 
@@ -191,9 +238,9 @@ Issue #683 is **not restored**:
 | Roadmap cron | ❌ FAIL | **0 jobs**; `trading-hub-roadmap-tick` missing |
 | Kill switch / live | ✅ PASS | `NORMAL`; live_trading=NO; holdout=NO |
 
-**Blocker:** The original A2 marker
+**Blocker (historical):** The original A2 marker
 (`APPROVED_A2_HERMESTRADER_RUNTIME_RECOVERY`, valid until 2026-08-01T18:00:00Z)
-has expired. A fresh time-limited A2 marker from Luke is required before any
+had expired. A fresh time-limited A2 marker from Luke was required before any
 runtime mutation. No self-approval possible.
 
 **Full report:** [`issue-683-closure-reconciliation-2026-08-02.md`](../reports/issue-683-closure-reconciliation-2026-08-02.md)
@@ -383,16 +430,20 @@ missing-file tests, and eventual bot-scoped entry integration.
 
 ## 6. Go / no-go
 
-**Allowed next repository work:** #683 read-only closure reconciliation — verify
-executor, fleet, cron, writer lock. This is A0/A1 work (Standing Owner
-Authorization active; see ADR-2026-08-04). No A2 selection backtest and no
-holdout inspection until a new canonical funding data contract exists and
-Gate-0 disposition advances beyond `EXTEND`.
+**Allowed next repository work:** #699 A2 host execution (Hermes 0.19.0 →
+0.20.0 via Change C) once its technical prerequisites are green — verified
+backup + restore drill and an executor action path for
+`scripts/hermes-native-change-c.sh` (or an equivalent operator execution
+channel). A1 state reconciliation is complete (this tick). No A2 selection
+backtest and no holdout inspection until a new canonical funding data contract
+exists and Gate-0 disposition advances beyond `EXTEND`.
 
 **Not authorized:** executor deployment or restart, runtime proof, R5B
 continuation, strategy reload, container mutation, kill-switch clear/bypass,
 new root capabilities, live-capital changes, selection backtest on the frozen
-dataset, synthetic funding, `funding_rate=0`, external data mixing.
+dataset, synthetic funding, `funding_rate=0`, external data mixing, and the
+#699 A2 upgrade itself until backup + restore drill and an execution path are
+proven.
 
 The repository writer remains single-writer and PR-only. Under the Standing
 Owner Authorization (ADR-2026-08-04), A1 merges follow the path
