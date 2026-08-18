@@ -1,6 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-08-18 after #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged) and #705 completion (canonical funding data contract, PR #706 `96f1865`). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; selection backtest #702 now A2-authorized). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-08-18 after #702 reopen (auto-close corrected: PR #714 delivered only the A1 Precondition-Teil; the A2 selection backtest did **not** run) and #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
+>
+> **Previous:** 2026-08-18 after #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A`; contract v2 frozen via PR #712 `fa3fb89` merged; state reconciled via PR #713) and #705 completion (canonical funding data contract, PR #706 `96f1865`).
 >
 > **Previous:** 2026-08-13 after #708 reopen (auto-close corrected; options analysis PR #709 `90fb9d9` merged; **Luke decision pending**) and #705 completion (canonical funding data contract, PR #706 `96f1865`).
 >
@@ -170,7 +172,7 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 7. **#705 canonical funding data contract** — ✅ COMPLETE (PR #706 `96f1865`, 2026-08-13)
 8. **#708 new canonical funding data contract (longer history)** — ✅ COMPLETE (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged 2026-08-18; issue closed)
 9. **Create A2 Selection Backtest issue** — ✅ DONE (#702 created 2026-08-13)
-10. **Execute selection-only backtest** — ⏳ A2 authorized (Owner blanket authorization 2026-08-18 documented on #702); execution is the next gate
+10. **Execute selection-only backtest** — ⏳ **OPERATOR-GATED** (see the #702 section below): A1 precondition merged (PR #714 `0bf5db1`); A2 execution blocked on (a) results-dir ownership and (b) executor-policy approval marker. One operator action unblocks it: `sudo chown 10000:10000 /opt/data/gate0-backtest-results`
 11. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
 12. **C6 holdout ceremony** — only after valid selection outcome
 13. **Record canonical Gate-0 edge decision**
@@ -235,6 +237,54 @@ progress: **Option A** (smallest compliant step, needs explicit confirmation).
 **Decision framework:** `docs/reports/canonical-funding-data-contract-v2-options-2026-08-13.md`.
 Luke's signed comment (2026-08-18, comment 5329852393) selected **Option A**;
 the contract values are frozen in `si_v2/research/backtest_contract.py` (PR #712).
+
+## Issue #702 — Selection-only backtest (A2, operator-gated; reopened 2026-08-18)
+
+**Status:** `REOPENED` — A1 precondition merged; A2 execution **NOT started**
+(`OPERATOR_GATED`).
+
+PR #714 (`fix/research: make Gate-0 backtest command executable and allowlist
+Gate-0 paths`, merge `0bf5db1`, 2026-08-18T16:44:23Z) delivered the **A1
+Precondition-Teil** of #702 only:
+
+- `BACKTEST_COMMAND` fixed: `--user 10000:10000` → `--group-add 10000`
+  (ftuser + supplemental GID 10000; the pinned image cannot execute
+  `--user 10000:10000` — #697 finding, verified 2026-08-18)
+- Executor allowlist extended: `/opt/data/gate0-freqtrade-native-r1` (read)
+  and `/opt/data/gate0-backtest-results` (read+write)
+- CI 3/3 SUCCESS, merge guard `ready:true`, blockers `[]`
+
+Because the PR body contained `Closes #702`, GitHub auto-closed #702 at
+2026-08-18T16:44:24Z — **one second after the merge**. The A2 selection
+backtest itself had **not** run (no results persisted, no
+`PASS_SELECTION`/`EXTEND`/`REJECT`/`INVALID` recorded). This is the same
+decision-issue auto-close trap documented for #708 (PR #711). The issue was
+**reopened** (REST `state=open`) with a documenting comment; the merge
+happened **before** the A2 deliverable, so the auto-close is incorrect.
+
+**A2 execution blockers (verified 2026-08-18, live):**
+
+1. **Results-dir ownership:** `/opt/data/gate0-backtest-results` is
+   `deploy:deploy 2770` (created 2026-08-18T15:51Z) — neither `hermes`
+   (uid 10000) nor the backtest container (ftuser + GID 10000) can write.
+   Operator action: `sudo chown 10000:10000 /opt/data/gate0-backtest-results`
+2. **Executor-policy approval marker:** server-side `policy.py`
+   `APPROVED_MARKERS = {APPROVED_HERMES_ROOT_EXECUTOR_CLIENT_INTEGRATION,
+   APPROVED_HERMESTRADER_DRY_RUN_DEPLOYMENT}`. The Owner blanket
+   authorization (2026-08-18, documented on #702) is **not** one of these
+   markers; any A2 executor mutation is rejected server-side with
+   `approval_reference_missing_or_invalid` (verified live via `fs_chown`
+   probe). Not interpretable or bypassable by the agent.
+
+**Remaining acceptance criteria of #702 (still open):** marker/policy
+unblock (operator), selection-timerange `[2024-12-01, 2026-01-01)`, holdout
+physically absent, walk-forward + regime coverage + costs/funding/slippage,
+confidence gates, `lookahead-analysis` + `recursive-analysis`, reproducible
+second run, outcome record.
+
+**Prohibitions remain binding:** no holdout access, no live trading, no
+`dry_run=false`, no exchange keys, no frozen-dataset mutation, no pin
+changes.
 
 ## Issue #699 — Hermes 0.20.0 upgrade via Change C (A2 gate status)
 
@@ -492,15 +542,15 @@ missing-file tests, and eventual bot-scoped entry integration.
 
 ## 6. Go / no-go
 
-**Allowed next repository work:** #699 A2 host execution (Hermes 0.19.0 →
-0.20.0 via Change C) once its technical prerequisites are green — verified
-backup + restore drill and an executor action path for
-`scripts/hermes-native-change-c.sh` (or an equivalent operator execution
-channel). A1 state reconciliation is complete (this tick). The next Gate-0
-gate is **Luke's signed `FUNDING_CONTRACT_V2_OPTION` decision on #708**
-(options A/B/C/D, delivered in PR #709 `90fb9d9`); no A2 selection backtest
-and no holdout inspection until a new canonical funding data contract exists
-and Gate-0 disposition advances beyond `EXTEND`.
+**Allowed next repository work:** A1 reconciliation is complete (this tick).
+The next Gate-0 gate is the **A2 execution of the selection-only backtest
+(#702)** — the A1 precondition merged (PR #714 `0bf5db1`, 2026-08-18) and
+funding contract v2 Option A is frozen (PR #712 `fa3fb89`). #702 is reopened
+and **operator-gated**: one host action
+(`sudo chown 10000:10000 /opt/data/gate0-backtest-results`) plus a
+policy-recognized A2 approval marker (or an explicit operator extension of
+the executor `APPROVED_MARKERS`) are required before the A2 execution can
+start. No A2 backtest and no holdout inspection until those are green.
 
 **Not authorized:** executor deployment or restart, runtime proof, R5B
 continuation, strategy reload, container mutation, kill-switch clear/bypass,
