@@ -531,6 +531,195 @@ def convert_funding_to_freqtrade_with_coverage(
     return out, report
 
 
+# ---------------------------------------------------------------------------
+# Funding cost model v2 — Option A (issue #708; ESTIMATED_GAP)
+# ---------------------------------------------------------------------------
+# Luke's decision 2026-08-18 (#708 comment 5329852393):
+#   FUNDING_CONTRACT_V2_OPTION=A
+#   FUNDING_STATUS=INCOMPLETE_CONFIRMED_NATIVE_LIMIT
+#   FUNDING_COST_MODEL=ESTIMATED_GAP
+# Semantics: the dataset coverage criterion stays fail-closed (no grace,
+# no silent gaps). For the cost model, the uncovered period is filled with a
+# documented best-effort estimate derived EXCLUSIVELY from the real observed
+# rates (per-pair median, conservatively capped). The estimate is explicitly
+# labeled ESTIMATED — never presented as fetched data. No synthetic rates,
+# no funding_rate=0 fill, no interpolation presented as measurement.
+FUNDING_CONTRACT_V2_OPTION = "A"
+FUNDING_COST_MODEL = "ESTIMATED_GAP"
+FUNDING_ESTIMATE_METHOD = "PER_PAIR_MEDIAN_CAPPED"
+# Conservative cap for the per-pair median estimate (0.1% per 8h interval).
+# Applied symmetrically: estimate = clamp(median, -cap, +cap).
+FUNDING_ESTIMATE_CAP = 0.001
+# Explicit label for estimate rows in the cost-model output.
+FUNDING_ESTIMATE_LABEL = "ESTIMATED"
+
+
+@dataclass(frozen=True)
+class FundingGapEstimate:
+    """Option-A gap estimate for one pair (issue #708).
+
+    ``estimate_rate`` is derived exclusively from the real observed rates
+    (per-pair median, capped at ``FUNDING_ESTIMATE_CAP``). ``gaps`` lists
+    every uncovered period inside the required window (leading, trailing or
+    both — no silent gap). When the observed window already covers the full
+    required window, ``gaps`` is empty and ``estimate_rate`` is ``None``.
+    """
+
+    pair: str
+    observed_first: datetime | None
+    observed_last: datetime | None
+    gaps: tuple[tuple[datetime, datetime], ...]
+    estimate_rate: float | None
+    method: str = FUNDING_ESTIMATE_METHOD
+    label: str = FUNDING_ESTIMATE_LABEL
+    cap: float = FUNDING_ESTIMATE_CAP
+    observed_rate_count: int = 0
+    uncertainty_band: float | None = None
+
+
+def estimate_funding_gap(
+    funding_rows: Sequence[tuple[datetime, float]],
+    *,
+    pair: str = "BTC/USDT:USDT",
+    required_from: datetime = FUNDING_COVERAGE_REQUIRED_FROM,
+    required_to: datetime = FUNDING_COVERAGE_REQUIRED_TO,
+    cap: float = FUNDING_ESTIMATE_CAP,
+) -> FundingGapEstimate:
+    """Derive the Option-A gap estimate for one pair (issue #708).
+
+    Fail-closed: an empty observed dataset raises ``RuntimeError``
+    (``FUNDING_ESTIMATE_EMPTY``) — no estimate may be derived from nothing.
+    The estimate is the per-pair median of the real observed rates, clamped
+    to ``[-cap, +cap]``. Every uncovered period inside the required window is
+    listed in ``gaps`` (leading, trailing or both). The uncertainty band is
+    a conservative sensitivity bound: ``max(0.5 * abs(estimate_rate), 1e-4)``.
+    """
+    coverage = compute_funding_coverage(funding_rows, pair=pair)
+    if coverage.first is None or coverage.last is None:
+        raise RuntimeError(
+            f"FUNDING_ESTIMATE_EMPTY: {pair} has no observed funding rows"
+        )
+    if coverage.first <= required_from and coverage.last >= required_to:
+        # Full observed coverage — no gap, no estimate required.
+        return FundingGapEstimate(
+            pair=pair,
+            observed_first=coverage.first,
+            observed_last=coverage.last,
+            gaps=(),
+            estimate_rate=None,
+            observed_rate_count=coverage.rate_count,
+            uncertainty_band=None,
+        )
+    unique: dict[int, float] = {}
+    for ts, rate in funding_rows:
+        unique[int(ts.timestamp() * 1000)] = float(rate)
+    rates = sorted(unique.values())
+    median = rates[len(rates) // 2] if len(rates) % 2 else (
+        (rates[len(rates) // 2 - 1] + rates[len(rates) // 2]) / 2.0
+    )
+    estimate = max(-cap, min(cap, median))
+    gaps: list[tuple[datetime, datetime]] = []
+    if coverage.first > required_from:
+        gaps.append((required_from, min(coverage.first, required_to)))
+    if coverage.last < required_to:
+        gaps.append((max(coverage.last, required_from), required_to))
+    band = max(0.5 * abs(estimate), 1e-4)
+    return FundingGapEstimate(
+        pair=pair,
+        observed_first=coverage.first,
+        observed_last=coverage.last,
+        gaps=tuple(gaps),
+        estimate_rate=estimate,
+        observed_rate_count=coverage.rate_count,
+        uncertainty_band=band,
+    )
+
+
+def funding_gap_estimate_report(
+    funding_rows: Sequence[tuple[datetime, float]],
+    *,
+    pair: str = "BTC/USDT:USDT",
+    required_from: datetime = FUNDING_COVERAGE_REQUIRED_FROM,
+    required_to: datetime = FUNDING_COVERAGE_REQUIRED_TO,
+) -> dict[str, object]:
+    """Build the canonical Option-A gap estimate report dict.
+
+    Deterministic and exception-free: always returns the observed window, the
+    gap window, the estimate (or ``None``), the method, the label, the cap,
+    the uncertainty band and the option/status identifiers. This is the
+    no-silent-gap evidence record for the v2 cost model.
+    """
+    estimate = estimate_funding_gap(
+        funding_rows, pair=pair, required_from=required_from, required_to=required_to
+    )
+    return {
+        "pair": pair,
+        "option": FUNDING_CONTRACT_V2_OPTION,
+        "cost_model": FUNDING_COST_MODEL,
+        "status": FUNDING_STATUS,
+        "source": FUNDING_SOURCE,
+        "method": estimate.method,
+        "label": estimate.label,
+        "cap": estimate.cap,
+        "observed_first": estimate.observed_first.isoformat() if estimate.observed_first else None,
+        "observed_last": estimate.observed_last.isoformat() if estimate.observed_last else None,
+        "gaps": [
+            [gap_from.isoformat(), gap_to.isoformat()] for gap_from, gap_to in estimate.gaps
+        ],
+        "estimate_rate": estimate.estimate_rate,
+        "uncertainty_band": estimate.uncertainty_band,
+        "observed_rate_count": estimate.observed_rate_count,
+        "required_from": required_from.isoformat(),
+        "required_to": required_to.isoformat(),
+    }
+
+
+def convert_funding_to_freqtrade_with_gap_estimate(
+    funding_rows: Sequence[tuple[datetime, float]],
+    output_dir: Path,
+    *,
+    pair: str = "BTC/USDT:USDT",
+    required_from: datetime = FUNDING_COVERAGE_REQUIRED_FROM,
+    required_to: datetime = FUNDING_COVERAGE_REQUIRED_TO,
+) -> tuple[Path, dict[str, object], Path]:
+    """Option-A cost-model conversion: observed rows + documented gap estimate.
+
+    Writes the Freqtrade funding JSON containing the real observed rows and,
+    for the uncovered period, deterministic estimate rows derived from the
+    observed per-pair median (capped). A sidecar ``<pair_key>_estimate.json``
+    records the exact gap window, estimate, method, label and uncertainty band
+    so no estimate row is ever presented as fetched data. Fail-closed on an
+    empty observed dataset (``FUNDING_ESTIMATE_EMPTY``): no JSON and no
+    sidecar are written. Returns ``(json_path, report, sidecar_path)``.
+    """
+    report = funding_gap_estimate_report(
+        funding_rows, pair=pair, required_from=required_from, required_to=required_to
+    )
+    estimate = estimate_funding_gap(
+        funding_rows, pair=pair, required_from=required_from, required_to=required_to
+    )
+    pair_key = pair.replace("/", "_").replace(":", "_")
+    out = output_dir / "futures_funding_rate" / f"{pair_key}.json"
+    sidecar = output_dir / "futures_funding_rate" / f"{pair_key}_estimate.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    unique: dict[int, float] = {}
+    for ts, rate in funding_rows:
+        unique[int(ts.timestamp() * 1000)] = float(rate)
+    if estimate.estimate_rate is not None:
+        # Deterministic hourly estimate rows across every gap window.
+        step = 3600
+        for gap_from, gap_to in estimate.gaps:
+            start_ms = int(gap_from.timestamp() * 1000)
+            end_ms = int(gap_to.timestamp() * 1000)
+            ts_ms = start_ms
+            while ts_ms < end_ms:
+                unique.setdefault(ts_ms, estimate.estimate_rate)
+                ts_ms += step * 1000
+    out.write_text(json.dumps(sorted(unique.items()), separators=(",", ":")))
+    sidecar.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    return out, report, sidecar
+
+
 def validate_warmup_excluded_from_metrics(
     warmup_candles: Sequence[CandleV1],
     selection_start: datetime = SELECTION_START_UTC,

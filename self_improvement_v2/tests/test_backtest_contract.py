@@ -14,8 +14,13 @@ from si_v2.research.backtest_contract import (
     CONFIG_FILE_SHA256,
     FREQTRADE_NATIVE_DATA_DIR,
     FREQTRADE_VERSION,
+    FUNDING_CONTRACT_V2_OPTION,
+    FUNDING_COST_MODEL,
     FUNDING_COVERAGE_REQUIRED_FROM,
     FUNDING_COVERAGE_REQUIRED_TO,
+    FUNDING_ESTIMATE_CAP,
+    FUNDING_ESTIMATE_LABEL,
+    FUNDING_ESTIMATE_METHOD,
     FUNDING_HISTORY_LIMIT_DAYS,
     FUNDING_SOURCE,
     FUNDING_STATUS,
@@ -33,9 +38,12 @@ from si_v2.research.backtest_contract import (
     compute_funding_coverage,
     convert_funding_to_freqtrade,
     convert_funding_to_freqtrade_with_coverage,
+    convert_funding_to_freqtrade_with_gap_estimate,
+    estimate_funding_gap,
     exclude_holdout,
     full_dataset_timerange,
     funding_coverage_report,
+    funding_gap_estimate_report,
     materialize_selection_dataset,
     render_backtest_command,
     selection_timerange,
@@ -590,3 +598,130 @@ class TestConvertFundingWithCoverage:
         rows = [(datetime(2026, 5, 5, tzinfo=UTC), 0.0001)]
         path = convert_funding_to_freqtrade(rows, tmp_path, pair="BTC/USDT:USDT")
         assert path.exists()
+
+
+class TestFundingContractV2OptionA:
+    """Funding cost model v2 — Option A (issue #708, ESTIMATED_GAP)."""
+
+    def test_option_a_constants(self):
+        assert FUNDING_CONTRACT_V2_OPTION == "A"
+        assert FUNDING_COST_MODEL == "ESTIMATED_GAP"
+        assert FUNDING_ESTIMATE_METHOD == "PER_PAIR_MEDIAN_CAPPED"
+        assert FUNDING_ESTIMATE_CAP == 0.001
+        assert FUNDING_ESTIMATE_LABEL == "ESTIMATED"
+        # The dataset-level status stays fail-closed (no silent gaps).
+        assert FUNDING_STATUS == "INCOMPLETE_CONFIRMED_NATIVE_LIMIT"
+
+    def test_full_coverage_no_estimate_needed(self):
+        rows = [
+            (datetime(2024, 12, 1, tzinfo=UTC), 0.0001),
+            (datetime(2026, 6, 30, tzinfo=UTC), 0.0002),
+        ]
+        est = estimate_funding_gap(rows, pair="BTC/USDT:USDT")
+        assert est.gaps == ()
+        assert est.estimate_rate is None
+        assert est.uncertainty_band is None
+
+    def test_empty_observed_fails_closed(self):
+        with pytest.raises(RuntimeError, match="FUNDING_ESTIMATE_EMPTY"):
+            estimate_funding_gap([], pair="BTC/USDT:USDT")
+
+    def test_gap_estimate_derived_from_observed_median(self):
+        # Observed window: 2026-05-05 .. 2026-05-07 (gaps on both sides).
+        rows = [
+            (datetime(2026, 5, 5, tzinfo=UTC), 0.0001),
+            (datetime(2026, 5, 6, tzinfo=UTC), 0.0003),
+            (datetime(2026, 5, 7, tzinfo=UTC), 0.0002),
+        ]
+        est = estimate_funding_gap(rows, pair="BTC/USDT:USDT")
+        assert est.estimate_rate == 0.0002  # median of observed rates
+        assert est.gaps == (
+            (datetime(2024, 12, 1, tzinfo=UTC), datetime(2026, 5, 5, tzinfo=UTC)),
+            (datetime(2026, 5, 7, tzinfo=UTC), datetime(2026, 6, 30, tzinfo=UTC)),
+        )
+        assert est.label == "ESTIMATED"
+        assert est.uncertainty_band is not None
+
+    def test_gap_estimate_capped(self):
+        rows = [
+            (datetime(2026, 5, 5, tzinfo=UTC), 0.01),
+            (datetime(2026, 5, 6, tzinfo=UTC), 0.02),
+        ]
+        est = estimate_funding_gap(rows, pair="BTC/USDT:USDT")
+        assert est.estimate_rate == FUNDING_ESTIMATE_CAP  # clamped to cap
+
+    def test_gap_estimate_negative_capped(self):
+        rows = [
+            (datetime(2026, 5, 5, tzinfo=UTC), -0.01),
+            (datetime(2026, 5, 6, tzinfo=UTC), -0.02),
+        ]
+        est = estimate_funding_gap(rows, pair="BTC/USDT:USDT")
+        assert est.estimate_rate == -FUNDING_ESTIMATE_CAP
+
+    def test_report_shape(self):
+        rows = [(datetime(2026, 5, 5, tzinfo=UTC), 0.0001)]
+        report = funding_gap_estimate_report(rows, pair="BTC/USDT:USDT")
+        assert report["option"] == "A"
+        assert report["cost_model"] == "ESTIMATED_GAP"
+        assert report["label"] == "ESTIMATED"
+        assert report["estimate_rate"] == 0.0001
+        assert report["gaps"] == [
+            ["2024-12-01T00:00:00+00:00", "2026-05-05T00:00:00+00:00"],
+            ["2026-05-05T00:00:00+00:00", "2026-06-30T00:00:00+00:00"],
+        ]
+        assert report["uncertainty_band"] is not None
+        assert report["status"] == "INCOMPLETE_CONFIRMED_NATIVE_LIMIT"
+
+    def test_conversion_writes_json_and_sidecar(self, tmp_path):
+        rows = [
+            (datetime(2026, 5, 5, tzinfo=UTC), 0.0001),
+            (datetime(2026, 5, 6, tzinfo=UTC), 0.0002),
+        ]
+        out, report, sidecar = convert_funding_to_freqtrade_with_gap_estimate(
+            rows, tmp_path, pair="BTC/USDT:USDT"
+        )
+        assert out.exists()
+        assert sidecar.exists()
+        assert report["estimate_rate"] == pytest.approx(0.00015)  # median of two observed
+        import json
+
+        data = json.loads(out.read_text())
+        # Observed rows + deterministic hourly estimate rows across the gaps.
+        assert len(data) > 2
+        sidecar_data = json.loads(sidecar.read_text())
+        assert sidecar_data["label"] == "ESTIMATED"
+        assert sidecar_data["cost_model"] == "ESTIMATED_GAP"
+
+    def test_conversion_empty_fails_closed_no_output(self, tmp_path):
+        with pytest.raises(RuntimeError, match="FUNDING_ESTIMATE_EMPTY"):
+            convert_funding_to_freqtrade_with_gap_estimate(
+                [], tmp_path, pair="BTC/USDT:USDT"
+            )
+        assert not (tmp_path / "futures_funding_rate").exists()
+
+    def test_conversion_full_coverage_no_estimate_rows(self, tmp_path):
+        rows = [
+            (datetime(2024, 12, 1, tzinfo=UTC), 0.0001),
+            (datetime(2026, 6, 30, tzinfo=UTC), 0.0002),
+        ]
+        out, report, sidecar = convert_funding_to_freqtrade_with_gap_estimate(
+            rows, tmp_path, pair="BTC/USDT:USDT"
+        )
+        assert report["estimate_rate"] is None
+        import json
+
+        data = json.loads(out.read_text())
+        assert len(data) == 2  # only observed rows, no estimate rows
+        sidecar_data = json.loads(sidecar.read_text())
+        assert sidecar_data["gaps"] == []
+
+    def test_estimate_rows_never_presented_as_observed(self, tmp_path):
+        # The sidecar must always accompany the JSON so estimate rows are
+        # distinguishable from fetched data (no silent gap masking).
+        rows = [(datetime(2026, 5, 5, tzinfo=UTC), 0.0001)]
+        out, report, sidecar = convert_funding_to_freqtrade_with_gap_estimate(
+            rows, tmp_path, pair="BTC/USDT:USDT"
+        )
+        assert out.exists() and sidecar.exists()
+        assert report["label"] == "ESTIMATED"
+        assert len(report["gaps"]) == 2
