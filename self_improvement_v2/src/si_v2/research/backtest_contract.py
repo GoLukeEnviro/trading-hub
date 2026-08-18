@@ -88,6 +88,13 @@ PROJECT_DIR = Path("/opt/data/projects/trading-hub/freqforge/user_data")
 FREQTRADE_NATIVE_DATA_DIR = Path("/opt/data/gate0-freqtrade-native-r1")
 RESEARCH_SNAPSHOT_DIR = Path("/opt/data/gate0-snapshot-v2-r1")
 BACKTEST_RESULTS_DIR = Path("/opt/data/gate0-backtest-results")
+# Holdout-excluded selection datadir (materialized from the frozen native
+# datadir by the container-side materializer; see SELECTION_MATERIALIZE_SCRIPT).
+SELECTION_DATA_DIR = Path("/opt/data/gate0-backtest-results/selection-data")
+# Container-side materializer script (runs inside the pinned image).
+SELECTION_MATERIALIZE_SCRIPT = (
+    "self_improvement_v2/src/si_v2/research/selection_materialize.py"
+)
 
 # Container paths
 CONTAINER_USER_DATA = Path("/freqtrade/user_data")
@@ -96,6 +103,12 @@ CONTAINER_RESULTS_DIR = Path("/freqtrade/user_data/backtest_results")
 
 # Selection results subdirectory (inside the results mount)
 RESULTS_SUBDIR = "gate0-selection"
+
+# Leverage-tiers cache: Freqtrade 2026.7 writes ``futures/leverage_tiers_<ccy>.json``
+# into the datadir on first futures backtest (read-only datadir would fail).
+# The materializer seeds this cache once; the backtest then runs fully offline
+# with the datadir mounted read-only.
+LEVERAGE_TIERS_CACHE_FILENAME = "leverage_tiers_USDT.json"
 
 # ---------------------------------------------------------------------------
 # Canonical funding data contract (issue #705; verified 2026-08-02/#697 A2 run)
@@ -120,7 +133,7 @@ FUNDING_COVERAGE_REQUIRED_TO = datetime(2026, 6, 30, tzinfo=UTC)
 
 BACKTEST_COMMAND = (
     "docker run --rm "
-    "--user 10000:10000 "
+    "--group-add 10000 "
     "-v {project_dir}:/freqtrade/user_data/project:ro "
     "-v {data_dir}:/freqtrade/user_data/data:ro "
     "-v {results_dir}:/freqtrade/user_data/backtest_results:rw "

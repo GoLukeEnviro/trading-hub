@@ -151,6 +151,18 @@ class TestCommandContract:
     def test_strategy_mount_read_only(self):
         assert "/freqtrade/user_data/project:ro" in BACKTEST_COMMAND
 
+    def test_no_user_10000_flag(self):
+        # #697 UID-corrective (Option B_PLUS): the pinned image's env lives in
+        # /home/ftuser/.local (700 ftuser) — --user 10000:10000 is NOT
+        # executable. The canonical command uses the default ftuser with
+        # supplemental GID 10000 (--group-add 10000).
+        assert "--user 10000:10000" not in BACKTEST_COMMAND
+
+    def test_group_add_10000_present(self):
+        # Supplemental GID 10000 grants read access to the frozen dataset
+        # (10000:10000, 0640) and write access to the results mount.
+        assert "--group-add 10000" in BACKTEST_COMMAND
+
     def test_path_constants_absolute(self):
         assert FREQTRADE_NATIVE_DATA_DIR.is_absolute()
         assert RESEARCH_SNAPSHOT_DIR.is_absolute()

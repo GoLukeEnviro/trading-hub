@@ -47,6 +47,8 @@ FS_READ_ROOTS = (
     "/opt/data/hermes",
     "/opt/data/state",
     "/opt/data/gate0-snapshot",
+    "/opt/data/gate0-freqtrade-native-r1",
+    "/opt/data/gate0-backtest-results",
     "/etc/hermes-root-executor",
     "/run/hermes-root-executor",
     "/tmp",
@@ -58,6 +60,7 @@ FS_WRITE_ROOTS = (
     "/opt/data/hermes",
     "/opt/data/state",
     "/opt/data/gate0-snapshot",
+    "/opt/data/gate0-backtest-results",
     "/opt/data/backups",
     "/tmp",
 )
