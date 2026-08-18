@@ -226,6 +226,19 @@ class TestFilesystemReadActions:
             with pytest.raises(ActionError, match="not_absolute"):
                 build_argv(action, ["relative/path"])
 
+    def test_fs_read_gate0_native_dataset_allowed(self):
+        # #702: the frozen Gate-0 dataset must be readable via the executor
+        # (read-only evidence path for the selection backtest).
+        for action in ["fs_stat", "fs_ls", "fs_read", "fs_checksum"]:
+            argv = build_argv(action, ["/opt/data/gate0-freqtrade-native-r1/futures"])
+            assert argv[-1].startswith("/opt/data/gate0-freqtrade-native-r1")
+
+    def test_fs_read_gate0_backtest_results_allowed(self):
+        # #702: backtest results must be readable for evidence collection.
+        for action in ["fs_stat", "fs_ls", "fs_read", "fs_checksum"]:
+            argv = build_argv(action, ["/opt/data/gate0-backtest-results"])
+            assert argv[-1].startswith("/opt/data/gate0-backtest-results")
+
 
 # ============================================================================
 # Filesystem — mutating actions
@@ -298,6 +311,16 @@ class TestFilesystemWriteActions:
         for action in ["fs_remove", "fs_mkdir"]:
             with pytest.raises(ActionError, match="not_absolute"):
                 build_argv(action, ["relative/path"])
+
+    def test_fs_write_gate0_backtest_results_allowed(self):
+        # #702: the results directory must be writable via the executor
+        # (results mount for the selection backtest).
+        argv = build_argv("fs_mkdir", ["/opt/data/gate0-backtest-results/gate0-selection"])
+        assert argv[-1].startswith("/opt/data/gate0-backtest-results")
+        argv = build_argv("fs_chmod", ["0755", "/opt/data/gate0-backtest-results/gate0-selection"])
+        assert argv[-1].startswith("/opt/data/gate0-backtest-results")
+        argv = build_argv("fs_chown", ["10000:10000", "/opt/data/gate0-backtest-results/gate0-selection"])
+        assert argv[-1].startswith("/opt/data/gate0-backtest-results")
 
 
 # ============================================================================
