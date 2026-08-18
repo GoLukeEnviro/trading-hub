@@ -1,8 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-08-13 after #708 reopen (auto-close corrected; options analysis PR #709 `90fb9d9` merged; **Luke decision pending**) and #705 completion (canonical funding data contract, PR #706 `96f1865`). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (funding contract decision `REJECT_INCOMPLETE_FUNDING`, Gate-0 `EXTEND`). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-08-18 after #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged) and #705 completion (canonical funding data contract, PR #706 `96f1865`). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; selection backtest #702 now A2-authorized). Phase C remains `in_progress`.
 >
-> **Previous:** 2026-08-13 after #708 creation (new canonical funding data contract v2 — options analysis, A1) and #705 completion (canonical funding data contract, PR #706 `96f1865`).
+> **Previous:** 2026-08-13 after #708 reopen (auto-close corrected; options analysis PR #709 `90fb9d9` merged; **Luke decision pending**) and #705 completion (canonical funding data contract, PR #706 `96f1865`).
 >
 > **Previous:** 2026-08-02 after #674 completion. A0 preflight GREEN (PR #682, `72421de`). Backtest Contract GREEN (PR #687, `79ad6dd`). Issue backlog reconciled: 27→5 open issues. #674 complete (PR #690, `ea04ca2`).
 >
@@ -168,9 +168,9 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 5. **#699 A1 prerequisite (PR #700)** — ✅ MERGED (`a5c1d99`, 2026-08-13): `scripts/hermes-native-change-c.sh` on `main`
 6. **#699 A2 host execution (Hermes 0.19.0 → 0.20.0 via Change C)** — ⏳ `BLOCKED_BY_MISSING_A2_TECHNICAL_PREREQUISITES` (see section below)
 7. **#705 canonical funding data contract** — ✅ COMPLETE (PR #706 `96f1865`, 2026-08-13)
-8. **#708 new canonical funding data contract (longer history)** — ⏳ `AWAITING_LUKE_DECISION` (PR #709 `90fb9d9` merged 2026-08-13; issue **reopened** after auto-close correction — decision not yet signed). **Luke decision required** on funding-gap handling (FUNDING_CONTRACT_V2_OPTION, options A/B/C/D; default C)
-9. **Create A2 Selection Backtest issue** — ✅ DONE (#702 created 2026-08-13); execution blocked until new funding contract exists
-10. **Execute selection-only backtest** — NOT authorized
+8. **#708 new canonical funding data contract (longer history)** — ✅ COMPLETE (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged 2026-08-18; issue closed)
+9. **Create A2 Selection Backtest issue** — ✅ DONE (#702 created 2026-08-13)
+10. **Execute selection-only backtest** — ⏳ A2 authorized (Owner blanket authorization 2026-08-18 documented on #702); execution is the next gate
 11. **Record PASS_SELECTION / EXTEND / REJECT / INVALID**
 12. **C6 holdout ceremony** — only after valid selection outcome
 13. **Record canonical Gate-0 edge decision**
@@ -202,11 +202,21 @@ until a new canonical funding data contract (longer history) exists.
 
 ## Issue #708 — New Canonical Funding Data Contract v2 (2026-08-13)
 
-**Status:** `AWAITING_LUKE_DECISION` — PR #709 merged `90fb9d9`
-(2026-08-13T19:48:58Z); issue **reopened** 2026-08-13 (auto-close by
-`Closes #708` corrected — a closed issue cannot receive the signed
-decision). A1 options analysis delivered; **Luke's signed comment is the
-sole authority** for funding-gap handling (`FUNDING_CONTRACT_V2_OPTION`).
+**Status:** `COMPLETE` — Luke decision `FUNDING_CONTRACT_V2_OPTION=A`
+(2026-08-18, comment 5329852393); contract v2 frozen via PR #712
+`fa3fb89` merged 2026-08-18T15:11:52Z; issue closed (decision signed
+before merge — auto-close now correct).
+
+**Frozen contract values (Option A):**
+`FUNDING_CONTRACT_V2_OPTION=A` · `FUNDING_STATUS=INCOMPLETE_CONFIRMED_NATIVE_LIMIT` ·
+`FUNDING_COST_MODEL=ESTIMATED_GAP` · `FUNDING_ESTIMATE_METHOD=PER_PAIR_MEDIAN_CAPPED` ·
+`FUNDING_ESTIMATE_CAP=0.001` · `FUNDING_ESTIMATE_LABEL=ESTIMATED`.
+
+Semantics: dataset coverage criterion stays fail-closed (no grace, no
+silent gaps); cost-model gap filled with a per-pair median estimate
+derived exclusively from real observed rates, explicitly labeled
+`ESTIMATED`, with uncertainty band. `synthetic_funding=PROHIBITED` and
+`funding_rate_zero=PROHIBITED` remain binding.
 
 The #705 contract confirmed no policy-compliant fallback source for longer
 funding history exists. Issue #708 (created 2026-08-13) delivers the
@@ -223,8 +233,8 @@ read-only options analysis and decision framework:
 progress: **Option A** (smallest compliant step, needs explicit confirmation).
 
 **Decision framework:** `docs/reports/canonical-funding-data-contract-v2-options-2026-08-13.md`.
-No option is selected and no contract value is frozen in this PR — Luke's
-signed comment on #708 is the sole authority for the final selection.
+Luke's signed comment (2026-08-18, comment 5329852393) selected **Option A**;
+the contract values are frozen in `si_v2/research/backtest_contract.py` (PR #712).
 
 ## Issue #699 — Hermes 0.20.0 upgrade via Change C (A2 gate status)
 
