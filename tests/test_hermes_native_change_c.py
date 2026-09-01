@@ -22,6 +22,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -49,7 +50,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-agent-fixture"
-version = "0.20.0"
+version = "0.21.0"
 requires-python = ">=3.9"
 
 [project.optional-dependencies]
@@ -66,6 +67,15 @@ PACKAGE_INIT = """\
 def main() -> None:
     print("fixture-hermes")
 """
+
+VERIFIED_BACKUP_PROOF = {
+    "snapshot_id": "abc123",
+    "manifest_verified": True,
+    "checksums_verified": True,
+    "sqlite_integrity_verified": True,
+    "restore_verified": True,
+    "verified": True,
+}
 
 
 def _run_git(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -90,6 +100,10 @@ def _make_bare_fixture_repo(tmp_path: Path, tag: str) -> tuple[Path, str]:
     pkg_dir = work_dir / "hermes_agent_fixture"
     pkg_dir.mkdir()
     (pkg_dir / "__init__.py").write_text(PACKAGE_INIT, encoding="utf-8")
+    (work_dir / "package-lock.json").write_text("{}\n", encoding="utf-8")
+    uv = shutil.which("uv")
+    if uv is not None:
+        subprocess.run([uv, "lock"], cwd=work_dir, capture_output=True, text=True, check=True)
 
     _run_git(["init", "-b", "main"], cwd=work_dir)
     _run_git(["add", "."], cwd=work_dir)
@@ -105,7 +119,29 @@ def _make_bare_fixture_repo(tmp_path: Path, tag: str) -> tuple[Path, str]:
     return bare_dir, sha
 
 
-def _base_env(tmp_path: Path, *, target_sha: str | None = None, target_tag: str = "vtest-0.20.0",
+def _make_fake_node_archive(tmp_path: Path, version: str = "24.20.0") -> tuple[Path, str]:
+    root = tmp_path / f"node-v{version}-linux-x64"
+    bindir = root / "bin"
+    bindir.mkdir(parents=True)
+    node = bindir / "node"
+    node.write_text(f"#!/bin/sh\necho v{version}\n", encoding="utf-8")
+    node.chmod(0o755)
+    npm = bindir / "npm"
+    npm.write_text(
+        "#!/bin/sh\n"
+        "case \" $* \" in\n"
+        "  *' run build '*) mkdir -p hermes_cli/web_dist; echo fixture > hermes_cli/web_dist/index.html;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    npm.chmod(0o755)
+    archive = tmp_path / f"node-v{version}-linux-x64.tar.xz"
+    with tarfile.open(archive, "w:xz") as tf:
+        tf.add(root, arcname=root.name)
+    return archive, hashlib.sha256(archive.read_bytes()).hexdigest()
+
+
+def _base_env(tmp_path: Path, *, target_sha: str | None = None, target_tag: str = "vtest-0.21.0",
               upstream_repo: str | None = None) -> dict[str, str]:
     env = dict(os.environ)
     native_root = tmp_path / "hermes-native"
@@ -120,6 +156,8 @@ def _base_env(tmp_path: Path, *, target_sha: str | None = None, target_tag: str 
         "HERMES_NATIVE_FLEET_BASELINE": str(state_dir / "fleet-baseline.json"),
         "HERMES_NATIVE_REPORT_DIR": str(state_dir / "reports"),
         "HERMES_NATIVE_CHANGE_C_TEST_TARGET_TAG": target_tag,
+        "HERMES_NATIVE_CHANGE_C_TEST_TARGET_VERSION": "0.21.0",
+        "HERMES_NATIVE_UV_BIN": shutil.which("uv") or "/missing/uv",
     })
     if target_sha is not None:
         env["HERMES_NATIVE_CHANGE_C_TEST_TARGET_SHA"] = target_sha
@@ -174,6 +212,10 @@ class TestStaticChecks:
     def test_no_forbidden_patterns(self):
         content = SCRIPT.read_text(encoding="utf-8")
         assert "pip install hermes-agent" not in content
+        assert "uv pip install" not in content
+        assert "UV_NO_CONFIG" not in content
+        assert "uv sync --locked" in content
+        assert "uv lock --check" in content
         assert re.search(r"curl[^\n]*\|[^\n]*bash", content) is None
         assert "origin/main" not in content
         assert "/usr/local/lib/hermes-agent" not in content
@@ -202,6 +244,31 @@ class TestStaticChecks:
     def test_no_daemon_reload(self):
         content = SCRIPT.read_text(encoding="utf-8")
         assert "daemon-reload" not in content
+
+    def test_exact_release_and_state_contract(self):
+        content = SCRIPT.read_text(encoding="utf-8")
+        assert "0.21.0" in content
+        assert "v2026.8.31" in content
+        assert "29112bef099274229cadff79cdff7bf7b99c4b77" in content
+        assert "/opt/data/hermes" in content
+        assert "LEGACY_STATE_PATH_REJECTED" in content
+        assert "not cryptographically verified" in content
+
+    def test_probe_contract_is_exact_and_fail_closed(self):
+        content = SCRIPT.read_text(encoding="utf-8")
+        assert 'before_db[role]["sessions"] == after_db[role]["sessions"]' in content
+        assert 'after_db[role]["integrity"] == ["ok"]' in content
+        assert 'after_db[role]["foreign_key_rows"] == 0' in content
+        assert "cursor[path[-1]] = old" in content
+        assert "never the duplicate" in content
+        assert "127.0.0.1 --port 29119" in content
+        assert "UNEXPECTED_LISTENER" in content
+
+    def test_cutover_is_disabled_in_a1(self):
+        content = SCRIPT.read_text(encoding="utf-8")
+        match = re.search(r"cmd_cutover\(\) \{(.*?)\n\}", content, re.S)
+        assert match and "CUTOVER_SEPARATE_GATE" in match.group(1)
+        assert "atomic_symlink_swap" not in match.group(1)
 
 
 # ---------------------------------------------------------------------------
@@ -255,8 +322,11 @@ class TestPlanNeverMutates:
 class TestStage:
     @requires_uv
     def test_stage_against_fake_remote_creates_release_without_touching_current(self, tmp_path):
-        bare_repo, sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.20.0")
-        env = _base_env(tmp_path, target_sha=sha, target_tag="vtest-0.20.0", upstream_repo=str(bare_repo))
+        bare_repo, sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.21.0")
+        archive, archive_sha = _make_fake_node_archive(tmp_path)
+        env = _base_env(tmp_path, target_sha=sha, target_tag="vtest-0.21.0", upstream_repo=str(bare_repo))
+        env["HERMES_NATIVE_CHANGE_C_TEST_NODE_ARCHIVE"] = str(archive)
+        env["HERMES_NATIVE_CHANGE_C_TEST_NODE_SHA256"] = archive_sha
         native_root = Path(env["HERMES_NATIVE_ROOT"])
         # Pre-existing 0.19.0 + current, to prove stage never touches them.
         release_019 = native_root / "releases" / "0.19.0"
@@ -269,16 +339,24 @@ class TestStage:
         result = _run(["stage"], env, timeout=STAGE_TIMEOUT)
         assert result.returncode == 0, result.stdout + result.stderr
 
-        target_release = native_root / "releases" / "0.20.0"
+        target_release = native_root / "releases" / "0.21.0"
         assert (target_release / "source" / ".git").exists()
-        assert (target_release / "venv" / "bin" / "python").exists() or (target_release / "venv" / "bin" / "python3").exists()
+        assert (
+            (target_release / "venv" / "bin" / "python").exists()
+            or (target_release / "venv" / "bin" / "python3").exists()
+        )
         manifest_path = target_release / "RELEASE-MANIFEST.json"
         assert manifest_path.exists()
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        assert manifest["version"] == "0.20.0"
-        assert manifest["tag"] == "vtest-0.20.0"
+        assert manifest["version"] == "0.21.0"
+        assert manifest["tag"] == "vtest-0.21.0"
         assert manifest["sha"] == sha
         assert manifest["source_commit_verified"] is True
+        assert manifest["tag_commit_verified"] is True
+        assert manifest["lock_gate"] == "PASS"
+        assert manifest["node_archive_sha256"] == archive_sha
+        assert manifest["dashboard_artifacts_verified"] is True
+        assert (target_release / "source" / "hermes_cli" / "web_dist" / "index.html").exists()
         assert (target_release / "bin" / "hermes").exists()
 
         # current + 0.19.0 must be byte-for-byte untouched.
@@ -287,17 +365,61 @@ class TestStage:
 
     @requires_uv
     def test_wrong_sha_aborts_with_target_sha_mismatch_and_cleans_up(self, tmp_path):
-        bare_repo, real_sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.20.0")
+        bare_repo, real_sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.21.0")
         bogus_sha = "0" * 40 if real_sha != "0" * 40 else "1" * 40
-        env = _base_env(tmp_path, target_sha=bogus_sha, target_tag="vtest-0.20.0", upstream_repo=str(bare_repo))
+        env = _base_env(tmp_path, target_sha=bogus_sha, target_tag="vtest-0.21.0", upstream_repo=str(bare_repo))
         native_root = Path(env["HERMES_NATIVE_ROOT"])
 
         result = _run(["stage"], env, timeout=STAGE_TIMEOUT)
 
         assert result.returncode != 0
         assert "TARGET_SHA_MISMATCH" in result.stderr
-        target_release = native_root / "releases" / "0.20.0"
+        target_release = native_root / "releases" / "0.21.0"
         assert not target_release.exists()
+        assert list((Path(env["HERMES_NATIVE_STATE_DIR"]) / "quarantine").glob("stage-0.21.0-*"))
+
+    def test_node_sha_mismatch_fails(self, tmp_path):
+        archive, _ = _make_fake_node_archive(tmp_path)
+        env = _base_env(tmp_path)
+        env["HERMES_NATIVE_CHANGE_C_TEST_NODE_SHA256"] = "0" * 64
+        harness = tmp_path / "node-check.sh"
+        harness.write_text(f'source "{SCRIPT}"\nverify_node_archive "{archive}"\n', encoding="utf-8")
+        result = subprocess.run(["bash", str(harness)], env=env, capture_output=True, text=True)
+        assert result.returncode != 0
+        assert "NODE_SHA_MISMATCH" in result.stderr
+
+    def test_lock_mismatch_fails_without_unlocked_fallback(self, tmp_path):
+        bare_repo, sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.21.0")
+        fake_uv = tmp_path / "uv"
+        python = tmp_path / "python3.13"
+        python.write_text("#!/bin/sh\necho 'Python 3.13.99'\n", encoding="utf-8")
+        python.chmod(0o755)
+        fake_uv.write_text(
+            f'#!/bin/sh\nif [ "$1 $2" = "python find" ]; then echo "{python}"; exit 0; fi\nexit 42\n',
+            encoding="utf-8",
+        )
+        fake_uv.chmod(0o755)
+        env = _base_env(tmp_path, target_sha=sha, upstream_repo=str(bare_repo))
+        env["HERMES_NATIVE_UV_BIN"] = str(fake_uv)
+        result = _run(["stage"], env)
+        assert result.returncode != 0
+        assert "LOCK_GATE_FAIL" in result.stderr
+        assert not (Path(env["HERMES_NATIVE_ROOT"]) / "releases" / "0.21.0").exists()
+
+
+class TestStatePath:
+    def test_legacy_state_path_is_rejected(self, tmp_path):
+        env = _base_env(tmp_path)
+        env["HERMES_NATIVE_HERMES_HOME"] = "/home/hermes/.hermes"
+        native_root = Path(env["HERMES_NATIVE_ROOT"])
+        release = native_root / "releases" / "0.19.0"
+        (release / "bin").mkdir(parents=True)
+        (native_root / "current").symlink_to(release, target_is_directory=True)
+        harness = tmp_path / "state-check.sh"
+        harness.write_text(f'source "{SCRIPT}"\nassert_source_runtime_unchanged\n', encoding="utf-8")
+        result = subprocess.run(["bash", str(harness)], env=env, capture_output=True, text=True)
+        assert result.returncode != 0
+        assert "LEGACY_STATE_PATH_REJECTED" in result.stderr
 
 
 # ---------------------------------------------------------------------------
@@ -319,12 +441,15 @@ class TestPreCutover:
         backup_proof.write_text(json.dumps({"backup_id": "x", "verified": False}), encoding="utf-8")
         result = _run(["pre-cutover"], env)
         assert result.returncode != 0
-        assert "BACKUP_PROOF_MISSING" in result.stderr
+        assert "BACKUP_PROOF_INVALID" in result.stderr
 
     @requires_uv
     def test_passes_and_writes_manifest_when_gates_are_green(self, tmp_path):
-        bare_repo, sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.20.0")
-        env = _base_env(tmp_path, target_sha=sha, target_tag="vtest-0.20.0", upstream_repo=str(bare_repo))
+        bare_repo, sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.21.0")
+        archive, archive_sha = _make_fake_node_archive(tmp_path)
+        env = _base_env(tmp_path, target_sha=sha, target_tag="vtest-0.21.0", upstream_repo=str(bare_repo))
+        env["HERMES_NATIVE_CHANGE_C_TEST_NODE_ARCHIVE"] = str(archive)
+        env["HERMES_NATIVE_CHANGE_C_TEST_NODE_SHA256"] = archive_sha
         native_root = Path(env["HERMES_NATIVE_ROOT"])
 
         release_019 = native_root / "releases" / "0.19.0"
@@ -334,7 +459,7 @@ class TestPreCutover:
 
         backup_proof = Path(env["HERMES_NATIVE_BACKUP_PROOF"])
         backup_proof.parent.mkdir(parents=True)
-        backup_proof.write_text(json.dumps({"backup_id": "abc123", "verified": True}), encoding="utf-8")
+        backup_proof.write_text(json.dumps(VERIFIED_BACKUP_PROOF), encoding="utf-8")
 
         stage_result = _run(["stage"], env, timeout=STAGE_TIMEOUT)
         assert stage_result.returncode == 0, stage_result.stdout + stage_result.stderr
@@ -369,7 +494,7 @@ class TestCutover:
 
         result = _run(["cutover"], env)
         assert result.returncode != 0
-        assert "PRECUTOVER_NOT_PASSED" in result.stderr
+        assert "CUTOVER_SEPARATE_GATE" in result.stderr
         # current must remain untouched since the gate failed before any
         # service stop / symlink swap was attempted.
         assert os.readlink(native_root / "current") == str(release_019)
@@ -399,6 +524,52 @@ class TestRollback:
         assert "ROLLBACK_MANIFEST_MISSING" in result.stderr
         assert _snapshot_tree(native_root) == before
 
+    def test_restores_state_pointer_services_and_quarantines_failed_state(self, tmp_path):
+        env = _base_env(tmp_path)
+        native_root = Path(env["HERMES_NATIVE_ROOT"])
+        release_019 = native_root / "releases" / "0.19.0"
+        (release_019 / "bin").mkdir(parents=True)
+        hermes = release_019 / "bin" / "hermes"
+        hermes.write_text("#!/bin/sh\necho 'Hermes Agent v0.19.0'\n", encoding="utf-8")
+        hermes.chmod(0o755)
+        (native_root / "current").symlink_to(release_019, target_is_directory=True)
+
+        live = tmp_path / "live-hermes"
+        pre = tmp_path / "pre-state"
+        live.mkdir()
+        pre.mkdir()
+        (live / "marker").write_text("failed-0.21", encoding="utf-8")
+        (pre / "marker").write_text("pre-0.19", encoding="utf-8")
+        env["HERMES_NATIVE_HERMES_HOME"] = str(live)
+        env["HERMES_NATIVE_QUARANTINE_DIR"] = str(tmp_path / "quarantine")
+
+        manifest = Path(env["HERMES_NATIVE_PRECUTOVER_MANIFEST"])
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({
+            "previous_symlink_target": str(release_019),
+            "pre_upgrade_state_path": str(pre),
+        }), encoding="utf-8")
+        fake_bin = tmp_path / "fake-bin"
+        fake_bin.mkdir()
+        systemctl = fake_bin / "systemctl"
+        systemctl.write_text(f'#!/bin/sh\necho "$*" >> "{tmp_path / "services.log"}"\n', encoding="utf-8")
+        systemctl.chmod(0o755)
+        env["PATH"] = f"{fake_bin}:{env['PATH']}"
+
+        result = _run(["rollback"], env)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (live / "marker").read_text(encoding="utf-8") == "pre-0.19"
+        quarantined = list((tmp_path / "quarantine").glob("failed-0.21-state-*"))
+        assert len(quarantined) == 1
+        assert (quarantined[0] / "marker").read_text(encoding="utf-8") == "failed-0.21"
+        assert (native_root / "current").resolve() == release_019.resolve()
+        service_lines = (tmp_path / "services.log").read_text(encoding="utf-8").splitlines()
+        assert service_lines == [
+            "stop hermes-desktop-serve.service", "stop hermes-dashboard.service",
+            "stop hermes-gateway.service", "start hermes-gateway.service",
+            "start hermes-dashboard.service", "start hermes-desktop-serve.service",
+        ]
+
 
 # ---------------------------------------------------------------------------
 # Secret redaction
@@ -409,7 +580,7 @@ class TestSecretRedaction:
     def test_report_never_leaks_env_file_secret_values(self, tmp_path):
         env = _base_env(tmp_path)
         native_root = Path(env["HERMES_NATIVE_ROOT"])
-        target_release = native_root / "releases" / "0.20.0"
+        target_release = native_root / "releases" / "0.21.0"
         target_release.mkdir(parents=True)
         (target_release / ".env").write_text(
             "API_KEY=xxxsecret\nDB_PASSWORD=hunter2\nHERMES_PROFILE=trading-hub-orchestrator\n",
