@@ -295,18 +295,25 @@ The later target contract is now exact Hermes Agent `0.21.0`, tag
 upstream annotated tag is not cryptographically verified. No 0.21 staging,
 migration, symlink switch, or cutover has occurred.
 
-Child issue #716 / PR #717 hardened recursive discovery and timeout reporting.
-Initial CI was green on head `17661fb`, but the first controlled host run
-`20260901T084411Z` failed during export of the active root WAL database:
-SQLite `.backup` repeatedly restarted under concurrent writes (about 440 GiB
-logical reads for a 271 MiB source; zero-byte destination). The run was
-terminated after 152 seconds and correctly reported `FAILED / SIGNAL_TERM /
-143`; no snapshot or restore proof exists. The exact-head deployment was
-rolled back to the prior host script/filter hashes. Production remains Hermes
-0.19.0 and the Hermes services, Root Executor, and dry-run fleet stayed green.
+Child issue #716 / PR #717 hardened recursive discovery, timeout reporting,
+SQLite snapshots, and isolated restore verification. After two fail-closed
+corrective runs exposed active-WAL restart starvation and an inactive
+WAL-header/systemd-sandbox edge case, exact PR head `935b4db` passed all three
+CI checks and the production sandbox probes.
+
+Fresh run `20260901T092907Z` completed with Restic snapshot
+`781d93e19f7ee4467417e60098305c10a07651c7cd07b87b7939d32a4c2c36af`,
+repository check `ok`, exact 12/12 database inventory, and exit 0. The isolated
+restore at `/var/lib/hermes-native-change-c/restore-proof/
+20260901T094412.411335Z` verified all 50,758 manifest entries and checksums;
+all 12 canonical SQLite exports returned exactly `ok`. The verifier atomically
+wrote `/var/lib/hermes-native-change-c/backup-proof.json` with exact snapshot
+binding and `verified=true`. Production remains Hermes 0.19.0; the Hermes
+services, Root Executor/socket, expected listeners, and 5/5 dry-run fleet are
+green. No 0.21 staging, migration, symlink switch, restart, or cutover occurred.
 
 ```text
-BACKUP_RESTORE_BLOCKED
+BACKUP_RESTORE_PROOF_PASS
 CUTOVER_AUTHORIZED=NO
 ```
 
@@ -320,7 +327,7 @@ Evidence:
 | A1 prerequisite PR #700 | ✅ MERGED | `a5c1d99` (2026-08-13T13:32:52Z); CI green on head `0a026006` |
 | Change-C script on `main` | ✅ PRESENT | `scripts/hermes-native-change-c.sh` (plan/stage/pre-cutover/cutover/validate/rollback/report) |
 | Target release pinned | ✅ PRESENT | 0.20.0 / `v2026.8.3` / `3c27eb62…` (script constants) |
-| Backup + restore drill | ❌ NOT PROVEN | no `backup-proof.json` at `/var/lib/hermes-native-change-c/`; no restore-drill evidence found on host |
+| Backup + restore drill | ✅ PROVEN | fresh snapshot `781d93e1…`; isolated restore; 50,758/50,758 checksums; 12/12 SQLite integrity; atomic `backup-proof.json` verified true |
 | Executor action to run change-c | ❌ ABSENT | deployed executor @ `9551977` has no `run_script`/`change_c` action (registry: systemd/docker/fs/git/caddy/ufw/hostname/sysctl/users only) |
 | Staged 0.20.0 release | ❌ NOT STAGED | `/opt/hermes-native/releases/` contains only 0.18.2 + 0.19.0; `current` → 0.19.0 |
 | Snapshot / rollback / audit | ⏳ PENDING | required by issue contract; not yet in place for this upgrade |

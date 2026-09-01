@@ -3,111 +3,161 @@
 ## Observation
 
 - Parent issue: #699; atomic child issue: #716; PR: #717.
-- Exact later release context: Hermes Agent `0.21.0`, tag `v2026.8.31`, commit `29112bef099274229cadff79cdff7bf7b99c4b77`.
-- The upstream annotated tag is not cryptographically verified. No staging, migration, symlink switch, or cutover occurred.
-- Production remained `/opt/hermes-native/current -> /opt/hermes-native/releases/0.19.0`; `hermes --version` returned `Hermes Agent v0.19.0 (2026.7.20)`.
-- The 2026-09-01 scheduled backup had previously timed out in `export-host-sqlite` and incorrectly recorded `SUCCESS / 0` without a snapshot.
-- Live discovery from PR head `17661fb740b51fa435d8db0d118a3d7448616726` selected exactly 9 canonical Hermes SQLite databases. The 3 canonical dry-run Freqtrade database specifications are explicit in the script.
-- Initial PR-head CI passed: `main-gate`, `offline-smoke`, and `governance-consistency` all `SUCCESS`.
+- The later release contract is exactly Hermes Agent `0.21.0`, tag
+  `v2026.8.31`, commit `29112bef099274229cadff79cdff7bf7b99c4b77`.
+  The upstream annotated tag is not cryptographically verified.
+- Production remained `/opt/hermes-native/current ->
+  /opt/hermes-native/releases/0.19.0`; the installed binary reported Hermes
+  Agent `v0.19.0`, Python `3.13.5`.
+- No Hermes service restart, 0.21 staging, state migration, symlink switch,
+  cutover, or trading-fleet mutation occurred.
+- Runtime discovery selected exactly nine canonical Hermes databases. Three
+  canonical dry-run Freqtrade databases are specified explicitly, for twelve
+  verified databases in each backup.
+- The fresh qualifying run `20260901T092907Z` completed successfully in 856
+  seconds and created snapshot
+  `781d93e19f7ee4467417e60098305c10a07651c7cd07b87b7939d32a4c2c36af`.
+- The isolated restore completed at
+  `/var/lib/hermes-native-change-c/restore-proof/20260901T094412.411335Z`.
+  Its manifest has 50,758 entries, all checksums match, and all twelve SQLite
+  databases return exactly `ok` from `PRAGMA integrity_check`.
+- `/var/lib/hermes-native-change-c/backup-proof.json` was written atomically
+  by the verifier with mode `0600`, exact snapshot binding, and
+  `verified=true`.
 
 ## Cause
 
-The original timeout had two proven causes:
+The original scheduled timeout had two proven defects:
 
-1. recursive `find /opt/data/hermes` discovery included historical databases below `state-snapshots/` and `backups/`, while rsync also captured those trees; and
-2. SIGTERM from the outer systemd timeout fell through to an EXIT report with code zero.
+1. recursive SQLite discovery and rsync source capture included historical
+   backup/snapshot namespaces; and
+2. SIGTERM from the outer systemd timeout could fall through to an EXIT report
+   with code zero.
 
-PR head `17661fb` fixed both defects, but the first controlled runtime run exposed another load-bearing defect. The SQLite CLI `.backup` of the active root WAL database did not make progress under concurrent production writes: for `/opt/data/hermes/state.db` (271 MiB), `/proc/<sqlite3>/io` increased from about 241 GiB to 440 GiB logical reads while the destination remained 0 bytes. The run was terminated after 152 seconds to prevent continued CPU/resource consumption.
+The first controlled corrective run (`20260901T084411Z`) then proved that the
+SQLite CLI's incremental `.backup` could repeatedly restart under concurrent
+writes to the active root WAL database. The destination remained empty while
+logical reads grew to about 440 GiB. The run was terminated after 152 seconds
+and correctly recorded `FAILED / SIGNAL_TERM / 143` without a snapshot.
 
-The corrected signal handler produced the required failure result:
+The next corrective used one full backup-API step to hold a continuous source
+read transaction. That solved restart starvation, but run
+`20260901T090933Z` exposed the systemd sandbox edge case: `kanban.db` retained
+a WAL-mode database header without `-wal`/`-shm` files. Opening it through the
+SQLite API attempted `O_RDWR|O_CREAT` on `kanban.db-wal`; `ProtectSystem=strict`
+correctly returned `EROFS`. The run failed closed as
+`SQLITE_EXPORT_FAILED`, produced no snapshot, and never wrote a proof.
 
-```json
-{
-  "timestamp": "20260901T084411Z",
-  "status": "FAILED",
-  "exit_code": 143,
-  "stage": "export-host-sqlite",
-  "reason": "SIGNAL_TERM",
-  "snapshot_id": ""
-}
-```
+The final helper therefore uses two allowlisted, bounded methods:
 
-## Changes in PR #717
+- active WAL/rollback state: one full SQLite backup-API step; and
+- no transaction sidecars: exclusive raw copy with source identity/size/
+  mtime/ctime stability checks, sidecar checks before/during/after, two
+  SHA-256 reads, destination `fsync`, and immutable integrity validation.
+
+An incomplete WAL sidecar set, source change, hash mismatch, timeout, or
+integrity failure remains a hard failure.
+
+## Changes
 
 - `ops/hermes/hermestrader-backup.sh`
-  - explicit canonical DB specification;
-  - path/root/symlink and unknown-production-DB gates;
-  - recursive source exclusions;
-  - fail-closed timeout and signal reporting;
-  - exact SQLite inventory in the backup report.
+  - exact canonical database inventory and unknown-DB gate;
+  - historical/temporary namespace exclusions and no recursive self-capture;
+  - fail-closed timeout/signal reporting;
+  - bounded SQLite snapshot helper with the actual method recorded per DB;
+  - fresh snapshot, repository check, retention, and atomic report binding.
 - `ops/hermes/hermestrader-backup-excludes.txt`
-  - recursive backup, snapshot, recovery, restore, cache, quarantine, temp, test, probe, and previous-upgrade exclusions.
+  - backup, snapshot, recovery, restore, cache, quarantine, temp, test, probe,
+    and previous-upgrade exclusions.
+- `ops/hermes/hermestrader_sqlite_snapshot.py`
+  - full-step backup API for active transaction sidecars;
+  - stable, hash-bound read-only copy for inactive WAL-header databases under
+    the production systemd sandbox.
 - `ops/hermes/hermestrader_backup_restore_proof.py`
-  - exact run/snapshot binding;
-  - isolated Restic restore;
-  - complete manifest and SHA-256 verification;
-  - all 12 canonical SQLite integrity checks;
-  - atomic positive proof and non-destructive failure reports.
+  - exact report/snapshot binding, isolated restore, complete manifest and
+    checksum verification, twelve canonical integrity checks, atomic proof.
 - `tests/test_hermestrader_backup_gate.py`
-  - 30 discovery, exclusion, timeout, signal, snapshot-binding, restore, checksum, integrity, and proof tests.
+  - discovery/exclusion, timeout/signal, active WAL, read-only inactive WAL,
+    method allowlist, restore, checksum, integrity, and atomic-proof coverage.
+- `docs/state/current-operational-state.md`
+  - superseding runtime truth and the next permitted gate.
 
 ## Validation
 
 | Gate | Result | Evidence |
 |---|---|---|
-| Release context | PASS | exact `0.21.0 / v2026.8.31 / 29112bef…`; tag documented as not cryptographically verified |
-| Backup discovery | PASS | live read-only discovery returned the exact 9 Hermes DBs; 3 Freqtrade specs are explicit |
-| Recursive excludes | PASS | source-capture regression test and versioned exclusion file |
-| Unknown DB | PASS | regression test fails with `UNKNOWN_PRODUCTION_DB` |
-| Timeout semantics | PASS | watchdog test reports `FAILED / TIMEOUT / 124`; live SIGTERM reports `FAILED / SIGNAL_TERM / 143` |
-| Targeted tests | PASS | 30/30 |
-| Bash syntax | PASS | `bash -n` |
-| ShellCheck | PASS | no findings |
-| Ruff | PASS | new Python and test files |
-| Root test suite | FAIL (environment-specific) | 1,288 passed, 55 skipped, 1 pre-existing host-symlink guard failure; initial GitHub `main-gate` passed hermetically |
-| Initial PR CI | PASS | all 3 required checks green on `17661fb` |
-| Exact-head deployment | PASS | installed hashes matched PR artifacts; prior files backed up with SHA/owner/mode |
-| Backup run | FAIL | controlled run `20260901T084411Z`; no snapshot; active WAL `.backup` did not progress |
-| Restore | NOT_RUN | backup failure is a hard stop |
-| Checksums | NOT_RUN | no fresh snapshot |
-| SQLite restore integrity | NOT_RUN | no restore |
-| `backup-proof.json` | FAIL | absent; never manually authored |
-| Production Hermes | PASS | still 0.19.0; gateway/dashboard/desktop/root executor active; expected listeners only |
-| Production SQLite | PASS | post-abort `PRAGMA integrity_check` = `ok` for all 9 Hermes DBs |
-| Fleet baseline | PASS | exactly 5/5 `hermestrader-dryrun-*` containers healthy; no `dry_run=false`, config, image, strategy, or credential mutation |
-| Runtime rollback | PASS | original backup script/filter restored to SHA `deea878f…` / `693a266d…`; failed-head restore tool retained in the recoverable deployment backup directory |
-| Final CI | NOT_RUN | runtime failure stops the gate before final evidence commit CI |
-| Merge guard / merge | NOT_RUN | PR must not merge while the runtime gate is red |
+| Release pin | PASS | exact later contract `0.21.0 / v2026.8.31 / 29112bef…`; tag explicitly not cryptographically verified |
+| Backup discovery | PASS | installed `discover-host`: exactly 9 Hermes DBs; 3 Freqtrade specs; historical namespaces excluded |
+| Backup run | PASS | `20260901T092907Z`, exit 0, 50,759 files, 2,840,260,340 bytes, Restic check `ok`, retention `ok` |
+| Restore | PASS | isolated root `/var/lib/hermes-native-change-c/restore-proof/20260901T094412.411335Z` |
+| Checksums | PASS | 50,758 manifest entries equal 50,758 restored non-manifest files; independent `sha256sum --quiet -c` exit 0 |
+| SQLite integrity | PASS | 12/12 canonical exports return exactly `ok` |
+| `backup-proof.json` | PASS | exact fresh snapshot ID; all verification booleans true; `verified=true`; mode `0600` |
+| Timeout semantics | PASS | unit tests `FAILED/TIMEOUT/124`; live aborted run `FAILED/SIGNAL_TERM/143` |
+| Sandbox probes | PASS | `kanban.db`: stable-copy SHA match + integrity `ok`; active `state.db`: full-step + integrity `ok` under `ProtectSystem=strict` |
+| Targeted tests | PASS | 51 passed, 3 skipped (backup gate plus Change-C contract tests) |
+| Bash/ShellCheck/Ruff | PASS | `bash -n`, ShellCheck, Ruff, `py_compile`, diff check, and secret scan |
+| Root test suite | FAIL (host-specific) | 1,294 passed, 55 skipped; only `test_host_repo_path_is_rejected` fails because this host resolves `/workspace` to the host path; GitHub CI passes hermetically |
+| PR-head CI | PASS | `main-gate`, `governance-consistency`, and `offline-smoke` green on `935b4dbcc36d7ecd966a988915e4bb91eade0da2` |
+| Exact-head deployment | PASS | all four installed SHA-256 values exactly match PR head; prior files retained at `/var/lib/hermestrader-backup/deploy-backups/20260901T-pr717-935b4db-WGSmeI17` |
+| Production baseline | PASS | Hermes 0.19.0; gateway/dashboard/desktop/root executor active; root executor socket listening; expected 9119/19119 listeners; no 8642 listener |
+| Fleet baseline | PASS | exactly 5/5 `hermestrader-dryrun-*` containers healthy; no fleet mutation |
+| 0.21 staging | NOT_RUN | separate next gate |
+| Migration probe | NOT_RUN | separate next gate |
+| Rollback readiness | NOT_RUN | separate next gate |
+
+## PR / CI
+
+```text
+Branch: fix/hermes-backup-restore-gate-20260901
+Runtime-validated commit: 935b4dbcc36d7ecd966a988915e4bb91eade0da2
+PR: #717
+CI on runtime-validated commit: PASS (3/3)
+Final evidence commit CI: pending before merge
+Merge SHA: recorded by post-merge reconciliation on #716
+```
 
 ## Runtime evidence
 
-Key commands:
+Key commands executed:
 
 ```text
 /usr/local/sbin/hermestrader-backup.sh discover-host
-systemctl start hermestrader-backup.service
-cat /proc/<sqlite3-pid>/io
-stat <isolated-export-destination>
-systemctl stop hermestrader-backup.service
+systemd-run ... ProtectSystem=strict ... hermestrader-sqlite-snapshot <source> <isolated-destination>
+systemctl start --no-block hermestrader-backup.service
+systemctl show hermestrader-backup.service -p ActiveState -p Result -p ExecMainStatus
 jq . /var/lib/hermestrader-backup/latest-report.json
+/usr/local/sbin/hermestrader-backup-restore-proof --snapshot-id <exact-id> --backup-report <exact-report>
+jq . /var/lib/hermes-native-change-c/backup-proof.json
+sha256sum --quiet -c SHA256SUMS
 readlink -f /opt/hermes-native/current
+/opt/hermes-native/current/bin/hermes --version
 systemctl is-active hermes-gateway hermes-dashboard hermes-desktop-serve hermes-root-executor
 docker ps --filter name=hermestrader-dryrun-
-sqlite3 -readonly <each-canonical-db> 'PRAGMA integrity_check;'
+ss -lntp
+ss -lxnp
 ```
 
-Deployment rollback evidence is retained at:
+Installed artifact SHA-256 values:
 
 ```text
-/var/lib/hermestrader-backup/deploy-backups/20260901T084326Z-pr717-17661fb/
+f5519c62f1bbd31df8afef75e2e72efbaef3af232d2beb009a0b0bf8c9614143  hermestrader-backup.sh
+0d09aa1a291035634848e056d8dd5d293998f27a305a7c942abbaf95897c9b1b  hermestrader-backup-excludes.txt
+637fc249b9340b43b437deab009406682a0dae76ea615b99bf162b055eb5b722  hermestrader_sqlite_snapshot.py
+2356b41e9a8df164658d962d11e7a8c26aa8064bd705422b568d4a8cb6573ab4  hermestrader_backup_restore_proof.py
 ```
 
-No Restic repository location, credential, token, secret, or database content is included in this report.
+No repository location, credential, token, secret, database content, or
+redacted configuration value is included in this report.
 
 ## Gate
 
 ```text
-BACKUP_RESTORE_BLOCKED
+BACKUP_RESTORE_PROOF_PASS
 ```
 
-No second backup attempt, restore, staging, migration, service restart, or cutover was performed.
+## Next roadmap task
+
+A1: harden Change-C for exact Hermes 0.21.0 locked side-by-side staging,
+isolated migration probe, and complete state-plus-release rollback. No
+production cutover is authorized by this result.
