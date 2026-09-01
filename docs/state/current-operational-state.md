@@ -288,6 +288,31 @@ changes.
 
 ## Issue #699 — Hermes 0.20.0 upgrade via Change C (A2 gate status)
 
+### Superseding backup-gate evidence — 2026-09-01
+
+The later target contract is now exact Hermes Agent `0.21.0`, tag
+`v2026.8.31`, commit `29112bef099274229cadff79cdff7bf7b99c4b77`. The
+upstream annotated tag is not cryptographically verified. No 0.21 staging,
+migration, symlink switch, or cutover has occurred.
+
+Child issue #716 / PR #717 hardened recursive discovery and timeout reporting.
+Initial CI was green on head `17661fb`, but the first controlled host run
+`20260901T084411Z` failed during export of the active root WAL database:
+SQLite `.backup` repeatedly restarted under concurrent writes (about 440 GiB
+logical reads for a 271 MiB source; zero-byte destination). The run was
+terminated after 152 seconds and correctly reported `FAILED / SIGNAL_TERM /
+143`; no snapshot or restore proof exists. The exact-head deployment was
+rolled back to the prior host script/filter hashes. Production remains Hermes
+0.19.0 and the Hermes services, Root Executor, and dry-run fleet stayed green.
+
+```text
+BACKUP_RESTORE_BLOCKED
+CUTOVER_AUTHORIZED=NO
+```
+
+Evidence:
+[`hermes-0.21-backup-restore-gate-2026-09-01.md`](../reports/hermes-0.21-backup-restore-gate-2026-09-01.md).
+
 **Status:** `A1_PREREQUISITE_MERGED` — A2 host execution NOT started.
 
 | Gate | Status | Evidence |
