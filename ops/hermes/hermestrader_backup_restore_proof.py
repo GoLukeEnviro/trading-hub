@@ -33,6 +33,7 @@ EXPECTED_FREQTRADE_PREFIXES = {
     "container:hermestrader-dryrun-freqtrade-freqforge-canary-1:",
     "container:hermestrader-dryrun-freqtrade-regime-hybrid-1:",
 }
+ALLOWED_SNAPSHOT_METHODS = {"sqlite_backup_full_step", "sqlite_stable_raw_copy"}
 
 
 class ProofFailure(RuntimeError):
@@ -157,7 +158,7 @@ def validate_inventory(staging: Path, manifest: dict[str, str]) -> list[dict[str
         }
         if not all(isinstance(value, str) and value for value in required.values()):
             raise ProofFailure("SQLITE_INVENTORY_INVALID", f"record {index} has missing fields")
-        if required["snapshot_method"] != "sqlite_backup_full_step":
+        if required["snapshot_method"] not in ALLOWED_SNAPSHOT_METHODS:
             raise ProofFailure("SQLITE_INVENTORY_INVALID", f"record {index} has unexpected snapshot method")
         source = required["source"]
         export = required["export"]

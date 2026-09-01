@@ -402,10 +402,10 @@ snapshot_host_sqlite() {
     fi
     if [[ "$_rc" -ne 0 ]]; then
         ERROR_REASON="SQLITE_EXPORT_FAILED"
-        ERROR_MSG="SQLITE_EXPORT_FAILED: full-step snapshot failed for $_source (exit $_rc)"
+        ERROR_MSG="SQLITE_EXPORT_FAILED: bounded snapshot failed for $_source (exit $_rc)"
         return 1
     fi
-    jq -e '.method == "sqlite_backup_full_step" and .integrity_check == "ok"' \
+    jq -e '(.method == "sqlite_backup_full_step" or .method == "sqlite_stable_raw_copy") and .integrity_check == "ok"' \
         "$_result_file" >/dev/null || {
         ERROR_REASON="SQLITE_EXPORT_FAILED"
         ERROR_MSG="SQLITE_EXPORT_FAILED: invalid snapshot result for $_source"
@@ -415,9 +415,9 @@ snapshot_host_sqlite() {
 
 add_inventory_record() {
     INVENTORY_RECORDS+=("$(jq -nc \
-        --arg name "$1" --arg source "$2" --arg export "$3" --arg type "$4" \
+        --arg name "$1" --arg source "$2" --arg export "$3" --arg type "$4" --arg method "$5" \
         '{name:$name,source:$source,export:$export,type:$type,
-          snapshot_method:"sqlite_backup_full_step"}')")
+          snapshot_method:$method}')")
 }
 
 export_host_sqlite() {
@@ -426,7 +426,7 @@ export_host_sqlite() {
         ERROR_REASON="DISCOVERY_FAILED"
         return 1
     }
-    local _spec _name _root _relative _type _source _export _destination
+    local _spec _name _root _relative _type _source _export _destination _method
     for _spec in "${HOST_DB_SPECS[@]}"; do
         IFS='|' read -r _name _root _relative _type <<<"$_spec"
         _source="$_root/$_relative"
@@ -434,19 +434,24 @@ export_host_sqlite() {
         _destination="$STAGING/$_export"
         install -d -m 0700 "$(dirname "$_destination")"
         snapshot_host_sqlite "$_source" "$_destination" || return 1
+        _method="$(jq -er '.method' "${_destination}.snapshot.json")" || {
+            ERROR_REASON="SQLITE_EXPORT_FAILED"
+            ERROR_MSG="SQLITE_EXPORT_FAILED: missing snapshot method for $_source"
+            return 1
+        }
         if ! sqlite_integrity_ok "$_destination"; then
             ERROR_REASON="SQLITE_INTEGRITY_FAILED"
             ERROR_MSG="SQLITE_INTEGRITY_FAILED: $_source"
             return 1
         fi
-        add_inventory_record "$_name" "$_source" "$_export" "$_type"
+        add_inventory_record "$_name" "$_source" "$_export" "$_type" "$_method"
     done
     SQLITE_EXPECTED="${#HOST_DB_SPECS[@]}"
 }
 
 export_freqtrade_sqlite() {
     CURRENT_STAGE="export-freqtrade-sqlite"
-    local _spec _name _container _source _temp _tool_temp _export _destination _result_file _rc
+    local _spec _name _container _source _temp _tool_temp _export _destination _result_file _method _rc
     for _spec in "${FREQTRADE_SPECS[@]}"; do
         IFS='|' read -r _name _container _source <<<"$_spec"
         _temp=".hermes-backup-${_name}-${TS}.sqlite"
@@ -472,11 +477,11 @@ export_freqtrade_sqlite() {
                 ERROR_MSG="SQLITE_SNAPSHOT_TIMEOUT: $_name after ${SQLITE_SNAPSHOT_TIMEOUT_SECONDS}s"
             else
                 ERROR_REASON="SQLITE_EXPORT_FAILED"
-                ERROR_MSG="SQLITE_EXPORT_FAILED: full-step snapshot failed for $_name (exit $_rc)"
+                ERROR_MSG="SQLITE_EXPORT_FAILED: bounded snapshot failed for $_name (exit $_rc)"
             fi
             return 1
         fi
-        if ! jq -e '.method == "sqlite_backup_full_step" and .integrity_check == "ok"' \
+        if ! jq -e '(.method == "sqlite_backup_full_step" or .method == "sqlite_stable_raw_copy") and .integrity_check == "ok"' \
             "$_result_file" >/dev/null; then
             docker exec "$_container" rm -f "/tmp/$_temp" "/tmp/$_tool_temp" 2>/dev/null || true
             ERROR_REASON="SQLITE_EXPORT_FAILED"
@@ -489,13 +494,18 @@ export_freqtrade_sqlite() {
             ERROR_MSG="SQLITE_EXPORT_FAILED: docker cp $_name"
             return 1
         fi
+        _method="$(jq -er '.method' "$_result_file")" || {
+            ERROR_REASON="SQLITE_EXPORT_FAILED"
+            ERROR_MSG="SQLITE_EXPORT_FAILED: missing snapshot method for $_name"
+            return 1
+        }
         docker exec "$_container" rm -f "/tmp/$_temp" "/tmp/$_tool_temp" 2>/dev/null || true
         if ! sqlite_integrity_ok "$_destination"; then
             ERROR_REASON="SQLITE_INTEGRITY_FAILED"
             ERROR_MSG="SQLITE_INTEGRITY_FAILED: $_name"
             return 1
         fi
-        add_inventory_record "$_name" "container:${_container}:${_source}" "$_export" "freqtrade-dry-run"
+        add_inventory_record "$_name" "container:${_container}:${_source}" "$_export" "freqtrade-dry-run" "$_method"
     done
     SQLITE_EXPECTED=$((SQLITE_EXPECTED + ${#FREQTRADE_SPECS[@]}))
 }

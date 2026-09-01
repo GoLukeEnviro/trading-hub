@@ -272,7 +272,42 @@ def test_sqlite_snapshot_rejects_existing_destination(tmp_path: Path) -> None:
     assert destination.read_bytes() == b"do not overwrite"
 
 
-def test_backup_pipeline_uses_bounded_full_step_snapshot_tool() -> None:
+def test_sqlite_snapshot_handles_wal_header_without_sidecars_on_readonly_source(
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "readonly-source"
+    source_dir.mkdir()
+    source = source_dir / "inactive-wal.db"
+    destination = tmp_path / "snapshot.db"
+    with sqlite3.connect(source) as database:
+        assert database.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+        database.execute("CREATE TABLE events (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+        database.execute("INSERT INTO events(value) VALUES ('stable')")
+    database.close()
+    assert not Path(f"{source}-wal").exists()
+    assert not Path(f"{source}-shm").exists()
+    source.chmod(0o444)
+    source_dir.chmod(0o555)
+    try:
+        result = subprocess.run(
+            [str(SQLITE_SNAPSHOT_SCRIPT), str(source), str(destination)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    finally:
+        source_dir.chmod(0o755)
+        source.chmod(0o644)
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["method"] == "sqlite_stable_raw_copy"
+    assert payload["integrity_check"] == "ok"
+    assert hashlib.sha256(source.read_bytes()).digest() == hashlib.sha256(destination.read_bytes()).digest()
+
+
+def test_backup_pipeline_uses_bounded_snapshot_tool() -> None:
     content = BACKUP_SCRIPT.read_text(encoding="utf-8")
 
     assert "HERMESTRADER_SQLITE_SNAPSHOT_TOOL" in content
@@ -335,7 +370,11 @@ def test_terminating_signals_never_report_success(tmp_path: Path, sig: signal.Si
 
 
 def build_restore_fixture(
-    tmp_path: Path, *, corrupt_db: bool = False, corrupt_checksum: bool = False
+    tmp_path: Path,
+    *,
+    corrupt_db: bool = False,
+    corrupt_checksum: bool = False,
+    snapshot_method: str = "sqlite_backup_full_step",
 ) -> tuple[Path, Path, str]:
     snapshot_id = "f" * 64
     staging_path = "/var/lib/hermestrader-backup/work/run/staging"
@@ -354,7 +393,7 @@ def build_restore_fixture(
                 "source": f"/opt/data/hermes/{relative}",
                 "export": export.relative_to(staging).as_posix(),
                 "type": "hermes-root",
-                "snapshot_method": "sqlite_backup_full_step",
+                "snapshot_method": snapshot_method,
             }
         )
     for relative in PROFILE_DATABASES:
@@ -366,7 +405,7 @@ def build_restore_fixture(
                 "source": f"/opt/data/hermes/profiles/trading-hub-orchestrator/{relative}",
                 "export": export.relative_to(staging).as_posix(),
                 "type": "hermes-profile",
-                "snapshot_method": "sqlite_backup_full_step",
+                "snapshot_method": snapshot_method,
             }
         )
     freqtrade_sources = {
@@ -392,7 +431,7 @@ def build_restore_fixture(
                 "source": source,
                 "export": export.relative_to(staging).as_posix(),
                 "type": "freqtrade-dry-run",
-                "snapshot_method": "sqlite_backup_full_step",
+                "snapshot_method": snapshot_method,
             }
         )
 
@@ -541,3 +580,30 @@ def test_successful_restore_writes_atomic_verified_proof(tmp_path: Path) -> None
     assert proof["restore_verified"] is True
     assert proof["verified"] is True
     assert not list((tmp_path / "proof-state").glob("*.tmp*"))
+
+
+def test_restore_accepts_stable_raw_copy_inventory(tmp_path: Path) -> None:
+    fixture, report, snapshot_id = build_restore_fixture(
+        tmp_path, snapshot_method="sqlite_stable_raw_copy"
+    )
+
+    result = run_restore(tmp_path, fixture, report, snapshot_id)
+
+    assert result.returncode == 0, result.stderr
+    proof = json.loads((tmp_path / "proof-state/backup-proof.json").read_text())
+    assert proof["verified"] is True
+    assert {item["snapshot_method"] for item in proof["sqlite_databases"]} == {
+        "sqlite_stable_raw_copy"
+    }
+
+
+def test_restore_rejects_unknown_snapshot_method(tmp_path: Path) -> None:
+    fixture, report, snapshot_id = build_restore_fixture(
+        tmp_path, snapshot_method="unverified_copy"
+    )
+
+    result = run_restore(tmp_path, fixture, report, snapshot_id)
+
+    assert result.returncode != 0
+    assert "SQLITE_INVENTORY_INVALID" in result.stderr
+    assert not (tmp_path / "proof-state/backup-proof.json").exists()
