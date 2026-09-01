@@ -168,7 +168,7 @@ Full manifest: [`phase-c-gate0-candidate-inventory-2026-07-19.md`](../reports/ph
 3. **#697 native dataset** — ✅ EXECUTED (RUN `issue697-20260803T155723Z`, frozen; funding incomplete)
 4. **Funding contract decision** — ✅ `REJECT_INCOMPLETE_FUNDING` (Luke, #697 comment 5179705029); Gate-0 disposition `EXTEND`
 5. **#699 A1 prerequisite (PR #700)** — ✅ MERGED (`a5c1d99`, 2026-08-13): `scripts/hermes-native-change-c.sh` on `main`
-6. **#699 A2 host execution (Hermes 0.19.0 → 0.20.0 via Change C)** — ⏳ `BLOCKED_BY_MISSING_A2_TECHNICAL_PREREQUISITES` (see section below)
+6. **#699 Hermes 0.19.0 → 0.21.0** — ✅ `CUTOVER_READY`; production cutover not executed (see section below)
 7. **#705 canonical funding data contract** — ✅ COMPLETE (PR #706 `96f1865`, 2026-08-13)
 8. **#708 new canonical funding data contract (longer history)** — ✅ COMPLETE (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged 2026-08-18; issue closed)
 9. **Create A2 Selection Backtest issue** — ✅ DONE (#702 created 2026-08-13)
@@ -286,7 +286,55 @@ second run, outcome record.
 `dry_run=false`, no exchange keys, no frozen-dataset mutation, no pin
 changes.
 
-## Issue #699 — Hermes 0.20.0 upgrade via Change C (A2 gate status)
+## Issue #699 — Hermes 0.21.0 upgrade via Change C
+
+### A1 staging/probe/rollback evidence — 2026-09-01
+
+Child issue #718 staged the exact release side-by-side at
+`/opt/hermes-native/releases/0.21.0`: tag `v2026.8.31` and HEAD both resolve to
+commit `29112bef099274229cadff79cdff7bf7b99c4b77`. The upstream annotated tag
+is not cryptographically verified; the release manifest binds the exact tag,
+commit, source archive, `uv.lock`, Node version/archive hash, Python runtime,
+and dashboard artifacts. Locked sync and the dashboard build passed.
+
+The fresh isolated probe at
+`/var/lib/hermes-native-change-c/probe/20260901T114021.1265427/` copied the
+canonical `/opt/data/hermes` state without writing production. Root/profile
+configuration migrated 33 → 39 and both state DBs migrated 22 → 26. Sessions
+were preserved exactly: root 199 → 199; profile 993 → 993. Both DBs returned
+exactly `ok` from `PRAGMA integrity_check` and zero rows from
+`PRAGMA foreign_key_check`. Structured operational settings remained
+`display.personality=technical` where configured,
+`delegation.max_iterations=50`, and
+`display.background_process_notifications=all`; the superseded duplicated
+personality system-prompt text was not restored.
+
+The isolated 0.21 backend reported version 0.21.0 from `/api/health` and
+`/api/status`, listened only on `127.0.0.1:29119`, and was cleanly stopped.
+The separate rollback rehearsal quarantined the candidate 0.21 state,
+restored pre-upgrade state byte-for-byte, restored the 0.19.0 release pointer,
+validated the required stop/start sequence and health, and retained the failed
+state. Exactly 5/5 `hermestrader-dryrun-*` containers remain healthy; all four
+Freqtrade runtime configs are `dry_run=true`.
+
+Production remains `/opt/hermes-native/current ->
+/opt/hermes-native/releases/0.19.0`. Gateway, dashboard, desktop serve and Root
+Executor are active with zero restarts. No production service restart, state
+migration, symlink switch, trading mutation, or cutover occurred.
+
+```text
+BACKUP_RESTORE_PROOF=PASS
+LOCK_GATE=PASS
+STAGING=PASS
+MIGRATION_PROBE=PASS
+ROLLBACK_READY=PASS
+TRADING_FLEET_BASELINE=PASS
+CUTOVER_READY=YES
+CUTOVER_EXECUTED=NO
+```
+
+Evidence:
+[`hermes-0.21-cutover-readiness-2026-09-01.md`](../reports/hermes-0.21-cutover-readiness-2026-09-01.md).
 
 ### Superseding backup-gate evidence — 2026-09-01
 
@@ -320,25 +368,23 @@ CUTOVER_AUTHORIZED=NO
 Evidence:
 [`hermes-0.21-backup-restore-gate-2026-09-01.md`](../reports/hermes-0.21-backup-restore-gate-2026-09-01.md).
 
-**Status:** `A1_PREREQUISITE_MERGED` — A2 host execution NOT started.
+**Historical status:** `A1_PREREQUISITE_MERGED`; superseded by the
+`CUTOVER_READY` evidence above.
 
 | Gate | Status | Evidence |
 |---|---|---|
 | A1 prerequisite PR #700 | ✅ MERGED | `a5c1d99` (2026-08-13T13:32:52Z); CI green on head `0a026006` |
 | Change-C script on `main` | ✅ PRESENT | `scripts/hermes-native-change-c.sh` (plan/stage/pre-cutover/cutover/validate/rollback/report) |
-| Target release pinned | ✅ PRESENT | 0.20.0 / `v2026.8.3` / `3c27eb62…` (script constants) |
+| Target release pinned | ✅ PASS | 0.21.0 / `v2026.8.31` / `29112bef…` |
 | Backup + restore drill | ✅ PROVEN | fresh snapshot `781d93e1…`; isolated restore; 50,758/50,758 checksums; 12/12 SQLite integrity; atomic `backup-proof.json` verified true |
 | Executor action to run change-c | ❌ ABSENT | deployed executor @ `9551977` has no `run_script`/`change_c` action (registry: systemd/docker/fs/git/caddy/ufw/hostname/sysctl/users only) |
-| Staged 0.20.0 release | ❌ NOT STAGED | `/opt/hermes-native/releases/` contains only 0.18.2 + 0.19.0; `current` → 0.19.0 |
-| Snapshot / rollback / audit | ⏳ PENDING | required by issue contract; not yet in place for this upgrade |
+| Staged 0.21.0 release | ✅ PASS | exact release staged side-by-side; `current` remains 0.19.0 |
+| Migration/backend probe | ✅ PASS | isolated proof JSON; schemas, sessions, DB integrity, config drift, port 29119 |
+| State+release rollback | ✅ PASS | isolated quarantine/restore/pointer/service/health proof |
 
-**Blocker:** `BLOCKED_BY_MISSING_A2_TECHNICAL_PREREQUISITES` — the issue's own
-acceptance criteria require (a) a verified backup + restore drill and (b) an
-execution path for the Change-C script. The deployed root executor has no
-action that can run `scripts/hermes-native-change-c.sh` (no generic shell
-execution by design), and no backup proof exists. The A2 host execution must
-not start until these technical prerequisites are green. No runtime mutation
-was performed by this tick.
+**Next gate:** a separate A2 production cutover. A1 deliberately disables the
+`cutover` subcommand fail-closed; readiness is not authorization and no
+production cutover has been performed.
 
 ## Issue #683 — Runtime Closure Reconciliation (2026-08-13)
 
