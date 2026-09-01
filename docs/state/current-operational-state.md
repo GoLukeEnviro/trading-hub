@@ -1,6 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-08-18 after #702 reopen (auto-close corrected: PR #714 delivered only the A1 Precondition-Teil; the A2 selection backtest did **not** run) and #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-09-01 after #720 completion (maintenance mode for the roadmap merge guard, PR #721 `53c1557` merged; guard now validates maintenance child issues against their explicit open parent instead of the SI-v2 tracker selection). #718 COMPLETE (PR #719 `568f171` merged 2026-09-01). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
+>
+> **Previous:** 2026-08-18 after #702 reopen (auto-close corrected: PR #714 delivered only the A1 Precondition-Teil; the A2 selection backtest did **not** run) and #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
 >
 > **Previous:** 2026-08-18 after #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A`; contract v2 frozen via PR #712 `fa3fb89` merged; state reconciled via PR #713) and #705 completion (canonical funding data contract, PR #706 `96f1865`).
 >
@@ -385,6 +387,38 @@ Evidence:
 **Next gate:** a separate A2 production cutover. A1 deliberately disables the
 `cutover` subcommand fail-closed; readiness is not authorization and no
 production cutover has been performed.
+
+## Issue #720 — Maintenance mode for roadmap merge guard (2026-09-01)
+
+**Status:** `COMPLETE` — PR #721 merged (`53c1557`, 2026-09-01T14:14:00Z),
+issue auto-closed.
+
+The read-only `roadmap_merge_guard.py` gained an explicit fail-closed
+**maintenance mode** (`--maintenance-mode`) so maintenance child issues
+(e.g. #716/#717/#718 under parent #699) can be validated independently of
+the SI-v2 tracker selection on #605:
+
+- **Roadmap mode unchanged:** without the flag, `TRACKER_TASK_MISMATCH`
+  still blocks when the #605 tracker selection differs from the expected
+  issue.
+- **Maintenance mode requires an explicit open native parent/sub-issue
+  relationship:** the expected issue body must reference a parent
+  (`Parent: #<N>` / `Parent maintenance issue: #<N>`), and that parent must
+  be `OPEN`. Missing parent → `MAINTENANCE_PARENT_MISSING`; closed parent →
+  `MAINTENANCE_PARENT_NOT_OPEN`. Both fail closed.
+- **All other gates remain identical and fail-closed:** PR open, not draft,
+  exact head SHA, `EXPECTED_ISSUE_NOT_LINKED`, `ISSUE_NOT_OPEN`,
+  `ISSUE_BLOCKED`, required checks (main-gate, offline-smoke), review
+  threads, review decision, formal governance blocks.
+- **No changes to #605 or #702** (tracker untouched; roadmap selection
+  logic untouched). No production cutover.
+
+Validation: `pytest tests/test_roadmap_merge_guard.py` → 37 passed (25
+pre-existing + 12 new); full suite 1316 passed / 1 pre-existing
+environment-dependent failure (`test_host_repo_path_is_rejected`, reproduced
+identically on pristine `origin/main` — host path resolves to the same bind
+mount as the container path); `ruff check` clean; `git diff --check` clean.
+Merge guard in maintenance mode: `ready: true`, `blockers: []`.
 
 ## Issue #683 — Runtime Closure Reconciliation (2026-08-13)
 
