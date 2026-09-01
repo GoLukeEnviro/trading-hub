@@ -151,9 +151,14 @@ def validate_inventory(staging: Path, manifest: dict[str, str]) -> list[dict[str
     for index, item in enumerate(inventory):
         if not isinstance(item, dict):
             raise ProofFailure("SQLITE_INVENTORY_INVALID", f"record {index} is not an object")
-        required = {key: item.get(key) for key in ("name", "source", "export", "type")}
+        required = {
+            key: item.get(key)
+            for key in ("name", "source", "export", "type", "snapshot_method")
+        }
         if not all(isinstance(value, str) and value for value in required.values()):
             raise ProofFailure("SQLITE_INVENTORY_INVALID", f"record {index} has missing fields")
+        if required["snapshot_method"] != "sqlite_backup_full_step":
+            raise ProofFailure("SQLITE_INVENTORY_INVALID", f"record {index} has unexpected snapshot method")
         source = required["source"]
         export = required["export"]
         assert isinstance(source, str) and isinstance(export, str)

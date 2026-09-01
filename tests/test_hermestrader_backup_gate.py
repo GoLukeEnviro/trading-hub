@@ -6,6 +6,7 @@ import os
 import signal
 import sqlite3
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -14,6 +15,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKUP_SCRIPT = REPO_ROOT / "ops/hermes/hermestrader-backup.sh"
 RESTORE_SCRIPT = REPO_ROOT / "ops/hermes/hermestrader_backup_restore_proof.py"
+SQLITE_SNAPSHOT_SCRIPT = REPO_ROOT / "ops/hermes/hermestrader_sqlite_snapshot.py"
 EXCLUDES = REPO_ROOT / "ops/hermes/hermestrader-backup-excludes.txt"
 
 ROOT_DATABASES = (
@@ -196,6 +198,88 @@ def test_rsync_source_capture_does_not_recursively_capture_backup_tree(tmp_path:
     assert not (destination / "backups").exists()
 
 
+def test_full_step_sqlite_snapshot_completes_with_active_wal_writer(tmp_path: Path) -> None:
+    source = tmp_path / "active.db"
+    destination = tmp_path / "snapshot.db"
+    with sqlite3.connect(source) as database:
+        assert database.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+        database.execute("CREATE TABLE events (id INTEGER PRIMARY KEY, payload BLOB NOT NULL)")
+        database.executemany(
+            "INSERT INTO events(payload) VALUES (?)",
+            [(b"x" * 4096,) for _ in range(2048)],
+        )
+
+    writer = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sqlite3,sys,time; "
+                "db=sqlite3.connect(sys.argv[1]); "
+                "[(db.execute('INSERT INTO events(payload) VALUES (?)',(b\"w\"*4096,)),db.commit(),time.sleep(.001)) "
+                "for _ in range(10000)]"
+            ),
+            str(source),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        time.sleep(0.1)
+        with sqlite3.connect(source) as database:
+            count_before = database.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        result = subprocess.run(
+            [str(SQLITE_SNAPSHOT_SCRIPT), str(source), str(destination)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=10,
+        )
+        with sqlite3.connect(source) as database:
+            count_after = database.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+    finally:
+        writer.terminate()
+        writer.wait(timeout=10)
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["method"] == "sqlite_backup_full_step"
+    assert payload["integrity_check"] == "ok"
+    assert count_after > count_before
+    with sqlite3.connect(destination) as database:
+        snapshot_count = database.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        assert database.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+    assert count_before <= snapshot_count <= count_after
+
+
+def test_sqlite_snapshot_rejects_existing_destination(tmp_path: Path) -> None:
+    source = tmp_path / "source.db"
+    destination = tmp_path / "destination.db"
+    create_db(source)
+    destination.write_bytes(b"do not overwrite")
+
+    result = subprocess.run(
+        [str(SQLITE_SNAPSHOT_SCRIPT), str(source), str(destination)],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "DESTINATION_EXISTS" in result.stderr
+    assert destination.read_bytes() == b"do not overwrite"
+
+
+def test_backup_pipeline_uses_bounded_full_step_snapshot_tool() -> None:
+    content = BACKUP_SCRIPT.read_text(encoding="utf-8")
+
+    assert "HERMESTRADER_SQLITE_SNAPSHOT_TOOL" in content
+    assert "HERMESTRADER_SQLITE_SNAPSHOT_TIMEOUT_SECONDS" in content
+    assert 'sqlite3 -readonly "$_source" ".timeout 30000" ".backup' not in content
+
+
 def test_internal_watchdog_reports_failed_timeout(tmp_path: Path) -> None:
     state = tmp_path / "state"
     reports = tmp_path / "reports"
@@ -270,6 +354,7 @@ def build_restore_fixture(
                 "source": f"/opt/data/hermes/{relative}",
                 "export": export.relative_to(staging).as_posix(),
                 "type": "hermes-root",
+                "snapshot_method": "sqlite_backup_full_step",
             }
         )
     for relative in PROFILE_DATABASES:
@@ -281,6 +366,7 @@ def build_restore_fixture(
                 "source": f"/opt/data/hermes/profiles/trading-hub-orchestrator/{relative}",
                 "export": export.relative_to(staging).as_posix(),
                 "type": "hermes-profile",
+                "snapshot_method": "sqlite_backup_full_step",
             }
         )
     freqtrade_sources = {
@@ -306,6 +392,7 @@ def build_restore_fixture(
                 "source": source,
                 "export": export.relative_to(staging).as_posix(),
                 "type": "freqtrade-dry-run",
+                "snapshot_method": "sqlite_backup_full_step",
             }
         )
 

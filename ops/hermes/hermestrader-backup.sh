@@ -29,6 +29,8 @@ readonly BACKUP_LOCK="${HERMESTRADER_BACKUP_LOCK:-/run/lock/hermestrader-backup.
 readonly WRITER_LOCK="${HERMESTRADER_WRITER_LOCK:-/opt/data/state/repo-writer/hermes-repo-writer.lock}"
 readonly WRITER_LOCK_TIMEOUT="${HERMESTRADER_WRITER_LOCK_TIMEOUT:-60}"
 readonly BACKUP_TIMEOUT_SECONDS="${HERMESTRADER_BACKUP_TIMEOUT_SECONDS:-9900}"
+readonly SQLITE_SNAPSHOT_TOOL="${HERMESTRADER_SQLITE_SNAPSHOT_TOOL:-/usr/local/libexec/hermestrader-sqlite-snapshot}"
+readonly SQLITE_SNAPSHOT_TIMEOUT_SECONDS="${HERMESTRADER_SQLITE_SNAPSHOT_TIMEOUT_SECONDS:-300}"
 
 TS="${HERMESTRADER_BACKUP_RUN_TS:-$(date -u +%Y%m%dT%H%M%SZ)}"
 readonly TS
@@ -299,7 +301,7 @@ preflight() {
     CURRENT_STAGE="preflight"
     validate_state_root || { err "$ERROR_MSG"; return 1; }
     local _bin
-    for _bin in restic rsync flock jq docker sqlite3 sha256sum realpath; do
+    for _bin in restic rsync flock jq docker sqlite3 sha256sum realpath timeout; do
         command -v "$_bin" >/dev/null 2>&1 || {
             ERROR_MSG="MISSING_BINARY: $_bin"
             ERROR_REASON="PREFLIGHT_FAILED"
@@ -310,6 +312,11 @@ preflight() {
     [[ -f "$RESTIC_ENV" ]] || { ERROR_MSG="MISSING_RESTIC_ENV: $RESTIC_ENV"; return 1; }
     [[ -f "$EXCLUDES" ]] || { ERROR_MSG="MISSING_EXCLUDES: $EXCLUDES"; return 1; }
     [[ -e "$WRITER_LOCK" ]] || { ERROR_MSG="WRITER_LOCK_MISSING: $WRITER_LOCK"; return 1; }
+    [[ -x "$SQLITE_SNAPSHOT_TOOL" ]] || { ERROR_MSG="SQLITE_SNAPSHOT_TOOL_MISSING: $SQLITE_SNAPSHOT_TOOL"; return 1; }
+    [[ "$SQLITE_SNAPSHOT_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || {
+        ERROR_MSG="SQLITE_SNAPSHOT_TIMEOUT_INVALID: $SQLITE_SNAPSHOT_TIMEOUT_SECONDS"
+        return 1
+    }
     set -a
     # shellcheck disable=SC1090
     source "$RESTIC_ENV"
@@ -381,10 +388,36 @@ sqlite_integrity_ok() {
     [[ "$(sqlite3 -readonly "$1" 'PRAGMA integrity_check;' 2>/dev/null)" == "ok" ]]
 }
 
+snapshot_host_sqlite() {
+    local _source="$1" _destination="$2" _result_file="${2}.snapshot.json" _rc
+    set +e
+    timeout --signal=TERM --kill-after=10s "${SQLITE_SNAPSHOT_TIMEOUT_SECONDS}s" \
+        "$SQLITE_SNAPSHOT_TOOL" "$_source" "$_destination" >"$_result_file"
+    _rc=$?
+    set -e
+    if [[ "$_rc" -eq 124 || "$_rc" -eq 137 ]]; then
+        ERROR_REASON="SQLITE_SNAPSHOT_TIMEOUT"
+        ERROR_MSG="SQLITE_SNAPSHOT_TIMEOUT: $_source after ${SQLITE_SNAPSHOT_TIMEOUT_SECONDS}s"
+        return 1
+    fi
+    if [[ "$_rc" -ne 0 ]]; then
+        ERROR_REASON="SQLITE_EXPORT_FAILED"
+        ERROR_MSG="SQLITE_EXPORT_FAILED: full-step snapshot failed for $_source (exit $_rc)"
+        return 1
+    fi
+    jq -e '.method == "sqlite_backup_full_step" and .integrity_check == "ok"' \
+        "$_result_file" >/dev/null || {
+        ERROR_REASON="SQLITE_EXPORT_FAILED"
+        ERROR_MSG="SQLITE_EXPORT_FAILED: invalid snapshot result for $_source"
+        return 1
+    }
+}
+
 add_inventory_record() {
     INVENTORY_RECORDS+=("$(jq -nc \
         --arg name "$1" --arg source "$2" --arg export "$3" --arg type "$4" \
-        '{name:$name,source:$source,export:$export,type:$type}')")
+        '{name:$name,source:$source,export:$export,type:$type,
+          snapshot_method:"sqlite_backup_full_step"}')")
 }
 
 export_host_sqlite() {
@@ -400,11 +433,7 @@ export_host_sqlite() {
         _export="sqlite/host/${_source#/}"
         _destination="$STAGING/$_export"
         install -d -m 0700 "$(dirname "$_destination")"
-        if ! sqlite3 -readonly "$_source" ".timeout 30000" ".backup '$_destination'"; then
-            ERROR_REASON="SQLITE_EXPORT_FAILED"
-            ERROR_MSG="SQLITE_EXPORT_FAILED: $_source"
-            return 1
-        fi
+        snapshot_host_sqlite "$_source" "$_destination" || return 1
         if ! sqlite_integrity_ok "$_destination"; then
             ERROR_REASON="SQLITE_INTEGRITY_FAILED"
             ERROR_MSG="SQLITE_INTEGRITY_FAILED: $_source"
@@ -417,24 +446,50 @@ export_host_sqlite() {
 
 export_freqtrade_sqlite() {
     CURRENT_STAGE="export-freqtrade-sqlite"
-    local _spec _name _container _source _temp _export _destination
+    local _spec _name _container _source _temp _tool_temp _export _destination _result_file _rc
     for _spec in "${FREQTRADE_SPECS[@]}"; do
         IFS='|' read -r _name _container _source <<<"$_spec"
         _temp=".hermes-backup-${_name}-${TS}.sqlite"
+        _tool_temp=".hermes-sqlite-snapshot-${_name}-${TS}.py"
         _export="sqlite/freqtrade/tradesv3.${_name}.sqlite"
         _destination="$STAGING/$_export"
-        if ! docker exec "$_container" sqlite3 "$_source" ".backup '/tmp/$_temp'"; then
+        _result_file="${_destination}.snapshot.json"
+        if ! docker cp "$SQLITE_SNAPSHOT_TOOL" "$_container:/tmp/$_tool_temp"; then
             ERROR_REASON="SQLITE_EXPORT_FAILED"
-            ERROR_MSG="SQLITE_EXPORT_FAILED: $_name"
+            ERROR_MSG="SQLITE_EXPORT_FAILED: helper copy failed for $_name"
+            return 1
+        fi
+        set +e
+        docker exec "$_container" timeout --signal=TERM --kill-after=10s \
+            "${SQLITE_SNAPSHOT_TIMEOUT_SECONDS}s" python "/tmp/$_tool_temp" \
+            "$_source" "/tmp/$_temp" >"$_result_file"
+        _rc=$?
+        set -e
+        if [[ "$_rc" -ne 0 ]]; then
+            docker exec "$_container" rm -f "/tmp/$_temp" "/tmp/$_tool_temp" 2>/dev/null || true
+            if [[ "$_rc" -eq 124 || "$_rc" -eq 137 ]]; then
+                ERROR_REASON="SQLITE_SNAPSHOT_TIMEOUT"
+                ERROR_MSG="SQLITE_SNAPSHOT_TIMEOUT: $_name after ${SQLITE_SNAPSHOT_TIMEOUT_SECONDS}s"
+            else
+                ERROR_REASON="SQLITE_EXPORT_FAILED"
+                ERROR_MSG="SQLITE_EXPORT_FAILED: full-step snapshot failed for $_name (exit $_rc)"
+            fi
+            return 1
+        fi
+        if ! jq -e '.method == "sqlite_backup_full_step" and .integrity_check == "ok"' \
+            "$_result_file" >/dev/null; then
+            docker exec "$_container" rm -f "/tmp/$_temp" "/tmp/$_tool_temp" 2>/dev/null || true
+            ERROR_REASON="SQLITE_EXPORT_FAILED"
+            ERROR_MSG="SQLITE_EXPORT_FAILED: invalid snapshot result for $_name"
             return 1
         fi
         if ! docker cp "$_container:/tmp/$_temp" "$_destination"; then
-            docker exec "$_container" rm -f "/tmp/$_temp" 2>/dev/null || true
+            docker exec "$_container" rm -f "/tmp/$_temp" "/tmp/$_tool_temp" 2>/dev/null || true
             ERROR_REASON="SQLITE_EXPORT_FAILED"
             ERROR_MSG="SQLITE_EXPORT_FAILED: docker cp $_name"
             return 1
         fi
-        docker exec "$_container" rm -f "/tmp/$_temp" 2>/dev/null || true
+        docker exec "$_container" rm -f "/tmp/$_temp" "/tmp/$_tool_temp" 2>/dev/null || true
         if ! sqlite_integrity_ok "$_destination"; then
             ERROR_REASON="SQLITE_INTEGRITY_FAILED"
             ERROR_MSG="SQLITE_INTEGRITY_FAILED: $_name"
