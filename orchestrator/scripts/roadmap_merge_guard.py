@@ -19,6 +19,10 @@ FORMAL_BLOCK_PATTERN = re.compile(
     r"\b(?:formally_blocked(?:_[a-z0-9_]+)?|blocked_by_[a-z0-9_]+)\b",
     re.IGNORECASE,
 )
+PARENT_ISSUE_PATTERN = re.compile(
+    r"#(\d{1,6})",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -42,6 +46,8 @@ class PullRequestSnapshot:
     unresolved_review_threads: int
     review_decision: str
     comments: tuple[str, ...]
+    parent_issue: int | None = None
+    parent_issue_state: str = ""
 
 
 @dataclass(frozen=True)
@@ -54,6 +60,19 @@ class MergeReadinessResult:
 def parse_selected_task(body: str) -> int | None:
     """Return the machine-selected #605 task, if present."""
     match = SELECTED_TASK_PATTERN.search(body or "")
+    return int(match.group(1)) if match else None
+
+
+def parse_parent_issue(body: str) -> int | None:
+    """Return the maintenance parent issue number from an issue body.
+
+    Maintenance child issues declare their parent with a ``Parent: #<N>``
+    line (or ``Parent maintenance issue: #<N>``). The first ``#<N>``
+    reference in the body is treated as the parent. Returns ``None`` when
+    the body carries no issue reference (fail-closed: no parent, no
+    maintenance-mode exemption).
+    """
+    match = PARENT_ISSUE_PATTERN.search(body or "")
     return int(match.group(1)) if match else None
 
 
@@ -123,8 +142,16 @@ def evaluate_merge_readiness(
     *,
     expected_issue: int,
     expected_head_sha: str,
+    maintenance_mode: bool = False,
 ) -> MergeReadinessResult:
-    """Evaluate facts only; this function never merges or mutates GitHub."""
+    """Evaluate facts only; this function never merges or mutates GitHub.
+
+    ``maintenance_mode`` exempts the SI-v2 tracker-selection check
+    (``TRACKER_TASK_MISMATCH``) for maintenance child issues that declare
+    an explicit, open native parent issue. All other gates remain
+    fail-closed and identical to roadmap mode. Without an explicit
+    ``--maintenance-mode`` flag the guard behaves exactly as before.
+    """
     blockers: list[str] = []
     if snapshot.state.upper() != "OPEN":
         blockers.append("PR_NOT_OPEN")
@@ -138,7 +165,12 @@ def evaluate_merge_readiness(
         blockers.append("ISSUE_NOT_OPEN")
     if any(label.casefold() == "status:blocked" for label in snapshot.issue_labels):
         blockers.append("ISSUE_BLOCKED")
-    if snapshot.tracker_selected_task != expected_issue:
+    if maintenance_mode:
+        if snapshot.parent_issue is None:
+            blockers.append("MAINTENANCE_PARENT_MISSING")
+        elif snapshot.parent_issue_state.upper() != "OPEN":
+            blockers.append("MAINTENANCE_PARENT_NOT_OPEN")
+    elif snapshot.tracker_selected_task != expected_issue:
         blockers.append("TRACKER_TASK_MISMATCH")
 
     checks = {check.name.casefold(): check for check in snapshot.checks}
@@ -215,9 +247,24 @@ def collect_snapshot(*, repo: str, pr: int, expected_issue: int, tracker_issue: 
             "--repo",
             repo,
             "--json",
-            "state,labels",
+            "state,labels,body",
         )
     )
+    parent_issue = parse_parent_issue(str(issue_data.get("body", "")))
+    parent_issue_state = ""
+    if parent_issue is not None:
+        parent_data = _run_gh_json(
+            (
+                "issue",
+                "view",
+                str(parent_issue),
+                "--repo",
+                repo,
+                "--json",
+                "state",
+            )
+        )
+        parent_issue_state = str(parent_data.get("state", ""))
     tracker_data = _run_gh_json(
         (
             "issue",
@@ -278,6 +325,8 @@ def collect_snapshot(*, repo: str, pr: int, expected_issue: int, tracker_issue: 
         unresolved_review_threads=sum(1 for thread in review_threads if not thread.get("isResolved", False)),
         review_decision=str(pr_data.get("reviewDecision") or ""),
         comments=comments,
+        parent_issue=parent_issue,
+        parent_issue_state=parent_issue_state,
     )
 
 
@@ -294,6 +343,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-issue", required=True, type=int)
     parser.add_argument("--expected-head-sha", required=True, type=_full_sha)
     parser.add_argument("--tracker-issue", type=int, default=605)
+    parser.add_argument(
+        "--maintenance-mode",
+        action="store_true",
+        help=(
+            "validate a maintenance child issue against its explicit open "
+            "parent instead of the SI-v2 tracker selection"
+        ),
+    )
     return parser
 
 
@@ -318,6 +375,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         snapshot,
         expected_issue=args.expected_issue,
         expected_head_sha=args.expected_head_sha,
+        maintenance_mode=args.maintenance_mode,
     )
     print(json.dumps(asdict(result), sort_keys=True))
     return 0 if result.ready else 2

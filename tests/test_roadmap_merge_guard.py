@@ -271,3 +271,148 @@ def test_governance_task_compatible_blocks_pending_with_incomplete_deps() -> Non
         )
         is False
     )
+
+
+# ----------------------------------------------------------------------
+# #720 maintenance mode (fail-closed, independent of SI-v2 tracker)
+# ----------------------------------------------------------------------
+
+
+def maintenance_snapshot() -> PullRequestSnapshot:
+    return replace(
+        ready_snapshot(),
+        tracker_selected_task=604,  # deliberately NOT the expected issue
+        parent_issue=699,
+        parent_issue_state="OPEN",
+    )
+
+
+def test_maintenance_mode_skips_tracker_mismatch() -> None:
+    result = evaluate_merge_readiness(
+        maintenance_snapshot(),
+        expected_issue=621,
+        expected_head_sha=EXPECTED_HEAD,
+        maintenance_mode=True,
+    )
+    assert result.ready is True
+    assert result.status == "READY_FOR_HUMAN_MERGE"
+    assert result.blockers == ()
+
+
+def test_roadmap_mode_still_blocks_tracker_mismatch() -> None:
+    # Default (roadmap) mode must remain unchanged: tracker mismatch blocks.
+    assert_blocked(maintenance_snapshot(), "TRACKER_TASK_MISMATCH")
+
+
+def test_maintenance_mode_requires_parent_issue() -> None:
+    snapshot = replace(maintenance_snapshot(), parent_issue=None)
+    result = evaluate_merge_readiness(
+        snapshot,
+        expected_issue=621,
+        expected_head_sha=EXPECTED_HEAD,
+        maintenance_mode=True,
+    )
+    assert result.status == "BLOCKED_BY_GOVERNANCE"
+    assert "MAINTENANCE_PARENT_MISSING" in result.blockers
+
+
+def test_maintenance_mode_requires_open_parent() -> None:
+    snapshot = replace(maintenance_snapshot(), parent_issue_state="CLOSED")
+    result = evaluate_merge_readiness(
+        snapshot,
+        expected_issue=621,
+        expected_head_sha=EXPECTED_HEAD,
+        maintenance_mode=True,
+    )
+    assert result.status == "BLOCKED_BY_GOVERNANCE"
+    assert "MAINTENANCE_PARENT_NOT_OPEN" in result.blockers
+
+
+def test_maintenance_mode_keeps_other_gates_fail_closed() -> None:
+    snapshot = replace(maintenance_snapshot(), head_sha="b" * 40)
+    result = evaluate_merge_readiness(
+        snapshot,
+        expected_issue=621,
+        expected_head_sha=EXPECTED_HEAD,
+        maintenance_mode=True,
+    )
+    assert result.status == "BLOCKED_BY_GOVERNANCE"
+    assert "HEAD_SHA_DRIFT" in result.blockers
+    assert "TRACKER_TASK_MISMATCH" not in result.blockers
+
+
+def test_parser_accepts_maintenance_mode_flag() -> None:
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "--repo",
+            "GoLukeEnviro/trading-hub",
+            "--pr",
+            "622",
+            "--expected-issue",
+            "621",
+            "--expected-head-sha",
+            EXPECTED_HEAD,
+            "--maintenance-mode",
+        ]
+    )
+    assert args.maintenance_mode is True
+    assert not hasattr(args, "merge")
+    assert not hasattr(args, "execute")
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("## Goal\n\nClose the gate.\n\nParent: #699\n", 699),
+        ("## Parent\n\n- #699\n\n## Goal\n", 699),
+        ("Parent maintenance issue: #699 remains open.\n", 699),
+        ("No parent here.\n", None),
+        ("", None),
+    ],
+)
+def test_parse_parent_issue(body: str, expected: int | None) -> None:
+    assert merge_guard.parse_parent_issue(body) == expected
+
+
+def test_snapshot_collects_parent_issue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_gh(arguments: tuple[str, ...]) -> dict[str, object]:
+        if arguments[:2] == ("pr", "view"):
+            return {
+                "state": "OPEN",
+                "isDraft": False,
+                "headRefOid": EXPECTED_HEAD,
+                "statusCheckRollup": [],
+                "comments": [],
+                "reviewDecision": "",
+            }
+        if arguments[:2] == ("issue", "view") and arguments[2] == "621":
+            return {"state": "OPEN", "labels": [], "body": "Parent: #699"}
+        if arguments[:2] == ("issue", "view") and arguments[2] == "699":
+            return {"state": "OPEN", "labels": []}
+        if arguments[:2] == ("issue", "view"):
+            return {"body": "<!-- roadmap-selected-task:621 -->"}
+        return {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {"nodes": []},
+                        "closingIssuesReferences": {"nodes": [{"number": 621}]},
+                    }
+                }
+            }
+        }
+
+    monkeypatch.setattr(merge_guard, "_run_gh_json", fake_gh)
+
+    snapshot = merge_guard.collect_snapshot(
+        repo="GoLukeEnviro/trading-hub",
+        pr=622,
+        expected_issue=621,
+        tracker_issue=605,
+    )
+
+    assert snapshot.parent_issue == 699
+    assert snapshot.parent_issue_state == "OPEN"
