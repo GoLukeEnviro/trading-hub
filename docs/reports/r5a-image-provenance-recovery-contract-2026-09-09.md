@@ -115,3 +115,37 @@ live import. No fleet process changed. The generic completeness-checked installe
 immediately restored a healthy executor from the same merge commit. The follow-up
 lock PR adds `legacy.py` and `__main__.py` to the specialized installer and adds a
 regression test requiring it to deploy every runtime package module.
+
+## Canonical deployment and parity result
+
+PR #725 merged the complete lock as `cf7cb34a13734cef16cae2333b5f51a5c9314125`.
+PR #726 added the bounded post-action health wait and merged as
+`d900154e441f5e119e97ebac7edade95404cea77`. All required CI checks passed on
+both PRs. The corrected executor extension installed successfully with zero
+restarts.
+
+Locked deployment audit `53fb7ab6-c630-4ed0-ade9-072da19811f6` completed
+ALLOWED/0 in 19,433 ms. Its only Compose mutation was `up -d --no-build --pull
+never`; no image build/pull, `down`, volume removal, or prune occurred.
+
+| Parity criterion | Result |
+|---|---|
+| exact fleet | PASS — five expected containers; Rebel absent |
+| locked image identity | PASS — Freqtrade ×4 `sha256:aa4ab785...`; Rainbow `sha256:7e2fab4a...` |
+| runtime health | PASS — 5/5 running and healthy across repeated 30-second cycles |
+| restart/OOM | PASS — all RestartCount 0; all OOMKilled false |
+| dry-run | PASS — 4/4 Freqtrade configs `dry_run=true` |
+| strategies | PASS — FreqForge/Canary `FreqForge_Override`; Regime `RegimeSwitchingHybrid_v7_v04_Integration`; webserver command correct |
+| bind mounts | PASS — config, strategy, shared, and Rainbow config binds read-only |
+| DB/WAL ownership | PASS — Freqtrade and Rainbow DB/WAL files `10000:10000` |
+| Rainbow | PASS — `/health` healthy/read_only; ingest and webhook writes rejected HTTP 405 |
+| persistent volumes | PASS — the same eight named volumes remain; original creation timestamps retained |
+| live authority | PASS — only dry-run databases/configurations; no live-trading authority introduced |
+
+The fresh Change-C readiness record was created at 2026-09-09 19:00:34 UTC,
+not reused from September 1. It reports backup restore, lock, staging, migration
+probe, rollback, and trading fleet gates PASS; `CUTOVER_READY=YES` and
+`CUTOVER_EXECUTED=NO`. Production remains Hermes Agent 0.19.0, with gateway and
+dashboard active and zero restarts.
+
+Final classification: `READY_FOR_HERMES_A2_IMPLEMENTATION`.

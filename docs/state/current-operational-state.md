@@ -1,6 +1,6 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-09-01 after #720 completion (maintenance mode for the roadmap merge guard, PR #721 `53c1557` merged; guard now validates maintenance child issues against their explicit open parent instead of the SI-v2 tracker selection). #718 COMPLETE (PR #719 `568f171` merged 2026-09-01). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-09-09 after #723 R5A image-provenance closure: PRs #724/#725/#726 merged, immutable image lock and safe recovery semantics active, canonical fleet 5/5 parity green, and fresh Hermes readiness `CUTOVER_READY=YES` / `CUTOVER_EXECUTED=NO`. Production remains Hermes 0.19.0. Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
 >
 > **Previous:** 2026-08-18 after #702 reopen (auto-close corrected: PR #714 delivered only the A1 Precondition-Teil; the A2 selection backtest did **not** run) and #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
 >
@@ -289,6 +289,35 @@ second run, outcome record.
 changes.
 
 ## Issue #699 — Hermes 0.21.0 upgrade via Change C
+
+### R5A image provenance prerequisite — 2026-09-09
+
+Maintenance child #723 closed the Docker-recovery reproducibility gap through
+PR #724 (`5bcb50f`), baseline attestation PR #725 (`cf7cb34`), and bounded
+health-wait PR #726 (`d900154`). All Main Gate, governance-consistency, and
+offline-smoke checks passed.
+
+The four Freqtrade services now share immutable image
+`sha256:aa4ab78532d996b0d3ac7b034819918e2085495dd1368399705b208d331bd380`;
+Rainbow uses
+`sha256:7e2fab4a87790a1aadebed29b2688ec4c45a80ed9763e69f0d3d285093cc5db0`.
+The canonical lock contains full source, base, Dockerfile, entrypoint, tag,
+image/config, and manifest identities. Recovery uses verified Compose `start`
+only; locked deployment cannot build or pull.
+
+The controlled recreate preserved the same eight named volumes. Repeated parity
+checks proved exact 5/5 running/healthy, restart count 0, OOMKilled false, 4/4
+`dry_run=true`, expected strategies, read-only binds, DB/WAL ownership
+10000:10000, Rainbow read-only health, and HTTP 405 on write routes. Rebel is
+absent and no live-trading authority exists.
+
+Fresh readiness at 2026-09-09T19:00:34Z records all prerequisite gates PASS,
+`CUTOVER_READY=YES`, and `CUTOVER_EXECUTED=NO`. Production gateway/dashboard
+remain Hermes Agent 0.19.0 with zero restarts. Status:
+`READY_FOR_HERMES_A2_IMPLEMENTATION`.
+
+Evidence:
+[`r5a-image-provenance-recovery-contract-2026-09-09.md`](../reports/r5a-image-provenance-recovery-contract-2026-09-09.md).
 
 ### A1 staging/probe/rollback evidence — 2026-09-01
 
