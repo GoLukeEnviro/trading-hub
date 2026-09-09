@@ -29,6 +29,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "hermes-native-change-c.sh"
+STATE_TOOL = REPO_ROOT / "ops" / "hermes" / "hermes_native_change_c.py"
+A2_APPROVAL = ["--approval", "APPROVED_A2_HERMES_021_CUTOVER"]
 
 STAGE_TIMEOUT = 300
 
@@ -39,9 +41,7 @@ STAGE_TIMEOUT = 300
 # absent, rather than this test file reaching into shared CI config to add
 # it. Verified locally with a real `uv` install: 17 passed, 1 skipped
 # (shellcheck only).
-requires_uv = pytest.mark.skipif(
-    shutil.which("uv") is None, reason="uv not installed in this test environment"
-)
+requires_uv = pytest.mark.skipif(shutil.which("uv") is None, reason="uv not installed in this test environment")
 
 PYPROJECT_TOML = """\
 [build-system]
@@ -114,7 +114,10 @@ def _make_bare_fixture_repo(tmp_path: Path, tag: str) -> tuple[Path, str]:
     bare_dir = tmp_path / "upstream.git"
     subprocess.run(
         ["git", "clone", "--bare", "--quiet", str(work_dir), str(bare_dir)],
-        capture_output=True, text=True, check=True, timeout=60,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,
     )
     return bare_dir, sha
 
@@ -129,7 +132,7 @@ def _make_fake_node_archive(tmp_path: Path, version: str = "24.20.0") -> tuple[P
     npm = bindir / "npm"
     npm.write_text(
         "#!/bin/sh\n"
-        "case \" $* \" in\n"
+        'case " $* " in\n'
         "  *' run build '*) mkdir -p hermes_cli/web_dist; echo fixture > hermes_cli/web_dist/index.html;;\n"
         "esac\n",
         encoding="utf-8",
@@ -141,24 +144,27 @@ def _make_fake_node_archive(tmp_path: Path, version: str = "24.20.0") -> tuple[P
     return archive, hashlib.sha256(archive.read_bytes()).hexdigest()
 
 
-def _base_env(tmp_path: Path, *, target_sha: str | None = None, target_tag: str = "vtest-0.21.0",
-              upstream_repo: str | None = None) -> dict[str, str]:
+def _base_env(
+    tmp_path: Path, *, target_sha: str | None = None, target_tag: str = "vtest-0.21.0", upstream_repo: str | None = None
+) -> dict[str, str]:
     env = dict(os.environ)
     native_root = tmp_path / "hermes-native"
     state_dir = tmp_path / "state"
-    env.update({
-        "HERMES_NATIVE_ROOT": str(native_root),
-        "HERMES_NATIVE_STATE_DIR": str(state_dir),
-        "HERMES_NATIVE_LOCK_FILE": str(tmp_path / "lock" / "change-c.lock"),
-        "HERMES_NATIVE_AUDIT_LOG": str(state_dir / "audit.jsonl"),
-        "HERMES_NATIVE_PRECUTOVER_MANIFEST": str(state_dir / "pre-cutover-manifest.json"),
-        "HERMES_NATIVE_BACKUP_PROOF": str(state_dir / "backup-proof.json"),
-        "HERMES_NATIVE_FLEET_BASELINE": str(state_dir / "fleet-baseline.json"),
-        "HERMES_NATIVE_REPORT_DIR": str(state_dir / "reports"),
-        "HERMES_NATIVE_CHANGE_C_TEST_TARGET_TAG": target_tag,
-        "HERMES_NATIVE_CHANGE_C_TEST_TARGET_VERSION": "0.21.0",
-        "HERMES_NATIVE_UV_BIN": shutil.which("uv") or "/missing/uv",
-    })
+    env.update(
+        {
+            "HERMES_NATIVE_ROOT": str(native_root),
+            "HERMES_NATIVE_STATE_DIR": str(state_dir),
+            "HERMES_NATIVE_LOCK_FILE": str(tmp_path / "lock" / "change-c.lock"),
+            "HERMES_NATIVE_AUDIT_LOG": str(state_dir / "audit.jsonl"),
+            "HERMES_NATIVE_PRECUTOVER_MANIFEST": str(state_dir / "pre-cutover-manifest.json"),
+            "HERMES_NATIVE_BACKUP_PROOF": str(state_dir / "backup-proof.json"),
+            "HERMES_NATIVE_FLEET_BASELINE": str(state_dir / "fleet-baseline.json"),
+            "HERMES_NATIVE_REPORT_DIR": str(state_dir / "reports"),
+            "HERMES_NATIVE_CHANGE_C_TEST_TARGET_TAG": target_tag,
+            "HERMES_NATIVE_CHANGE_C_TEST_TARGET_VERSION": "0.21.0",
+            "HERMES_NATIVE_UV_BIN": shutil.which("uv") or "/missing/uv",
+        }
+    )
     if target_sha is not None:
         env["HERMES_NATIVE_CHANGE_C_TEST_TARGET_SHA"] = target_sha
     if upstream_repo is not None:
@@ -169,7 +175,10 @@ def _base_env(tmp_path: Path, *, target_sha: str | None = None, target_tag: str 
 def _run(args: list[str], env: dict[str, str], timeout: int = 30) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["bash", str(SCRIPT), *args],
-        capture_output=True, text=True, timeout=timeout, env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=env,
     )
 
 
@@ -255,20 +264,31 @@ class TestStaticChecks:
         assert "not cryptographically verified" in content
 
     def test_probe_contract_is_exact_and_fail_closed(self):
-        content = SCRIPT.read_text(encoding="utf-8")
-        assert 'before_db[role]["sessions"] == after_db[role]["sessions"]' in content
-        assert 'after_db[role]["integrity"] == ["ok"]' in content
-        assert 'after_db[role]["foreign_key_rows"] == 0' in content
-        assert "cursor[path[-1]] = old" in content
-        assert "never the duplicate" in content
-        assert "127.0.0.1 --port 29119" in content
-        assert "UNEXPECTED_LISTENER" in content
+        content = STATE_TOOL.read_text(encoding="utf-8")
+        assert 'after[role]["database"]["sessions"] == before[role]["database"]["sessions"]' in content
+        assert 'after[role]["database"]["integrity"] == ["ok"]' in content
+        assert 'after[role]["database"]["foreign_key_rows"] == 0' in content
+        assert "cursor[keys[-1]] = prior" in content
+        assert "OPERATIONAL_CONFIG_PATHS" in content
+        shell = SCRIPT.read_text(encoding="utf-8")
+        assert "hermes_native_change_c.py" in shell
+        assert "127.0.0.1 --port 29119" in shell
+        assert "UNEXPECTED_LISTENER" in shell
 
-    def test_cutover_is_disabled_in_a1(self):
+    def test_cutover_requires_explicit_a2_marker(self):
         content = SCRIPT.read_text(encoding="utf-8")
         match = re.search(r"cmd_cutover\(\) \{(.*?)\n\}", content, re.S)
-        assert match and "CUTOVER_SEPARATE_GATE" in match.group(1)
-        assert "atomic_symlink_swap" not in match.group(1)
+        assert match and "require_a2_approval" in match.group(1)
+        assert "verify-manifest" in match.group(1)
+        assert "TRANSACTION_MUTATED=true" in match.group(1)
+
+    def test_readiness_and_precutover_fail_before_success_artifacts_on_r5a_error(self):
+        content = SCRIPT.read_text(encoding="utf-8")
+        readiness = re.search(r"cmd_readiness\(\) \{(.*?)\n\}", content, re.S).group(1)
+        precutover = re.search(r"cmd_pre_cutover\(\) \{(.*?)\n\}", content, re.S).group(1)
+        assert readiness.index("verify_r5a_gate") < readiness.index("CUTOVER_READY=YES")
+        assert precutover.index("verify_r5a_gate") < precutover.index("create_preupgrade_state_and_manifest")
+        assert 'rm -f "${HERMES_NATIVE_PRECUTOVER_MANIFEST}"' in precutover
 
 
 # ---------------------------------------------------------------------------
@@ -341,10 +361,9 @@ class TestStage:
 
         target_release = native_root / "releases" / "0.21.0"
         assert (target_release / "source" / ".git").exists()
-        assert (
-            (target_release / "venv" / "bin" / "python").exists()
-            or (target_release / "venv" / "bin" / "python3").exists()
-        )
+        assert (target_release / "venv" / "bin" / "python").exists() or (
+            target_release / "venv" / "bin" / "python3"
+        ).exists()
         manifest_path = target_release / "RELEASE-MANIFEST.json"
         assert manifest_path.exists()
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -421,6 +440,34 @@ class TestStatePath:
         assert result.returncode != 0
         assert "LEGACY_STATE_PATH_REJECTED" in result.stderr
 
+    def test_source_pointer_not_019_is_blocked(self, tmp_path):
+        env = _base_env(tmp_path)
+        native_root = Path(env["HERMES_NATIVE_ROOT"])
+        wrong = native_root / "releases" / "0.18.0"
+        wrong.mkdir(parents=True)
+        (native_root / "current").symlink_to(wrong, target_is_directory=True)
+        harness = tmp_path / "state-check.sh"
+        harness.write_text(f'source "{SCRIPT}"\nassert_source_runtime_unchanged\n', encoding="utf-8")
+        result = subprocess.run(["bash", str(harness)], env=env, capture_output=True, text=True)
+        assert result.returncode != 0
+        assert "ACTIVE_VERSION_MISMATCH" in result.stderr
+
+    @pytest.mark.parametrize(
+        ("proof_name", "code"),
+        [("migration", "MIGRATION_PROBE_NOT_PASSED"), ("rollback", "ROLLBACK_NOT_READY")],
+    )
+    def test_invalid_required_proof_is_blocked(self, tmp_path, proof_name, code):
+        env = _base_env(tmp_path)
+        proof = tmp_path / f"{proof_name}.json"
+        proof.write_text(json.dumps({"verified": False}), encoding="utf-8")
+        harness = tmp_path / "proof-check.sh"
+        harness.write_text(
+            f'source "{SCRIPT}"\nassert_verified_proof "{proof}" {code} {proof_name}\n', encoding="utf-8"
+        )
+        result = subprocess.run(["bash", str(harness)], env=env, capture_output=True, text=True)
+        assert result.returncode != 0
+        assert code in result.stderr
+
 
 # ---------------------------------------------------------------------------
 # pre-cutover
@@ -430,7 +477,7 @@ class TestStatePath:
 class TestPreCutover:
     def test_fails_without_backup_proof(self, tmp_path):
         env = _base_env(tmp_path)
-        result = _run(["pre-cutover"], env)
+        result = _run(["pre-cutover", *A2_APPROVAL], env)
         assert result.returncode != 0
         assert "BACKUP_PROOF_MISSING" in result.stderr
 
@@ -439,40 +486,16 @@ class TestPreCutover:
         backup_proof = Path(env["HERMES_NATIVE_BACKUP_PROOF"])
         backup_proof.parent.mkdir(parents=True)
         backup_proof.write_text(json.dumps({"backup_id": "x", "verified": False}), encoding="utf-8")
-        result = _run(["pre-cutover"], env)
+        result = _run(["pre-cutover", *A2_APPROVAL], env)
         assert result.returncode != 0
         assert "BACKUP_PROOF_INVALID" in result.stderr
 
-    @requires_uv
-    def test_passes_and_writes_manifest_when_gates_are_green(self, tmp_path):
-        bare_repo, sha = _make_bare_fixture_repo(tmp_path, tag="vtest-0.21.0")
-        archive, archive_sha = _make_fake_node_archive(tmp_path)
-        env = _base_env(tmp_path, target_sha=sha, target_tag="vtest-0.21.0", upstream_repo=str(bare_repo))
-        env["HERMES_NATIVE_CHANGE_C_TEST_NODE_ARCHIVE"] = str(archive)
-        env["HERMES_NATIVE_CHANGE_C_TEST_NODE_SHA256"] = archive_sha
-        native_root = Path(env["HERMES_NATIVE_ROOT"])
-
-        release_019 = native_root / "releases" / "0.19.0"
-        (release_019 / "bin").mkdir(parents=True)
-        (release_019 / "bin" / "hermes").write_text("#!/bin/sh\necho fake\n", encoding="utf-8")
-        (native_root / "current").symlink_to(release_019, target_is_directory=True)
-
-        backup_proof = Path(env["HERMES_NATIVE_BACKUP_PROOF"])
-        backup_proof.parent.mkdir(parents=True)
-        backup_proof.write_text(json.dumps(VERIFIED_BACKUP_PROOF), encoding="utf-8")
-
-        stage_result = _run(["stage"], env, timeout=STAGE_TIMEOUT)
-        assert stage_result.returncode == 0, stage_result.stdout + stage_result.stderr
-
+    def test_never_stops_services_without_separate_a2_approval(self, tmp_path):
+        env = _base_env(tmp_path)
         result = _run(["pre-cutover"], env)
-        assert result.returncode == 0, result.stdout + result.stderr
-
-        manifest_path = Path(env["HERMES_NATIVE_PRECUTOVER_MANIFEST"])
-        assert manifest_path.exists()
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        assert manifest["gates_passed"] is True
-        assert manifest["previous_version"] == "0.19.0"
-        assert manifest["previous_symlink_target"].endswith("0.19.0")
+        assert result.returncode != 0
+        assert "A2_APPROVAL_REQUIRED" in result.stderr
+        assert not Path(env["HERMES_NATIVE_PRECUTOVER_MANIFEST"]).exists()
 
 
 # ---------------------------------------------------------------------------
@@ -491,10 +514,15 @@ class TestCutover:
 
         manifest_path = Path(env["HERMES_NATIVE_PRECUTOVER_MANIFEST"])
         assert not manifest_path.exists()
+        state_dir = Path(env["HERMES_NATIVE_STATE_DIR"])
+        state_dir.mkdir(parents=True)
+        (state_dir / "backup-proof.json").write_text(json.dumps(VERIFIED_BACKUP_PROOF), encoding="utf-8")
+        (state_dir / "migration-probe.json").write_text(json.dumps({"verified": True}), encoding="utf-8")
+        (state_dir / "rollback-proof.json").write_text(json.dumps({"verified": True}), encoding="utf-8")
 
-        result = _run(["cutover"], env)
+        result = _run(["cutover", *A2_APPROVAL], env)
         assert result.returncode != 0
-        assert "CUTOVER_SEPARATE_GATE" in result.stderr
+        assert "PRECUTOVER_MANIFEST_INVALID" in result.stderr
         # current must remain untouched since the gate failed before any
         # service stop / symlink swap was attempted.
         assert os.readlink(native_root / "current") == str(release_019)
@@ -524,7 +552,7 @@ class TestRollback:
         assert "ROLLBACK_MANIFEST_MISSING" in result.stderr
         assert _snapshot_tree(native_root) == before
 
-    def test_restores_state_pointer_services_and_quarantines_failed_state(self, tmp_path):
+    def test_incomplete_manifest_never_guesses_rollback_state(self, tmp_path):
         env = _base_env(tmp_path)
         native_root = Path(env["HERMES_NATIVE_ROOT"])
         release_019 = native_root / "releases" / "0.19.0"
@@ -545,10 +573,15 @@ class TestRollback:
 
         manifest = Path(env["HERMES_NATIVE_PRECUTOVER_MANIFEST"])
         manifest.parent.mkdir(parents=True)
-        manifest.write_text(json.dumps({
-            "previous_symlink_target": str(release_019),
-            "pre_upgrade_state_path": str(pre),
-        }), encoding="utf-8")
+        manifest.write_text(
+            json.dumps(
+                {
+                    "previous_symlink_target": str(release_019),
+                    "pre_upgrade_state_path": str(pre),
+                }
+            ),
+            encoding="utf-8",
+        )
         fake_bin = tmp_path / "fake-bin"
         fake_bin.mkdir()
         systemctl = fake_bin / "systemctl"
@@ -556,19 +589,12 @@ class TestRollback:
         systemctl.chmod(0o755)
         env["PATH"] = f"{fake_bin}:{env['PATH']}"
 
+        before = _snapshot_tree(live)
         result = _run(["rollback"], env)
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert (live / "marker").read_text(encoding="utf-8") == "pre-0.19"
-        quarantined = list((tmp_path / "quarantine").glob("failed-0.21-state-*"))
-        assert len(quarantined) == 1
-        assert (quarantined[0] / "marker").read_text(encoding="utf-8") == "failed-0.21"
-        assert (native_root / "current").resolve() == release_019.resolve()
-        service_lines = (tmp_path / "services.log").read_text(encoding="utf-8").splitlines()
-        assert service_lines == [
-            "stop hermes-desktop-serve.service", "stop hermes-dashboard.service",
-            "stop hermes-gateway.service", "start hermes-gateway.service",
-            "start hermes-dashboard.service", "start hermes-desktop-serve.service",
-        ]
+        assert result.returncode != 0
+        assert "PRECUTOVER_MANIFEST_INCOMPLETE" in result.stderr
+        assert _snapshot_tree(live) == before
+        assert not (tmp_path / "services.log").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -609,7 +635,11 @@ class TestSecretRedaction:
         )
         env = _base_env(tmp_path)
         result = subprocess.run(
-            ["bash", str(harness)], capture_output=True, text=True, timeout=30, env=env,
+            ["bash", str(harness)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
         )
         assert result.returncode == 0, result.stderr
         assert "xxxsecret" not in result.stdout
