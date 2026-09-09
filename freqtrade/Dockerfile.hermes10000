@@ -13,5 +13,5 @@ RUN groupmod -g 10000 ftuser \
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-USER ftuser
+USER 10000:10000
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -531,7 +531,7 @@ def _r5a_v1_payload(**overrides):
         "task_name": "R5A",
         "execution_class": "A2",
         "resource_key": "r5a:compose",
-        "action": "r5a_compose_build",
+        "action": "r5a_compose_start_existing",
         "argv": [],
         "cwd": "/tmp",
         "timeout": 120,
@@ -545,27 +545,35 @@ class TestR5AComposeExactArgv:
     """Exact argv generation for each R5A compose action."""
 
     def test_build_all_services(self, daemon):
-        from hermes_root.actions import build_argv
-        argv = build_argv("r5a_compose_build", [])
-        assert argv == [
-            "docker", "compose", "-f",
-            "/opt/data/projects/trading-hub/docker-compose.hermestrader-dryrun.yml",
-            "-p", "hermestrader-dryrun", "build",
-        ]
+        from hermes_root.actions import ActionError, build_argv
+        with pytest.raises(ActionError, match="separate_ceremony"):
+            build_argv("r5a_compose_build", [])
 
     def test_build_specific_services(self, daemon):
-        from hermes_root.actions import build_argv
-        argv = build_argv("r5a_compose_build", ["freqtrade-freqforge", "rainbow"])
-        assert "freqtrade-freqforge" in argv
-        assert "rainbow" in argv
-        assert "freqai-rebel" not in argv
-        assert argv[-2:] == ["freqtrade-freqforge", "rainbow"]
+        from hermes_root.actions import ActionError, build_argv
+        with pytest.raises(ActionError, match="separate_ceremony"):
+            build_argv("r5a_compose_build", ["freqtrade-freqforge", "rainbow"])
+
+    def test_canonical_baseline_builder_is_separate_and_bounded(self, daemon):
+        from hermes_root.actions import ActionError, build_argv
+        assert build_argv("r5a_build_canonical_baseline", []) == [
+            "/usr/bin/python3",
+            "/usr/local/sbin/hermes_root/r5a_baseline_build.py",
+        ]
+        with pytest.raises(ActionError, match="takes_no_arguments"):
+            build_argv("r5a_build_canonical_baseline", ["rainbow"])
 
     def test_up_all_services_includes_dash_d(self, daemon):
         from hermes_root.actions import build_argv
         argv = build_argv("r5a_compose_up", [])
-        assert argv[-1] == "-d"
-        assert "up" in argv
+        assert argv[-1] == "deploy-locked"
+        assert argv[:2] == ["/usr/bin/python3", "/usr/local/sbin/hermes_root/r5a_recovery.py"]
+
+    def test_start_existing_uses_provenance_helper(self, daemon):
+        from hermes_root.actions import build_argv
+        argv = build_argv("r5a_compose_start_existing", [])
+        assert argv[-1] == "start-existing"
+        assert "docker" not in argv
 
     def test_stop_services(self, daemon):
         from hermes_root.actions import build_argv
@@ -604,7 +612,7 @@ class TestR5AComposeServiceAllowlist:
         from hermes_root.actions import build_argv
         for svc in ["freqtrade-freqforge", "freqtrade-freqforge-canary",
                       "freqtrade-regime-hybrid", "freqtrade-webserver", "rainbow"]:
-            argv = build_argv("r5a_compose_build", [svc])
+            argv = build_argv("r5a_compose_start_existing", [svc])
             assert svc in argv
 
     def test_unknown_service_rejected(self, daemon):
@@ -696,7 +704,7 @@ class TestR5AComposeAuditFields:
         assert resp.get("audit_id"), "audit_id must be present"
         assert resp.get("schema_version") == SCHEMA_VERSION
         assert resp.get("execution_class") == "A2"
-        assert resp.get("action") == "r5a_compose_build"
+        assert resp.get("action") == "r5a_compose_start_existing"
         assert resp.get("resource_key") == "r5a:compose"
 
     def test_audit_file_written(self, daemon):
@@ -704,7 +712,7 @@ class TestR5AComposeAuditFields:
         entries = _read_audit(daemon)
         assert len(entries) >= 1
         entry = entries[0]
-        assert entry["action"] == "r5a_compose_build"
+        assert entry["action"] == "r5a_compose_start_existing"
         assert entry["execution_class"] == "A2"
         assert entry["audit_id"]
         assert entry["decision"] == "ALLOWED"

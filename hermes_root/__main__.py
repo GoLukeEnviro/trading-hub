@@ -81,8 +81,10 @@ Runtime actions (mutating, A2, requires --approval):
     group_delete --name <name>
 
 R5A compose fleet actions (A2, requires --approval):
-    r5a_compose_build [--service <svc>]...
+    r5a_compose_build [--service <svc>]...  (fail-closed; separate ceremony)
+    r5a_build_canonical_baseline
     r5a_compose_up [--service <svc>]...
+    r5a_compose_start_existing [--service <svc>]...
     r5a_compose_stop [--service <svc>]...
     r5a_compose_down [--service <svc>]...
 """
@@ -340,7 +342,11 @@ def _build_argv(action: str, args: argparse.Namespace) -> list[str]:
         return []
 
     # R5A compose
+    if action == "r5a_build_canonical_baseline":
+        return []
+
     if action in ("r5a_compose_build", "r5a_compose_up",
+                  "r5a_compose_start_existing",
                   "r5a_compose_stop", "r5a_compose_down"):
         return args.service if args.service else []
 

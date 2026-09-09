@@ -26,6 +26,8 @@ R5A_CANONICAL_COMPOSE_FILE = (
     "/opt/data/projects/trading-hub/docker-compose.hermestrader-dryrun.yml"
 )
 R5A_CANONICAL_PROJECT = "hermestrader-dryrun"
+R5A_RECOVERY_HELPER = "/usr/local/sbin/hermes_root/r5a_recovery.py"
+R5A_BASELINE_BUILD_HELPER = "/usr/local/sbin/hermes_root/r5a_baseline_build.py"
 
 # The five default (non-rebel-profile) services from the canonical compose.
 # Client-supplied service names are validated against this allowlist only.
@@ -330,10 +332,21 @@ def build_argv(action: str, argv: list[str]) -> list[str]:
     # R5A compose fleet
     # ------------------------------------------------------------------
     if action == "r5a_compose_build":
-        return _build_r5a_compose_cmd("build", argv)
+        _validate_r5a_services(argv)
+        raise ActionError("r5a_baseline_build_requires_separate_ceremony")
+
+    if action == "r5a_build_canonical_baseline":
+        if argv:
+            raise ActionError("r5a_baseline_build_takes_no_arguments")
+        return ["/usr/bin/python3", R5A_BASELINE_BUILD_HELPER]
 
     if action == "r5a_compose_up":
-        return _build_r5a_compose_cmd("up", argv) + ["-d"]
+        _validate_r5a_services(argv)
+        return ["/usr/bin/python3", R5A_RECOVERY_HELPER, "deploy-locked", *argv]
+
+    if action == "r5a_compose_start_existing":
+        _validate_r5a_services(argv)
+        return ["/usr/bin/python3", R5A_RECOVERY_HELPER, "start-existing", *argv]
 
     if action == "r5a_compose_stop":
         return _build_r5a_compose_cmd("stop", argv)

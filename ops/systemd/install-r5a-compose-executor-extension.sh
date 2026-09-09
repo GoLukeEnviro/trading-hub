@@ -2,9 +2,8 @@
 # Transactional installer for the R5A hermestrader-dryrun compose execution
 # executor extension (Issue #527).
 #
-# Deploys the updated hermes_root/ package (actions, policy, schema) that
-# adds the four bounded compose actions:
-#   r5a_compose_build, r5a_compose_up, r5a_compose_stop, r5a_compose_down
+# Deploys the updated hermes_root/ package with bounded recovery,
+# deployment and baseline-build actions.
 #
 # This script is the Host-Operator-Handoff step: it MUST be run directly
 # on the host as root, NEVER through the executor socket itself (the
@@ -65,6 +64,8 @@ REQUIRED_MODULES=(
   "policy.py"
   "protocol.py"
   "redact.py"
+  "r5a_baseline_build.py"
+  "r5a_recovery.py"
   "schema.py"
   "validate.py"
 )
@@ -177,7 +178,9 @@ import hermes_root.schema
 # Verify R5A actions are present
 from hermes_root.schema import MUTATING_ACTIONS
 assert 'r5a_compose_build' in MUTATING_ACTIONS, 'R5A actions not in schema'
+assert 'r5a_build_canonical_baseline' in MUTATING_ACTIONS
 assert 'r5a_compose_up' in MUTATING_ACTIONS
+assert 'r5a_compose_start_existing' in MUTATING_ACTIONS
 assert 'r5a_compose_stop' in MUTATING_ACTIONS
 assert 'r5a_compose_down' in MUTATING_ACTIONS
 # Verify approval marker

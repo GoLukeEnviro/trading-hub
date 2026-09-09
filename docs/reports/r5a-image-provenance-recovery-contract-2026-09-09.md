@@ -1,0 +1,93 @@
+# R5A image provenance and recovery contract — 2026-09-09
+
+Issue: #723 (maintenance child of #699)
+
+## Incident and present classification
+
+Docker panicked on 2026-09-07 19:34:54 UTC with `fatal error: concurrent map iteration and map write`.
+After Docker restarted, the five canonical containers remained stopped. The bounded
+`r5a_compose_up` action was invoked on 2026-09-09 and Compose recreated all five
+containers because their recorded Compose image identities no longer matched the
+locally resolved mutable build tags. That action did not build or pull an image.
+
+The recovered fleet is 5/5 running and healthy, with restart count 0, OOMKilled
+false, four `dry_run=true` configurations, and preserved named volumes. It remains
+`RUNNING_CANDIDATE`; its canonical provenance is unproven. Hermes production remains
+0.19.0. No Hermes readiness or cutover was run.
+
+## Read-only forensic result
+
+Previous container image objects are absent from the Docker image store, so their
+bit-identical reconstruction or ancestry proof is impossible.
+
+| Workload | Previous image ID | Running candidate image ID |
+|---|---|---|
+| FreqForge | `sha256:8f8bf1e6b726...` | `sha256:c1318af57f8b6ffb34ae09d86320ec06648a17ac319e2d2d0883d45e4e9cf712` |
+| Canary | `sha256:9fe8f1254f97...` | `sha256:246b577e69fcece8bfe2ecf45465d80c0b2df2f6424a620a22e8f719fd8464a0` |
+| Regime Hybrid | `sha256:80df56d81ee7...` | `sha256:f9fcdf187897cbdaa09726a597ec52a3803dcdcf7c163ac16aae00878293ba2b` |
+| Webserver | `sha256:6eed82ddb8e7...` | `sha256:0f8642bb306254967a538a79635964bd0e8e99f20eeb73d4274b7259b71167ad` |
+| Rainbow | `sha256:2dad039f7173...` | `sha256:553dbfc682c9a2bb77711f9d778b549c12a9464a64e8c62a05638087cbc47f5b` |
+
+All four candidate Freqtrade images have identical complete 12-layer RootFS lists.
+Their runtime entrypoint hashes equal repository `freqtrade/entrypoint.sh`:
+`7e1890ed32c9211f13475853cb5a5c15ac9c44db0f9676f50d5d7d82d48a6880`.
+The candidate image metadata declares user `ftuser`; Compose overrides the running
+containers to `10000:10000`. The new canonical image contract requires the numeric
+identity in both places and therefore does not accept these candidate images.
+Mounted configs, strategy directories, and shared code match clean repository commit
+`069274c21c90e154cae51618fa2d874c1534ac57`; all four configs remain dry-run.
+The pinned upstream base is
+`sha256:87aa5c6d65359b34e9d99a0bb260a38c0efe0315253811e6f48c2afe8f278a6a`,
+but its local image object is absent, so candidate ancestry cannot be independently
+bound to that digest.
+
+The immutable Rainbow checkout is clean at
+`6e850c8f8ba1d8a0ad45250f130280e4171c001d`, and its Dockerfile hash matches the
+existing source lock (`faa2e3d8c351dc50adc4af21093811587c2f49caaa8827e138fee8c0d0796405`).
+The running candidate image does not match the recorded Rainbow image/config
+digests and has image user `rainbow`, not `10000:10000`. Classification:
+`RAINBOW_PROVENANCE_MISMATCH`.
+
+## Root cause
+
+The prior executor mapped `r5a_compose_up` directly to `docker compose ... up -d`.
+It had no canonical image lock, no local tag-to-full-image-ID check, and no recovery
+mode distinct from reconciliation. The old and current containers carried the same
+Compose configuration hashes, but their Compose image labels differed from the
+local tag targets. Compose therefore selected recreate when asked to perform `up`.
+
+## Remediation contract
+
+- Four Freqtrade services share one immutable image tag; Rainbow has a separate
+  immutable tag. No canonical `latest` identity exists.
+- `ops/hermes/hermestrader-dryrun-images.lock.json` is fail-closed while
+  `status=baseline_pending`; it cannot authorize start or deploy until full image
+  IDs are attested and status becomes `locked`.
+- `r5a_compose_start_existing` verifies the exact existing five-container set,
+  container image ID and immutable tag, local tag resolution, image user and
+  provenance labels, read-only config mounts, and `dry_run=true`, then invokes only
+  `docker compose start`.
+- `r5a_compose_up` is now deployment-only. It validates locked local images plus
+  the rendered Compose service/tag/config contract, then invokes `up -d --no-build
+  --pull never`.
+- Ordinary `r5a_compose_build` fails closed. The separate
+  `r5a_build_canonical_baseline` ceremony accepts no caller-selected path, image tag,
+  or service; it validates clean immutable sources and builds exactly one Freqtrade
+  and one Rainbow image with provenance labels.
+- The Freqtrade image declares numeric `USER 10000:10000`.
+
+## Deliberate two-step baseline transition
+
+This PR does not bless the running candidate or fabricate missing image IDs. After
+merge and green CI, the bounded baseline action builds from the exact merged
+trading-hub checkout and immutable Rainbow checkout. A follow-up lock update records
+both complete Docker image IDs and the exact trading-hub source commit, changes the
+lock to `locked`, and aligns Compose immutable tags. Only then may the five
+containers be recreated with named volumes preserved and the full R5A parity matrix
+run. Fresh Hermes readiness remains prohibited until provenance and parity pass.
+
+## Safety invariants
+
+No `down -v`, volume prune, Docker prune, DB deletion, credential mutation,
+strategy/config mutation, `dry_run=false`, live-trading authority, Hermes restart,
+Hermes state migration, or Hermes cutover is part of this remediation PR.

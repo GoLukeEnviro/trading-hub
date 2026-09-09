@@ -15,6 +15,7 @@
 
 services:
   freqtrade-freqforge:
+    image: hermestrader/freqtrade-r5a:r7a-069274c21c90-7ca1e4f9b150
     build:
       context: ./freqtrade
       dockerfile: Dockerfile.hermes10000
@@ -59,6 +60,7 @@ services:
       - trading_egress
 
   freqtrade-freqforge-canary:
+    image: hermestrader/freqtrade-r5a:r7a-069274c21c90-7ca1e4f9b150
     build:
       context: ./freqtrade
       dockerfile: Dockerfile.hermes10000
@@ -100,6 +102,7 @@ services:
       - trading_egress
 
   freqtrade-regime-hybrid:
+    image: hermestrader/freqtrade-r5a:r7a-069274c21c90-7ca1e4f9b150
     build:
       context: ./freqtrade
       dockerfile: Dockerfile.hermes10000
@@ -141,6 +144,7 @@ services:
       - trading_egress
 
   freqtrade-webserver:
+    image: hermestrader/freqtrade-r5a:r7a-069274c21c90-7ca1e4f9b150
     build:
       context: ./freqtrade
       dockerfile: Dockerfile.hermes10000
@@ -231,6 +235,7 @@ services:
   # Verify before deploy: git -C ../ai4trade-bot merge-base --is-ancestor
   # 6e850c8f8ba1d8a0ad45250f130280e4171c001d origin/master
   rainbow:
+    image: hermestrader/rainbow-r5a:6e850c8f8ba1-faa2e3d8c351
     build:
       context: ${AI4TRADE_CONTEXT:-../ai4trade-bot}
       dockerfile: rainbow.Dockerfile
