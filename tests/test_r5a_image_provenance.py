@@ -162,11 +162,17 @@ def test_rainbow_wrong_image_config_digest_fails_closed(monkeypatch: pytest.Monk
                 }
             )
         image_id = FREQ_ID if is_freq else "sha256:" + "a" * 64
-        return _completed(json.dumps([{
-            "Id": image_id,
-            "RepoDigests": [f"test@{item['image_manifest_digest']}"],
-            "Config": {"User": "10000:10000", "Labels": labels},
-        }]))
+        return _completed(
+            json.dumps(
+                [
+                    {
+                        "Id": image_id,
+                        "RepoDigests": [f"test@{item['image_manifest_digest']}"],
+                        "Config": {"User": "10000:10000", "Labels": labels},
+                    }
+                ]
+            )
+        )
 
     with pytest.raises(recovery.ProvenanceError, match="IMAGE_ID_MISMATCH"):
         recovery.verify_locked_images(_lock(), run=run, repo_root=tmp_path)
@@ -307,16 +313,59 @@ def test_deploy_path_cannot_build_or_pull(monkeypatch: pytest.MonkeyPatch, tmp_p
 
 def test_post_action_health_wait_is_bounded() -> None:
     def run(_argv, **_kwargs):
-        return _completed(json.dumps([{
-            "RestartCount": 0,
-            "State": {
-                "Running": True,
-                "OOMKilled": False,
-                "Health": {"Status": "starting"},
-            },
-        }]))
+        return _completed(
+            json.dumps(
+                [
+                    {
+                        "RestartCount": 0,
+                        "State": {
+                            "Running": True,
+                            "OOMKilled": False,
+                            "Health": {"Status": "starting"},
+                        },
+                    }
+                ]
+            )
+        )
 
     with pytest.raises(recovery.ProvenanceError, match="FLEET_HEALTH_TIMEOUT"):
-        recovery.verify_post_action_health(
-            [], run=run, timeout_seconds=0, sleep=lambda _seconds: None, clock=lambda: 0
+        recovery.verify_post_action_health([], run=run, timeout_seconds=0, sleep=lambda _seconds: None, clock=lambda: 0)
+
+
+@pytest.mark.parametrize(
+    ("running", "health", "restart", "oom", "error"),
+    [
+        (False, "healthy", 0, False, "FLEET_HEALTH_TIMEOUT"),
+        (True, "unhealthy", 0, False, "FLEET_HEALTH_TIMEOUT"),
+        (True, "healthy", 1, False, "FLEET_RUNTIME_STATE_MISMATCH"),
+        (True, "healthy", 0, True, "FLEET_RUNTIME_STATE_MISMATCH"),
+    ],
+)
+def test_runtime_state_drift_is_blocked(running, health, restart, oom, error) -> None:
+    def run(_argv, **_kwargs):
+        return _completed(
+            json.dumps(
+                [
+                    {
+                        "RestartCount": restart,
+                        "State": {"Running": running, "OOMKilled": oom, "Health": {"Status": health}},
+                    }
+                ]
+            )
         )
+
+    with pytest.raises(recovery.ProvenanceError, match=error):
+        recovery.verify_post_action_health([], run=run, timeout_seconds=0, sleep=lambda _seconds: None, clock=lambda: 0)
+
+
+def test_rebel_presence_is_blocked(tmp_path: Path) -> None:
+    run, _calls = _fleet_runner(tmp_path / "config.json")
+
+    def with_rebel(argv, **kwargs):
+        result = run(argv, **kwargs)
+        if argv == ["docker", "ps", "-a", "--format", "{{.Names}}"]:
+            return _completed(result.stdout + "hermestrader-dryrun-freqai-rebel-1\n")
+        return result
+
+    with pytest.raises(recovery.ProvenanceError, match="REBEL_PRESENT"):
+        recovery.verify_existing_fleet(_lock(), run=with_rebel)

@@ -45,8 +45,10 @@
 #   - Every mutating step is preceded/followed by a JSON audit event.
 #   - dry_run=false found anywhere this script reads is an immediate,
 #     unconditional, non-continuable abort (DRY_RUN_FALSE_DETECTED).
-#   - rollback's target is read from a manifest written by pre-cutover; it is
-#     never guessed, and rollback hard-aborts if that manifest is absent.
+#   - pre-cutover/cutover require an explicit A2 maintenance-window marker;
+#     repository merge alone never authorizes production mutation.
+#   - rollback's release, state path and session baseline are read from an
+#     integrity-bound manifest; they are never guessed.
 
 set -Eeuo pipefail
 
@@ -89,6 +91,7 @@ readonly HERMES_NATIVE_AUDIT_LOG="${HERMES_NATIVE_AUDIT_LOG:-${HERMES_NATIVE_STA
 readonly HERMES_NATIVE_PRECUTOVER_MANIFEST="${HERMES_NATIVE_PRECUTOVER_MANIFEST:-${HERMES_NATIVE_STATE_DIR}/pre-cutover-manifest.json}"
 readonly HERMES_NATIVE_BACKUP_PROOF="${HERMES_NATIVE_BACKUP_PROOF:-${HERMES_NATIVE_STATE_DIR}/backup-proof.json}"
 readonly HERMES_NATIVE_FLEET_BASELINE="${HERMES_NATIVE_FLEET_BASELINE:-${HERMES_NATIVE_STATE_DIR}/fleet-baseline-pre-cutover.json}"
+readonly HERMES_NATIVE_FLEET_IMAGE_LOCK="${HERMES_NATIVE_FLEET_IMAGE_LOCK:-/opt/data/projects/trading-hub/ops/hermes/hermestrader-dryrun-images.lock.json}"
 readonly HERMES_NATIVE_REPORT_DIR="${HERMES_NATIVE_REPORT_DIR:-${HERMES_NATIVE_STATE_DIR}/reports}"
 readonly HERMES_NATIVE_PROBE_DIR="${HERMES_NATIVE_PROBE_DIR:-${HERMES_NATIVE_STATE_DIR}/probe}"
 readonly HERMES_NATIVE_PROBE_RESULT="${HERMES_NATIVE_PROBE_RESULT:-${HERMES_NATIVE_STATE_DIR}/migration-probe.json}"
@@ -96,6 +99,12 @@ readonly HERMES_NATIVE_ROLLBACK_RESULT="${HERMES_NATIVE_ROLLBACK_RESULT:-${HERME
 readonly HERMES_NATIVE_READINESS_RESULT="${HERMES_NATIVE_READINESS_RESULT:-${HERMES_NATIVE_STATE_DIR}/cutover-readiness.json}"
 readonly HERMES_NATIVE_PREUPGRADE_STATE="${HERMES_NATIVE_PREUPGRADE_STATE:-${HERMES_NATIVE_STATE_DIR}/pre-upgrade-state}"
 readonly HERMES_NATIVE_QUARANTINE_DIR="${HERMES_NATIVE_QUARANTINE_DIR:-${HERMES_NATIVE_STATE_DIR}/quarantine}"
+readonly HERMES_NATIVE_MIGRATION_RESULT="${HERMES_NATIVE_MIGRATION_RESULT:-${HERMES_NATIVE_STATE_DIR}/production-migration.json}"
+CHANGE_C_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly CHANGE_C_REPO_ROOT
+readonly HERMES_NATIVE_STATE_TOOL="${HERMES_NATIVE_STATE_TOOL:-${CHANGE_C_REPO_ROOT}/ops/hermes/hermes_native_change_c.py}"
+readonly HERMES_NATIVE_R5A_VERIFY_HELPER="${HERMES_NATIVE_R5A_VERIFY_HELPER:-${CHANGE_C_REPO_ROOT}/hermes_root/r5a_recovery.py}"
+readonly HERMES_NATIVE_A2_APPROVAL_MARKER="APPROVED_A2_HERMES_021_CUTOVER"
 
 # Best-effort diagnostic targets. Real paths on the production host are not
 # fully documented anywhere this script can source without guessing; these
@@ -113,6 +122,8 @@ readonly HERMES_NATIVE_ROOT_EXECUTOR_SOCKET="${HERMES_NATIVE_ROOT_EXECUTOR_SOCKE
 # (0.0.0.0 / ::). Defaults to the documented dashboard port (127.0.0.1:9119
 # only). Empty disables the check with a WARN, never a silent pass-as-skip.
 readonly HERMES_NATIVE_PUBLIC_BIND_CHECK_PORTS="${HERMES_NATIVE_PUBLIC_BIND_CHECK_PORTS:-9119}"
+readonly HERMES_NATIVE_HEALTH_URL="${HERMES_NATIVE_HEALTH_URL:-http://127.0.0.1:9119/api/health}"
+readonly HERMES_NATIVE_STATUS_URL="${HERMES_NATIVE_STATUS_URL:-http://127.0.0.1:9119/api/status}"
 
 readonly RELEASES_DIR="${HERMES_NATIVE_ROOT}/releases"
 readonly CURRENT_SYMLINK="${HERMES_NATIVE_ROOT}/current"
@@ -129,6 +140,9 @@ readonly -a STOP_ORDER=("${SVC_DESKTOP_SERVE}" "${SVC_DASHBOARD}" "${SVC_GATEWAY
 readonly -a START_ORDER=("${SVC_GATEWAY}" "${SVC_DASHBOARD}" "${SVC_DESKTOP_SERVE}")
 
 DRY_RUN=false
+A2_APPROVAL=""
+TRANSACTION_MUTATED=false
+ROLLBACK_ACTIVE=false
 
 # ---------------------------------------------------------------------------
 # Logging / audit / secret redaction
@@ -181,6 +195,10 @@ fatal() {
   local msg="$*"
   log "FATAL ${code}: ${msg}"
   audit_event "fatal" "${code}"
+  if [[ "${TRANSACTION_MUTATED}" == "true" && "${ROLLBACK_ACTIVE}" != "true" ]]; then
+    log "production mutation already began; entering automatic rollback"
+    perform_rollback "${code}" || log "FATAL AUTO_ROLLBACK_FAILED after ${code}"
+  fi
   exit 1
 }
 
@@ -284,6 +302,18 @@ PY
   else
     python3 -c "import json,sys; print(json.dumps({'captured_at': sys.argv[1], 'docker_available': False, 'containers': []}))" "${captured_at}"
   fi
+}
+
+verify_r5a_gate() {
+  local output="$1"
+  [[ -x "${HERMES_NATIVE_R5A_VERIFY_HELPER}" || -f "${HERMES_NATIVE_R5A_VERIFY_HELPER}" ]] || \
+    fatal R5A_VERIFY_HELPER_MISSING "${HERMES_NATIVE_R5A_VERIFY_HELPER}"
+  mkdir -p "$(dirname "${output}")"
+  rm -f "${output}"
+  R5A_PROOF_OUTPUT="${output}" python3 "${HERMES_NATIVE_R5A_VERIFY_HELPER}" verify-only || \
+    fatal R5A_PROVENANCE_GATE_FAILED "canonical immutable 5/5 dry-run fleet verification failed"
+  [[ -f "${output}" ]] || fatal R5A_PROVENANCE_PROOF_MISSING "${output}"
+  audit_event "r5a_provenance_gate" "success"
 }
 
 # ---------------------------------------------------------------------------
@@ -525,6 +555,12 @@ raise SystemExit(0 if all(d.get(k) is True for k in required) and d.get("snapsho
 PY
 }
 
+assert_verified_proof() {
+  local proof="$1" code="$2" label="$3"
+  python3 -c 'import json,sys; assert json.load(open(sys.argv[1],encoding="utf-8")).get("verified") is True' \
+    "${proof}" 2>/dev/null || fatal "${code}" "${label} proof is absent, malformed or unverified: ${proof}"
+}
+
 assert_source_runtime_unchanged() {
   local current_target
   current_target="$(resolved_current_target)"
@@ -594,112 +630,20 @@ cmd_probe() {
 
   local target_python="${TARGET_RELEASE_DIR}/venv/bin/python"
   [[ -x "${target_python}" ]] || fatal TARGET_INTERPRETER_MISSING "${target_python}"
-  "${target_python}" - "${probe_state}" "${HERMES_NATIVE_PROFILE}" \
-    "${HERMES_NATIVE_PROBE_RESULT}" "${probe_root}" <<'PY'
-import difflib, hashlib, json, os, re, sqlite3, subprocess, sys, tempfile
-from datetime import datetime, timezone
-from pathlib import Path
-import yaml
-
-state = Path(sys.argv[1]); profile = sys.argv[2]; report = Path(sys.argv[3]); root = Path(sys.argv[4])
-python = Path(sys.executable)
-homes = {"root": state, "profile": state / "profiles" / profile}
-sensitive_key_pattern = re.compile(r"token|secret|password|passphrase|api[_-]?key|private[_-]?key", re.I)
-
-def raw_config(path):
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-def redacted(value, key=""):
-    if sensitive_key_pattern.search(key): return "<REDACTED>"
-    if isinstance(value, dict): return {k:redacted(v,str(k)) for k,v in sorted(value.items())}
-    if isinstance(value, list): return [redacted(v,key) for v in value]
-    return value
-def nested(d, *keys):
-    for key in keys:
-        if not isinstance(d, dict): return None
-        d = d.get(key)
-    return d
-def db_info(path):
-    uri = f"file:{path}?mode=ro"
-    con = sqlite3.connect(uri, uri=True, timeout=30)
-    try:
-        schema = con.execute("SELECT version FROM schema_version LIMIT 1").fetchone()[0]
-        sessions = con.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
-        integrity = [r[0] for r in con.execute("PRAGMA integrity_check")]
-        foreign = list(con.execute("PRAGMA foreign_key_check"))
-    finally: con.close()
-    return {"schema":schema,"sessions":sessions,"integrity":integrity,"foreign_key_rows":len(foreign)}
-
-before_cfg = {role: raw_config(home / "config.yaml") for role,home in homes.items()}
-before_db = {role: db_info(home / "state.db") for role,home in homes.items()}
-for role, home in homes.items():
-    env = os.environ.copy(); env["HERMES_HOME"] = str(home); env.pop("HERMES_PROFILE", None)
-    subprocess.run([str(python), "-c",
-        "from hermes_cli.config import migrate_config; migrate_config(interactive=False, quiet=True)"],
-        env=env, check=True, stdin=subprocess.DEVNULL, timeout=180)
-    # The 33->39 migration intentionally clears the legacy duplicated
-    # agent.system_prompt when the structured personality setting supersedes
-    # it. Preserve only the explicit operational settings, never the duplicate
-    # prompt text or any secret-bearing value.
-    migrated = raw_config(home / "config.yaml")
-    for path in (('display','personality'), ('delegation','max_iterations'),
-                 ('display','background_process_notifications')):
-        old = nested(before_cfg[role], *path)
-        if old is None: continue
-        cursor = migrated
-        for key in path[:-1]: cursor = cursor.setdefault(key, {})
-        cursor[path[-1]] = old
-    config_path = home / "config.yaml"
-    config_tmp = config_path.with_name(config_path.name + ".change-c.tmp")
-    config_tmp.write_text(yaml.safe_dump(migrated, sort_keys=False, allow_unicode=True), encoding="utf-8")
-    os.chmod(config_tmp, config_path.stat().st_mode & 0o777)
-    os.replace(config_tmp, config_path)
-    subprocess.run([str(python), "-c",
-        "from pathlib import Path; import sys; from hermes_state import SessionDB; "
-        "SessionDB(db_path=Path(sys.argv[1]), read_only=False).close()", str(home / "state.db")],
-        env=env, check=True, stdin=subprocess.DEVNULL, timeout=300)
-
-after_cfg = {role: raw_config(home / "config.yaml") for role,home in homes.items()}
-after_db = {role: db_info(home / "state.db") for role,home in homes.items()}
-from hermes_cli.config_defaults import DEFAULT_CONFIG
-from hermes_state_common import SCHEMA_VERSION
-target_config = int(DEFAULT_CONFIG["_config_version"]); target_db = int(SCHEMA_VERSION)
-
-checks=[]; diffs={}
-for role in homes:
-    b,a = before_cfg[role],after_cfg[role]
-    checks += [b.get("_config_version") == 33, a.get("_config_version") == target_config,
-               before_db[role]["schema"] == 22, after_db[role]["schema"] == target_db,
-               before_db[role]["sessions"] == after_db[role]["sessions"],
-               after_db[role]["integrity"] == ["ok"], after_db[role]["foreign_key_rows"] == 0]
-    for path, expected in [(('display','personality'),'technical'),
-                           (('delegation','max_iterations'),50),
-                           (('display','background_process_notifications'),'all')]:
-        old=nested(b,*path); new=nested(a,*path)
-        if old is not None: checks += [old == expected, new == old]
-    left=json.dumps(redacted(b),indent=2,sort_keys=True).splitlines(True)
-    right=json.dumps(redacted(a),indent=2,sort_keys=True).splitlines(True)
-    diff=''.join(difflib.unified_diff(left,right,fromfile=f'{role}-before',tofile=f'{role}-after'))
-    diff_path=root/f'{role}-config.diff'; diff_path.write_text(diff,encoding='utf-8'); diffs[role]=str(diff_path)
-
-result={
-  "version":1,"created_at":datetime.now(timezone.utc).isoformat(),"probe_root":str(root),
-  "source_root":"/opt/data/hermes","profile":profile,"target_version":"0.21.0",
-  "target_commit":"29112bef099274229cadff79cdff7bf7b99c4b77",
-  "config_target_schema":target_config,"state_target_schema":target_db,
-  "config_before":{k:v.get('_config_version') for k,v in before_cfg.items()},
-  "config_after":{k:v.get('_config_version') for k,v in after_cfg.items()},
-  "database_before":before_db,"database_after":after_db,"config_diffs":diffs,
-  "session_invariant_verified":all(before_db[k]['sessions']==after_db[k]['sessions'] for k in homes),
-  "sqlite_integrity_verified":all(after_db[k]['integrity']==['ok'] and after_db[k]['foreign_key_rows']==0 for k in homes),
-  "config_drift_verified":all(checks),"migration_verified":all(checks),
-  "backend_probe_verified":False,"verified":False,
-}
-report.parent.mkdir(parents=True,exist_ok=True)
-fd,tmp=tempfile.mkstemp(prefix='.migration-probe.',dir=report.parent,text=True)
+  "${target_python}" "${HERMES_NATIVE_STATE_TOOL}" migrate --state "${probe_state}" \
+    --profile "${HERMES_NATIVE_PROFILE}" --python "${target_python}" \
+    --output "${HERMES_NATIVE_PROBE_RESULT}" || fatal MIGRATION_PROBE_FAILED "shared migration primitive failed"
+  python3 - "${HERMES_NATIVE_PROBE_RESULT}" "${probe_root}" "${HERMES_NATIVE_PROFILE}" \
+    "${HERMES_TARGET_VERSION}" "${HERMES_TARGET_SHA}" <<'PY'
+import json, os, sys, tempfile
+path, probe_root, profile, version, commit = sys.argv[1:6]
+d=json.load(open(path,encoding='utf-8'))
+d.update({'probe_root':probe_root,'source_root':'/opt/data/hermes','profile':profile,
+          'target_version':version,'target_commit':commit})
+fd,tmp=tempfile.mkstemp(prefix='.migration-probe.',dir=os.path.dirname(path),text=True)
 with os.fdopen(fd,'w',encoding='utf-8') as f:
-    json.dump(result,f,indent=2,sort_keys=True); f.write('\n'); f.flush(); os.fsync(f.fileno())
-os.chmod(tmp,0o600); os.replace(tmp,report)
-raise SystemExit(0 if result['migration_verified'] else 1)
+    json.dump(d,f,indent=2,sort_keys=True); f.write('\n'); f.flush(); os.fsync(f.fileno())
+os.chmod(tmp,0o600); os.replace(tmp,path)
 PY
   audit_event "probe:migration" "success"
 
@@ -823,44 +767,29 @@ cmd_readiness() {
   assert_source_runtime_unchanged
   release_manifest_matches_target "$(release_manifest_path "${TARGET_RELEASE_DIR}")" || \
     fatal TARGET_RELEASE_NOT_STAGED "release manifest mismatch"
-  python3 -c 'import json,sys; assert json.load(open(sys.argv[1])).get("verified") is True' \
-    "${HERMES_NATIVE_PROBE_RESULT}" || fatal MIGRATION_PROBE_NOT_PASSED "probe proof invalid"
-  python3 -c 'import json,sys; assert json.load(open(sys.argv[1])).get("verified") is True' \
-    "${HERMES_NATIVE_ROLLBACK_RESULT}" || fatal ROLLBACK_NOT_READY "rollback proof invalid"
+  assert_verified_proof "${HERMES_NATIVE_PROBE_RESULT}" MIGRATION_PROBE_NOT_PASSED migration
+  assert_verified_proof "${HERMES_NATIVE_ROLLBACK_RESULT}" ROLLBACK_NOT_READY rollback
+  verify_r5a_gate "${HERMES_NATIVE_FLEET_BASELINE}"
   python3 - "${HERMES_NATIVE_READINESS_RESULT}" "${HERMES_NATIVE_BACKUP_PROOF}" \
     "$(release_manifest_path "${TARGET_RELEASE_DIR}")" "${HERMES_NATIVE_PROBE_RESULT}" \
-    "${HERMES_NATIVE_ROLLBACK_RESULT}" <<'PY'
-import json, os, subprocess, sys, tempfile
+    "${HERMES_NATIVE_ROLLBACK_RESULT}" "${HERMES_NATIVE_FLEET_BASELINE}" \
+    "${HERMES_NATIVE_FLEET_IMAGE_LOCK}" <<'PY'
+import hashlib, json, os, sys, tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-out, backup, release, probe, rollback = map(Path,sys.argv[1:6])
-rows=subprocess.run(['docker','ps','--filter','name=hermestrader-dryrun-','--format','{{.Names}}|{{.Status}}'],
-                    text=True,capture_output=True,check=True).stdout.splitlines()
-fleet=[]; dry=[]
-for row in rows:
-    name,status=row.split('|',1); fleet.append({'name':name,'status':status})
-    if 'freqtrade-' in name:
-        mounts=json.loads(subprocess.run(['docker','inspect',name,'--format','{{json .Mounts}}'],
-                          text=True,capture_output=True,check=True).stdout)
-        configs=[m['Source'] for m in mounts if m.get('Destination')=='/freqtrade/user_data/config.example.json']
-        dry.append(len(configs)==1 and json.load(open(configs[0],encoding='utf-8')).get('dry_run') is True)
-expected_names={
- 'hermestrader-dryrun-freqtrade-regime-hybrid-1',
- 'hermestrader-dryrun-freqtrade-freqforge-canary-1',
- 'hermestrader-dryrun-freqtrade-webserver-1',
- 'hermestrader-dryrun-rainbow-1',
- 'hermestrader-dryrun-freqtrade-freqforge-1',
-}
-fleet_ok=(set(x['name'] for x in fleet)==expected_names
-          and all('healthy' in x['status'].lower() for x in fleet)
-          and len(dry)==4 and all(dry))
+out, backup, release, probe, rollback, fleet, image_lock = map(Path,sys.argv[1:8])
+fleet_data=json.load(open(fleet,encoding='utf-8'))
+fleet_ok=fleet_data.get('verified') is True and fleet_data.get('freqtrade_dry_run_count') == 4
 data={'version':1,'created_at':datetime.now(timezone.utc).isoformat(),
       'target':{'version':'0.21.0','tag':'v2026.8.31','commit':'29112bef099274229cadff79cdff7bf7b99c4b77'},
       'backup_restore_proof':'PASS','lock_gate':'PASS','staging':'PASS','migration_probe':'PASS',
       'session_invariant':'PASS','rollback_ready':'PASS','trading_fleet_baseline':'PASS' if fleet_ok else 'FAIL',
-      'fleet':fleet,'freqtrade_dry_run_verified':all(dry),'current_release':'0.19.0',
+      'fleet':fleet_data,'freqtrade_dry_run_verified':fleet_data.get('freqtrade_dry_run_count') == 4,
+      'fleet_image_lock_ref':str(image_lock),
+      'fleet_image_lock_sha256':hashlib.sha256(image_lock.read_bytes()).hexdigest(),
+      'current_release':'0.19.0',
       'cutover_ready':'YES' if fleet_ok else 'NO','cutover_executed':'NO','verified':fleet_ok,
-      'evidence':{'backup':str(backup),'release':str(release),'probe':str(probe),'rollback':str(rollback)}}
+      'evidence':{'backup':str(backup),'release':str(release),'probe':str(probe),'rollback':str(rollback),'fleet':str(fleet)}}
 out.parent.mkdir(parents=True,exist_ok=True)
 fd,tmp=tempfile.mkstemp(prefix='.cutover-readiness.',dir=out.parent,text=True)
 with os.fdopen(fd,'w',encoding='utf-8') as f:
@@ -877,36 +806,81 @@ PY
 # pre-cutover
 # ---------------------------------------------------------------------------
 
-write_precutover_manifest() {
-  local previous_target="$1"
-  python3 - "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" "${previous_target}" "${HERMES_SOURCE_VERSION}" \
-    "${HERMES_TARGET_VERSION}" "${HERMES_TARGET_SHA}" "$(whoami)" \
-    "${HERMES_NATIVE_BACKUP_PROOF}" "${HERMES_NATIVE_FLEET_BASELINE}" <<'PY'
-import json
-import sys
-from datetime import datetime, timezone
-
-(manifest_path, previous_target, previous_version, target_version,
- target_sha, operator, backup_proof_ref, fleet_baseline_ref) = sys.argv[1:9]
-manifest = {
-    "previous_symlink_target": previous_target,
-    "previous_version": previous_version,
-    "target_version": target_version,
-    "target_sha": target_sha,
-    "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    "gates_passed": True,
-    "operator": operator,
-    "backup_proof_ref": backup_proof_ref,
-    "fleet_baseline_ref": fleet_baseline_ref,
+require_a2_approval() {
+  [[ "${A2_APPROVAL}" == "${HERMES_NATIVE_A2_APPROVAL_MARKER}" ]] || \
+    fatal A2_APPROVAL_REQUIRED "pass --approval ${HERMES_NATIVE_A2_APPROVAL_MARKER} for the separately authorized maintenance window"
 }
-with open(manifest_path, "w", encoding="utf-8") as fh:
-    json.dump(manifest, fh, indent=2, sort_keys=True)
-    fh.write("\n")
+
+assert_services_active() {
+  local svc
+  for svc in "${START_ORDER[@]}"; do
+    systemctl is-active --quiet "${svc}" || fatal SERVICE_NOT_ACTIVE "${svc} must be active before pre-cutover"
+  done
+}
+
+assert_services_stopped() {
+  local svc
+  for svc in "${START_ORDER[@]}"; do
+    if systemctl is-active --quiet "${svc}"; then
+      fatal SERVICE_STILL_ACTIVE "${svc} must remain stopped between pre-cutover and cutover"
+    fi
+  done
+}
+
+create_preupgrade_state_and_manifest() {
+  local previous_target="$1"
+  python3 - "${CHANGE_C_REPO_ROOT}" "${HERMES_NATIVE_HERMES_HOME}" "${HERMES_NATIVE_PREUPGRADE_STATE}" \
+    "${HERMES_NATIVE_PROFILE}" "${HERMES_NATIVE_SQLITE_SNAPSHOT}" "${previous_target}" \
+    "${HERMES_SOURCE_VERSION}" "${HERMES_TARGET_VERSION}" "${HERMES_TARGET_SHA}" \
+    "$(whoami)" "${HERMES_NATIVE_BACKUP_PROOF}" "${HERMES_NATIVE_FLEET_BASELINE}" \
+    "${HERMES_NATIVE_FLEET_IMAGE_LOCK}" "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" <<'PY'
+import json, sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+from ops.hermes.hermes_native_change_c import create_pre_upgrade_snapshot, write_precutover_manifest
+
+(source, snapshot_parent, profile, helper, previous_target, previous_version,
+ target_version, target_sha, operator, backup_ref, fleet_ref, image_lock_ref,
+ precutover_path) = sys.argv[2:15]
+metadata = {
+    'source_release_version': previous_version,
+    'source_release_symlink_target': previous_target,
+    'target_release_version': target_version,
+    'target_release_commit': target_sha,
+    'backup_proof_reference': backup_ref,
+    'r5a_fleet_provenance_proof_reference': fleet_ref,
+    'fleet_image_lock_reference': image_lock_ref,
+    'operator': operator,
+}
+snapshot, digest, snapshot_manifest = create_pre_upgrade_snapshot(
+    Path(source), Path(snapshot_parent), profile, Path(helper), metadata
+)
+manifest = {
+    'previous_symlink_target': previous_target,
+    'previous_version': previous_version,
+    'target_version': target_version,
+    'target_sha': target_sha,
+    'pre_upgrade_state_path': str(snapshot),
+    'pre_upgrade_state_manifest_sha256': digest,
+    'root_session_count': snapshot_manifest['root_session_count'],
+    'profile_session_count': snapshot_manifest['profile_session_count'],
+    'backup_proof_ref': backup_ref,
+    'fleet_baseline_ref': fleet_ref,
+    'fleet_image_lock_ref': image_lock_ref,
+    'timestamp': datetime.now(timezone.utc).isoformat(),
+    'operator': operator,
+    'gates_passed': True,
+}
+write_precutover_manifest(Path(precutover_path), manifest, profile)
+print(json.dumps({'snapshot': str(snapshot), 'manifest_sha256': digest}, sort_keys=True))
 PY
 }
 
 cmd_pre_cutover() {
   acquire_lock
+  require_a2_approval
   audit_event "pre-cutover" "start"
 
   # Gate 1: full backup + isolated restore proof.
@@ -920,6 +894,15 @@ cmd_pre_cutover() {
   fi
   audit_event "pre-cutover:staged_release_gate" "success"
 
+  assert_source_runtime_unchanged
+  python3 "${HERMES_NATIVE_STATE_TOOL}" verify-manifest \
+    --manifest "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" --profile "${HERMES_NATIVE_PROFILE}" >/dev/null 2>&1 && \
+    fatal PRECUTOVER_ALREADY_PREPARED "an already-valid pre-cutover manifest exists; cut over or roll back before preparing again"
+  rm -f "${HERMES_NATIVE_PRECUTOVER_MANIFEST}"
+
+  assert_verified_proof "${HERMES_NATIVE_PROBE_RESULT}" MIGRATION_PROBE_NOT_PASSED migration
+  assert_verified_proof "${HERMES_NATIVE_ROLLBACK_RESULT}" ROLLBACK_NOT_READY rollback
+
   # Capture current symlink target for the rollback contract.
   local previous_target
   previous_target="$(resolved_current_target)"
@@ -928,16 +911,20 @@ cmd_pre_cutover() {
     fatal ACTIVE_SYMLINK_MISSING "${CURRENT_SYMLINK} does not exist or is not a symlink; refusing to plan a cutover with no known previous state"
   fi
 
-  # Capture fleet baseline (read-only; stopped fleet is not an error).
+  # The canonical fleet must be exact, healthy, dry-run-only and locked.
   mkdir -p "${HERMES_NATIVE_STATE_DIR}"
-  local fleet_json
-  fleet_json="$(capture_fleet_state_json)"
-  printf '%s\n' "${fleet_json}" > "${HERMES_NATIVE_FLEET_BASELINE}"
+  verify_r5a_gate "${HERMES_NATIVE_FLEET_BASELINE}"
   audit_event "pre-cutover:fleet_baseline_capture" "success"
 
-  write_precutover_manifest "${previous_target}"
+  assert_services_active
+  TRANSACTION_MUTATED=true
+  stop_services_in_order
+  assert_services_stopped
+  create_preupgrade_state_and_manifest "${previous_target}" || \
+    fatal PREUPGRADE_STATE_SNAPSHOT_FAILED "final stopped-state snapshot or manifest validation failed"
   audit_event "pre-cutover" "success"
-  log "pre-cutover gates passed; manifest written to ${HERMES_NATIVE_PRECUTOVER_MANIFEST}"
+  TRANSACTION_MUTATED=false
+  log "pre-cutover gates passed; services intentionally stopped and rollback-complete manifest written to ${HERMES_NATIVE_PRECUTOVER_MANIFEST}"
 }
 
 # ---------------------------------------------------------------------------
@@ -986,8 +973,36 @@ atomic_symlink_swap() {
 
 cmd_cutover() {
   acquire_lock
-  fatal CUTOVER_SEPARATE_GATE \
-    "A1 stops at CUTOVER_READY. Production migration/cutover is implemented only by the separate A2 goal after explicit authorization"
+  require_a2_approval
+  assert_backup_gate
+  assert_verified_proof "${HERMES_NATIVE_PROBE_RESULT}" MIGRATION_PROBE_NOT_PASSED migration
+  assert_verified_proof "${HERMES_NATIVE_ROLLBACK_RESULT}" ROLLBACK_NOT_READY rollback
+  python3 "${HERMES_NATIVE_STATE_TOOL}" verify-manifest \
+    --manifest "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" --profile "${HERMES_NATIVE_PROFILE}" || \
+    fatal PRECUTOVER_MANIFEST_INVALID "rollback-complete pre-cutover manifest did not validate"
+  assert_source_runtime_unchanged
+  assert_services_stopped
+  release_manifest_matches_target "$(release_manifest_path "${TARGET_RELEASE_DIR}")" || \
+    fatal TARGET_RELEASE_NOT_STAGED "target SHA/manifest drifted after pre-cutover"
+  verify_r5a_gate "${HERMES_NATIVE_STATE_DIR}/fleet-cutover-revalidation.json"
+
+  TRANSACTION_MUTATED=true
+  audit_event "cutover:migrate_state" "start"
+  "${TARGET_RELEASE_DIR}/venv/bin/python" "${HERMES_NATIVE_STATE_TOOL}" migrate \
+    --state "${HERMES_NATIVE_HERMES_HOME}" --profile "${HERMES_NATIVE_PROFILE}" \
+    --python "${TARGET_RELEASE_DIR}/venv/bin/python" --output "${HERMES_NATIVE_MIGRATION_RESULT}" || \
+    fatal PRODUCTION_STATE_MIGRATION_FAILED "offline root/profile migration failed"
+  audit_event "cutover:migrate_state" "success"
+
+  audit_event "cutover:symlink_swap" "start"
+  atomic_symlink_swap "${TARGET_RELEASE_DIR}" || fatal SYMLINK_SWAP_FAILED "failed to atomically select ${TARGET_RELEASE_DIR}"
+  audit_event "cutover:symlink_swap" "success"
+  start_services_in_order
+  cmd_validate || fatal POST_CUTOVER_VALIDATION_FAILED "one or more immediate validation gates failed"
+  TRANSACTION_MUTATED=false
+  audit_event "cutover" "success"
+  echo "CUTOVER_EXECUTED=YES"
+  echo "VALIDATE_PASS"
 }
 
 # ---------------------------------------------------------------------------
@@ -1074,25 +1089,52 @@ cmd_validate() {
     rollback_codes+=("SESSION_READ_FAIL"); overall_ok=false
   fi
 
-  if [[ ! -S "${HERMES_NATIVE_ROOT_EXECUTOR_SOCKET}" && ! -e "${HERMES_NATIVE_ROOT_EXECUTOR_SOCKET}" ]]; then
+  if ! python3 - "${CHANGE_C_REPO_ROOT}" "${HERMES_NATIVE_HERMES_HOME}" "${HERMES_NATIVE_PROFILE}" \
+      "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from ops.hermes.hermes_native_change_c import inspect_state, validate_precutover_manifest
+state, profile, manifest_path = Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4])
+manifest = validate_precutover_manifest(manifest_path, profile)
+value = inspect_state(state, profile)
+for role, count_key in (("root", "root_session_count"), ("profile", "profile_session_count")):
+    database = value[role]["database"]
+    assert value[role]["config_schema"] == 39
+    assert database["schema"] == 26
+    assert database["sessions"] == manifest[count_key]
+    assert database["integrity"] == ["ok"]
+    assert database["foreign_key_rows"] == 0
+PY
+  then
+    log "FAIL STATE_INVARIANT_ERROR: root/profile schema, sessions, integrity or FK gate failed"
+    rollback_codes+=("STATE_INVARIANT_ERROR"); overall_ok=false
+  fi
+
+  if ! "${CURRENT_SYMLINK}/bin/hermes" --version 2>/dev/null | grep -Fq "${HERMES_TARGET_VERSION}"; then
+    log "FAIL BACKEND_VERSION_MISMATCH: selected binary does not report ${HERMES_TARGET_VERSION}"
+    rollback_codes+=("BACKEND_VERSION_MISMATCH"); overall_ok=false
+  fi
+
+  local health_json status_json
+  if ! health_json="$(curl -fsS --max-time 10 "${HERMES_NATIVE_HEALTH_URL}" 2>/dev/null)" || \
+     ! status_json="$(curl -fsS --max-time 10 "${HERMES_NATIVE_STATUS_URL}" 2>/dev/null)" || \
+     ! python3 -c 'import json,sys; h=json.loads(sys.argv[1]); s=json.loads(sys.argv[2]); assert h.get("ok") is True; assert str(h.get("version",s.get("version",""))).lstrip("v")==sys.argv[3]' \
+       "${health_json:-{}}" "${status_json:-{}}" "${HERMES_TARGET_VERSION}" 2>/dev/null; then
+    log "FAIL BACKEND_HEALTH_FAILURE: health/status did not prove ${HERMES_TARGET_VERSION}"
+    rollback_codes+=("BACKEND_HEALTH_FAILURE"); overall_ok=false
+  fi
+
+  if ! systemctl is-active --quiet hermes-root-executor.service || \
+     [[ ! -S "${HERMES_NATIVE_ROOT_EXECUTOR_SOCKET}" && ! -e "${HERMES_NATIVE_ROOT_EXECUTOR_SOCKET}" ]]; then
     log "FAIL ROOT_EXECUTOR_SOCKET_MISSING: ${HERMES_NATIVE_ROOT_EXECUTOR_SOCKET} absent (socket read-only check; service itself is never touched)"
     rollback_codes+=("ROOT_EXECUTOR_SOCKET_MISSING"); overall_ok=false
   fi
 
-  if [[ -f "${HERMES_NATIVE_FLEET_BASELINE}" ]]; then
-    local baseline_content current_fleet_json
-    baseline_content="$(cat "${HERMES_NATIVE_FLEET_BASELINE}")"
-    guard_dry_run_false "${baseline_content}"
-    current_fleet_json="$(capture_fleet_state_json)"
-    if ! python3 -c "
-import json, sys
-a = json.loads(sys.argv[1])
-b = json.loads(sys.argv[2])
-sys.exit(0 if a.get('containers') == b.get('containers') else 1)
-" "${baseline_content}" "${current_fleet_json}" 2>/dev/null; then
-      log "FAIL FLEET_STATE_CHANGED: fleet container state differs from the pre-cutover baseline; this script must never change fleet state"
-      overall_ok=false
-    fi
+  if ! R5A_PROOF_OUTPUT="${HERMES_NATIVE_STATE_DIR}/fleet-post-cutover.json" \
+      python3 "${HERMES_NATIVE_R5A_VERIFY_HELPER}" verify-only >/dev/null 2>&1; then
+    log "FAIL R5A_PARITY_LOSS: canonical image/provenance/health/dry-run gate failed"
+    rollback_codes+=("R5A_PARITY_LOSS"); overall_ok=false
   fi
 
   if ! check_public_binds; then
@@ -1118,46 +1160,98 @@ sys.exit(0 if a.get('containers') == b.get('containers') else 1)
 # rollback
 # ---------------------------------------------------------------------------
 
-cmd_rollback() {
-  acquire_lock
-  audit_event "rollback" "start"
+perform_rollback() {
+  local trigger="${1:-manual}"
+  ROLLBACK_ACTIVE=true
+  audit_event "rollback" "start:${trigger}"
 
   if [[ ! -f "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" ]]; then
-    fatal ROLLBACK_MANIFEST_MISSING "no pre-cutover manifest at ${HERMES_NATIVE_PRECUTOVER_MANIFEST}; refusing to guess a rollback target"
+    # A stop/snapshot failure before the atomic manifest write has not changed
+    # state or the release pointer. Restore availability, but never guess state.
+    start_services_in_order
+    TRANSACTION_MUTATED=false
+    ROLLBACK_ACTIVE=false
+    audit_event "rollback:no_manifest" "services_restored"
+    return 0
   fi
+  python3 "${HERMES_NATIVE_STATE_TOOL}" verify-manifest \
+    --manifest "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" --profile "${HERMES_NATIVE_PROFILE}" || return 1
 
-  local previous_target pre_upgrade_state
-  previous_target="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('previous_symlink_target',''))" "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" 2>/dev/null || true)"
-  pre_upgrade_state="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('pre_upgrade_state_path',''))" "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" 2>/dev/null || true)"
-  if [[ -z "${previous_target}" || ! -d "${previous_target}" || ! -x "${previous_target}/bin/hermes" ]]; then
-    fatal ROLLBACK_TARGET_INVALID "manifest previous_symlink_target=${previous_target:-<empty>} does not point at a valid release (missing bin/hermes)"
-  fi
-  [[ -n "${pre_upgrade_state}" && -d "${pre_upgrade_state}" ]] || fatal ROLLBACK_STATE_SNAPSHOT_INVALID \
-    "manifest must identify a complete pre_upgrade_state_path"
+  local previous_target pre_upgrade_state manifest_hash
+  readarray -t rollback_fields < <(python3 - "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1],encoding='utf-8'))
+print(d['previous_symlink_target'])
+print(d['pre_upgrade_state_path'])
+print(d['pre_upgrade_state_manifest_sha256'])
+PY
+  )
+  previous_target="${rollback_fields[0]:-}"
+  pre_upgrade_state="${rollback_fields[1]:-}"
+  manifest_hash="${rollback_fields[2]:-}"
+  [[ "${previous_target}" == "${SOURCE_RELEASE_DIR}" && -x "${previous_target}/bin/hermes" ]] || return 1
+  python3 "${HERMES_NATIVE_STATE_TOOL}" verify-snapshot --snapshot "${pre_upgrade_state}" \
+    --sha256 "${manifest_hash}" --profile "${HERMES_NATIVE_PROFILE}" || return 1
 
   stop_services_in_order
-
   local quarantine_path
   mkdir -p "${HERMES_NATIVE_QUARANTINE_DIR}"
   quarantine_path="${HERMES_NATIVE_QUARANTINE_DIR}/failed-0.21-state-$(date -u +%Y%m%dT%H%M%S).$$"
-  mv "${HERMES_NATIVE_HERMES_HOME}" "${quarantine_path}"
+  mv "${HERMES_NATIVE_HERMES_HOME}" "${quarantine_path}" || return 1
   mkdir -p "${HERMES_NATIVE_HERMES_HOME}"
-  rsync -a "${pre_upgrade_state}/" "${HERMES_NATIVE_HERMES_HOME}/"
+  rsync -a --exclude='/PRE-UPGRADE-STATE-MANIFEST.json' \
+    --exclude='/PRE-UPGRADE-STATE-MANIFEST.json.sha256' \
+    "${pre_upgrade_state}/" "${HERMES_NATIVE_HERMES_HOME}/" || return 1
+
+  python3 - "${CHANGE_C_REPO_ROOT}" "${pre_upgrade_state}" "${HERMES_NATIVE_HERMES_HOME}" \
+    "${HERMES_NATIVE_PROFILE}" <<'PY' || return 1
+import sys
+from pathlib import Path
+sys.path.insert(0,sys.argv[1])
+from ops.hermes.hermes_native_change_c import inspect_state, inventory
+snapshot, restored, profile = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
+assert inventory(snapshot) == inventory(restored)
+assert inspect_state(snapshot, profile) == inspect_state(restored, profile)
+PY
   audit_event "rollback:state_restore" "success"
 
-  audit_event "rollback:symlink_swap" "start"
-  atomic_symlink_swap "${previous_target}"
-  audit_event "rollback:symlink_swap" "success"
-
+  atomic_symlink_swap "${previous_target}" || return 1
   start_services_in_order
+  [[ "$(resolved_current_target)" == "${previous_target}" ]] || return 1
+  "${previous_target}/bin/hermes" --version | grep -Fq "${HERMES_SOURCE_VERSION}" || return 1
+  systemctl is-active --quiet hermes-root-executor.service || return 1
+  [[ -S "${HERMES_NATIVE_ROOT_EXECUTOR_SOCKET}" || -e "${HERMES_NATIVE_ROOT_EXECUTOR_SOCKET}" ]] || return 1
+  check_public_binds || return 1
+  R5A_PROOF_OUTPUT="${HERMES_NATIVE_STATE_DIR}/fleet-rollback-validation.json" \
+    python3 "${HERMES_NATIVE_R5A_VERIFY_HELPER}" verify-only >/dev/null || return 1
 
-  [[ "$(resolved_current_target)" == "${previous_target}" ]] || fatal ROLLBACK_RELEASE_VERIFY_FAILED \
-    "current pointer did not restore"
-  "${previous_target}/bin/hermes" --version | grep -Fq "${HERMES_SOURCE_VERSION}" || \
-    fatal ROLLBACK_HEALTH_FAILED "restored binary version check failed"
-
+  python3 - "${CHANGE_C_REPO_ROOT}" "${HERMES_NATIVE_ROLLBACK_RESULT}" "${trigger}" \
+    "${quarantine_path}" "${previous_target}" "${pre_upgrade_state}" <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0,sys.argv[1])
+from ops.hermes.hermes_native_change_c import atomic_write_json, utc_now
+atomic_write_json(Path(sys.argv[2]), {
+ 'version':2,'created_at':utc_now(),'trigger':sys.argv[3],
+ 'failed_state_quarantine':sys.argv[4],'release_pointer':sys.argv[5],
+ 'pre_upgrade_state_path':sys.argv[6],'state_restore_verified':True,
+ 'release_pointer_verified':True,'services_restore_sequence_verified':True,
+ 'health_verified':True,'sqlite_integrity_verified':True,
+ 'session_invariant_verified':True,'root_executor_verified':True,
+ 'r5a_provenance_verified':True,'failed_state_retained':True,'verified':True,
+})
+PY
+  TRANSACTION_MUTATED=false
+  ROLLBACK_ACTIVE=false
   audit_event "rollback" "success"
-  log "rollback complete: state restored, failed state retained at ${quarantine_path}, current -> ${previous_target}"
+  log "rollback complete: failed state retained at ${quarantine_path}; current -> ${previous_target}"
+}
+
+cmd_rollback() {
+  acquire_lock
+  [[ -f "${HERMES_NATIVE_PRECUTOVER_MANIFEST}" ]] || \
+    fatal ROLLBACK_MANIFEST_MISSING "no pre-cutover manifest; refusing to guess rollback state or release"
+  perform_rollback manual || fatal AUTO_ROLLBACK_FAILED "explicit rollback transaction failed"
 }
 
 # ---------------------------------------------------------------------------
@@ -1259,9 +1353,11 @@ Subcommands:
                 service sequence and health in a fully isolated sandbox.
   readiness     Aggregate all proofs and the 5/5 healthy dry-run fleet into
                 CUTOVER_READY=YES / CUTOVER_EXECUTED=NO.
-  pre-cutover   Run pre-cutover gate checks. Writes only this script's own
-                state manifest; exits non-zero if any gate fails.
-  cutover       Fail closed in A1; production cutover is a separate A2 goal.
+  pre-cutover   With explicit A2 approval: verify all gates, stop the three
+                Hermes writers, create the final immutable pre-upgrade state,
+                and atomically write the rollback-complete manifest.
+  cutover       With explicit A2 approval and a valid pre-cutover manifest:
+                migrate offline, atomically select 0.21, start and validate.
   validate      Post-cutover checks. Exits non-zero and prints
                 AUTO_ROLLBACK_RECOMMENDED=<CODE> lines on failure.
   rollback      Swap `current` back to the pre-cutover manifest's target.
@@ -1269,6 +1365,9 @@ Subcommands:
 
 --dry-run forces plan-mode behavior for any subcommand: no mutating command
 is ever executed.
+
+Production mutation also requires:
+  --approval APPROVED_A2_HERMES_021_CUTOVER
 USAGE
 }
 
@@ -1279,9 +1378,14 @@ main() {
   fi
 
   local mode=""
-  local arg
+  local arg expect_approval=false
   for arg in "$@"; do
-    if [[ "${arg}" == "--dry-run" ]]; then
+    if [[ "${expect_approval}" == "true" ]]; then
+      A2_APPROVAL="${arg}"
+      expect_approval=false
+    elif [[ "${arg}" == "--approval" ]]; then
+      expect_approval=true
+    elif [[ "${arg}" == "--dry-run" ]]; then
       DRY_RUN=true
     elif [[ "${arg}" == "--help" || "${arg}" == "-h" ]]; then
       usage
@@ -1290,6 +1394,7 @@ main() {
       mode="${arg}"
     fi
   done
+  [[ "${expect_approval}" == "false" ]] || fatal INVALID_ARGUMENT "--approval requires a value"
 
   if [[ "${DRY_RUN}" == "true" ]]; then
     log "--dry-run requested for subcommand '${mode}': showing plan only, no mutation will occur"

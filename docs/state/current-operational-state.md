@@ -1,6 +1,6 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-09-09 after #723 R5A image-provenance closure: PRs #724/#725/#726 merged, immutable image lock and safe recovery semantics active, canonical fleet 5/5 parity green, and fresh Hermes readiness `CUTOVER_READY=YES` / `CUTOVER_EXECUTED=NO`. Production remains Hermes 0.19.0. Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-09-09 for #728 A2 contract hardening: the repository now has a stopped-state, integrity-bound pre-upgrade snapshot contract, rollback-complete pre-cutover manifest, one canonical R5A provenance gate, and automatic state+release rollback transaction. Production remains Hermes 0.19.0 and `CUTOVER_EXECUTED=NO`; #728 performs no runtime cutover. After exact-head CI/merge reconciliation the status is `READY_FOR_A2_CUTOVER_REVALIDATION`. Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
 >
 > **Previous:** 2026-08-18 after #702 reopen (auto-close corrected: PR #714 delivered only the A1 Precondition-Teil; the A2 selection backtest did **not** run) and #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
 >
@@ -289,6 +289,43 @@ second run, outcome record.
 changes.
 
 ## Issue #699 — Hermes 0.21.0 upgrade via Change C
+
+### A2 production transaction contract — Issue #728 (2026-09-09)
+
+Issue #728 implements the remaining repository-side cutover and rollback
+contract. The isolated probe and future production migration now share the
+same root/profile config, DB, session, integrity, FK and operational-setting
+primitives. `readiness`, `pre-cutover`, cutover revalidation and post-cutover
+validation use the same canonical R5A `verify-only` gate, including immutable
+image IDs/tags and Rainbow source provenance.
+
+The future `pre-cutover` command is explicitly A2-gated. It stops the three
+Hermes writer services before creating an integrity-bound, immutable final
+snapshot of `/opt/data/hermes`; SQLite files use the hardened snapshot helper.
+The atomic mode-0600 manifest binds the exact state path/hash, 0.19 pointer,
+0.21 target SHA, measured session baselines, backup proof and R5A proof/lock.
+The future `cutover` command validates that manifest, migrates offline, swaps
+the release pointer atomically, starts the three services and automatically
+rolls back state+release after any unsafe post-mutation failure. Failed 0.21
+state is quarantined, never deleted. `hermes-root-executor.service` is never
+mutated.
+
+Local evidence: targeted Change-C/R5A `71 passed, 2 skipped`; extended safety
+set `135 passed, 2 skipped`; full suite as `hermes` `1367 passed, 54 skipped,
+1 failed`, with the single host-path-alias writer-guard failure reproduced
+unchanged on pristine `main`. Bash syntax, ShellCheck, Ruff, py_compile,
+diff-check and live read-only R5A verification passed.
+
+This task does not execute `pre-cutover` or `cutover` against production:
+
+```text
+PRODUCTION_HERMES=0.19.0
+CUTOVER_EXECUTED=NO
+POST_MERGE_STATE=READY_FOR_A2_CUTOVER_REVALIDATION
+```
+
+Evidence:
+[`hermes-a2-cutover-contract-hardening-2026-09-09.md`](../reports/hermes-a2-cutover-contract-hardening-2026-09-09.md).
 
 ### R5A image provenance prerequisite — 2026-09-09
 

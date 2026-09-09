@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -187,6 +189,17 @@ def verify_existing_fleet(lock: dict[str, Any], *, run: Run = subprocess.run) ->
     if set(result.stdout.splitlines()) != expected_names:
         raise ProvenanceError("FLEET_SET_MISMATCH")
 
+    all_names = run(
+        ["docker", "ps", "-a", "--format", "{{.Names}}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if all_names.returncode != 0:
+        raise ProvenanceError("FLEET_INVENTORY_FAILED")
+    if any("freqai-rebel" in name.lower() for name in all_names.stdout.splitlines()):
+        raise ProvenanceError("REBEL_PRESENT")
+
     for service in EXPECTED_SERVICES:
         name = f"{PROJECT}-{service}-1"
         container = _run_json(run, ["docker", "inspect", name])
@@ -295,6 +308,69 @@ def verify_post_action_health(
         sleep(2)
 
 
+def verify_runtime_fleet(
+    lock: dict[str, Any],
+    *,
+    run: Run = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    """Verify the complete immutable, healthy, dry-run-only R5A runtime.
+
+    This is the canonical read-only A2 gate.  Recovery, Hermes readiness,
+    pre-cutover and post-cutover validation must not reimplement a weaker
+    subset of these checks.
+    """
+    verify_locked_images(lock, run=run, repo_root=repo_root)
+    verify_compose_contract(lock, run=run, repo_root=repo_root)
+    verify_existing_fleet(lock, run=run)
+    verify_post_action_health(list(EXPECTED_SERVICES), run=run, timeout_seconds=0)
+
+    containers: list[dict[str, Any]] = []
+    for service in EXPECTED_SERVICES:
+        name = f"{PROJECT}-{service}-1"
+        inspected = _run_json(run, ["docker", "inspect", name])
+        state = inspected.get("State") or {}
+        health = state.get("Health") or {}
+        config = inspected.get("Config") or {}
+        containers.append(
+            {
+                "service": service,
+                "name": name,
+                "running": state.get("Running") is True,
+                "health": health.get("Status"),
+                "restart_count": inspected.get("RestartCount"),
+                "oom_killed": state.get("OOMKilled"),
+                "image_id": inspected.get("Image"),
+                "image_tag": config.get("Image"),
+            }
+        )
+    return {
+        "version": 1,
+        "verified": True,
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+        "project": PROJECT,
+        "expected_services": list(EXPECTED_SERVICES),
+        "freqtrade_dry_run_count": len(FREQTRADE_SERVICES),
+        "rebel_absent": True,
+        "image_lock": str(repo_root / "ops/hermes/hermestrader-dryrun-images.lock.json"),
+        "image_lock_sha256": _sha256(repo_root / "ops/hermes/hermestrader-dryrun-images.lock.json"),
+        "repository_commit": lock["repository_commit"],
+        "containers": containers,
+    }
+
+
+def _atomic_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(value, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, path)
+
+
 def execute(
     mode: str,
     services: list[str],
@@ -302,10 +378,14 @@ def execute(
     run: Run = subprocess.run,
     repo_root: Path = REPO_ROOT,
     lock_path: Path = LOCK_FILE,
-) -> None:
+) -> dict[str, Any] | None:
     if any(service not in EXPECTED_SERVICES for service in services):
         raise ProvenanceError("INVALID_SERVICE")
     lock = load_lock(lock_path)
+    if mode == "verify-only":
+        if services:
+            raise ProvenanceError("INVALID_SERVICE")
+        return verify_runtime_fleet(lock, run=run, repo_root=repo_root)
     verify_locked_images(lock, run=run, repo_root=repo_root)
     if mode == "start-existing":
         verify_existing_fleet(lock, run=run)
@@ -332,6 +412,7 @@ def execute(
     if result.returncode != 0:
         raise ProvenanceError("COMPOSE_ACTION_FAILED")
     verify_post_action_health(services, run=run)
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -340,10 +421,13 @@ def main(argv: list[str] | None = None) -> int:
         print("BLOCKED_INVALID_MODE", file=sys.stderr)
         return 2
     try:
-        execute(args[0], args[1:])
+        evidence = execute(args[0], args[1:])
     except ProvenanceError as exc:
         print(f"BLOCKED_{exc}", file=sys.stderr)
         return 1
+    output = os.environ.get("R5A_PROOF_OUTPUT")
+    if output and evidence is not None:
+        _atomic_json(Path(output), evidence)
     print("R5A_PROVENANCE_GATE=PASS")
     return 0
 
