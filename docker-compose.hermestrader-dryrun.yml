@@ -15,7 +15,7 @@
 
 services:
   freqtrade-freqforge:
-    image: hermestrader/freqtrade-r5a:r7a-069274c21c90-7ca1e4f9b150
+    image: hermestrader/freqtrade-r5a:r7a-5bcb50fc8186-7ca1e4f9b150
     build:
       context: ./freqtrade
       dockerfile: Dockerfile.hermes10000
@@ -60,7 +60,7 @@ services:
       - trading_egress
 
   freqtrade-freqforge-canary:
-    image: hermestrader/freqtrade-r5a:r7a-069274c21c90-7ca1e4f9b150
+    image: hermestrader/freqtrade-r5a:r7a-5bcb50fc8186-7ca1e4f9b150
     build:
       context: ./freqtrade
       dockerfile: Dockerfile.hermes10000
@@ -102,7 +102,7 @@ services:
       - trading_egress
 
   freqtrade-regime-hybrid:
-    image: hermestrader/freqtrade-r5a:r7a-069274c21c90-7ca1e4f9b150
+    image: hermestrader/freqtrade-r5a:r7a-5bcb50fc8186-7ca1e4f9b150
     build:
       context: ./freqtrade
       dockerfile: Dockerfile.hermes10000
@@ -144,7 +144,7 @@ services:
       - trading_egress
 
   freqtrade-webserver:
-    image: hermestrader/freqtrade-r5a:r7a-069274c21c90-7ca1e4f9b150
+    image: hermestrader/freqtrade-r5a:r7a-5bcb50fc8186-7ca1e4f9b150
     build:
       context: ./freqtrade
       dockerfile: Dockerfile.hermes10000

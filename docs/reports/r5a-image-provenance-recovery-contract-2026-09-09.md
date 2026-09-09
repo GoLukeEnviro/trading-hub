@@ -91,3 +91,27 @@ run. Fresh Hermes readiness remains prohibited until provenance and parity pass.
 No `down -v`, volume prune, Docker prune, DB deletion, credential mutation,
 strategy/config mutation, `dry_run=false`, live-trading authority, Hermes restart,
 Hermes state migration, or Hermes cutover is part of this remediation PR.
+
+## Controlled post-merge baseline attestation
+
+PR #724 merged as `5bcb50fc81862969180fbc7f154ef719118925af` after Main Gate,
+governance consistency, and offline smoke passed. The bounded baseline action then
+built two images without touching containers or volumes. Runtime audit request
+`h3b-452fe772a398` completed ALLOWED/0 in 38,924 ms.
+
+| Runtime | Immutable tag | Full image/config digest |
+|---|---|---|
+| Freqtrade shared ×4 | `hermestrader/freqtrade-r5a:r7a-5bcb50fc8186-7ca1e4f9b150` | `sha256:aa4ab78532d996b0d3ac7b034819918e2085495dd1368399705b208d331bd380` |
+| Rainbow | `hermestrader/rainbow-r5a:6e850c8f8ba1-faa2e3d8c351` | `sha256:7e2fab4a87790a1aadebed29b2688ec4c45a80ed9763e69f0d3d285093cc5db0` |
+
+Both local RepoDigests equal their full image/config digest. Image users are numeric
+`10000:10000`; Freqtrade provenance labels bind the merged source commit, pinned
+base digest, Dockerfile hash, and entrypoint hash; Rainbow labels bind the immutable
+source commit and Dockerfile hash.
+
+The specialized extension installer exposed a pre-existing completeness defect on
+first post-merge installation: it omitted `legacy.py`, so the executor failed its
+live import. No fleet process changed. The generic completeness-checked installer
+immediately restored a healthy executor from the same merge commit. The follow-up
+lock PR adds `legacy.py` and `__main__.py` to the specialized installer and adds a
+regression test requiring it to deploy every runtime package module.

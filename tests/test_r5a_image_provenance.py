@@ -22,6 +22,7 @@ def _lock() -> dict:
         "repository_commit": "a" * 40,
         "freqtrade": {
             "runtime_image_id": FREQ_ID,
+            "image_manifest_digest": FREQ_ID,
             "immutable_tag": "hermestrader/freqtrade-r5a:locked",
             "base_digest": "sha256:" + "3" * 64,
             "dockerfile_sha256": "4" * 64,
@@ -31,6 +32,7 @@ def _lock() -> dict:
         },
         "rainbow": {
             "runtime_image_id": RAINBOW_ID,
+            "image_manifest_digest": RAINBOW_ID,
             "immutable_tag": "hermestrader/rainbow-r5a:locked",
             "dockerfile_sha256": "7" * 64,
             "source_lock_sha256": "8" * 64,
@@ -44,9 +46,15 @@ def _completed(stdout: str = "", returncode: int = 0) -> subprocess.CompletedPro
     return subprocess.CompletedProcess([], returncode, stdout=stdout, stderr="")
 
 
-def test_committed_lock_is_explicitly_pending() -> None:
-    with pytest.raises(recovery.ProvenanceError, match="IMAGE_BASELINE_PENDING"):
-        recovery.load_lock(Path("ops/hermes/hermestrader-dryrun-images.lock.json"))
+def test_committed_lock_is_complete_and_locked() -> None:
+    lock = recovery.load_lock(Path("ops/hermes/hermestrader-dryrun-images.lock.json"))
+    assert lock["status"] == "locked"
+    assert lock["freqtrade"]["runtime_image_id"] == (
+        "sha256:aa4ab78532d996b0d3ac7b034819918e2085495dd1368399705b208d331bd380"
+    )
+    assert lock["rainbow"]["runtime_image_id"] == (
+        "sha256:7e2fab4a87790a1aadebed29b2688ec4c45a80ed9763e69f0d3d285093cc5db0"
+    )
 
 
 def test_wrong_base_digest_fails_closed(tmp_path: Path) -> None:
@@ -154,7 +162,11 @@ def test_rainbow_wrong_image_config_digest_fails_closed(monkeypatch: pytest.Monk
                 }
             )
         image_id = FREQ_ID if is_freq else "sha256:" + "a" * 64
-        return _completed(json.dumps([{"Id": image_id, "Config": {"User": "10000:10000", "Labels": labels}}]))
+        return _completed(json.dumps([{
+            "Id": image_id,
+            "RepoDigests": [f"test@{item['image_manifest_digest']}"],
+            "Config": {"User": "10000:10000", "Labels": labels},
+        }]))
 
     with pytest.raises(recovery.ProvenanceError, match="IMAGE_ID_MISMATCH"):
         recovery.verify_locked_images(_lock(), run=run, repo_root=tmp_path)

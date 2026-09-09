@@ -58,9 +58,11 @@ COMMIT_SHA_RE='^[0-9a-f]{7,40}$'
 # This is the full set deployed to /usr/local/sbin/hermes_root/.
 REQUIRED_MODULES=(
   "__init__.py"
+  "__main__.py"
   "actions.py"
   "audit.py"
   "client.py"
+  "legacy.py"
   "policy.py"
   "protocol.py"
   "redact.py"
