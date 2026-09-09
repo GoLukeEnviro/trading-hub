@@ -85,7 +85,9 @@ MUTATING_ACTIONS = frozenset({
     "systemctl_disable",
     # R5A — HermesTrader dry-run compose fleet management (Issue #527)
     "r5a_compose_build",
+    "r5a_build_canonical_baseline",
     "r5a_compose_up",
+    "r5a_compose_start_existing",
     "r5a_compose_stop",
     "r5a_compose_down",
     # Filesystem

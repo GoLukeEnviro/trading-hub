@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "status": "baseline_pending",
+  "repository_commit": "069274c21c90e154cae51618fa2d874c1534ac57",
+  "freqtrade": {
+    "source_commit": "069274c21c90e154cae51618fa2d874c1534ac57",
+    "base_digest": "sha256:87aa5c6d65359b34e9d99a0bb260a38c0efe0315253811e6f48c2afe8f278a6a",
+    "dockerfile_sha256": "7ca1e4f9b15044f8968da02a5843ff206f0ee53b14a7351c7547146f4f039c6a",
+    "entrypoint_sha256": "7e1890ed32c9211f13475853cb5a5c15ac9c44db0f9676f50d5d7d82d48a6880",
+    "immutable_tag": "hermestrader/freqtrade-r5a:r7a-069274c21c90-7ca1e4f9b150",
+    "runtime_image_id": null,
+    "config_user": "10000:10000"
+  },
+  "rainbow": {
+    "source_repository": "GoLukeEnviro/ai4trade-bot",
+    "source_commit": "6e850c8f8ba1d8a0ad45250f130280e4171c001d",
+    "dockerfile_sha256": "faa2e3d8c351dc50adc4af21093811587c2f49caaa8827e138fee8c0d0796405",
+    "source_lock_sha256": "1b24141cc00033e04fff9c2e10d6479815a46127be67ad056839540c8ccaee52",
+    "immutable_tag": "hermestrader/rainbow-r5a:6e850c8f8ba1-faa2e3d8c351",
+    "runtime_image_id": null,
+    "image_manifest_digest": null,
+    "config_user": "10000:10000"
+  }
+}

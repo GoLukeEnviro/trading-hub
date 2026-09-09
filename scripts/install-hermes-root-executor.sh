@@ -52,6 +52,8 @@ REQUIRED_MODULES=(
   "policy.py"
   "protocol.py"
   "redact.py"
+  "r5a_baseline_build.py"
+  "r5a_recovery.py"
   "schema.py"
   "validate.py"
 )

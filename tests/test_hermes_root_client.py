@@ -1011,6 +1011,15 @@ class TestR5ACLIServiceExtras:
         extras = cli_build_argv("r5a_compose_up", ns)
         assert extras == ["freqtrade-freqforge-canary"]
 
+    def test_start_existing_forwards_services(self):
+        ns = _namespace(service=["freqtrade-freqforge-canary"])
+        extras = cli_build_argv("r5a_compose_start_existing", ns)
+        assert extras == ["freqtrade-freqforge-canary"]
+
+    def test_baseline_build_takes_no_services(self):
+        ns = _namespace(service=[])
+        assert cli_build_argv("r5a_build_canonical_baseline", ns) == []
+
     def test_stop_forwards_services(self):
         ns = _namespace(service=["freqtrade-regime-hybrid"])
         extras = cli_build_argv("r5a_compose_stop", ns)
