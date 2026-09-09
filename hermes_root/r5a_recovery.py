@@ -15,6 +15,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -266,16 +267,32 @@ def verify_compose_contract(lock: dict[str, Any], *, run: Run = subprocess.run, 
             raise ProvenanceError("DRY_RUN_FALSE")
 
 
-def verify_post_action_health(services: list[str], *, run: Run = subprocess.run) -> None:
+def verify_post_action_health(
+    services: list[str],
+    *,
+    run: Run = subprocess.run,
+    timeout_seconds: float = 120,
+    sleep: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.monotonic,
+) -> None:
     """Require every requested canonical workload to be running and healthy."""
-    for service in services or list(EXPECTED_SERVICES):
-        container = _run_json(run, ["docker", "inspect", f"{PROJECT}-{service}-1"])
-        state = container.get("State") or {}
-        health = state.get("Health") or {}
-        if state.get("Running") is not True or health.get("Status") != "healthy":
-            raise ProvenanceError("FLEET_HEALTH_MISMATCH")
-        if container.get("RestartCount") != 0 or state.get("OOMKilled") is not False:
-            raise ProvenanceError("FLEET_RUNTIME_STATE_MISMATCH")
+    expected = services or list(EXPECTED_SERVICES)
+    deadline = clock() + timeout_seconds
+    while True:
+        all_healthy = True
+        for service in expected:
+            container = _run_json(run, ["docker", "inspect", f"{PROJECT}-{service}-1"])
+            state = container.get("State") or {}
+            health = state.get("Health") or {}
+            if container.get("RestartCount") != 0 or state.get("OOMKilled") is not False:
+                raise ProvenanceError("FLEET_RUNTIME_STATE_MISMATCH")
+            if state.get("Running") is not True or health.get("Status") != "healthy":
+                all_healthy = False
+        if all_healthy:
+            return
+        if clock() >= deadline:
+            raise ProvenanceError("FLEET_HEALTH_TIMEOUT")
+        sleep(2)
 
 
 def execute(

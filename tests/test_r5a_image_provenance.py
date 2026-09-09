@@ -303,3 +303,20 @@ def test_deploy_path_cannot_build_or_pull(monkeypatch: pytest.MonkeyPatch, tmp_p
     recovery.execute("deploy-locked", [], run=run, repo_root=tmp_path)
     command = calls[-1]
     assert command[-5:] == ["up", "-d", "--no-build", "--pull", "never"]
+
+
+def test_post_action_health_wait_is_bounded() -> None:
+    def run(_argv, **_kwargs):
+        return _completed(json.dumps([{
+            "RestartCount": 0,
+            "State": {
+                "Running": True,
+                "OOMKilled": False,
+                "Health": {"Status": "starting"},
+            },
+        }]))
+
+    with pytest.raises(recovery.ProvenanceError, match="FLEET_HEALTH_TIMEOUT"):
+        recovery.verify_post_action_health(
+            [], run=run, timeout_seconds=0, sleep=lambda _seconds: None, clock=lambda: 0
+        )
