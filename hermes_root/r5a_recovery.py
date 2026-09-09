@@ -76,6 +76,8 @@ def load_lock(path: Path = LOCK_FILE) -> dict[str, Any]:
             raise ProvenanceError(f"IMAGE_LOCK_{section.upper()}_INVALID")
         if not SHA256_RE.fullmatch(str(item.get("runtime_image_id", ""))):
             raise ProvenanceError(f"IMAGE_LOCK_{section.upper()}_IMAGE_ID_INVALID")
+        if not SHA256_RE.fullmatch(str(item.get("image_manifest_digest", ""))):
+            raise ProvenanceError(f"IMAGE_LOCK_{section.upper()}_MANIFEST_DIGEST_INVALID")
         for key in ("dockerfile_sha256",):
             if not HEX_SHA256_RE.fullmatch(str(item.get(key, ""))):
                 raise ProvenanceError(f"IMAGE_LOCK_{section.upper()}_{key.upper()}_INVALID")
@@ -125,6 +127,9 @@ def _verify_image(
     inspected = _run_json(run, ["docker", "image", "inspect", tag])
     if inspected.get("Id") != image["runtime_image_id"]:
         raise ProvenanceError("IMAGE_ID_MISMATCH")
+    repo_digests = inspected.get("RepoDigests") or []
+    if not any(str(digest).endswith(f"@{image['image_manifest_digest']}") for digest in repo_digests):
+        raise ProvenanceError("IMAGE_MANIFEST_DIGEST_MISMATCH")
     config = inspected.get("Config") or {}
     if config.get("User") != expected_user:
         raise ProvenanceError("IMAGE_USER_MISMATCH")

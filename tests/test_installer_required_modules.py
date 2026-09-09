@@ -20,6 +20,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INSTALLER = REPO_ROOT / "scripts" / "install-hermes-root-executor.sh"
+R5A_EXTENSION_INSTALLER = REPO_ROOT / "ops/systemd/install-r5a-compose-executor-extension.sh"
 PACKAGE_DIR = REPO_ROOT / "hermes_root"
 
 # Modules that must always be deployed, independent of import analysis:
@@ -31,9 +32,9 @@ MANDATORY_MODULES = {
 }
 
 
-def _parse_required_modules() -> set[str]:
+def _parse_required_modules(installer: Path = INSTALLER) -> set[str]:
     """Extract REQUIRED_MODULES entries from the installer script."""
-    text = INSTALLER.read_text(encoding="utf-8")
+    text = installer.read_text(encoding="utf-8")
     match = re.search(r"REQUIRED_MODULES=\((.*?)\)", text, re.DOTALL)
     assert match is not None, "REQUIRED_MODULES=(...) block not found in installer"
     body = match.group(1)
@@ -119,6 +120,15 @@ class TestInstallerRequiredModules:
             f"hermes_root/ contains modules the installer never deploys: "
             f"{sorted(undeployed)}. Either add them or document why they are "
             f"not needed at runtime."
+        )
+
+    def test_r5a_extension_installer_deploys_complete_package(self):
+        """The live extension installer must not strand daemon imports."""
+        modules = _parse_required_modules(R5A_EXTENSION_INSTALLER)
+        undeployed = _package_modules() - modules - {"daemon.py"}
+        assert not undeployed, (
+            "R5A extension installer omits runtime package modules: "
+            f"{sorted(undeployed)}"
         )
 
     @pytest.mark.skipif(
