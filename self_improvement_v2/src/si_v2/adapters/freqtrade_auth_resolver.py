@@ -35,22 +35,44 @@ RESOLVED_FROM_FILE = "RESOLVED_FROM_FILE"
 MISSING = "MISSING"
 
 # Allowlisted local config paths per bot. Read-only — never modified.
+#
+# These are resolved against the deployed canonical checkout. The previous
+# list pointed at /home/hermes/projects/trading/... — the historical agent0
+# path that no longer exists on the target host — so credential resolution
+# silently fell through to MISSING there. Paths are now derived from the
+# canonical repository root so they follow the deployment instead of a
+# hard-coded legacy location.
+_CANONICAL_REPO_ROOT: Final[Path] = Path("/workspace/projects/trading-hub")
+_FALLBACK_REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[4]
+
+
+def _repo_root() -> Path:
+    """Return the canonical checkout, falling back to this file's repo root."""
+    if _CANONICAL_REPO_ROOT.is_dir():
+        return _CANONICAL_REPO_ROOT
+    return _FALLBACK_REPO_ROOT
+
+
 ALLOWED_CONFIG_PATHS: Final[dict[str, list[Path]]] = {
+    # Deployed R5A layout: the exact read-only config that docker-compose
+    # mounts into each container as /freqtrade/user_data/config.example.json.
+    # Keeping this in sync with the compose mount is what makes the
+    # container and the host-side reader agree on the same credentials.
     "freqtrade-freqforge": [
-        Path("/home/hermes/projects/trading/freqforge/config/config_freqforge_dryrun.json"),
-        Path("/home/hermes/projects/trading/freqtrade/bots/freqforge/config/config_freqforge_dryrun.json"),
+        _repo_root() / "freqforge" / "user_data" / "config.json",
+        _repo_root() / "freqforge" / "user_data" / "config.example.json",
     ],
     "freqtrade-regime-hybrid": [
-        Path("/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/config/config_regime_hybrid_dryrun.json"),
+        _repo_root() / "freqtrade" / "bots" / "regime-hybrid" / "user_data" / "config.json",
+        _repo_root() / "freqtrade" / "bots" / "regime-hybrid" / "user_data" / "config.example.json",
     ],
     "freqtrade-freqforge-canary": [
-        Path("/home/hermes/projects/trading/freqforge-canary/config/config_canary_dryrun.json"),
-        Path("/home/hermes/projects/trading/freqtrade/bots/freqforge-canary/config/config_canary_dryrun.json"),
+        _repo_root() / "freqforge-canary" / "user_data" / "config.json",
+        _repo_root() / "freqforge-canary" / "user_data" / "config.example.json",
     ],
     "freqai-rebel": [
-        Path("/home/hermes/projects/trading/freqtrade/bots/freqai-rebel/user_data/config.json"),
-        Path("/home/hermes/projects/trading/freqtrade/bots/freqai-rebel/config/config.json"),
-        Path("/home/hermes/projects/trading/freqtrade/bots/freqai-rebel/config/config_freqai_rebel_dryrun.json"),
+        _repo_root() / "freqtrade" / "bots" / "freqai-rebel" / "user_data" / "config.json",
+        _repo_root() / "freqtrade" / "bots" / "freqai-rebel" / "user_data" / "config.example.json",
     ],
 }
 

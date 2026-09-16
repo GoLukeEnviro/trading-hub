@@ -55,10 +55,10 @@ def proof_module():
 
 
 # ---------------------------------------------------------------------------
-# Test: bot registry has all four bots enabled
+# Test: bot registry declares the deployed R5A fleet
 # ---------------------------------------------------------------------------
 class TestBotRegistry:
-    """Verify the registry contains the expected four Freqtrade bots."""
+    """Verify the registry declares the deployed fleet and its scope."""
 
     EXPECTED_BOT_IDS = frozenset({
         "freqtrade-freqforge",
@@ -73,7 +73,7 @@ class TestBotRegistry:
         assert "schema_version" in bot_registry
 
     def test_exactly_four_bots(self, bot_registry):
-        """Registry must contain exactly four bot entries."""
+        """Registry must declare all four known bot entries."""
         bots = bot_registry["bots"]
         assert isinstance(bots, list)
         assert len(bots) == 4
@@ -83,12 +83,44 @@ class TestBotRegistry:
         bot_ids = {b.get("bot_id") for b in bot_registry["bots"]}
         assert bot_ids == self.EXPECTED_BOT_IDS
 
-    def test_all_bots_enabled(self, bot_registry):
-        """All four bots must be enabled for this proof."""
+    def test_enabled_bots_are_the_deployed_fleet(self, bot_registry):
+        """Exactly the deployed OPTION_C fleet is enabled.
+
+        freqai-rebel stays present but disabled (ADR-2026-07-11): it is
+        NOT_REPRODUCIBLE and gated behind profiles: ["rebel"]. Disabling it
+        here is the explicit scope, never a silent reduction.
+        """
         enabled = [b for b in bot_registry["bots"] if b.get("enabled", False)]
-        assert len(enabled) == 4
+        assert len(enabled) == 3
         enabled_ids = {b.get("bot_id") for b in enabled}
-        assert enabled_ids == self.EXPECTED_BOT_IDS
+        assert enabled_ids == {
+            "freqtrade-freqforge",
+            "freqtrade-regime-hybrid",
+            "freqtrade-freqforge-canary",
+        }
+
+    def test_disabled_entry_declares_a_reason(self, bot_registry):
+        """A disabled bot must state why, so the scope is auditable."""
+        disabled = [b for b in bot_registry["bots"] if not b.get("enabled", False)]
+        assert [b.get("bot_id") for b in disabled] == ["freqai-rebel"]
+        assert disabled[0].get("disabled_reason"), "disabled bot needs a reason"
+        assert "ADR-2026-07-11" in disabled[0]["disabled_reason"]
+
+    def test_enabled_bots_use_loopback_host_ports(self, bot_registry):
+        """Enabled bots must be reachable on host-native loopback endpoints.
+
+        SI-v2 runs on the host, not inside the compose network, so Docker DNS
+        names never resolve there. Each enabled bot's base_url must be
+        127.0.0.1 with the loopback port published by the canonical compose.
+        """
+        from urllib.parse import urlparse
+
+        for bot in bot_registry["bots"]:
+            parsed = urlparse(bot["base_url"])
+            assert parsed.hostname == "127.0.0.1", (
+                f"{bot['bot_id']}: base_url must use loopback, got {bot['base_url']}"
+            )
+            assert parsed.port is not None, f"{bot['bot_id']}: base_url needs an explicit port"
 
     def test_all_bots_have_required_fields(self, bot_registry):
         """Each bot must have bot_id, base_url, and auth config."""
