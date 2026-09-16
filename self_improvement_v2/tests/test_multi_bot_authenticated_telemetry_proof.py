@@ -53,13 +53,21 @@ def proof_module():
 # Registry tests
 # ---------------------------------------------------------------------------
 class TestBotRegistry:
-    """Registry must contain four enabled bots with auth config."""
+    """Registry declares the deployed R5A fleet with auth config."""
 
     EXPECTED = frozenset({
         "freqtrade-freqforge",
         "freqtrade-regime-hybrid",
         "freqtrade-freqforge-canary",
         "freqai-rebel",
+    })
+
+    # The deployed OPTION_C fleet (ADR-2026-07-11). freqai-rebel stays
+    # declared but disabled; it is NOT_REPRODUCIBLE and profile-gated.
+    DEPLOYED = frozenset({
+        "freqtrade-freqforge",
+        "freqtrade-regime-hybrid",
+        "freqtrade-freqforge-canary",
     })
 
     def test_registry_loads(self, bot_registry):
@@ -72,9 +80,11 @@ class TestBotRegistry:
         ids = {b["bot_id"] for b in bot_registry["bots"]}
         assert ids == self.EXPECTED
 
-    def test_all_enabled(self, bot_registry):
-        enabled = [b for b in bot_registry["bots"] if b.get("enabled")]
-        assert len(enabled) == 4
+    def test_deployed_bots_enabled(self, bot_registry):
+        enabled = {b["bot_id"] for b in bot_registry["bots"] if b.get("enabled")}
+        assert enabled == self.DEPLOYED
+        disabled = {b["bot_id"] for b in bot_registry["bots"] if not b.get("enabled")}
+        assert disabled == {"freqai-rebel"}
 
     def test_all_have_auth(self, bot_registry):
         for bot in bot_registry["bots"]:

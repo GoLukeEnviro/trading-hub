@@ -359,7 +359,7 @@ def test_fleet_decision_to_dict_is_json_safe() -> None:
 # ------------------------------------------------------------------
 
 
-def test_registry_has_four_enabled_bots() -> None:
+def test_registry_declares_deployed_fleet() -> None:
     """Sanity check on the readonly registry consumed by the proof."""
     from pathlib import Path
 
@@ -371,8 +371,9 @@ def test_registry_has_four_enabled_bots() -> None:
         registry = json.load(f)
     bots = [b for b in registry.get("bots", []) if b.get("enabled", True)]
     ids = sorted(b.get("bot_id") for b in bots)
+    # The deployed OPTION_C fleet: freqai-rebel is declared but disabled
+    # (ADR-2026-07-11, NOT_REPRODUCIBLE, profiles: ["rebel"]).
     assert ids == [
-        "freqai-rebel",
         "freqtrade-freqforge",
         "freqtrade-freqforge-canary",
         "freqtrade-regime-hybrid",
@@ -383,6 +384,23 @@ def test_registry_has_four_enabled_bots() -> None:
         assert auth.get("username_env", "").startswith("SI_V2_")
         assert auth.get("password_env", "").startswith("SI_V2_")
         assert b.get("dry_run_expected") is True
+
+
+def test_registry_entries_use_loopback_host_endpoints() -> None:
+    """SI-v2 runs on the host: Docker DNS names cannot resolve there."""
+    from pathlib import Path
+    from urllib.parse import urlparse
+
+    repo_root = Path(__file__).resolve().parents[2]
+    registry_path = repo_root / "self_improvement_v2" / "config" / "freqtrade_bots.readonly.json"
+    with open(registry_path) as f:
+        registry = json.load(f)
+    for bot in registry["bots"]:
+        parsed = urlparse(bot["base_url"])
+        assert parsed.hostname == "127.0.0.1", (
+            f"{bot['bot_id']}: expected a loopback endpoint, got {bot['base_url']}"
+        )
+        assert parsed.port, f"{bot['bot_id']}: base_url must carry an explicit port"
 
 
 # ------------------------------------------------------------------

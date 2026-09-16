@@ -26,6 +26,12 @@ services:
       --strategy FreqForge_Override
     environment:
       - PYTHONPATH=/freqtrade/shared
+      # The bot API must bind all interfaces *inside the container* so the
+      # loopback-published host port can reach it. A container-internal
+      # 127.0.0.1 listener is unreachable through a published port (verified:
+      # host curl -> 000). Exposure stays loopback-only because the port
+      # mapping below is bound to 127.0.0.1 on the host.
+      - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
     volumes:
       # Configs and strategies: read-only
       - ./freqforge/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
@@ -71,6 +77,9 @@ services:
       --strategy FreqForge_Override
     environment:
       - PYTHONPATH=/freqtrade/shared
+      # Bind all interfaces inside the container so the loopback-published
+      # host port can reach the API; host-side exposure stays 127.0.0.1 only.
+      - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
     volumes:
       - ./freqforge-canary/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
       - ./freqforge-canary/user_data/strategies:/freqtrade/user_data/strategies:ro
@@ -113,6 +122,9 @@ services:
       --strategy RegimeSwitchingHybrid_v7_v04_Integration
     environment:
       - PYTHONPATH=/freqtrade/shared
+      # Bind all interfaces inside the container so the loopback-published
+      # host port can reach the API; host-side exposure stays 127.0.0.1 only.
+      - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
     volumes:
       - ./freqtrade/bots/regime-hybrid/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
       - ./freqtrade/bots/regime-hybrid/user_data/strategies:/freqtrade/user_data/strategies:ro
@@ -154,6 +166,9 @@ services:
       --config /freqtrade/user_data/config.example.json
     environment:
       - PYTHONPATH=/freqtrade/shared
+      # Bind all interfaces inside the container so the loopback-published
+      # host port can reach the API; host-side exposure stays 127.0.0.1 only.
+      - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
     volumes:
       - ./freqtrade/bots/webserver/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
       - ./freqforge/user_data/strategies:/freqtrade/user_data/strategies:ro
@@ -195,6 +210,9 @@ services:
       --strategy RebelLiquidation
     environment:
       - PYTHONPATH=/freqtrade/shared
+      # Bind all interfaces inside the container so the loopback-published
+      # host port can reach the API; host-side exposure stays 127.0.0.1 only.
+      - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
     volumes:
       - ./freqtrade/bots/freqai-rebel/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
       - ./freqtrade/bots/freqai-rebel/user_data/strategies:/freqtrade/user_data/strategies:ro

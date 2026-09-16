@@ -78,8 +78,14 @@ class TestResolverStructure:
         # Make sure secret-like values aren't accidentally stored as data
         assert "password" not in [ar.bot_id, ar.status, ar.source_path, ar.error]
 
-    def test_real_registry_loads_four_bots(self, real_registry):
-        assert len(real_registry) == 4
+    def test_real_registry_loads_deployed_fleet(self, real_registry):
+        # _load_registry returns only enabled entries — the deployed fleet.
+        assert len(real_registry) == 3
+        assert {b["bot_id"] for b in real_registry} == {
+            "freqtrade-freqforge",
+            "freqtrade-regime-hybrid",
+            "freqtrade-freqforge-canary",
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +186,14 @@ class TestRegistryLoading:
 class TestResolverIntegration:
     def test_resolve_all_returns_per_bot(self, resolver_module):
         results = resolver_module.resolve_all(_REGISTRY_PATH)
-        assert len(results) == 4
+        # resolve_all covers every enabled registry entry; freqai-rebel is
+        # declared but disabled (ADR-2026-07-11), so the deployed fleet is 3.
+        assert len(results) == 3
+        assert {r.bot_id for r in results} == {
+            "freqtrade-freqforge",
+            "freqtrade-regime-hybrid",
+            "freqtrade-freqforge-canary",
+        }
         for r in results:
             assert r.bot_id
             assert r.username_env
