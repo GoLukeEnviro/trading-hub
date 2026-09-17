@@ -650,3 +650,82 @@ class TestJwtSecretPlaceholderLength:
             cfg = json.load(f)
         key = cfg.get("api_server", {}).get("jwt_secret_key", "")
         assert len(key) >= 32, f"{config_path.name}: jwt_secret_key too short ({len(key)} chars)"
+
+# ─── 26. Runtime config source is interpolatable with unchanged defaults ───
+
+class TestRuntimeConfigSourceInterpolation:
+    """The four default Freqtrade services mount a per-service config source
+    via ${VAR:-<tracked example path>}. The default stays the sanitized
+    config.example.json (HermesTrader behavior unchanged); Agent0 overrides
+    the variable through its gitignored .env to point at untracked
+    user_data/config.json files with host-local runtime secrets. The mount
+    target and the read-only flag stay identical. No secret value may ever
+    appear in the compose file itself.
+    """
+
+    @pytest.mark.parametrize(
+        "svc_name,env_var",
+        [
+            ("freqtrade-freqforge", "FREQFORGE_CONFIG_FILE"),
+            ("freqtrade-freqforge-canary", "FREQFORGE_CANARY_CONFIG_FILE"),
+            ("freqtrade-regime-hybrid", "REGIME_HYBRID_CONFIG_FILE"),
+            ("freqtrade-webserver", "WEBSERVER_CONFIG_FILE"),
+        ],
+    )
+    def test_config_source_interpolated_with_example_default(
+        self, services: dict[str, dict[str, object]], svc_name: str, env_var: str
+    ) -> None:
+        svc = services[svc_name]
+        volumes = cast(list[str], svc.get("volumes", []))
+        config_mounts = [
+            v for v in volumes
+            if v.rsplit(":", 2)[1] == "/freqtrade/user_data/config.example.json"
+        ]
+        assert len(config_mounts) == 1, f"{svc_name}: exactly one config mount"
+        mount = config_mounts[0]
+        assert f"${{{env_var}:-" in mount, (
+            f"{svc_name}: config source must be interpolated via {env_var}"
+        )
+        src, target, ro = mount.rsplit(":", 2)
+        assert target == "/freqtrade/user_data/config.example.json", (
+            f"{svc_name}: mount target must stay /freqtrade/user_data/config.example.json"
+        )
+        assert ro == "ro", f"{svc_name}: config mount must stay read-only"
+        # The interpolation default must remain the tracked example file.
+        default_expr = src.split(":-", 1)[1].rstrip("}")
+        assert default_expr.endswith("config.example.json"), (
+            f"{svc_name}: default must remain config.example.json"
+        )
+        assert "config.json}" not in default_expr and not default_expr.endswith(
+            "config.json"
+        ), f"{svc_name}: default must not be a runtime config.json"
+        # No credential material in the mount expression.
+        for marker in ("CHANGE_ME", "password", "token", "secret"):
+            assert marker not in mount, f"{svc_name}: no secret markers in mount string"
+
+    def test_rebel_config_mount_stays_example(
+        self, services: dict[str, dict[str, object]]
+    ) -> None:
+        """freqai-rebel stays profile-gated and is not part of the default
+        deploy; its mount must remain the tracked example file."""
+        rebel = services[REBEL_SERVICE]
+        volumes = cast(list[str], rebel.get("volumes", []))
+        config_mounts = [
+            v for v in volumes
+            if v.rsplit(":", 2)[1] == "/freqtrade/user_data/config.example.json"
+        ]
+        assert config_mounts == [
+            "./freqtrade/bots/freqai-rebel/user_data/config.example.json"
+            ":/freqtrade/user_data/config.example.json:ro"
+        ], f"rebel config mount must stay the example file, got {config_mounts}"
+
+    def test_config_mounts_contain_no_secret_markers(
+        self, services: dict[str, dict[str, object]]
+    ) -> None:
+        """No service mount string may carry credential material."""
+        for svc_name in DEFAULT_FLEET:
+            svc = services[svc_name]
+            volumes = cast(list[str], svc.get("volumes", []))
+            for v in volumes:
+                if "config" in v:
+                    assert "CHANGE_ME" not in v, f"{svc_name}: no CHANGE_ME in mounts"

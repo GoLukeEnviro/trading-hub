@@ -15,7 +15,15 @@ set +x
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-REPO="/home/hermes/projects/trading"
+# Canonical repository root. Default remains the HermesTrader path; Agent0
+# sets SI_V2_REPO_ROOT to its canonical checkout. No silent fallback to a
+# historical path: if the repository does not exist, fail explicitly.
+REPO="${SI_V2_REPO_ROOT:-/home/hermes/projects/trading}"
+
+if [ ! -d "${REPO}" ]; then
+  echo "SI_V2_REPO_ROOT invalid or missing: ${REPO}" >&2
+  exit 2
+fi
 SI_V2_DIR="${REPO}/self_improvement_v2"
 SECRET_ENV="/opt/data/secrets/si-v2-freqtrade.env"
 LOG_DIR="/opt/data/logs/si-v2-active-cycle"
