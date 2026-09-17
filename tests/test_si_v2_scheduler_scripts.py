@@ -96,3 +96,26 @@ def test_t4_watcher_cron_wrapper_is_detection_only() -> None:
     assert "run_measurement_decision_engine_read_only" in watcher_cron
     assert "execute_apply" not in watcher_cron
     assert "docker compose up" not in watcher_cron
+
+def test_active_cycle_wrapper_repo_root_override() -> None:
+    """The wrapper must resolve REPO via SI_V2_REPO_ROOT while the
+    HermesTrader default stays unchanged."""
+    runner = _read("active_cycle_runner")
+    assert 'REPO="${SI_V2_REPO_ROOT:-/home/hermes/projects/trading}"' in runner, (
+        "wrapper REPO must default to the HermesTrader path and be "
+        "overridable via SI_V2_REPO_ROOT"
+    )
+    assert 'REPO="/home/hermes/projects/trading"' not in runner, (
+        "hardcoded REPO must be replaced by the interpolated form"
+    )
+
+
+def test_active_cycle_wrapper_fails_explicitly_on_missing_repo() -> None:
+    """No silent fallback: the wrapper must stop when the repository
+    directory does not exist."""
+    runner = _read("active_cycle_runner")
+    assert '-d "${REPO}"' in runner, (
+        "wrapper must check that the repository directory exists"
+    )
+    assert "SI_V2_REPO_ROOT invalid or missing" in runner
+    assert "exit 2" in runner

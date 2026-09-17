@@ -14,6 +14,12 @@
 #   - healthchecks use python3 (no curl dependency)
 
 services:
+  # Runtime config source per Freqtrade service: ${VAR:-default} interpolation.
+  # Defaults are the tracked, sanitized config.example.json files (current
+  # HermesTrader behavior, unchanged). Agent0 sets the variables in its
+  # gitignored .env file to point at untracked user_data/config.json files
+  # that carry host-local runtime secrets. The mount target and read-only
+  # flag stay exactly as before; no secret value ever enters Git.
   freqtrade-freqforge:
     image: hermestrader/freqtrade-r5a:r7a-5bcb50fc8186-7ca1e4f9b150
     build:
@@ -34,7 +40,7 @@ services:
       - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
     volumes:
       # Configs and strategies: read-only
-      - ./freqforge/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
+      - ${FREQFORGE_CONFIG_FILE:-./freqforge/user_data/config.example.json}:/freqtrade/user_data/config.example.json:ro
       - ./freqforge/user_data/strategies:/freqtrade/user_data/strategies:ro
       # Shared modules: read-only
       - ./freqtrade/shared:/freqtrade/shared:ro
@@ -81,7 +87,7 @@ services:
       # host port can reach the API; host-side exposure stays 127.0.0.1 only.
       - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
     volumes:
-      - ./freqforge-canary/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
+      - ${FREQFORGE_CANARY_CONFIG_FILE:-./freqforge-canary/user_data/config.example.json}:/freqtrade/user_data/config.example.json:ro
       - ./freqforge-canary/user_data/strategies:/freqtrade/user_data/strategies:ro
       - ./freqtrade/shared:/freqtrade/shared:ro
       - canary-db:/freqtrade/user_data
@@ -126,7 +132,7 @@ services:
       # host port can reach the API; host-side exposure stays 127.0.0.1 only.
       - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
     volumes:
-      - ./freqtrade/bots/regime-hybrid/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
+      - ${REGIME_HYBRID_CONFIG_FILE:-./freqtrade/bots/regime-hybrid/user_data/config.example.json}:/freqtrade/user_data/config.example.json:ro
       - ./freqtrade/bots/regime-hybrid/user_data/strategies:/freqtrade/user_data/strategies:ro
       - ./freqtrade/shared:/freqtrade/shared:ro
       - regime-hybrid-db:/freqtrade/user_data
@@ -170,7 +176,7 @@ services:
       # host port can reach the API; host-side exposure stays 127.0.0.1 only.
       - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
     volumes:
-      - ./freqtrade/bots/webserver/user_data/config.example.json:/freqtrade/user_data/config.example.json:ro
+      - ${WEBSERVER_CONFIG_FILE:-./freqtrade/bots/webserver/user_data/config.example.json}:/freqtrade/user_data/config.example.json:ro
       - ./freqforge/user_data/strategies:/freqtrade/user_data/strategies:ro
       - ./freqtrade/shared:/freqtrade/shared:ro
       - webserver-db:/freqtrade/user_data

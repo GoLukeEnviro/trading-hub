@@ -141,7 +141,24 @@ Restore-Test zählt nicht als Nachweis.
 einen grünen Status zu erhalten. Fehlende Kill-Switch-Konfiguration wird über das
 vorgesehene Initialisierungsverfahren hergestellt, nicht durch Setzen von `NORMAL`.
 
-## 8. Scheduler — genau einer, mit Überlappungsschutz
+## 8. Runtime-Konfiguration und Secrets (Agent0)
+
+Die vier Freqtrade-Dienste lesen ihre Konfiguration über interpolierte Mount-Quellen (`${VAR:-<getracktes Beispiel>}`). Default bleibt das getrackte, sanitized `config.example.json` (HermesTrader-Verhalten unverändert).
+
+Für Agent0 werden in der **gitignorierten** `.env` im Projektverzeichnis folgende Variablen gesetzt, die auf untracked `user_data/config.json`-Dateien mit host-lokalen Runtime-Secrets zeigen (Mount-Ziel und `:ro` bleiben identisch):
+
+| Variable | Default (getrackt) | Agent0-Ziel |
+|---|---|---|
+| `FREQFORGE_CONFIG_FILE` | `./freqforge/user_data/config.example.json` | `./freqforge/user_data/config.json` |
+| `FREQFORGE_CANARY_CONFIG_FILE` | `./freqforge-canary/user_data/config.example.json` | `./freqforge-canary/user_data/config.json` |
+| `REGIME_HYBRID_CONFIG_FILE` | `./freqtrade/bots/regime-hybrid/user_data/config.example.json` | `./freqtrade/bots/regime-hybrid/user_data/config.json` |
+| `WEBSERVER_CONFIG_FILE` | `./freqtrade/bots/webserver/user_data/config.example.json` | `./freqtrade/bots/webserver/user_data/config.json` |
+
+Keine Secret-Werte dürfen in Compose, Git, Tests oder Reports erscheinen. Die SI-v2-Secrets bleiben in `/opt/data/secrets/si-v2-freqtrade.env` (außerhalb des Repositorys, 0600).
+
+Der SI-v2-Wrapper löst das Repository über `SI_V2_REPO_ROOT` auf (Default bleibt der HermesTrader-Pfad); auf Agent0 wird der Wert explizit auf das kanonische Checkout gesetzt. Fehlt das Verzeichnis, bricht der Wrapper explizit ab — kein stiller Fallback.
+
+## 9. Scheduler — genau einer, mit Überlappungsschutz
 
 Vorgesehen ist **genau ein** Scheduler: der SI-v2-Active-Cycle-Job
 (`orchestrator/scripts/si_v2_active_cycle_cron.sh`, 6h-Takt).
@@ -160,7 +177,7 @@ hermes cron status          # Ticker-Heartbeat muss frisch sein
 hermes cron list            # genau ein Job, kein Duplikat
 ```
 
-## 9. Doppelbetriebsschutz (Quellhost ↔ Zielhost)
+## 10. Doppelbetriebsschutz (Quellhost ↔ Zielhost)
 
 Solange derselbe Bot-Role auf beiden Hosts laufen könnte, ist das ein **Datenrisiko**
 (zwei Dry-Run-DBs divergieren; Messdaten sind nicht mehr eindeutig zuordenbar).
@@ -170,7 +187,7 @@ Vor jeder Zielaktivierung klären:
 2. Wenn ja: **vor** Zielstart Rollen trennen — Scheduler und Steuerung nur auf einem Host.
 3. Ein Stop auf dem Quellhost wird **zuvor konkret mit Rückweg vorgelegt**, nie pauschal.
 
-## 10. Was dieses Runbook nicht autorisiert
+## 11. Was dieses Runbook nicht autorisiert
 
 Kein Live-Trading, kein `dry_run=false`, keine Exchange-Keys, keine Risikolimit-Erhöhung,
 kein Kill-Switch-Bypass, kein Löschen oder Abschalten des Quellhosts. Der privilegierte
