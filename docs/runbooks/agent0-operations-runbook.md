@@ -192,3 +192,62 @@ Vor jeder Zielaktivierung klären:
 Kein Live-Trading, kein `dry_run=false`, keine Exchange-Keys, keine Risikolimit-Erhöhung,
 kein Kill-Switch-Bypass, kein Löschen oder Abschalten des Quellhosts. Der privilegierte
 Pfad ist der Executor — `sudo`/`docker`-Gruppenrechte sind **keine** Freigabe, ihn zu umgehen.
+
+## 10. Apply-Kette (AUTONOMOUS_DRY_RUN, aktiviert 2026-09-18)
+
+Der Modus `AUTONOMOUS_DRY_RUN` ist auf Agent0 aktiviert
+(Marker: `docs/decisions/APPROVED_AUTONOMOUS_DRY_RUN_AGENT0.md`). Er bleibt
+strikt Dry-Run, canary-first und fail-closed.
+
+### 10.1 Ablauf je Zyklus (automatisch)
+
+1. Der SI-v2-Active-Cycle-Job läuft (6h-Takt, `.active-cycle.lock`).
+2. Danach läuft die Apply-Ketten-Auswertung (`.apply-chain.lock`, eigener
+   Overlap-Schutz) über den Evaluator:
+   `self_improvement_v2/scripts/si_v2_apply_chain_evaluator.py`.
+3. Der Evaluator liest ausschließlich echte Evidenz: Marker, Kill-Switch,
+   RiskGuard-State, neuestes Cycle-Bundle, Canary-Config. Fehlt oder
+   korrumpiert etwas, blockiert er fail-closed (Status `BLOCKED_*`).
+4. Ein Kandidat für einen anderen Bot als `freqtrade-freqforge-canary`
+   ergibt `NO_QUALIFIED_PROPOSAL` (Stage 1 ist canary-only).
+5. Ein qualifizierter Canary-Kandidat wird vollständig vorbereitet
+   (Overlay, Rollback-Plan, Audit-Event, Messplan) und die
+   Ceremony-Preflight läuft. Die **Runtime-Ausführung** (Canary-Recreate)
+   ist in dieser Stage bewusst nicht verdrahtet; der Datensatz vermerkt
+   `runtime_execution_wired=false`.
+
+### 10.2 Status und Evidenz
+
+```bash
+# Letzte Auswertung (atomarer Record)
+ls -t /opt/data/logs/si-v2-apply-chain/state/results/ | head -3
+cat "$(ls -t /opt/data/logs/si-v2-apply-chain/state/results/*.json | head -1)"
+
+# Append-only Audit
+tail -5 /opt/data/logs/si-v2-apply-chain/state/audit/apply_chain_audit.jsonl
+```
+
+Statuswerte: `NO_QUALIFIED_PROPOSAL` (korrektes Nicht-Anwenden),
+`APPLY_PREPARED_RUNTIME_STAGE_NOT_WIRED` (vorbereitet, bewusst kein
+Runtime-Schritt), `BLOCKED_*` (fail-closed — Ursache im `reason`).
+
+### 10.3 Alarmierung
+
+Der Scheduler meldet an Telegram nur bei Problemen: `BLOCKED_*`,
+`APPLY_PREPARED_*` sowie alle Watchdog-Verletzungen (`SI-V2 APPLY-CHAIN
+ALERT` / `SI-v2 WATCHDOG ALERT`). `NO_QUALIFIED_PROPOSAL` ist still.
+
+### 10.4 Watchdog (Fleet, RiskGuard, Kill-Switch, Speicher, Zyklusfrische)
+
+Eigener stündlicher Alert-Job (`si-v2-watchdog-agent0`, rein meldend, kein
+Zyklus-Scheduler). Geprüft werden: 5/5 Container healthy, Kill-Switch
+`NORMAL`, RiskGuard `PASS`, freier Speicher ≥ 512 MB, Zyklusfrische < 13 h.
+Der Watchdog repariert nichts — er meldet nur.
+
+### 10.5 Grenzen
+
+- Kein Live-Trading, kein `dry_run=false`, keine Exchange-Keys.
+- Kein Kandidat wird erzeugt, keine Schwelle gesenkt: Angewendet wird nur,
+  was als echter ShadowProposal-Kandidat im Cycle-Bundle steht.
+- Ein Runtime-Apply bleibt gesperrt, bis die R7A-Topologie der Kette
+  verifiziert verdrahtet ist (separater, belegter Schritt).
