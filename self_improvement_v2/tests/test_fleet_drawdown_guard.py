@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
+import json
 import os
+import sys
 import tempfile
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -41,6 +44,11 @@ def _make_guard(
         hwm_drawdown_pct=hwm_pct,
         daily_loss_pct=daily_pct,
         state_file=state_file,
+        # Pin the kill-switch write target to a per-test temp path. Without
+        # this, a triggered evaluation calls kill_switch.set_kill_mode through
+        # its DEFAULT path resolution, which can reach the repository's real
+        # var/kill_switch.json and leave it in HALT_NEW (observed on Agent0).
+        kill_switch_path=Path(state_file).with_suffix(".ks.json"),
     )
     return guard, Path(state_file)
 
@@ -51,6 +59,8 @@ def _cleanup(path: Path) -> None:
 
     with suppress(OSError):
         path.unlink(missing_ok=True)
+    with suppress(OSError):
+        path.with_suffix(".ks.json").unlink(missing_ok=True)
     with suppress(OSError):
         path.with_suffix(".tmp").unlink(missing_ok=True)
 
@@ -331,6 +341,7 @@ class TestFleetDrawdownGuardEvaluate:
                 hwm_drawdown_pct=D("10.0"),
                 daily_loss_pct=D("10.0"),
                 state_file=path,
+                kill_switch_path=path.with_suffix(".ks.json"),
             )
             ts2 = datetime(2026, 7, 14, 13, 0, 0, tzinfo=UTC)
             result = guard2.evaluate(equity=D("89999"), timestamp=ts2)
@@ -523,3 +534,84 @@ class TestDrawdownEvaluation:
         assert ev.hwm_equity == D("100000")
         assert ev.day_start_equity == D("95000")
         assert ev.current_equity == D("85000")
+
+# ---------------------------------------------------------------------------
+# Kill-switch isolation (Agent0 finding: default path resolution could write
+# the repository's real var/kill_switch.json from inside the suite)
+# ---------------------------------------------------------------------------
+
+
+def _repo_root() -> Path:
+    """Repository root (this file lives at <root>/self_improvement_v2/tests/)."""
+    return Path(__file__).resolve().parents[2]
+
+
+def _ensure_kill_switch_importable() -> bool:
+    """Ensure ``freqtrade.shared.kill_switch`` resolves in this process.
+
+    ``python -m pytest`` puts the CWD on ``sys.path``, so a run from the
+    repository root makes the ``freqtrade`` namespace package importable and
+    the guard can reach the default kill-switch path. The console ``pytest``
+    entry point used by some CI jobs does not put the CWD on ``sys.path``,
+    and the guard's import then fails without writing anywhere. The write
+    target must be safe in both environments; this helper guarantees the
+    stricter (importable) case for the assertion below.
+    """
+    root = _repo_root()
+    added = False
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+        added = True
+    try:
+        importlib.import_module("freqtrade.shared.kill_switch")
+        return True
+    except ImportError:
+        return False
+    finally:
+        if added:
+            sys.path.remove(str(root))
+
+
+class TestKillSwitchIsolation:
+    def test_trigger_writes_only_the_pinned_temp_path(self) -> None:
+        guard, path = _make_guard(hwm_pct=D("10.0"), daily_pct=D("5.0"))
+        ks_path = path.with_suffix(".ks.json")
+        repo_ks = _repo_root() / "var" / "kill_switch.json"
+        repo_before = repo_ks.read_bytes() if repo_ks.exists() else None
+        try:
+            importable = _ensure_kill_switch_importable()
+
+            ts = datetime(2026, 7, 14, 12, 0, 0, tzinfo=UTC)
+            guard.evaluate(equity=D("100000"), timestamp=ts)
+
+            ts2 = datetime(2026, 7, 14, 13, 0, 0, tzinfo=UTC)
+            result = guard.evaluate(equity=D("85000"), timestamp=ts2)
+
+            assert result.triggered is True
+
+            repo_after = repo_ks.read_bytes() if repo_ks.exists() else None
+            assert repo_after == repo_before, (
+                "tests must never create or modify the repository kill-switch file"
+            )
+
+            if importable:
+                assert ks_path.exists(), "pinned kill-switch file must receive the write"
+                state = json.loads(ks_path.read_text(encoding="utf-8"))
+                assert state.get("mode") == "HALT_NEW"
+                assert state.get("triggered_by") == "drawdown_guard"
+            else:  # only when the repository module cannot be imported at all
+                assert not ks_path.exists()
+        finally:
+            _cleanup(path)
+
+    def test_no_trigger_leaves_pinned_path_absent(self) -> None:
+        guard, path = _make_guard(hwm_pct=D("25.0"), daily_pct=D("10.0"))
+        ks_path = path.with_suffix(".ks.json")
+        try:
+            ts = datetime(2026, 7, 14, 12, 0, 0, tzinfo=UTC)
+            guard.evaluate(equity=D("100000"), timestamp=ts)
+            result = guard.evaluate(equity=D("99999"), timestamp=ts)
+            assert result.triggered is False
+            assert not ks_path.exists()
+        finally:
+            _cleanup(path)
