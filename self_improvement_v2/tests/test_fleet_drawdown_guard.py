@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from datetime import UTC, datetime
@@ -41,6 +42,11 @@ def _make_guard(
         hwm_drawdown_pct=hwm_pct,
         daily_loss_pct=daily_pct,
         state_file=state_file,
+        # Pin the kill-switch write target to a per-test temp path. Without
+        # this, a triggered evaluation calls kill_switch.set_kill_mode through
+        # its DEFAULT path resolution, which can reach the repository's real
+        # var/kill_switch.json and leave it in HALT_NEW (observed on Agent0).
+        kill_switch_path=Path(state_file).with_suffix(".ks.json"),
     )
     return guard, Path(state_file)
 
@@ -51,6 +57,8 @@ def _cleanup(path: Path) -> None:
 
     with suppress(OSError):
         path.unlink(missing_ok=True)
+    with suppress(OSError):
+        path.with_suffix(".ks.json").unlink(missing_ok=True)
     with suppress(OSError):
         path.with_suffix(".tmp").unlink(missing_ok=True)
 
@@ -331,6 +339,7 @@ class TestFleetDrawdownGuardEvaluate:
                 hwm_drawdown_pct=D("10.0"),
                 daily_loss_pct=D("10.0"),
                 state_file=path,
+                kill_switch_path=path.with_suffix(".ks.json"),
             )
             ts2 = datetime(2026, 7, 14, 13, 0, 0, tzinfo=UTC)
             result = guard2.evaluate(equity=D("89999"), timestamp=ts2)
@@ -523,3 +532,47 @@ class TestDrawdownEvaluation:
         assert ev.hwm_equity == D("100000")
         assert ev.day_start_equity == D("95000")
         assert ev.current_equity == D("85000")
+
+# ---------------------------------------------------------------------------
+# Kill-switch isolation (Agent0 finding: default path resolution could write
+# the repository's real var/kill_switch.json from inside the suite)
+# ---------------------------------------------------------------------------
+
+
+class TestKillSwitchIsolation:
+    def test_trigger_writes_only_the_pinned_temp_path(self) -> None:
+        guard, path = _make_guard(hwm_pct=D("10.0"), daily_pct=D("5.0"))
+        ks_path = path.with_suffix(".ks.json")
+        repo_ks = Path("var/kill_switch.json")
+        repo_before = repo_ks.read_bytes() if repo_ks.exists() else None
+        try:
+            ts = datetime(2026, 7, 14, 12, 0, 0, tzinfo=UTC)
+            guard.evaluate(equity=D("100000"), timestamp=ts)
+
+            ts2 = datetime(2026, 7, 14, 13, 0, 0, tzinfo=UTC)
+            result = guard.evaluate(equity=D("85000"), timestamp=ts2)
+
+            assert result.triggered is True
+            assert ks_path.exists(), "pinned kill-switch file must receive the write"
+            state = json.loads(ks_path.read_text(encoding="utf-8"))
+            assert state.get("mode") == "HALT_NEW"
+            assert state.get("triggered_by") == "drawdown_guard"
+
+            repo_after = repo_ks.read_bytes() if repo_ks.exists() else None
+            assert repo_after == repo_before, (
+                "tests must never create or modify the repository kill-switch file"
+            )
+        finally:
+            _cleanup(path)
+
+    def test_no_trigger_leaves_pinned_path_absent(self) -> None:
+        guard, path = _make_guard(hwm_pct=D("25.0"), daily_pct=D("10.0"))
+        ks_path = path.with_suffix(".ks.json")
+        try:
+            ts = datetime(2026, 7, 14, 12, 0, 0, tzinfo=UTC)
+            guard.evaluate(equity=D("100000"), timestamp=ts)
+            result = guard.evaluate(equity=D("99999"), timestamp=ts)
+            assert result.triggered is False
+            assert not ks_path.exists()
+        finally:
+            _cleanup(path)
