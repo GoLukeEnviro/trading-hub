@@ -299,8 +299,8 @@ def _validate_timestamp(value: object) -> bool:
 def validate_state(state: object) -> ValidationResult:
     """Strictly validate a RiskGuard state dict against contract v1.
 
-    Fail-closed: any missing field, unknown schema version, unknown bot,
-    forbidden field, live-authority marker or limit breach yields
+    Fail-closed: a missing field, an unknown schema version, an unknown bot,
+    a forbidden field, a live-authority marker or a limit breach yields
     ``ok=False`` with a machine-readable reason. Never raises.
     """
     if not isinstance(state, dict):
