@@ -1,6 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-09-09 for #728 A2 contract hardening: the repository now has a stopped-state, integrity-bound pre-upgrade snapshot contract, rollback-complete pre-cutover manifest, one canonical R5A provenance gate, and automatic state+release rollback transaction. Production remains Hermes 0.19.0 and `CUTOVER_EXECUTED=NO`; #728 performs no runtime cutover. After exact-head CI/merge reconciliation the status is `READY_FOR_A2_CUTOVER_REVALIDATION`. Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
+> **Canonical current-state snapshot.** Reconciled on 2026-09-18 for the **Agent0 dry-run commissioning (#730)**: the default fleet (3 trading bots + webserver + Rainbow) runs healthy on Agent0 at `a02d91e`; SI-v2 processes real bot telemetry (`ping_ok=3/3`, all mutation counters 0) with the historical trade evidence window restored (292 closed trades); exactly one scheduler executed a real automatic cycle. `AUTONOMOUS_DRY_RUN` stays **not activated** (host kill-switch artifact + missing RiskGuard state — see the Agent0 section). Live trading remains excluded.
+>
+> **Previous:** 2026-09-09 — Reconciled for #728 A2 contract hardening: the repository now has a stopped-state, integrity-bound pre-upgrade snapshot contract, rollback-complete pre-cutover manifest, one canonical R5A provenance gate, and automatic state+release rollback transaction. Production remains Hermes 0.19.0 and `CUTOVER_EXECUTED=NO`; #728 performs no runtime cutover. After exact-head CI/merge reconciliation the status is `READY_FOR_A2_CUTOVER_REVALIDATION`. Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
 >
 > **Previous:** 2026-08-18 after #702 reopen (auto-close corrected: PR #714 delivered only the A1 Precondition-Teil; the A2 selection backtest did **not** run) and #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
 >
@@ -76,6 +78,38 @@ roadmap_observed_at_utc: 2026-08-04T14:00:00Z
 `config/governance/program-contract.yaml`; `roadmap_revision_observed` is
 informational only and does not force a state-file touch on ordinary roadmap
 status changes.
+
+## Agent0 — dry-run fleet operational (2026-09-18)
+
+```text
+ISSUE_730_AGENT0_DRYRUN=OPERATIONAL
+DEPLOYED_COMMIT=a02d91e
+HOST=Agent0 (agent0-1, tailnet 100.103.203.107)
+FLEET=5/5 healthy (freqforge, freqforge-canary, regime-hybrid, webserver, rainbow)
+TRADING_BOTS_DRY_RUN=3/3 true (authenticated API proof)
+SI_V2_CYCLE=fleet_verdict GREEN, ping_ok 3/3, mutations all 0
+SI_V2_RAINBOW=SUCCESS read_only (no fixtures)
+SCHEDULER=exactly one (hermes cron si-v2-active-cycle-agent0, 6h), real automatic run proven
+BACKUP_RESTORE=SNAPSHOT+ISOLATED_RESTORE PASS
+BOT_RESTART=canary restart without data loss PASS
+AUTONOMOUS_DRY_RUN=NOT_ACTIVATED (policy gates open)
+LIVE_TRADING=NO
+```
+
+Full evidence: [`docs/reports/agent0-dryrun-operational-2026-09-18.md`](../reports/agent0-dryrun-operational-2026-09-18.md).
+
+**Open policy gates (blocking `AUTONOMOUS_DRY_RUN`, not the dry-run operation):**
+
+1. Host kill-switch `var/kill_switch.json` reads `HALT_NEW` — a test artefact
+   from the SI-v2 suite's default-path write, fixed in PR #743 (`a02d91e`);
+   the host file itself was deliberately **not** reset (operator decision
+   pending). Bot paths read the container file (`NORMAL`) and fail closed on
+   `HALT_NEW` (verified in the bot image).
+2. RiskGuard state is absent on Agent0; the apply gate fails closed to
+   `BLOCKED`, which is correct behaviour but not a PASS.
+
+Neither gate blocks the read-only operation above; both must be green before
+any autonomous apply step.
 
 ## Standing Owner Authorization (2026-08-04)
 
