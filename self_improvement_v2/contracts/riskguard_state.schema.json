@@ -1,0 +1,246 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/GoLukeEnviro/trading-hub/blob/main/self_improvement_v2/contracts/riskguard_state.schema.json",
+  "title": "RiskGuard State (baseline contract v1)",
+  "description": "Versioned contract for the RiskGuard state file consumed by the SI-v2 apply gates. Dry-run only; no live authority. Anything else fails closed in the consumer adapter.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "contract_name",
+    "contract_version",
+    "created_at_utc",
+    "updated_at_utc",
+    "binding_commit",
+    "mode",
+    "operating_mode",
+    "live_authority",
+    "summary",
+    "pairs",
+    "bot_scope",
+    "limits",
+    "mandates"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "State schema version. Current version: 1."
+    },
+    "contract_name": {
+      "type": "string",
+      "const": "riskguard_baseline_contract_v1"
+    },
+    "contract_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Contract document version (e.g. 1.0.0)."
+    },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "binding_commit": {
+      "type": "string",
+      "minLength": 7,
+      "description": "Repository commit the baseline binds to."
+    },
+    "mode": {
+      "type": "string",
+      "const": "ACTIVE"
+    },
+    "operating_mode": {
+      "type": "string",
+      "const": "DRY_RUN_ONLY"
+    },
+    "live_authority": {
+      "type": "boolean",
+      "const": false
+    },
+    "summary": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "ACTIVE"
+        }
+      }
+    },
+    "pairs": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["verdict"],
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": ["ACCEPTED", "WATCH_ONLY", "BLOCK_ENTRY"]
+          },
+          "allow_long_bias": {
+            "type": "boolean"
+          },
+          "allow_short_bias": {
+            "type": "boolean"
+          },
+          "riskguard_reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "bot_scope": {
+      "type": "object",
+      "required": ["allowed"],
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": [
+              "freqtrade-freqforge",
+              "freqtrade-freqforge-canary",
+              "freqtrade-regime-hybrid"
+            ]
+          }
+        },
+        "forbidden": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "non_trading_actors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "required": ["parameters", "min_apply_cooldown_days"],
+      "properties": {
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "min_apply_cooldown_days": {
+          "type": "integer",
+          "minimum": 7
+        }
+      }
+    },
+    "mandates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "proposal_id",
+          "bot_id",
+          "parameter",
+          "from_value",
+          "to_value",
+          "allowlist_match",
+          "evidence_refs",
+          "dry_run_mandate",
+          "snapshot_id",
+          "canary_target",
+          "measurement_window",
+          "rollback_criterion",
+          "expires_at_utc",
+          "revision",
+          "state"
+        ],
+        "properties": {
+          "proposal_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bot_id": {
+            "type": "string",
+            "enum": [
+              "freqtrade-freqforge",
+              "freqtrade-freqforge-canary",
+              "freqtrade-regime-hybrid"
+            ]
+          },
+          "parameter": {
+            "type": "string",
+            "enum": [
+              "rsi_period",
+              "stoploss_pct",
+              "take_profit_pct",
+              "stake_factor",
+              "max_open_trades",
+              "cooldown_candles"
+            ]
+          },
+          "from_value": {
+            "type": ["number", "integer"]
+          },
+          "to_value": {
+            "type": ["number", "integer"]
+          },
+          "allowlist_match": {
+            "type": "boolean",
+            "const": true
+          },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "dry_run_mandate": {
+            "type": "string",
+            "const": "DRY_RUN_ONLY"
+          },
+          "snapshot_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "canary_target": {
+            "type": "boolean",
+            "const": true
+          },
+          "measurement_window": {
+            "type": "object",
+            "required": ["opened_at_utc", "closes_at_utc"]
+          },
+          "rollback_criterion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expires_at_utc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": ["ACCEPTED", "REJECTED", "BLOCK_ENTRY", "EXPIRED", "INVALID"]
+          }
+        }
+      }
+    }
+  }
+}

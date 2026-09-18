@@ -71,8 +71,15 @@ L3_TOKEN_VALUE: Final[str] = "APPROVE"
 DEFAULT_STATE_DIR: Final[Path] = Path(
     "/opt/data/profiles/orchestrator/state/si_v2_controlled_apply"
 )
-RISKGUARD_STATE_PATH: Final[Path] = Path(
-    "/home/hermes/projects/trading/orchestrator/state/riskguard/riskguard_state.json"
+# Canonical RiskGuard state path (riskguard-baseline-contract-v1).
+# Resolved relative to the repository root so the same contract holds on the
+# historical HermesTrader tree and on Agent0 (where that absolute path does
+# not exist). The file is intentionally NOT created here — the merged
+# initializer (scripts/riskguard_init_baseline.py) writes it; a missing file
+# keeps the gate fail-closed.
+_REPO_ROOT_FOR_RISKGUARD: Final[Path] = Path(__file__).resolve().parents[4]
+RISKGUARD_STATE_PATH: Final[Path] = (
+    _REPO_ROOT_FOR_RISKGUARD / "orchestrator" / "state" / "riskguard" / "riskguard_state.json"
 )
 
 

@@ -24,6 +24,30 @@ from .fleet_drawdown_guard import (
     DrawdownState,
     FleetDrawdownGuard,
 )
+from .riskguard_baseline import (
+    CONTRACT_NAME as RISKGUARD_CONTRACT_NAME,
+)
+from .riskguard_baseline import (
+    CONTRACT_VERSION as RISKGUARD_CONTRACT_VERSION,
+)
+from .riskguard_baseline import (
+    SCHEMA_VERSION as RISKGUARD_SCHEMA_VERSION,
+)
+from .riskguard_baseline import (
+    ValidationResult as RiskGuardValidationResult,
+)
+from .riskguard_baseline import (
+    build_conservative_baseline as build_riskguard_baseline,
+)
+from .riskguard_baseline import (
+    initialize_baseline as initialize_riskguard_baseline,
+)
+from .riskguard_baseline import (
+    validate_mandate as validate_riskguard_mandate,
+)
+from .riskguard_baseline import (
+    validate_state as validate_riskguard_state,
+)
 from .verdict_contracts import (
     CONTRACT_MAP,
     EntryGateVerdict,
@@ -47,6 +71,9 @@ __all__ = [
     "DYNAMIC_EXIT_MODES",
     "DYNAMIC_EXIT_QUANTUM",
     "DYNAMIC_EXIT_STATUSES",
+    "RISKGUARD_CONTRACT_NAME",
+    "RISKGUARD_CONTRACT_VERSION",
+    "RISKGUARD_SCHEMA_VERSION",
     "SIZING_CAPPED_NOTIONAL",
     "SIZING_CAPPED_RISK",
     "SIZING_INVALID_INPUT",
@@ -60,7 +87,9 @@ __all__ = [
     "FleetSafetyState",
     "ObservationClassification",
     "PositionSizingInput",
+    "RiskGuardValidationResult",
     "SizingDecision",
+    "build_riskguard_baseline",
     "calculate_dynamic_exit",
     "calculate_dynamic_exit_from_row",
     "calculate_position_size",
@@ -68,6 +97,7 @@ __all__ = [
     "entry_gate_to_str",
     "entry_verdict_from_observation",
     "fleet_safety_to_str",
+    "initialize_riskguard_baseline",
     "is_observation_only",
     "is_trading_authoritative",
     "observation_to_str",
@@ -75,4 +105,6 @@ __all__ = [
     "str_to_entry_gate",
     "str_to_fleet_safety",
     "str_to_observation",
+    "validate_riskguard_mandate",
+    "validate_riskguard_state",
 ]
