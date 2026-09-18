@@ -1,6 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-09-18 for the **Agent0 dry-run commissioning (#730)**: the default fleet (3 trading bots + webserver + Rainbow) runs healthy on Agent0 at `a02d91e`; SI-v2 processes real bot telemetry (`ping_ok=3/3`, all mutation counters 0) with the historical trade evidence window restored (292 closed trades); exactly one scheduler executed a real automatic cycle. `AUTONOMOUS_DRY_RUN` stays **not activated** (host kill-switch artifact + missing RiskGuard state — see the Agent0 section). Live trading remains excluded.
+> **Canonical current-state snapshot.** Reconciled on 2026-09-18 (later tick) for the **Agent0 safety-control-plane step**: the host kill-switch `HALT_NEW` test artifact was reconciled to `NORMAL` via the prescribed function (immutable backup + record retained), host/projection are consistent (`kill_switch_proof` GREEN), consumer matrix and fail-closed probes are green, and the evidence bundle now records `control_plane` provenance (#746, `d9d7e1a`). The RiskGuard baseline remains **`BLOCKED_BY_MISSING_RISKGUARD_BASELINE_CONTRACT`** (no versioned contract exists; nothing invented) — `AUTONOMOUS_DRY_RUN` stays unactivated.
+>
+> **Previous:** 2026-09-18 — Agent0 dry-run commissioning (#730): the default fleet (3 trading bots + webserver + Rainbow) runs healthy on Agent0 at `a02d91e`; SI-v2 processes real bot telemetry (`ping_ok=3/3`, all mutation counters 0) with the historical trade evidence window restored (292 closed trades); exactly one scheduler executed a real automatic cycle. `AUTONOMOUS_DRY_RUN` stays **not activated** (host kill-switch artifact + missing RiskGuard state — see the Agent0 section). Live trading remains excluded.
 >
 > **Previous:** 2026-09-09 — Reconciled for #728 A2 contract hardening: the repository now has a stopped-state, integrity-bound pre-upgrade snapshot contract, rollback-complete pre-cutover manifest, one canonical R5A provenance gate, and automatic state+release rollback transaction. Production remains Hermes 0.19.0 and `CUTOVER_EXECUTED=NO`; #728 performs no runtime cutover. After exact-head CI/merge reconciliation the status is `READY_FOR_A2_CUTOVER_REVALIDATION`. Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
 >
@@ -110,6 +112,28 @@ Full evidence: [`docs/reports/agent0-dryrun-operational-2026-09-18.md`](../repor
 
 Neither gate blocks the read-only operation above; both must be green before
 any autonomous apply step.
+
+## Agent0 — safety control plane (2026-09-18)
+
+```text
+KILL_SWITCH_HOST=NORMAL (reconciled 2026-09-18T14:28:54Z from proven test artifact)
+KILL_SWITCH_PROJECTION=NORMAL
+KILL_SWITCH_CONSISTENT=true (kill_switch_proof GREEN)
+RECONCILIATION_BACKUP=immutable (chattr +i, /opt/data/backups/kill-switch-reconciliation/)
+RISKGUARD_BASELINE=BLOCKED_BY_MISSING_RISKGUARD_BASELINE_CONTRACT
+CONSUMER_MATRIX=18 checks green (16 PASS + 2 expected fail-closed)
+FAIL_CLOSED_PROBES=9/9 PASS (production state unchanged)
+BUNDLE_CONTROL_PLANE_PROVENANCE=active (#746, d9d7e1a)
+AUTONOMOUS_DRY_RUN=NOT_ACTIVATED
+LIVE_TRADING=NO
+```
+
+Full evidence: [`docs/reports/agent0-safety-control-plane-2026-09-18.md`](../reports/agent0-safety-control-plane-2026-09-18.md).
+
+The RiskGuard blocker is actionable: the report specifies the exact missing
+contract (state schema, canonical Agent0 path, bot scoping incl. `freqai-rebel`
+disabled, dry-run baseline semantics, init procedure, tests). Until it exists,
+the apply gate remains correctly fail-closed.
 
 ## Standing Owner Authorization (2026-08-04)
 
