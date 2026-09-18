@@ -1,6 +1,8 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-09-18 (later tick) for the **Agent0 safety-control-plane step**: the host kill-switch `HALT_NEW` test artifact was reconciled to `NORMAL` via the prescribed function (immutable backup + record retained), host/projection are consistent (`kill_switch_proof` GREEN), consumer matrix and fail-closed probes are green, and the evidence bundle now records `control_plane` provenance (#746, `d9d7e1a`). The RiskGuard baseline remains **`BLOCKED_BY_MISSING_RISKGUARD_BASELINE_CONTRACT`** (no versioned contract exists; nothing invented) — `AUTONOMOUS_DRY_RUN` stays unactivated.
+> **Canonical current-state snapshot.** Reconciled on 2026-09-18 for the **RiskGuard baseline contract v1** (#749, merged via PR #750 `586f13c`): the versioned contract (`riskguard_baseline_contract_v1`, schema `riskguard_state` v1, initializer `riskguard_init_baseline.py`, canonical repo-relative path `orchestrator/state/riskguard/riskguard_state.json`, spec `docs/specs/riskguard-baseline-contract-v1.md`) now exists in the repository and the consumer path is repo-relative. The **runtime RiskGuard state file on Agent0 is still absent** (initializer not executed — runtime step outside this A1 reconciliation); the apply gate remains fail-closed `BLOCKED` and `AUTONOMOUS_DRY_RUN` stays unactivated.
+>
+> **Previous:** 2026-09-18 (safety control plane) — kill-switch reconciliation to `NORMAL` (proof GREEN, immutable backup), consumer matrix 18/18, fail-closed probes 9/9, bundle control-plane provenance #746 `d9d7e1a`; RiskGuard baseline was `BLOCKED_BY_MISSING_RISKGUARD_BASELINE_CONTRACT` (resolved by #749/PR #750 `586f13c`, see current snapshot).
 >
 > **Previous:** 2026-09-18 — Agent0 dry-run commissioning (#730): the default fleet (3 trading bots + webserver + Rainbow) runs healthy on Agent0 at `a02d91e`; SI-v2 processes real bot telemetry (`ping_ok=3/3`, all mutation counters 0) with the historical trade evidence window restored (292 closed trades); exactly one scheduler executed a real automatic cycle. `AUTONOMOUS_DRY_RUN` stays **not activated** (host kill-switch artifact + missing RiskGuard state — see the Agent0 section). Live trading remains excluded.
 >
@@ -108,7 +110,9 @@ Full evidence: [`docs/reports/agent0-dryrun-operational-2026-09-18.md`](../repor
    pending). Bot paths read the container file (`NORMAL`) and fail closed on
    `HALT_NEW` (verified in the bot image).
 2. RiskGuard state is absent on Agent0; the apply gate fails closed to
-   `BLOCKED`, which is correct behaviour but not a PASS.
+   `BLOCKED`, which is correct behaviour but not a PASS. The versioned baseline
+   contract v1 now exists (#749 / PR #750 `586f13c`); the missing state-file
+   initializer run on Agent0 is the remaining runtime gate.
 
 Neither gate blocks the read-only operation above; both must be green before
 any autonomous apply step.
@@ -120,7 +124,8 @@ KILL_SWITCH_HOST=NORMAL (reconciled 2026-09-18T14:28:54Z from proven test artifa
 KILL_SWITCH_PROJECTION=NORMAL
 KILL_SWITCH_CONSISTENT=true (kill_switch_proof GREEN)
 RECONCILIATION_BACKUP=immutable (chattr +i, /opt/data/backups/kill-switch-reconciliation/)
-RISKGUARD_BASELINE=BLOCKED_BY_MISSING_RISKGUARD_BASELINE_CONTRACT
+RISKGUARD_BASELINE_CONTRACT=ACTIVE (v1.0.0, #749, merged via PR #750 `586f13c`)
+RISKGUARD_STATE_AGENT0=MISSING (initializer not run; apply gate remains fail-closed)
 CONSUMER_MATRIX=18 checks green (16 PASS + 2 expected fail-closed)
 FAIL_CLOSED_PROBES=9/9 PASS (production state unchanged)
 BUNDLE_CONTROL_PLANE_PROVENANCE=active (#746, d9d7e1a)
@@ -130,10 +135,13 @@ LIVE_TRADING=NO
 
 Full evidence: [`docs/reports/agent0-safety-control-plane-2026-09-18.md`](../reports/agent0-safety-control-plane-2026-09-18.md).
 
-The RiskGuard blocker is actionable: the report specifies the exact missing
-contract (state schema, canonical Agent0 path, bot scoping incl. `freqai-rebel`
-disabled, dry-run baseline semantics, init procedure, tests). Until it exists,
-the apply gate remains correctly fail-closed.
+The RiskGuard baseline contract v1 is now **active in the repository** (schema, canonical
+repo-relative Agent0 path, bot scoping incl. `freqai-rebel` disabled, dry-run baseline
+semantics, init procedure, tests — `docs/specs/riskguard-baseline-contract-v1.md`, PR #750
+`586f13c`). The remaining runtime gate is executing the initializer
+(`self_improvement_v2/scripts/riskguard_init_baseline.py`) on Agent0 so a concrete
+`riskguard_state.json` exists and the apply gate can PASS; until then the gate stays
+correctly fail-closed and `AUTONOMOUS_DRY_RUN` remains unactivated.
 
 ## Standing Owner Authorization (2026-08-04)
 
