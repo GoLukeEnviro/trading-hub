@@ -28,6 +28,7 @@ Safety guarantees (enforced at code level):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -1200,6 +1201,114 @@ def _run_walk_forward_materializer(
 # ------------------------------------------------------------------
 
 
+# ------------------------------------------------------------------
+# Safety control plane provenance (read-only)
+# ------------------------------------------------------------------
+
+_CONTROL_PLANE_KILL_SWITCH_PATH: Path = _REPO_ROOT / "var" / "kill_switch.json"
+_CONTROL_PLANE_KILL_SWITCH_PROJECTION_PATH: Path = (
+    _REPO_ROOT / "freqtrade" / "shared" / "kill_switch.json"
+)
+
+
+def _read_kill_switch_provenance(path: Path) -> dict[str, object]:
+    """Read-only provenance for one kill-switch state file.
+
+    Missing or unreadable state is reported fail-closed: ``readable=False``
+    and ``mode=None`` — it is never interpreted as NORMAL.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return {
+            "path": str(path),
+            "readable": False,
+            "mode": None,
+            "active": True,
+            "fail_closed": True,
+            "sha256": None,
+        }
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        data = None
+    mode: str | None = None
+    if isinstance(data, dict):
+        mode_raw = data.get("safety_state", data.get("mode"))
+        if isinstance(mode_raw, str) and mode_raw:
+            mode = mode_raw
+    if mode is None:
+        return {
+            "path": str(path),
+            "readable": False,
+            "mode": None,
+            "active": True,
+            "fail_closed": True,
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+    return {
+        "path": str(path),
+        "readable": True,
+        "mode": mode,
+        "active": mode != "NORMAL",
+        "fail_closed": False,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }
+
+
+def _collect_control_plane_provenance(
+    *,
+    kill_switch_path: Path | None = None,
+    kill_switch_projection_path: Path | None = None,
+    riskguard_state_path: Path | None = None,
+) -> dict[str, object]:
+    """Collect read-only safety control-plane provenance for the cycle bundle.
+
+    Records the canonical host kill-switch state, its container projection and
+    the RiskGuard state exactly as observed — without mutating anything.
+    Missing or unreadable state is reported fail-closed.
+    """
+    # Local import: keeps the apply-actuator out of this module's
+    # top-level import graph and pins the RiskGuard state path to its
+    # single source of truth in the actuator.
+    from si_v2.apply_actuator.controlled_apply_actuator import (
+        RISKGUARD_STATE_PATH,
+        read_riskguard_status,
+    )
+
+    host_path = kill_switch_path or _CONTROL_PLANE_KILL_SWITCH_PATH
+    projection_path = kill_switch_projection_path or _CONTROL_PLANE_KILL_SWITCH_PROJECTION_PATH
+    rg_path = riskguard_state_path or RISKGUARD_STATE_PATH
+
+    host = _read_kill_switch_provenance(host_path)
+    projection = _read_kill_switch_provenance(projection_path)
+
+    rg_gate = read_riskguard_status(rg_path)
+    rg_provenance: dict[str, object] = {
+        "path": str(rg_path),
+        "present": rg_path.exists(),
+        "status": "PASS" if rg_gate.passed else "FAIL",
+        "fail_closed": not rg_gate.passed,
+        "reason": rg_gate.reason,
+        "sha256": None,
+    }
+    try:
+        rg_provenance["sha256"] = hashlib.sha256(rg_path.read_bytes()).hexdigest()
+    except OSError:
+        rg_provenance["sha256"] = None
+
+    return {
+        "kill_switch": {
+            "host": host,
+            "container_projection": projection,
+            "consistent": bool(host.get("readable"))
+            and bool(projection.get("readable"))
+            and host.get("mode") == projection.get("mode"),
+        },
+        "riskguard": rg_provenance,
+    }
+
+
 def run_active_cycle() -> int:
     """Execute one active multi-bot cycle.
 
@@ -1908,6 +2017,7 @@ def run_active_cycle() -> int:
         },
         "profitability_gate": _gate_dict,
         "proposal_candidates": [candidate.to_json_safe() for candidate in proposal_candidates],
+        "control_plane": _collect_control_plane_provenance(),
     }
 
     bundle_path = _EVIDENCE_DIR / f"active_cycle_{cycle_id}.json"
