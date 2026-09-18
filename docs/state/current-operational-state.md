@@ -1,27 +1,6 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-09-18 for the **RiskGuard baseline contract v1** (#749, merged via PR #750 `586f13c`): the versioned contract (`riskguard_baseline_contract_v1`, schema `riskguard_state` v1, initializer `riskguard_init_baseline.py`, canonical repo-relative path `orchestrator/state/riskguard/riskguard_state.json`, spec `docs/specs/riskguard-baseline-contract-v1.md`) now exists in the repository and the consumer path is repo-relative. The **runtime RiskGuard state file on Agent0 is still absent** (initializer not executed — runtime step outside this A1 reconciliation); the apply gate remains fail-closed `BLOCKED` and `AUTONOMOUS_DRY_RUN` stays unactivated.
->
-> **Previous:** 2026-09-18 (safety control plane) — kill-switch reconciliation to `NORMAL` (proof GREEN, immutable backup), consumer matrix 18/18, fail-closed probes 9/9, bundle control-plane provenance #746 `d9d7e1a`; RiskGuard baseline was `BLOCKED_BY_MISSING_RISKGUARD_BASELINE_CONTRACT` (resolved by #749/PR #750 `586f13c`, see current snapshot).
->
-> **Previous:** 2026-09-18 — Agent0 dry-run commissioning (#730): the default fleet (3 trading bots + webserver + Rainbow) runs healthy on Agent0 at `a02d91e`; SI-v2 processes real bot telemetry (`ping_ok=3/3`, all mutation counters 0) with the historical trade evidence window restored (292 closed trades); exactly one scheduler executed a real automatic cycle. `AUTONOMOUS_DRY_RUN` stays **not activated** (host kill-switch artifact + missing RiskGuard state — see the Agent0 section). Live trading remains excluded.
->
-> **Previous:** 2026-09-09 — Reconciled for #728 A2 contract hardening: the repository now has a stopped-state, integrity-bound pre-upgrade snapshot contract, rollback-complete pre-cutover manifest, one canonical R5A provenance gate, and automatic state+release rollback transaction. Production remains Hermes 0.19.0 and `CUTOVER_EXECUTED=NO`; #728 performs no runtime cutover. After exact-head CI/merge reconciliation the status is `READY_FOR_A2_CUTOVER_REVALIDATION`. Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
->
-> **Previous:** 2026-08-18 after #702 reopen (auto-close corrected: PR #714 delivered only the A1 Precondition-Teil; the A2 selection backtest did **not** run) and #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A` 2026-08-18 comment 5329852393; contract v2 frozen via PR #712 `fa3fb89` merged). Phase C exit gate `edge_decision_recorded` is **not yet satisfied** (Gate-0 `EXTEND`; #702 A2 execution is **operator-gated** — see the #702 section). Phase C remains `in_progress`.
->
-> **Previous:** 2026-08-18 after #708 completion (Luke decision `FUNDING_CONTRACT_V2_OPTION=A`; contract v2 frozen via PR #712 `fa3fb89` merged; state reconciled via PR #713) and #705 completion (canonical funding data contract, PR #706 `96f1865`).
->
-> **Previous:** 2026-08-13 after #708 reopen (auto-close corrected; options analysis PR #709 `90fb9d9` merged; **Luke decision pending**) and #705 completion (canonical funding data contract, PR #706 `96f1865`).
->
-> **Previous:** 2026-08-02 after #674 completion. A0 preflight GREEN (PR #682, `72421de`). Backtest Contract GREEN (PR #687, `79ad6dd`). Issue backlog reconciled: 27→5 open issues. #674 complete (PR #690, `ea04ca2`).
->
-> **Previous:** C5.2 A0-FAIL documented (#664, `01b7fb2`). C5.3 corrective
-> fully strips FreqForge_Gate0_Core_v1 of all dependencies, introduces manifest
-> v3, entry-time regime classification, and selection-only evaluation with
-> holdout isolation. 67 tests pass. C5.4 corrective merged (`8b4dace`):
-> SelectionOutcomeV1.PASS_CANDIDATE fix, pair normalization, unified guardrails.
-> Variante-B complete (PRs #677, #678, #679). Tracker #423 closed.
+> **Canonical current-state snapshot.** Reconciled on 2026-09-18 (latest tick) for the **Agent0 AUTONOMOUS_DRY_RUN activation**: the four-gate master GOAL completed — RiskGuard baseline contract v1 merged (#749/#750 `586f13c`), RiskGuard runtime state initialized and verified (`167a7e14…`, consumer PASS in the cycle bundle), the controlled chain proof returned `NO_QUALIFIED_PROPOSAL` (no canary candidate existed; the chain correctly applied nothing), and the mode was activated (#752/#753 `095464d`) with one cycle scheduler plus one watchdog, proven by real automatic runs (`20260918T161738Z` cycle, 18:23 watchdog). Runtime execution of a prepared canary change remains deliberately unwired (next step). Live trading: no.
 
 ## Hermes runtime — native migration (2026-07-25)
 
@@ -82,6 +61,36 @@ roadmap_observed_at_utc: 2026-08-04T14:00:00Z
 `config/governance/program-contract.yaml`; `roadmap_revision_observed` is
 informational only and does not force a state-file touch on ordinary roadmap
 status changes.
+
+## Agent0 — AUTONOMOUS_DRY_RUN activated (2026-09-18)
+
+```text
+STATUS=SAFETY_CONTROL_PLANE_GREEN_NO_QUALIFIED_PROPOSAL
+RISKGUARD_CONTRACT=ACTIVE (586f13c, v1.0.0)
+RISKGUARD_STATE=PASS (167a7e14…, ACTIVE, DRY_RUN_ONLY, live_authority=false)
+KILL_SWITCH=NORMAL (host+projection consistent, sha 47c7d924…)
+FLEET=5/5 healthy; SI-v2 cycle GREEN (ping 3/3, mutations 0)
+SCHEDULER=exactly one cycle job (5f26075be2cb) + exactly one watchdog (fdae4e06667c)
+AUTONOMOUS_DRY_RUN=ACTIVATED (marker APPROVED_AUTONOMOUS_DRY_RUN_AGENT0)
+APPLY_CHAIN=canary-first, fail-closed, prepare-only (runtime_execution_wired=false)
+CANARY_APPLY=none (NO_QUALIFIED_PROPOSAL — no canary candidate existed)
+FIRST_AUTOMATIC_RUN=cycle 20260918T161738Z (18:17:36 local) + watchdog 18:23:36 local
+RESTORE_PROOF=PASS; RECOVERY_FAIL_CLOSED=PASS; APPLY_OVERLAP_LOCK=PASS
+LIVE_TRADING=NO
+```
+
+Full evidence: [`docs/reports/agent0-autonomous-dryrun-2026-09-18.md`](../reports/agent0-autonomous-dryrun-2026-09-18.md).
+
+**Gate chain:** Gate 1 (#749 / PR #750 `586f13c`), Gate 2 (runtime init,
+`SAFETY_CONTROL_PLANE_GREEN`), Gate 3 (`NO_QUALIFIED_PROPOSAL` — chain proof
+with the real candidate), Gate 4 (#752 / PR #753 `095464d`, activation with
+marker + evaluator + runbook section 10).
+
+**One next step:** wire the runtime execution stage of the apply chain (R7A
+topology end-to-end verification, compose overlay consumption, ceremony
+`execute_runtime=True`, `RuntimeEffectProof`), then a future qualified canary
+candidate applies and measures automatically. Until then the chain prepares
+and records, and applies nothing.
 
 ## Agent0 — dry-run fleet operational (2026-09-18)
 
