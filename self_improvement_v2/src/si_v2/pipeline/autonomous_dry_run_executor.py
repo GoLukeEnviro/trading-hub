@@ -33,6 +33,7 @@ from si_v2.apply_actuator.controlled_apply_actuator import (
     create_rollback_plan,
     write_overlay_file,
 )
+from si_v2.apply_actuator.runtime_binding import CONTROLLED_APPLY_STATE_DIR
 from si_v2.pipeline.candidate_to_apply import (
     CandidateApplyInput,
     CandidatePipelineResult,
@@ -43,9 +44,8 @@ from si_v2.pipeline.candidate_to_apply import (
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_STATE_DIR: Final[Path] = Path(
-    "/opt/data/profiles/orchestrator/state/si_v2_controlled_apply"
-)
+DEFAULT_STATE_DIR: Final[Path] = CONTROLLED_APPLY_STATE_DIR
+"""Default state directory (repo-relative, portable; see runtime_binding)."""
 
 # ---------------------------------------------------------------------------
 # Data models

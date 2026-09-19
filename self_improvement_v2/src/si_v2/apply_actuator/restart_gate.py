@@ -110,6 +110,12 @@ class CanaryRecreatePlan:
     dry_run_confirmed: bool
     restart_gate_ready: bool
     blocked_reasons: tuple[str, ...]
+    host_overlay_path: str = ""
+    """Host-side overlay path (bind-mounted into the container by the override)."""
+    expected_parameter: str = ""
+    """Parameter the restart is expected to apply."""
+    expected_value: object = None
+    """Value the restart is expected to apply."""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -125,6 +131,9 @@ class CanaryRecreatePlan:
             "dry_run_confirmed": self.dry_run_confirmed,
             "restart_gate_ready": self.restart_gate_ready,
             "blocked_reasons": list(self.blocked_reasons),
+            "host_overlay_path": self.host_overlay_path,
+            "expected_parameter": self.expected_parameter,
+            "expected_value": self.expected_value,
         }
 
 
@@ -186,9 +195,21 @@ def _g6_forbidden_keys_absent(
 def _g7_proposed_command_contains_base_config(
     plan: RestartPlan,
 ) -> tuple[bool, str]:
-    cmd = " ".join(plan.proposed_command)
-    if "--config /freqtrade/user_data/config.json" in cmd:
-        return True, ""
+    """Return whether the proposed command contains a base ``--config``.
+
+    The base config is any ``--config`` value that is not an overlay file
+    (``overlay_`` marker). On the R7A topology the container base config is
+    ``/freqtrade/user_data/config.example.json`` (the host file is
+    bind-mounted to that name); the historical tree used ``config.json``.
+    The gate stays semantic so both topologies pass without weakening the
+    overlay checks (G8).
+    """
+    cmd = list(plan.proposed_command)
+    for index, arg in enumerate(cmd):
+        if arg == "--config" and index + 1 < len(cmd):
+            value = cmd[index + 1]
+            if "overlay_" not in value:
+                return True, ""
     return False, "G7: proposed_command missing base config path"
 
 
@@ -371,6 +392,9 @@ def build_canary_recreate_plan(
         dry_run_confirmed=gate_result.gate_results.get("dry_run_true", False),
         restart_gate_ready=gate_result.ready,
         blocked_reasons=gate_result.blocked_reasons,
+        host_overlay_path=restart_plan.host_overlay_path,
+        expected_parameter=restart_plan.expected_parameter,
+        expected_value=restart_plan.expected_value,
     )
 
 
@@ -414,6 +438,12 @@ def render_compose_override_preview(
     lines.append("    command:")
     for arg in recreate_plan.proposed_command:
         lines.append(f"      - {arg}")
+    if recreate_plan.host_overlay_path:
+        lines.append("    volumes:")
+        lines.append(
+            f"      - {recreate_plan.host_overlay_path}:"
+            f"{recreate_plan.overlay_container_path}:ro"
+        )
     lines.append("")
     up_flag = "up"
     lines.append("# Rollback: remove this override file and run a compose recreate:")

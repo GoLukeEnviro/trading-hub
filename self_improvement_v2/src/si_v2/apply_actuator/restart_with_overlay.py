@@ -46,6 +46,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final, Literal
 
+from si_v2.apply_actuator.runtime_binding import (
+    CONTAINER_CONFIG_PATH,
+    container_name_for_service,
+)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -53,11 +58,11 @@ from typing import Final, Literal
 CANARY_BOT_ID: Final[str] = "freqtrade-freqforge-canary"
 """The only bot ID accepted by the restart planner."""
 
-CANARY_CONTAINER_NAME: Final[str] = "trading-freqtrade-freqforge-canary-1"
-"""Expected Docker container name for the canary."""
-
 CANARY_SERVICE_NAME: Final[str] = "freqtrade-freqforge-canary"
 """Docker Compose service name for the canary."""
+
+CANARY_CONTAINER_NAME: Final[str] = container_name_for_service(CANARY_SERVICE_NAME)
+"""Container name for the canary (compose-project-derived, R7A default)."""
 
 CANARY_USER_DATA_RELATIVE: Final[Path] = Path("freqforge-canary/user_data")
 """Relative path from repo root to the canary's user_data directory."""
@@ -489,7 +494,7 @@ def plan_canary_restart_with_overlay(
         host_overlay_path=str(overlay_path.resolve()),
         container_overlay_path=container_overlay_path,
         overlay_sha256=overlay_sha256,
-        base_config_container_path="/freqtrade/user_data/config.json",
+        base_config_container_path=CONTAINER_CONFIG_PATH,
         current_command=cmd,
         proposed_command=proposed_command,
         rollback_command=rollback_command,

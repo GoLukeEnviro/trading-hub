@@ -14,8 +14,10 @@ import pytest
 from si_v2.apply_actuator.restart_gate import (
     CANARY_BOT_ID,
     CANARY_COMPOSE_SERVICE,
+    CANARY_CONTAINER_NAME,
     CanaryRecreatePlan,
 )
+from si_v2.apply_actuator.runtime_binding import ComposeContext
 from si_v2.apply_actuator.runtime_executor import (
     L3_RESTART_TOKEN_VALUE,
     RuntimeExecutionResult,
@@ -41,7 +43,7 @@ def valid_recreate_plan() -> CanaryRecreatePlan:
     return CanaryRecreatePlan(
         plan_id="restart_overlay_max_open_trades_3_to_2",
         bot_id=CANARY_BOT_ID,
-        container_name="trading-freqtrade-freqforge-canary-1",
+        container_name=CANARY_CONTAINER_NAME,
         service_name=CANARY_BOT_ID,
         compose_service=CANARY_COMPOSE_SERVICE,
         proposed_command=(
@@ -66,6 +68,18 @@ def valid_recreate_plan() -> CanaryRecreatePlan:
 @pytest.fixture
 def compose_output_dir(tmp_path: Path) -> Path:
     return tmp_path / "compose_overrides"
+
+
+@pytest.fixture
+def compose_context(tmp_path: Path) -> ComposeContext:
+    """A test compose context with existing env/compose files."""
+    (tmp_path / ".env").write_text("# test env\n")
+    (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+    return ComposeContext(
+        repo_root=str(tmp_path),
+        compose_file=str(tmp_path / "docker-compose.yml"),
+        env_file=str(tmp_path / ".env"),
+    )
 
 
 def _mock_subprocess_success(*args: object, **kwargs: object) -> subprocess.CompletedProcess:
@@ -227,21 +241,27 @@ class TestWriteComposeOverrideFile:
 
 
 class TestRunComposeRecreate:
-    def test_mock_success(self, tmp_path: Path) -> None:
+    def test_mock_success(
+        self, tmp_path: Path, compose_context: ComposeContext,
+    ) -> None:
         override = tmp_path / "test-override.yml"
         override.write_text("")
         ok, _ = _run_compose_recreate(
             override, "freqtrade-freqforge-canary",
+            compose_context=compose_context,
             docker_available=True,
             _subprocess_run=_mock_subprocess_success,
         )
         assert ok
 
-    def test_mock_failure(self, tmp_path: Path) -> None:
+    def test_mock_failure(
+        self, tmp_path: Path, compose_context: ComposeContext,
+    ) -> None:
         override = tmp_path / "test-override.yml"
         override.write_text("")
         ok, detail = _run_compose_recreate(
             override, "freqtrade-freqforge-canary",
+            compose_context=compose_context,
             docker_available=True,
             _subprocess_run=_mock_subprocess_failure,
         )
@@ -257,6 +277,63 @@ class TestRunComposeRecreate:
         )
         assert not ok
         assert "docker_unavailable" in detail
+
+    def test_missing_context_fails_closed(self, tmp_path: Path) -> None:
+        override = tmp_path / "test-override.yml"
+        override.write_text("")
+        ok, detail = _run_compose_recreate(
+            override, "freqtrade-freqforge-canary",
+            docker_available=True,
+            _subprocess_run=_mock_subprocess_success,
+        )
+        assert not ok
+        assert "compose_context_required" in detail
+
+    def test_missing_env_file_fails_closed(self, tmp_path: Path) -> None:
+        override = tmp_path / "test-override.yml"
+        override.write_text("")
+        ctx = ComposeContext(
+            repo_root=str(tmp_path),
+            compose_file=str(tmp_path / "docker-compose.yml"),
+            env_file=str(tmp_path / "missing.env"),
+        )
+        ok, detail = _run_compose_recreate(
+            override, "freqtrade-freqforge-canary",
+            compose_context=ctx,
+            docker_available=True,
+            _subprocess_run=_mock_subprocess_success,
+        )
+        assert not ok
+        assert "compose_env_file_missing" in detail
+
+    def test_compose_command_shape(
+        self, tmp_path: Path, compose_context: ComposeContext,
+    ) -> None:
+        """The compose command must carry project, env-file, both -f files."""
+        override = tmp_path / "test-override.yml"
+        override.write_text("")
+        calls: list[tuple[list[str], dict]] = []
+
+        def _capture(cmd: list[str], *args: object, **kwargs: object):
+            calls.append((cmd, dict(kwargs)))
+            return subprocess.CompletedProcess(cmd, 0, "ok", "")
+
+        ok, _ = _run_compose_recreate(
+            override, "freqtrade-freqforge-canary",
+            compose_context=compose_context,
+            docker_available=True,
+            _subprocess_run=_capture,
+        )
+        assert ok
+        cmd, kwargs = calls[0]
+        assert cmd[:2] == ["docker", "compose"]
+        assert "-p" in cmd and "hermestrader-dryrun" in cmd
+        assert "--env-file" in cmd and compose_context.env_file in cmd
+        assert cmd.count("-f") == 2
+        assert compose_context.compose_file in cmd
+        assert str(override.resolve()) in cmd
+        assert cmd[-3:] == ["up", "-d", "freqtrade-freqforge-canary"]
+        assert kwargs.get("cwd") == compose_context.repo_root
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +396,8 @@ class TestRunCanaryRestart:
             execute=True,
             token=L3_RESTART_TOKEN_VALUE,
             compose_output_dir=compose_output_dir,
-            docker_available=True,
+            compose_context=ComposeContext.default(),
+            docker_available=False,
         )
 
         # Since we can't mock subprocess.run inside the module easily from here

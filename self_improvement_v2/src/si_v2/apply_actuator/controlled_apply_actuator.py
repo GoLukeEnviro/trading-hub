@@ -55,6 +55,7 @@ from si_v2.apply_actuator.models import (
 )
 from si_v2.apply_actuator.policy import compute_apply_result
 from si_v2.apply_actuator.runtime_binding import (
+    CONTROLLED_APPLY_STATE_DIR,
     build_host_overlay_path,
     resolve_binding,
 )
@@ -68,9 +69,8 @@ CANARY_BOT_ID: Final[str] = "freqtrade-freqforge-canary"
 COOLDOWN_DAYS: Final[int] = 7
 L3_TOKEN_ENV: Final[str] = "APPROVE_SI_V2_RUNTIME_ACTUATOR_ACTIVATION"
 L3_TOKEN_VALUE: Final[str] = "APPROVE"
-DEFAULT_STATE_DIR: Final[Path] = Path(
-    "/opt/data/profiles/orchestrator/state/si_v2_controlled_apply"
-)
+DEFAULT_STATE_DIR: Final[Path] = CONTROLLED_APPLY_STATE_DIR
+"""Default state directory (repo-relative, portable; see runtime_binding)."""
 # Canonical RiskGuard state path (riskguard-baseline-contract-v1).
 # Resolved relative to the repository root so the same contract holds on the
 # historical HermesTrader tree and on Agent0 (where that absolute path does
