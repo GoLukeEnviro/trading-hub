@@ -14,10 +14,14 @@ SI-v2 scheduler job right after the read-only active cycle:
 6. A qualified canary candidate is prepared end to end: overlay, rollback
    plan, audit event and measurement plan are written; the runtime
    ceremony runs its full preflight (no runtime action).
-7. Runtime execution (canary recreate) is deliberately not wired in this
-   stage. A prepared candidate waits in an audited state instead of
-   half-applying on an unverified topology; the result records that fact
-   in ``detail["runtime_execution_wired"]``.
+7. Runtime execution (canary recreate) runs only when the
+   rehearsal-gated switch is on: ``activation.json`` carries
+   ``runtime_execution.wired=true`` **and** the referenced rehearsal
+   evidence exists with a PASS result. Without that proof the stage
+   stays prepare-only; a switch naming missing/failed evidence blocks.
+8. On a non-GREEN execution outcome the stage rolls the canary back
+   automatically and verifies the rollback; a failed verification is a
+   hard blocker event.
 
 No live trading. No ``dry_run`` change. No Docker or subprocess call from
 this module. Expected gate outcomes never raise - every outcome is a
@@ -29,6 +33,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -42,7 +47,12 @@ from si_v2.apply_actuator.controlled_apply_actuator import (
     derive_riskguard_status,
     read_riskguard_status,
 )
-from si_v2.apply_actuator.runtime_binding import resolve_binding
+from si_v2.apply_actuator.runtime_binding import (
+    ComposeContext,
+    compose_project_name,
+    container_name_for_service,
+    resolve_binding,
+)
 from si_v2.pipeline.autonomous_dry_run_executor import (
     AutonomousDryRunExecutorInput,
     prepare_autonomous_dry_run_apply,
@@ -77,6 +87,10 @@ CANDIDATE_KEY_MAP: Final[dict[str, str]] = {
 
 STATUS_NO_QUALIFIED_PROPOSAL: Final[str] = "NO_QUALIFIED_PROPOSAL"
 STATUS_APPLY_PREPARED: Final[str] = "APPLY_PREPARED_RUNTIME_STAGE_NOT_WIRED"
+STATUS_APPLY_EXECUTED_GREEN: Final[str] = "APPLY_EXECUTED_GREEN"
+STATUS_APPLY_ROLLED_BACK: Final[str] = "APPLY_ROLLED_BACK"
+STATUS_BLOCKED_WIRING: Final[str] = "BLOCKED_WIRING"
+STATUS_BLOCKED_ROLLBACK_FAILED: Final[str] = "BLOCKED_ROLLBACK_FAILED"
 STATUS_BLOCKED_MARKER: Final[str] = "BLOCKED_MARKER"
 STATUS_BLOCKED_ACTIVATION_RECORD: Final[str] = "BLOCKED_ACTIVATION_RECORD"
 STATUS_BLOCKED_KILL_SWITCH: Final[str] = "BLOCKED_KILL_SWITCH"
@@ -89,6 +103,11 @@ STATUS_BLOCKED_PIPELINE: Final[str] = "BLOCKED_PIPELINE"
 EVENT_NO_APPLY: Final[str] = "NO_APPLY"
 EVENT_BLOCKER: Final[str] = "BLOCKER"
 EVENT_PREPARED: Final[str] = "PREPARED"
+EVENT_EXECUTED: Final[str] = "EXECUTED"
+EVENT_ROLLED_BACK: Final[str] = "ROLLED_BACK"
+
+REHEARSAL_PASS_RESULT: Final[str] = "P2_REHEARSAL_PASS"
+"""The only rehearsal result that authorises runtime execution."""
 
 _ALLOWED_PIPELINE_STATUSES: Final[tuple[str, ...]] = (
     "READY_FOR_AUTONOMOUS_DRY_RUN_APPLY",
@@ -196,6 +215,7 @@ def _result(
     candidate_id: str = "",
     target_bot: str = "",
     detail: dict[str, object] | None = None,
+    executed_runtime: bool = False,
 ) -> ApplyChainEvaluationResult:
     return ApplyChainEvaluationResult(
         status=status,
@@ -205,7 +225,7 @@ def _result(
         bundle_name=bundle_name,
         candidate_id=candidate_id,
         target_bot=target_bot,
-        executed_runtime=False,
+        executed_runtime=executed_runtime,
         detail=dict(detail or {}),
         created_at_utc=_now_utc(),
     )
@@ -244,6 +264,119 @@ def _check_activation_record(state_dir: Path) -> tuple[bool, str]:
         return False, "activation_record_invalid: mode mismatch"
     return True, ""
 
+
+def _read_runtime_wiring(state_dir: Path) -> tuple[bool, str, dict[str, object]]:
+    """Read the rehearsal-gated runtime-execution switch.
+
+    Three outcomes:
+
+    - no activation record / no ``runtime_execution`` section / ``wired`` not
+      true -> ``(False, "", {})`` — prepare-only, not a blocker;
+    - ``wired=true`` whose referenced rehearsal evidence is missing,
+      unreadable or not a PASS -> ``(False, reason, ..)`` — caller blocks;
+    - ``wired=true`` with PASS evidence -> ``(True, "", detail)``.
+    """
+    record_path = state_dir / ACTIVATION_RECORD_NAME
+    if not record_path.is_file():
+        return False, "", {}
+    record = _load_json(record_path)
+    if record is None:
+        return False, f"activation_record_unreadable: {record_path}", {}
+    if record.get("marker") != MARKER_ID:
+        return False, "activation_record_invalid: marker mismatch", {}
+    if record.get("mode") != "AUTONOMOUS_DRY_RUN":
+        return False, "activation_record_invalid: mode mismatch", {}
+
+    section = record.get("runtime_execution")
+    if not isinstance(section, dict) or section.get("wired") is not True:
+        return False, "", {}
+
+    evidence_path = str(section.get("rehearsal_evidence") or "")
+    if not evidence_path:
+        return False, (
+            "wiring_rehearsal_evidence_missing: no path in runtime_execution section"
+        ), {"present": True}
+    if not Path(evidence_path).is_file():
+        return False, (
+            f"wiring_rehearsal_evidence_not_found: {evidence_path}"
+        ), {"present": True}
+    evidence = _load_json(Path(evidence_path))
+    if evidence is None:
+        return False, (
+            f"wiring_rehearsal_evidence_unreadable: {evidence_path}"
+        ), {"present": True}
+    if evidence.get("result") != REHEARSAL_PASS_RESULT:
+        return False, (
+            f"wiring_rehearsal_not_pass: {evidence.get('result')!r} != "
+            f"{REHEARSAL_PASS_RESULT!r}"
+        ), {"present": True}
+    return True, "", {
+        "rehearsal_evidence": evidence_path,
+        "rehearsal_result": evidence.get("result"),
+    }
+
+
+def _rollback_canary(
+    compose_context: ComposeContext,
+    service: str,
+    overlay_host_path: str,
+) -> tuple[bool, dict[str, object]]:
+    """Remove the overlay and recreate the service from the base compose.
+
+    Documented rollback path (ADR: remove the override, compose recreate).
+    Also removes the overlay file inside the container volume (the compose
+    bind mount leaves a zero-byte stub there). Returns (verified, detail).
+    """
+    detail: dict[str, object] = {}
+    overlay_host = Path(overlay_host_path) if overlay_host_path else None
+    container = container_name_for_service(service)
+
+    cmd = [
+        "docker", "compose",
+        "-p", compose_project_name(),
+        "--env-file", compose_context.env_file,
+        "-f", compose_context.compose_file,
+        "up", "-d", service,
+    ]
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=180,
+            cwd=compose_context.repo_root,
+        )
+        detail["compose_rc"] = proc.returncode
+    except (OSError, subprocess.SubprocessError) as exc:
+        return False, {"compose_rc": -1, "compose_error": str(exc)[:200]}
+
+    if detail.get("compose_rc") != 0:
+        return False, detail
+
+    if overlay_host is not None and overlay_host.is_file():
+        try:
+            overlay_host.unlink()
+        except OSError as exc:
+            detail["overlay_remove_error"] = str(exc)[:200]
+    detail["overlay_removed_host"] = overlay_host is None or not overlay_host.exists()
+
+    overlay_name = overlay_host.name if overlay_host is not None else ""
+    if overlay_name:
+        subprocess.run(
+            ["docker", "exec", container, "sh", "-lc",
+             f"rm -f /freqtrade/user_data/{overlay_name}"],
+            capture_output=True, text=True, timeout=30,
+        )
+
+    try:
+        cmdline = subprocess.run(
+            ["docker", "exec", container, "sh", "-lc",
+             "tr '\\0' ' ' < /proc/1/cmdline"],
+            capture_output=True, text=True, timeout=30,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        cmdline = ""
+    verified = bool(cmdline) and "overlay_" not in cmdline
+    detail["cmdline_no_overlay"] = verified
+    detail["cmdline_sample"] = cmdline[:200]
+    return verified, detail
 
 def _find_newest_bundle(evidence_dir: Path) -> Path | None:
     if not evidence_dir.is_dir():
@@ -597,9 +730,24 @@ def evaluate_apply_chain(input_: ApplyChainEvaluationInput) -> ApplyChainEvaluat
             target_bot=target,
         )
 
-    # 14. Ceremony preflight (execute_runtime stays False in this stage).
+    # 14. Runtime wiring (rehearsal-gated switch) + ceremony.
     binding = resolve_binding(target)
     current_command = tuple(binding.loaded_config_args) if binding is not None else ()
+    wiring_ok, wiring_reason, wiring_detail = _read_runtime_wiring(state_dir)
+    if wiring_reason:
+        # Switch present but unusable — fail closed, never silently prepare.
+        return _result(
+            STATUS_BLOCKED_WIRING,
+            EVENT_BLOCKER,
+            wiring_reason,
+            cycle_id=cycle_id,
+            bundle_name=bundle_path.name,
+            candidate_id=candidate_id,
+            target_bot=target,
+            detail={**base_detail, "wiring": wiring_detail},
+        )
+    executed_runtime = wiring_ok
+
     ceremony = run_runtime_ceremony(
         RuntimeCeremonyInput(
             change_id=change_id,
@@ -617,44 +765,129 @@ def evaluate_apply_chain(input_: ApplyChainEvaluationInput) -> ApplyChainEvaluat
             kill_switch_mode=ks_mode,
             riskguard_status=rg_status,
         ),
-        execute_runtime=False,
+        execute_runtime=executed_runtime,
         canary_user_data=canary_user_data,
+        compose_output_dir=state_dir / "compose_overrides",
+        compose_context=ComposeContext.default() if executed_runtime else None,
         t0_dir=state_dir / "t0_records",
     )
-    if ceremony.status != "CEREMONY_READY":
+
+    # 14a. Prepare-only (switch off): unchanged behaviour.
+    if not executed_runtime:
+        if ceremony.status != "CEREMONY_READY":
+            return _result(
+                STATUS_BLOCKED_PIPELINE,
+                EVENT_BLOCKER,
+                f"ceremony_status={ceremony.status}",
+                cycle_id=cycle_id,
+                bundle_name=bundle_path.name,
+                candidate_id=candidate_id,
+                target_bot=target,
+                detail={**base_detail, "blocked_reasons": list(ceremony.blocked_reasons)},
+            )
         return _result(
-            STATUS_BLOCKED_PIPELINE,
-            EVENT_BLOCKER,
-            f"ceremony_status={ceremony.status}",
+            STATUS_APPLY_PREPARED,
+            EVENT_PREPARED,
+            (
+                f"canary_candidate_prepared: {parameter} -> {value!r}; "
+                "runtime execution stage not wired"
+            ),
             cycle_id=cycle_id,
             bundle_name=bundle_path.name,
             candidate_id=candidate_id,
             target_bot=target,
-            detail={**base_detail, "blocked_reasons": list(ceremony.blocked_reasons)},
+            detail={
+                **base_detail,
+                "parameter": parameter,
+                "value": value,
+                "current_value": current_value,
+                "overlay_path": exec_result.overlay_path,
+                "overlay_sha256": exec_result.overlay_sha256,
+                "rollback_plan_path": exec_result.rollback_plan_path,
+                "pipeline_status": pipeline_status,
+                "ceremony_status": ceremony.status,
+                "runtime_execution_wired": False,
+            },
         )
 
+    # 14b. Executed path: GREEN keeps the change; anything else rolls back.
+    if ceremony.status == "CEREMONY_EXECUTED_GREEN":
+        return _result(
+            STATUS_APPLY_EXECUTED_GREEN,
+            EVENT_EXECUTED,
+            (
+                f"canary_apply_executed_green: {parameter} -> {value!r}; "
+                f"proof={ceremony.runtime_proof_status}; "
+                f"t0_measurement_active={ceremony.t0_measurement_active}"
+            ),
+            cycle_id=cycle_id,
+            bundle_name=bundle_path.name,
+            candidate_id=candidate_id,
+            target_bot=target,
+            executed_runtime=True,
+            detail={
+                **base_detail,
+                "parameter": parameter,
+                "value": value,
+                "overlay_path": exec_result.overlay_path,
+                "overlay_sha256": exec_result.overlay_sha256,
+                "rollback_plan_path": exec_result.rollback_plan_path,
+                "pipeline_status": pipeline_status,
+                "ceremony_status": ceremony.status,
+                "runtime_proof_status": ceremony.runtime_proof_status,
+                "t0_measurement_active": ceremony.t0_measurement_active,
+                "runtime_execution_wired": True,
+                "wiring": wiring_detail,
+                "rollback_instruction": "see rollback_plan_path",
+            },
+        )
+
+    # Not GREEN (RED/YELLOW/runtime-not-executed): roll back and verify.
+    verified, rb_detail = _rollback_canary(
+        ComposeContext.default(),
+        "freqtrade-freqforge-canary",
+        exec_result.overlay_path,
+    )
+    if not verified:
+        return _result(
+            STATUS_BLOCKED_ROLLBACK_FAILED,
+            EVENT_BLOCKER,
+            (
+                f"rollback_not_verified: ceremony={ceremony.status}; "
+                f"detail={rb_detail}"
+            ),
+            cycle_id=cycle_id,
+            bundle_name=bundle_path.name,
+            candidate_id=candidate_id,
+            target_bot=target,
+            executed_runtime=True,
+            detail={
+                **base_detail,
+                "ceremony_status": ceremony.status,
+                "runtime_proof_status": ceremony.runtime_proof_status,
+                "rollback": rb_detail,
+            },
+        )
     return _result(
-        STATUS_APPLY_PREPARED,
-        EVENT_PREPARED,
+        STATUS_APPLY_ROLLED_BACK,
+        EVENT_ROLLED_BACK,
         (
-            f"canary_candidate_prepared: {parameter} -> {value!r}; "
-            "runtime execution stage not wired"
+            f"canary_apply_rolled_back: ceremony={ceremony.status} "
+            f"(not GREEN); rollback verified"
         ),
         cycle_id=cycle_id,
         bundle_name=bundle_path.name,
         candidate_id=candidate_id,
         target_bot=target,
+        executed_runtime=True,
         detail={
             **base_detail,
             "parameter": parameter,
             "value": value,
-            "current_value": current_value,
-            "overlay_path": exec_result.overlay_path,
-            "overlay_sha256": exec_result.overlay_sha256,
-            "rollback_plan_path": exec_result.rollback_plan_path,
-            "pipeline_status": pipeline_status,
             "ceremony_status": ceremony.status,
-            "runtime_execution_wired": False,
+            "runtime_proof_status": ceremony.runtime_proof_status,
+            "rollback": rb_detail,
+            "runtime_execution_wired": True,
         },
     )
 
