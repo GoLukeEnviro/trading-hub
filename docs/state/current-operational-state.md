@@ -1,6 +1,6 @@
 # Trading Hub — Current Operational State
 
-> **Canonical current-state snapshot.** Reconciled on 2026-09-18 (latest tick) for the **Agent0 AUTONOMOUS_DRY_RUN activation**: the four-gate master GOAL completed — RiskGuard baseline contract v1 merged (#749/#750 `586f13c`), RiskGuard runtime state initialized and verified (`167a7e14…`, consumer PASS in the cycle bundle), the controlled chain proof returned `NO_QUALIFIED_PROPOSAL` (no canary candidate existed; the chain correctly applied nothing), and the mode was activated (#752/#753 `095464d`) with one cycle scheduler plus one watchdog, proven by real automatic runs (`20260918T161738Z` cycle, 18:23 watchdog). Runtime execution of a prepared canary change remains deliberately unwired (next step). Live trading: no.
+> **Canonical current-state snapshot.** Reconciled on 2026-09-19 for the **Agent0 runtime-execution wiring**: the apply chain is executable end to end — host paths and container names resolve for the R7A topology (#757/#758 `1af7873`), the executor proof draft carries the expected values (#759/#760 `fe59125`), the E2E rehearsal passed (`P2_REHEARSAL_PASS`: overlay recreate → proof GREEN → rollback 4/4), and the rehearsal-gated switch is on (#762/#763 `07a5265`). The evaluator still reports `NO_QUALIFIED_PROPOSAL` (`executed_runtime=false`) because the evidence contains no canary candidate — the canary-only first stage working as designed. All mutation counters 0; live trading: no.
 
 ## Hermes runtime — native migration (2026-07-25)
 
@@ -61,6 +61,31 @@ roadmap_observed_at_utc: 2026-08-04T14:00:00Z
 `config/governance/program-contract.yaml`; `roadmap_revision_observed` is
 informational only and does not force a state-file touch on ordinary roadmap
 status changes.
+
+## Agent0 — runtime-execution wiring (2026-09-19)
+
+```text
+STATUS=RUNTIME_EXECUTION_WIRED
+P1_PORTABILITY=#757/#758 (1af7873) repo-relative bindings, compose-derived names, overlay mount, ComposeContext
+P2A_PROOF_DRAFT=#759/#760 (fe59125) executor draft carries expected values
+P2_REHEARSAL=P2_REHEARSAL_PASS (rehearsal-20260919T081735Z) — overlay recreate GREEN proof + rollback 4/4
+P3_WIRING=#762/#763 (07a5265) rehearsal-gated switch + automatic rollback + blocker on unverified rollback
+WIRING_STATE=activation.json runtime_execution.wired=true (bound to the PASS evidence)
+EVALUATOR=NO_QUALIFIED_PROPOSAL (no canary candidate exists; executed_runtime=false)
+ROLLBACK_PATH=proven (P2) — base compose recreate + overlay removal + cmdline verification
+FIRST_AUTOMATIC_RUN_WITH_WIRING=cycle 20260919T082956Z GREEN (apply=NO_QUALIFIED_PROPOSAL)
+MUTATIONS=0/0/0/0/0; LIVE_TRADING=NO
+NEXT=first qualified canary candidate from live cycle evidence; the wired path applies it automatically
+```
+
+Full evidence: [`docs/reports/agent0-runtime-wiring-2026-09-19.md`](../reports/agent0-runtime-wiring-2026-09-19.md).
+
+The apply chain is now executable end to end and remains canary-first,
+policy-gated, snapshot-backed, rollback-capable and measurement-bound. The
+switch cannot be flipped without a passing rehearsal proof on disk; an
+unverified rollback is a hard blocker event. No real (non-no-op) apply has
+occurred because the evidence contains no canary candidate — the safety
+boundary working as designed.
 
 ## Agent0 — AUTONOMOUS_DRY_RUN activated (2026-09-18)
 
