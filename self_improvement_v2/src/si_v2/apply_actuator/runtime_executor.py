@@ -338,24 +338,43 @@ def _run_runtime_effect_proof(
             errors=(f"no_runtime_binding_for: {recreate_plan.bot_id}",),
         )
 
+    if (
+        not recreate_plan.expected_parameter
+        or recreate_plan.expected_value is None
+    ):
+        # Fail closed: without an expected parameter/value the runtime
+        # effect cannot be verified, so the recreate must not be
+        # classified as effective.
+        return RuntimeEffectProof(
+            proposal_id=recreate_plan.plan_id,
+            bot_id=recreate_plan.bot_id,
+            proof_status=ProofStatus.RED,
+            errors=("no_expected_parameter_value: plan carries no expected "
+                    "parameter/value to verify",),
+        )
+
+    expected_values = {
+        recreate_plan.expected_parameter: recreate_plan.expected_value,
+    }
     proposal = OverlayProposal(
         proposal_id=recreate_plan.plan_id,
         bot_id=recreate_plan.bot_id,
         policy="safe_parameter_overlay_only",
-        parameters=(
-            {recreate_plan.expected_parameter: recreate_plan.expected_value}
-            if recreate_plan.expected_parameter
-            and recreate_plan.expected_value is not None
-            else {}
-        ),
+        parameters=dict(expected_values),
     )
 
-    # Build a draft with the expected overlay path
+    # Build the draft carrying the expected post-apply values. The
+    # composite proof (verify_runtime_effect) checks every proposal
+    # parameter against draft.after_values — an empty draft would make
+    # Step 3 fail with draft_missing_key and force RED regardless of
+    # the actual runtime effect.
     from si_v2.apply_actuator.models import EffectiveConfigDraft
 
     draft = EffectiveConfigDraft(
         proposal_id=recreate_plan.plan_id,
         bot_id=recreate_plan.bot_id,
+        changed_keys=(recreate_plan.expected_parameter,),
+        after_values=dict(expected_values),
         dry_run_preserved=True,
         live_trading_forbidden=True,
         multi_config_compatible=True,

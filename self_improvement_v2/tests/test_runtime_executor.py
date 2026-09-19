@@ -28,6 +28,7 @@ from si_v2.apply_actuator.runtime_executor import (
     _check_rollback_ready,
     _check_token,
     _run_compose_recreate,
+    _run_runtime_effect_proof,
     run_canary_restart_with_overlay,
     write_compose_override_file,
 )
@@ -502,3 +503,65 @@ class TestSerialization:
         json.dumps(d)  # verify JSON serialisable
         assert d["status"] == "EXECUTED_GREEN"
         assert d["plan_id"] == "test_plan"
+
+
+
+# ---------------------------------------------------------------------------
+# Runtime effect proof draft (P2a regression)
+# ---------------------------------------------------------------------------
+
+
+class TestRuntimeEffectProofDraft:
+    def test_missing_expected_value_fails_closed_red(
+        self, valid_recreate_plan: CanaryRecreatePlan,
+    ) -> None:
+        """A plan without expected parameter/value must yield RED, not GREEN."""
+        from dataclasses import replace
+
+        from si_v2.apply_actuator.models import ProofStatus
+
+        plan = replace(
+            valid_recreate_plan, expected_parameter="", expected_value=None
+        )
+        proof = _run_runtime_effect_proof(plan, docker_available=True)
+        assert proof.proof_status == ProofStatus.RED
+        assert any(
+            "no_expected_parameter_value" in e for e in proof.errors
+        ), proof.errors
+
+    def test_draft_carries_expected_values(
+        self, valid_recreate_plan: CanaryRecreatePlan,
+        monkeypatch,
+    ) -> None:
+        """The draft handed to the proof must carry after_values for the key."""
+        from dataclasses import replace
+
+        import si_v2.apply_actuator.runtime_executor as re_mod
+        from si_v2.apply_actuator.models import (
+            ProofStatus,
+            RuntimeEffectProof,
+        )
+
+        captured: dict = {}
+
+        def _fake_verify(proposal, binding, draft, **kwargs):
+            captured["proposal_params"] = dict(proposal.parameters)
+            captured["after_values"] = dict(draft.after_values)
+            captured["changed_keys"] = tuple(draft.changed_keys)
+            return RuntimeEffectProof(
+                proposal_id=proposal.proposal_id,
+                bot_id=proposal.bot_id,
+                proof_status=ProofStatus.GREEN,
+            )
+
+        monkeypatch.setattr(re_mod, "verify_runtime_effect", _fake_verify)
+        plan = replace(
+            valid_recreate_plan,
+            expected_parameter="max_open_trades",
+            expected_value=2,
+        )
+        proof = _run_runtime_effect_proof(plan, docker_available=True)
+        assert proof.proof_status == ProofStatus.GREEN
+        assert captured["proposal_params"] == {"max_open_trades": 2}
+        assert captured["after_values"] == {"max_open_trades": 2}
+        assert captured["changed_keys"] == ("max_open_trades",)
