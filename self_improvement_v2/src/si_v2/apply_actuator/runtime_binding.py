@@ -5,113 +5,179 @@ The previous overlay was placed in the wrong host path because the agent
 assumed `freqtrade/bots/freqforge/user_data/` was the active mount,
 when the actual Docker bind mount is `freqforge/user_data/`.
 
-All bindings are machine-verified (Docker inspect, read-only container exec).
-No assumptions — every path is backed by evidence.
+Resolution rules (R7A topology, portable across hosts)
+------------------------------------------------------
+- Host paths are **repo-relative**: resolved from this file's location
+  (``<repo>/self_improvement_v2/src/si_v2/apply_actuator/runtime_binding.py``),
+  so the same binding table holds on any checkout (the historical
+  HermesTrader tree and Agent0 alike). The historical absolute root
+  (``/home/hermes/projects/trading``) is intentionally not used.
+- Container names derive from the compose project
+  (``SI_V2_COMPOSE_PROJECT``, default ``hermestrader-dryrun``) as
+  ``<project>-<service>-1``.
+- The R7A compose mounts the host config file at
+  ``/freqtrade/user_data/config.example.json`` inside the container (the
+  host file is bind-mounted to that name, keeping its secrets out of Git).
+  The overlay is added as a *second* ``--config`` at runtime, and the
+  compose override bind-mounts it into the same user_data directory.
 
 Multi-config note (added 2026-06-23, candidate 65502d13):
-`loaded_config_args` is the BASE process command line. When an overlay
-candidate is activated, the runtime layer adds a second `--config
-/freqtrade/user_data/overlay_<id>.json` argument. The proof layer
-(`si_v2.apply_actuator.proof.verify_runtime_effect`) derives the expected
-overlay path dynamically from the proposal_id and checks the actual
-process command line — see `check_process_uses_overlay`. We do not
-hardcode the activated overlay path into the static binding.
+`loaded_config_args` is the BASE compose command line (starting with
+``trade``). When an overlay candidate is activated, the runtime layer adds a
+second ``--config /freqtrade/user_data/overlay_<id>.json`` argument. The
+proof layer (`si_v2.apply_actuator.proof.verify_runtime_effect`) derives the
+expected overlay path dynamically from the proposal_id and checks the actual
+process command line — see `check_process_uses_overlay`. We do not hardcode
+the activated overlay path into the static binding.
 """
 
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 from si_v2.apply_actuator.models import BotRuntimeBinding
 
 # ---------------------------------------------------------------------------
-# Fleet binding table — verified via Docker inspect on 2026-06-23
+# Topology (repo-relative host paths + compose project)
 # ---------------------------------------------------------------------------
 
+REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[4]
+"""Repository root (checkout) this binding table lives in."""
+
+DEFAULT_COMPOSE_PROJECT: Final[str] = "hermestrader-dryrun"
+"""Canonical compose project of the R7A dry-run stack."""
+
+CONTAINER_CONFIG_PATH: Final[str] = "/freqtrade/user_data/config.example.json"
+"""Container-side base config path (R7A mount target of the host config)."""
+
+CONTROLLED_APPLY_STATE_DIR: Final[Path] = Path(
+    os.environ.get("SI_V2_CONTROLLED_APPLY_STATE_DIR")
+    or (REPO_ROOT / "var" / "si-v2-controlled-apply")
+)
+"""Default state directory for controlled-apply artifacts.
+
+Repo-relative (``var/`` is gitignored) so it is writable on any checkout —
+the historical ``/opt/data/profiles/orchestrator/...`` default was only
+valid inside the HermesTrader orchestrator profile and is not portable.
+Production callers may override via ``SI_V2_CONTROLLED_APPLY_STATE_DIR`` or
+by passing explicit ``state_dir`` arguments.
+"""
+
+
+def compose_project_name() -> str:
+    """Return the compose project name (env read at call time)."""
+    return os.environ.get("SI_V2_COMPOSE_PROJECT", DEFAULT_COMPOSE_PROJECT)
+
+
+def container_name_for_service(service: str) -> str:
+    """Return the compose container name for a service (env read at call time)."""
+    return f"{compose_project_name()}-{service}-1"
+
+
+# ---------------------------------------------------------------------------
+# Compose invocation context
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ComposeContext:
+    """Explicit compose invocation context for a real recreate (R7A stack).
+
+    A real ``docker compose`` recreate must never be invoked against an
+    implicitly guessed compose file: the executor fails closed when no
+    context is supplied, and real callers pass
+    :meth:`ComposeContext.default` (or an explicit context).
+    """
+
+    repo_root: str
+    """Working directory for the compose invocation (interpolation base)."""
+
+    compose_file: str
+    """Absolute path to the main compose file."""
+
+    env_file: str
+    """Absolute path to the env-file used for interpolation (may not exist)."""
+
+    @classmethod
+    def default(cls) -> ComposeContext:
+        """Return the context for the current checkout (R7A compose)."""
+        return cls(
+            repo_root=str(REPO_ROOT),
+            compose_file=str(REPO_ROOT / "docker-compose.hermestrader-dryrun.yml"),
+            env_file=str(REPO_ROOT / ".env"),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Fleet binding table — repo-relative, compose-derived (R7A topology)
+# ---------------------------------------------------------------------------
+
+
+def _binding(
+    bot_id: str,
+    service: str,
+    user_data_relative: str,
+    strategy: str,
+) -> BotRuntimeBinding:
+    host_user_data = REPO_ROOT / user_data_relative
+    container_name = container_name_for_service(service)
+    return BotRuntimeBinding(
+        bot_id=bot_id,
+        container_name=container_name,
+        host_user_data_path=str(host_user_data),
+        container_user_data_path="/freqtrade/user_data",
+        host_config_path=str(host_user_data / "config.json"),
+        container_config_path=CONTAINER_CONFIG_PATH,
+        # `loaded_config_args` reflects the BASE compose command (compose-style,
+        # starting with `trade`). When a multi-config overlay is activated, the
+        # running process includes an additional
+        # `--config /freqtrade/user_data/overlay_<id>.json` argument. The proof
+        # layer derives the expected overlay path dynamically from the
+        # proposal_id at verification time — we do NOT hardcode the activated
+        # overlay into the static binding here.
+        loaded_config_args=(
+            "trade",
+            "--config",
+            CONTAINER_CONFIG_PATH,
+            "--strategy",
+            strategy,
+        ),
+        runtime_visible=True,
+        confidence="VERIFIED",
+        evidence_source=f"compose-live:{container_name}",
+    )
+
+
 BOT_RUNTIME_BINDINGS: Final[dict[str, BotRuntimeBinding]] = {
-    "freqtrade-freqforge": BotRuntimeBinding(
-        bot_id="freqtrade-freqforge",
-        container_name="trading-freqtrade-freqforge-1",
-        host_user_data_path="/home/hermes/projects/trading/freqforge/user_data",
-        container_user_data_path="/freqtrade/user_data",
-        host_config_path="/home/hermes/projects/trading/freqforge/user_data/config.json",
-        container_config_path="/freqtrade/user_data/config.json",
-        # Note: `loaded_config_args` reflects the BASE process args only.
-        # When a multi-config overlay is activated, the running process
-        # will include an additional `--config /freqtrade/user_data/overlay_<id>.json`
-        # argument. The proof layer derives the expected overlay path
-        # dynamically from the proposal_id at verification time — we do NOT
-        # hardcode the activated overlay into the static binding here,
-        # because that would make the binding stale the next time a
-        # different candidate is activated.
-        loaded_config_args=(
-            "--config",
-            "/freqtrade/user_data/config.json",
-            "--strategy",
-            "FreqForge_Override",
-        ),
-        runtime_visible=True,
-        confidence="VERIFIED",
-        evidence_source="container-trading-freqtrade-freqforge-1-inspect.txt",
+    "freqtrade-freqforge": _binding(
+        "freqtrade-freqforge",
+        "freqtrade-freqforge",
+        "freqforge/user_data",
+        "FreqForge_Override",
     ),
-    "freqtrade-freqforge-canary": BotRuntimeBinding(
-        bot_id="freqtrade-freqforge-canary",
-        container_name="trading-freqtrade-freqforge-canary-1",
-        host_user_data_path="/home/hermes/projects/trading/freqforge-canary/user_data",
-        container_user_data_path="/freqtrade/user_data",
-        host_config_path="/home/hermes/projects/trading/freqforge-canary/user_data/config.json",
-        container_config_path="/freqtrade/user_data/config.json",
-        loaded_config_args=(
-            "--config",
-            "/freqtrade/user_data/config.json",
-            "--strategy",
-            "FreqForge_Override",
-        ),
-        runtime_visible=True,
-        confidence="VERIFIED",
-        evidence_source="container-trading-freqtrade-freqforge-canary-1-inspect.txt",
+    "freqtrade-freqforge-canary": _binding(
+        "freqtrade-freqforge-canary",
+        "freqtrade-freqforge-canary",
+        "freqforge-canary/user_data",
+        "FreqForge_Override",
     ),
-    "freqtrade-regime-hybrid": BotRuntimeBinding(
-        bot_id="freqtrade-regime-hybrid",
-        container_name="trading-freqtrade-regime-hybrid-1",
-        host_user_data_path="/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data",
-        container_user_data_path="/freqtrade/user_data",
-        host_config_path="/home/hermes/projects/trading/freqtrade/bots/regime-hybrid/user_data/config.json",
-        container_config_path="/freqtrade/user_data/config.json",
-        loaded_config_args=(
-            "--config",
-            "/freqtrade/user_data/config.json",
-            "--strategy",
-            "RegimeSwitchingHybrid_v7_v04_Integration",
-        ),
-        runtime_visible=True,
-        confidence="VERIFIED",
-        evidence_source="container-trading-freqtrade-regime-hybrid-1-inspect.txt",
+    "freqtrade-regime-hybrid": _binding(
+        "freqtrade-regime-hybrid",
+        "freqtrade-regime-hybrid",
+        "freqtrade/bots/regime-hybrid/user_data",
+        "RegimeSwitchingHybrid_v7_v04_Integration",
     ),
-    "freqai-rebel": BotRuntimeBinding(
-        bot_id="freqai-rebel",
-        container_name="trading-freqai-rebel-1",
-        host_user_data_path="/home/hermes/projects/trading/freqtrade/bots/freqai-rebel/user_data",
-        container_user_data_path="/freqtrade/user_data",
-        host_config_path="/home/hermes/projects/trading/freqtrade/bots/freqai-rebel/user_data/config.json",
-        container_config_path="/freqtrade/user_data/config.json",
-        loaded_config_args=(
-            "--config",
-            "/freqtrade/user_data/config.json",
-            "--strategy",
-            "RebelLiquidation",
-        ),
-        runtime_visible=True,
-        confidence="VERIFIED",
-        evidence_source="container-trading-freqai-rebel-1-inspect.txt",
+    "freqai-rebel": _binding(
+        "freqai-rebel",
+        "freqai-rebel",
+        "freqtrade/bots/freqai-rebel/user_data",
+        "RebelLiquidation",
     ),
 }
-"""Machine-verified runtime bindings for all 4 SI-v2 bots.
-
-Evidence: Docker inspect mounts, container exec read-only checks.
-Verified: 2026-06-23 via fleet runtime binding audit (Issue #332).
-"""
+"""Runtime bindings for all 4 SI-v2 bots (repo-relative + compose-derived)."""
 
 
 # ---------------------------------------------------------------------------

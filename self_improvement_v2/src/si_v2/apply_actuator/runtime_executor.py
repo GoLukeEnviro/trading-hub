@@ -47,6 +47,11 @@ from si_v2.apply_actuator.restart_gate import (
     CanaryRecreatePlan,
     render_compose_override_preview,
 )
+from si_v2.apply_actuator.runtime_binding import (
+    CONTROLLED_APPLY_STATE_DIR,
+    ComposeContext,
+    compose_project_name,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -58,10 +63,10 @@ L3_RESTART_TOKEN_ENV: Final[str] = "APPROVE_SI_V2_CANARY_RESTART_WITH_OVERLAY"
 L3_RESTART_TOKEN_VALUE: Final[str] = "APPROVE"
 """Expected value of the L3 restart activation token."""
 
-DEFAULT_COMPOSE_OUTPUT_DIR: Final[Path] = Path(
-    "/opt/data/profiles/orchestrator/state/si_v2_controlled_apply/compose_overrides"
+DEFAULT_COMPOSE_OUTPUT_DIR: Final[Path] = (
+    CONTROLLED_APPLY_STATE_DIR / "compose_overrides"
 )
-"""Default output directory for compose override files (orchestrator-side, not docker-compose.yml dir)."""
+"""Default output directory for compose override files (repo-relative, portable)."""
 
 COMPOSE_FILENAME_PREFIX: Final[str] = "si-v2-canary-override-"
 """Prefix for generated compose override filenames."""
@@ -73,6 +78,7 @@ EXECUTION_GATE_NAMES: tuple[str, ...] = (
     "restart_gate_ready",
     "proposed_command_valid",
     "rollback_command_ready",
+    "compose_context_provided",
 )
 """Execution-level gates (in addition to restart gates)."""
 
@@ -202,6 +208,24 @@ def _check_rollback_ready(recreate_plan: CanaryRecreatePlan) -> tuple[bool, str]
     return False, "rollback_not_ready: rollback_command is empty"
 
 
+def _check_compose_context(
+    compose_context: ComposeContext | None,
+) -> tuple[bool, str]:
+    """Block a runtime recreate without an explicit compose context.
+
+    The executor must never guess the compose file, project name or env
+    file: a wrong guess would recreate the canary against the wrong
+    configuration. Callers pass ``ComposeContext.default()`` (current
+    checkout) or an explicit context.
+    """
+    if compose_context is None:
+        return False, (
+            "compose_context_required: refusing implicit compose invocation. "
+            "Pass ComposeContext.default() or an explicit context."
+        )
+    return True, ""
+
+
 # ---------------------------------------------------------------------------
 # Compose execution (mockable)
 # ---------------------------------------------------------------------------
@@ -211,6 +235,7 @@ def _run_compose_recreate(
     compose_override_path: Path,
     service_name: str,
     *,
+    compose_context: ComposeContext | None = None,
     docker_available: bool = True,
     _subprocess_run=None,
 ) -> tuple[bool, str]:
@@ -232,14 +257,21 @@ def _run_compose_recreate(
 
     if not docker_available:
         return False, "docker_unavailable"
-
-    compose_dir = compose_override_path.parent
-    override_name = compose_override_path.name
+    if compose_context is None:
+        return False, (
+            "compose_context_required: refusing implicit compose invocation"
+        )
+    if not Path(compose_context.env_file).is_file():
+        return False, f"compose_env_file_missing: {compose_context.env_file}"
+    if not Path(compose_context.compose_file).is_file():
+        return False, f"compose_file_missing: {compose_context.compose_file}"
 
     cmd = [
         "docker", "compose",
-        "-f", "docker-compose.yml",
-        "-f", override_name,
+        "-p", compose_project_name(),
+        "--env-file", compose_context.env_file,
+        "-f", compose_context.compose_file,
+        "-f", str(compose_override_path.resolve()),
         "up",
         "-d",
         service_name,
@@ -251,7 +283,7 @@ def _run_compose_recreate(
             capture_output=True,
             text=True,
             timeout=120,
-            cwd=str(compose_dir),
+            cwd=compose_context.repo_root,
         )
         if result.returncode == 0:
             return True, f"compose_recreate_ok: {result.stdout or 'no output'}"
@@ -310,7 +342,12 @@ def _run_runtime_effect_proof(
         proposal_id=recreate_plan.plan_id,
         bot_id=recreate_plan.bot_id,
         policy="safe_parameter_overlay_only",
-        parameters={},  # filled from expected_parameter in the plan context
+        parameters=(
+            {recreate_plan.expected_parameter: recreate_plan.expected_value}
+            if recreate_plan.expected_parameter
+            and recreate_plan.expected_value is not None
+            else {}
+        ),
     )
 
     # Build a draft with the expected overlay path
@@ -350,6 +387,7 @@ def run_canary_restart_with_overlay(
     compose_output_dir: Path | None = None,
     docker_available: bool = True,
     apply_mode: str = "MANUAL_L3",
+    compose_context: ComposeContext | None = None,
 ) -> RuntimeExecutionResult:
     """Run the controlled canary restart with overlay.
 
@@ -438,6 +476,11 @@ def run_canary_restart_with_overlay(
     if not ok6:
         blocked_reasons.append(reason6)
 
+    # -- Gate 7: compose context provided (no implicit guess) -------
+    ok7, reason7 = _check_compose_context(compose_context)
+    if not ok7:
+        blocked_reasons.append(reason7)
+
     # If any execution gate failed, block
     if blocked_reasons:
         return RuntimeExecutionResult(
@@ -463,6 +506,7 @@ def run_canary_restart_with_overlay(
     compose_ok, compose_detail = _run_compose_recreate(
         override_path,
         str(recreate_plan.compose_service),
+        compose_context=compose_context,
         docker_available=docker_available,
     )
     if not compose_ok:

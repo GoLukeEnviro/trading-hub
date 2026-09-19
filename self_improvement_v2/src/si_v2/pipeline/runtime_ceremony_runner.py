@@ -47,6 +47,10 @@ from si_v2.apply_actuator.restart_with_overlay import (
     RestartPlanResult,
     plan_canary_restart_with_overlay,
 )
+from si_v2.apply_actuator.runtime_binding import (
+    CONTROLLED_APPLY_STATE_DIR,
+    ComposeContext,
+)
 from si_v2.apply_actuator.runtime_executor import (
     CanaryRecreatePlan,
     RuntimeExecutionResult,
@@ -57,9 +61,8 @@ from si_v2.apply_actuator.runtime_executor import (
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_STATE_DIR: Final[Path] = Path(
-    "/opt/data/profiles/orchestrator/state/si_v2_controlled_apply"
-)
+DEFAULT_STATE_DIR: Final[Path] = CONTROLLED_APPLY_STATE_DIR
+"""Default state directory (repo-relative, portable; see runtime_binding)."""
 
 AUTONOMOUS_MODE: Final[str] = "AUTONOMOUS_DRY_RUN"
 MANUAL_MODE: Final[str] = "MANUAL_L3"
@@ -279,6 +282,7 @@ def run_runtime_ceremony(
     execute_runtime: bool = False,
     canary_user_data: Path | None = None,
     compose_output_dir: Path | None = None,
+    compose_context: ComposeContext | None = None,
     docker_available: bool = True,
     subprocess_runner: object | None = None,
     t0_dir: Path | None = None,
@@ -512,6 +516,7 @@ def run_runtime_ceremony(
         overlay_payload=overlay_payload,
         execute=True,
         compose_output_dir=compose_output_dir,
+        compose_context=compose_context,
         docker_available=docker_available,
         apply_mode=input_.apply_mode,
     )
