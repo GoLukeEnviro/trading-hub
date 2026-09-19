@@ -684,3 +684,63 @@ class TestRestartExecutionResult:
         assert d["reason"] == "test reason"
         assert d["plan_id"] == "test_plan"
         json.dumps(d)  # verify serialisable
+
+
+# ---------------------------------------------------------------------------
+# R7A topology tests (#757)
+# ---------------------------------------------------------------------------
+
+
+class TestR7ATopology:
+    def test_plan_derives_base_config_from_command(self, tmp_path: Path) -> None:
+        """R7A: the base config is whatever the process started with (example)."""
+        canary_ud = tmp_path / "freqforge-canary" / "user_data"
+        canary_ud.mkdir(parents=True)
+        overlay = canary_ud / "overlay_max_open_trades_3_to_2.json"
+        overlay.write_text(json.dumps({"max_open_trades": 2}))
+        r7a_command = (
+            "freqtrade", "trade",
+            "--config", "/freqtrade/user_data/config.example.json",
+            "--strategy", "FreqForge_Override",
+        )
+        result = plan_canary_restart_with_overlay(
+            bot_id=CANARY_BOT_ID,
+            overlay_path=overlay,
+            current_command=r7a_command,
+            expected_parameter="max_open_trades",
+            expected_value=2,
+            pre_apply_config={"max_open_trades": 3, "dry_run": True},
+            canary_user_data=canary_ud,
+        )
+        assert result.ready
+        assert result.plan is not None
+        assert result.plan.base_config_container_path == (
+            "/freqtrade/user_data/config.example.json"
+        )
+        assert "/freqtrade/user_data/config.example.json" in " ".join(
+            result.plan.proposed_command
+        )
+        assert result.plan.rollback_command == r7a_command
+
+    def test_plan_container_name_follows_canary_constant(self, tmp_path: Path) -> None:
+        """Default plan container name is the R7A compose-derived name."""
+        canary_ud = tmp_path / "freqforge-canary" / "user_data"
+        canary_ud.mkdir(parents=True)
+        overlay = canary_ud / "overlay_test.json"
+        overlay.write_text(json.dumps({"max_open_trades": 2}))
+        result = plan_canary_restart_with_overlay(
+            bot_id=CANARY_BOT_ID,
+            overlay_path=overlay,
+            current_command=(
+                "freqtrade", "trade",
+                "--config", "/freqtrade/user_data/config.example.json",
+            ),
+            expected_parameter="max_open_trades",
+            expected_value=2,
+            pre_apply_config={"dry_run": True},
+            canary_user_data=canary_ud,
+        )
+        assert result.ready
+        assert result.plan is not None
+        assert result.plan.container_name == CANARY_CONTAINER_NAME
+        assert result.plan.container_name.startswith("hermestrader-dryrun-")

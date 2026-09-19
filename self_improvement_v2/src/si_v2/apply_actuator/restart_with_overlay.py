@@ -46,6 +46,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final, Literal
 
+from si_v2.apply_actuator.models import BotRuntimeBinding
+from si_v2.apply_actuator.runtime_binding import (
+    build_container_name,
+    resolve_binding,
+)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -53,11 +59,15 @@ from typing import Final, Literal
 CANARY_BOT_ID: Final[str] = "freqtrade-freqforge-canary"
 """The only bot ID accepted by the restart planner."""
 
-CANARY_CONTAINER_NAME: Final[str] = "trading-freqtrade-freqforge-canary-1"
-"""Expected Docker container name for the canary."""
-
 CANARY_SERVICE_NAME: Final[str] = "freqtrade-freqforge-canary"
 """Docker Compose service name for the canary."""
+
+CANARY_CONTAINER_NAME: Final[str] = build_container_name(CANARY_SERVICE_NAME)
+"""Docker container name for the canary under the fleet compose project.
+
+Derived from the R7A compose convention ``<project>-<service>-1`` with the
+default project ``hermestrader-dryrun`` (override via ``SI_V2_COMPOSE_PROJECT``).
+"""
 
 CANARY_USER_DATA_RELATIVE: Final[Path] = Path("freqforge-canary/user_data")
 """Relative path from repo root to the canary's user_data directory."""
@@ -204,6 +214,29 @@ class RestartExecutionResult:
 def _parse_command(command: Sequence[str]) -> tuple[str, ...]:
     """Normalise a command sequence to a tuple of strings."""
     return tuple(str(arg) for arg in command)
+
+
+def _find_base_config_path(command: tuple[str, ...]) -> str:
+    """Return the first non-overlay ``--config`` value from a command tuple.
+
+    The semantically correct base config is the config the process actually
+    started with. On the R7A topology this is
+    ``/freqtrade/user_data/config.example.json``; on the historical
+    HermesTrader topology it is ``/freqtrade/user_data/config.json``.
+
+    Args:
+        command: Normalised command tuple (e.g. current_command).
+
+    Returns:
+        The base config path, or an empty string when no non-overlay
+        ``--config`` value is present.
+    """
+    for i, arg in enumerate(command):
+        if arg == "--config" and i + 1 < len(command):
+            value = command[i + 1]
+            if "overlay_" not in value:
+                return value
+    return ""
 
 
 def _find_config_args(command: tuple[str, ...]) -> list[int]:
@@ -430,15 +463,25 @@ def plan_canary_restart_with_overlay(
     proposed_command: tuple[str, ...] = ()
     rollback_command: tuple[str, ...] = ()
     container_overlay_path = ""
+    base_config_container_path = ""
 
     if cmd_ok:
-        # Derive container overlay path from the host path
-        # The container sees /freqtrade/user_data/<filename>
-        container_overlay_path = (
-            f"/freqtrade/user_data/{overlay_path.name}"
+        # Resolve the binding for the canary to derive container-side paths.
+        # The container-side overlay path is derived from the binding's
+        # container user_data path (R7A topology — not a hardcoded path).
+        binding: BotRuntimeBinding | None = resolve_binding(CANARY_BOT_ID)
+        container_ud = (
+            binding.container_user_data_path if binding is not None
+            else "/freqtrade/user_data"
         )
+        container_overlay_path = f"{container_ud}/{overlay_path.name}"
         proposed_command = _build_proposed_command(cmd, container_overlay_path)
         rollback_command = _build_rollback_command(cmd)
+
+        # Derive the semantically correct base config: it is whatever
+        # non-overlay value the process started with, e.g. the R7A
+        # config.example.json — G7 validates against this value.
+        base_config_container_path = _find_base_config_path(cmd)
 
         # Verify proposed command doesn't duplicate overlay
         overlay_count = sum(
@@ -489,7 +532,7 @@ def plan_canary_restart_with_overlay(
         host_overlay_path=str(overlay_path.resolve()),
         container_overlay_path=container_overlay_path,
         overlay_sha256=overlay_sha256,
-        base_config_container_path="/freqtrade/user_data/config.json",
+        base_config_container_path=base_config_container_path,
         current_command=cmd,
         proposed_command=proposed_command,
         rollback_command=rollback_command,

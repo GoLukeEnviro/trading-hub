@@ -258,6 +258,80 @@ class TestRunComposeRecreate:
         assert not ok
         assert "docker_unavailable" in detail
 
+    def test_r7a_context_passed_to_compose(self, tmp_path: Path) -> None:
+        """R7A shape: project name, canonical compose file and env-file are passed."""
+        override = tmp_path / "test-override.yml"
+        override.write_text("")
+        env_file = tmp_path / ".env"
+        env_file.write_text("FREQFORGE_CANARY_CONFIG_FILE=/tmp/config.json\n")
+        seen: dict[str, object] = {}
+
+        def _capture(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+            seen["cmd"] = cmd
+            seen["cwd"] = kwargs.get("cwd")
+            return subprocess.CompletedProcess(cmd, returncode=0, stdout="ok", stderr="")
+
+        from si_v2.apply_actuator.runtime_binding import resolve_si_v2_repo_root
+
+        ok, _detail = _run_compose_recreate(
+            override,
+            "freqtrade-freqforge-canary",
+            docker_available=True,
+            _subprocess_run=_capture,  # type: ignore[arg-type]
+            compose_file="docker-compose.hermestrader-dryrun.yml",
+            compose_project="hermestrader-dryrun",
+            env_file=str(env_file),
+        )
+        assert ok
+        cmd = seen["cmd"]
+        assert isinstance(cmd, list)
+        assert cmd[0:2] == ["docker", "compose"]
+        assert "-p" in cmd
+        assert cmd[cmd.index("-p") + 1] == "hermestrader-dryrun"
+        assert "-f" in cmd
+        joined = " ".join(cmd)
+        assert "docker-compose.hermestrader-dryrun.yml" in joined
+        assert "test-override.yml" in joined
+        assert "--env-file" in cmd
+        assert cmd[cmd.index("--env-file") + 1] == str(env_file)
+        assert "up" in cmd
+        assert "-d" in cmd
+        assert cmd[-1] == "freqtrade-freqforge-canary"
+        # Working directory is the SI-v2 repo root (relative bind mounts resolve).
+        repo_root = resolve_si_v2_repo_root()
+        assert seen["cwd"] == str(repo_root)
+        assert str(repo_root / "docker-compose.hermestrader-dryrun.yml") in joined
+
+    def test_historical_default_still_passes(self, tmp_path: Path) -> None:
+        """Backward compatibility: default compose_file = docker-compose.yml."""
+        override = tmp_path / "test-override.yml"
+        override.write_text("")
+        seen: dict[str, object] = {}
+
+        def _capture(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+            seen["cmd"] = cmd
+            seen["cwd"] = kwargs.get("cwd")
+            return subprocess.CompletedProcess(cmd, returncode=0, stdout="ok", stderr="")
+
+        ok, _ = _run_compose_recreate(
+            override,
+            "freqtrade-freqforge-canary",
+            docker_available=True,
+            _subprocess_run=_capture,  # type: ignore[arg-type]
+        )
+        assert ok
+        cmd = seen["cmd"]
+        assert isinstance(cmd, list)
+        joined = " ".join(cmd)
+        assert "docker-compose.yml" in joined
+        # No explicit project/env-file when not provided.
+        assert "-p" not in cmd
+        assert "--env-file" not in cmd
+        # Historical default still uses the SI-v2 repo root as cwd.
+        from si_v2.apply_actuator.runtime_binding import resolve_si_v2_repo_root
+
+        assert seen["cwd"] == str(resolve_si_v2_repo_root())
+
 
 # ---------------------------------------------------------------------------
 # Integration: run_canary_restart_with_overlay

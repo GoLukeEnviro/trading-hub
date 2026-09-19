@@ -7,12 +7,22 @@ is never returned as a valid runtime binding.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from si_v2.apply_actuator.runtime_binding import (
     BOT_RUNTIME_BINDINGS,
+    DEFAULT_SI_V2_COMPOSE_PROJECT,
+    DEFAULT_SI_V2_REPO_ROOT,
+    SI_V2_COMPOSE_PROJECT_ENV,
+    SI_V2_REPO_ROOT_ENV,
+    build_container_name,
+    build_fleet_bindings,
     build_host_overlay_path,
     resolve_binding,
+    resolve_compose_project,
+    resolve_si_v2_repo_root,
     validate_fleet_bindings,
 )
 
@@ -82,8 +92,8 @@ class TestResolveBinding:
             binding = resolve_binding(bot_id)
             assert binding is not None
             assert binding.host_config_path, f"{bot_id}: host_config_path empty"
-            assert "config.json" in binding.host_config_path, (
-                f"{bot_id}: host_config_path doesn't contain config.json"
+            assert "config.example.json" in binding.host_config_path, (
+                f"{bot_id}: host_config_path doesn't contain config.example.json"
             )
 
     def test_all_bindings_have_container_config_paths(self) -> None:
@@ -92,7 +102,7 @@ class TestResolveBinding:
             binding = resolve_binding(bot_id)
             assert binding is not None
             assert binding.container_config_path, f"{bot_id}: container_config_path empty"
-            assert binding.container_config_path == "/freqtrade/user_data/config.json"
+            assert binding.container_config_path == "/freqtrade/user_data/config.example.json"
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +120,62 @@ class TestValidateFleetBindings:
     def test_binding_count(self) -> None:
         """Must have exactly 4 bot bindings."""
         assert len(BOT_RUNTIME_BINDINGS) == 4
+
+
+# ---------------------------------------------------------------------------
+# Topology derivation tests — R7A / Agent0 portability (#757)
+# ---------------------------------------------------------------------------
+
+
+class TestTopologyDerivation:
+    def test_container_name_follows_compose_convention(self) -> None:
+        """Container name is <project>-<service>-1 (verified on live stack)."""
+        assert build_container_name(
+            "freqtrade-freqforge-canary", compose_project="hermestrader-dryrun"
+        ) == "hermestrader-dryrun-freqtrade-freqforge-canary-1"
+
+    def test_default_container_name_uses_canonical_project(self) -> None:
+        """Default compose project is hermestrader-dryrun (R7A canonical)."""
+        assert DEFAULT_SI_V2_COMPOSE_PROJECT == "hermestrader-dryrun"
+        assert build_container_name("freqtrade-freqforge-canary") == (
+            "hermestrader-dryrun-freqtrade-freqforge-canary-1"
+        )
+
+    def test_env_overrides_repo_root_and_compose_project(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Agent0 shape: SI_V2_REPO_ROOT + SI_V2_COMPOSE_PROJECT override the defaults."""
+        agent0_root = "/opt/data/projects/trading-hub"
+        monkeypatch.setenv(SI_V2_REPO_ROOT_ENV, agent0_root)
+        monkeypatch.setenv(SI_V2_COMPOSE_PROJECT_ENV, "agent0")
+        bindings = build_fleet_bindings(
+            repo_root=Path(agent0_root), compose_project="agent0"
+        )
+        canary = bindings["freqtrade-freqforge-canary"]
+        assert canary.container_name == "agent0-freqtrade-freqforge-canary-1"
+        assert canary.host_user_data_path == (
+            f"{agent0_root}/freqforge-canary/user_data"
+        )
+        assert canary.container_config_path == "/freqtrade/user_data/config.example.json"
+        assert canary.host_config_path == (
+            f"{agent0_root}/freqforge-canary/user_data/config.example.json"
+        )
+
+    def test_defaults_preserved_hermestrader(self) -> None:
+        """HermesTrader default repo root is the historical checkout."""
+        assert DEFAULT_SI_V2_REPO_ROOT == "/home/hermes/projects/trading"
+        assert resolve_si_v2_repo_root() == Path(DEFAULT_SI_V2_REPO_ROOT)
+        assert resolve_compose_project() == DEFAULT_SI_V2_COMPOSE_PROJECT
+
+    def test_default_bindings_have_example_base_config(self) -> None:
+        """R7A base config is config.example.json (the compose mount target)."""
+        for bot_id in KNOWN_BOTS:
+            binding = resolve_binding(bot_id)
+            assert binding is not None
+            assert binding.container_config_path == (
+                "/freqtrade/user_data/config.example.json"
+            )
+            assert binding.host_config_path.endswith("config.example.json")
 
 
 # ---------------------------------------------------------------------------

@@ -41,6 +41,7 @@ from si_v2.apply_actuator.restart_with_overlay import (
     CANARY_SERVICE_NAME,
     RESTART_FORBIDDEN_KEYS,
     RestartPlan,
+    _find_base_config_path,
 )
 
 # ---------------------------------------------------------------------------
@@ -110,6 +111,8 @@ class CanaryRecreatePlan:
     dry_run_confirmed: bool
     restart_gate_ready: bool
     blocked_reasons: tuple[str, ...]
+    host_overlay_path: str = ""
+    """Absolute host path of the overlay file (for the compose bind mount)."""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -125,6 +128,7 @@ class CanaryRecreatePlan:
             "dry_run_confirmed": self.dry_run_confirmed,
             "restart_gate_ready": self.restart_gate_ready,
             "blocked_reasons": list(self.blocked_reasons),
+            "host_overlay_path": self.host_overlay_path,
         }
 
 
@@ -186,10 +190,14 @@ def _g6_forbidden_keys_absent(
 def _g7_proposed_command_contains_base_config(
     plan: RestartPlan,
 ) -> tuple[bool, str]:
-    cmd = " ".join(plan.proposed_command)
-    if "--config /freqtrade/user_data/config.json" in cmd:
+    base = getattr(plan, "base_config_container_path", None) or _find_base_config_path(
+        plan.proposed_command
+    )
+    if not base:
+        return False, "G7: proposed_command missing base config path"
+    if f"--config {base}" in " ".join(plan.proposed_command):
         return True, ""
-    return False, "G7: proposed_command missing base config path"
+    return False, f"G7: proposed_command missing base config path ({base})"
 
 
 def _g8_proposed_command_contains_overlay_config(
@@ -371,6 +379,7 @@ def build_canary_recreate_plan(
         dry_run_confirmed=gate_result.gate_results.get("dry_run_true", False),
         restart_gate_ready=gate_result.ready,
         blocked_reasons=gate_result.blocked_reasons,
+        host_overlay_path=restart_plan.host_overlay_path,
     )
 
 
@@ -390,6 +399,9 @@ def render_compose_override_preview(
     - Does NOT execute any Docker/Compose command.
     - Contains ONLY the canary service (no other services affected).
     - Contains NO secrets (only the service command block).
+    - Includes the overlay bind mount (host path -> container path, read-only)
+      when the plan carries a host overlay path — required because the
+      R7A user_data directory is a named volume.
 
     Args:
         recreate_plan: A validated ``CanaryRecreatePlan``.
@@ -414,11 +426,20 @@ def render_compose_override_preview(
     lines.append("    command:")
     for arg in recreate_plan.proposed_command:
         lines.append(f"      - {arg}")
+    if recreate_plan.host_overlay_path:
+        # The user_data directory is a named volume on R7A — a compose-override
+        # bind mount is required so the running container can see the overlay.
+        lines.append("    volumes:")
+        lines.append(
+            f'      - "{recreate_plan.host_overlay_path}:'
+            f'{recreate_plan.overlay_container_path}:ro"'
+        )
     lines.append("")
     up_flag = "up"
     lines.append("# Rollback: remove this override file and run a compose recreate:")
     lines.append(
-        f"#   docker compose -f docker-compose.yml {up_flag} -d "
+        f"#   docker compose -p hermestrader-dryrun "
+        f"-f docker-compose.hermestrader-dryrun.yml {up_flag} -d "
         f"{recreate_plan.compose_service}"
     )
     lines.append("# The container will start with:")

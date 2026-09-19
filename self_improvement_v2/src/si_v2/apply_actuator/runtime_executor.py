@@ -47,6 +47,10 @@ from si_v2.apply_actuator.restart_gate import (
     CanaryRecreatePlan,
     render_compose_override_preview,
 )
+from si_v2.apply_actuator.runtime_binding import (
+    resolve_compose_project,
+    resolve_si_v2_repo_root,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -213,17 +217,36 @@ def _run_compose_recreate(
     *,
     docker_available: bool = True,
     _subprocess_run=None,
+    compose_file: str = "docker-compose.yml",
+    compose_project: str | None = None,
+    env_file: str | None = None,
 ) -> tuple[bool, str]:
     """Run a controlled compose recreate for the canary service.
 
     This function is the **only** subprocess call in the executor.
     Tests should mock ``_subprocess_run`` to avoid real Docker calls.
 
+    Compose context is resolved explicitly so the R7A topology works:
+    - the canonical compose file ``docker-compose.hermestrader-dryrun.yml``
+      (overridable via ``compose_file``),
+    - the fleet compose project ``hermestrader-dryrun`` (via
+      ``SI_V2_COMPOSE_PROJECT``, passed as ``compose_project``),
+    - the optional ``.env`` (``--env-file``) carrying runtime config
+      interpolation (FREQFORGE_*_CONFIG_FILE, PR #740),
+    - the working directory set to the compose file's parent so relative
+      bind mounts resolve against the repo root.
+
     Args:
         compose_override_path: Path to the compose override file.
         service_name: Service to recreate (e.g. ``freqtrade-freqforge-canary``).
         docker_available: If False, returns a mock failure.
         _subprocess_run: Override for testing (default: subprocess.run).
+        compose_file: Name of the base compose file (default
+            ``docker-compose.yml`` — historical; callers targeting the R7A
+            topology pass ``docker-compose.hermestrader-dryrun.yml``).
+        compose_project: Compose project name (``-p``). Defaults to the
+            ``SI_V2_COMPOSE_PROJECT`` env value or ``hermestrader-dryrun``.
+        env_file: Optional ``--env-file`` path for compose interpolation.
 
     Returns:
         Tuple of (success: bool, detail: str).
@@ -233,17 +256,24 @@ def _run_compose_recreate(
     if not docker_available:
         return False, "docker_unavailable"
 
-    compose_dir = compose_override_path.parent
-    override_name = compose_override_path.name
+    # Resolve the base compose file absolute against the SI-v2 repo root so
+    # relative bind mounts (./freqforge/user_data/...) resolve correctly and
+    # the command is independent of the override output directory.
+    repo_root = resolve_si_v2_repo_root()
+    base_compose = repo_root / compose_file
 
-    cmd = [
-        "docker", "compose",
-        "-f", "docker-compose.yml",
-        "-f", override_name,
-        "up",
-        "-d",
-        service_name,
-    ]
+    cmd = ["docker", "compose"]
+
+    if compose_project is not None:
+        cmd.extend(["-p", compose_project])
+    if compose_file:
+        cmd.extend(["-f", str(base_compose)])
+    # Absolute override path — cwd is the repo root, not the output dir.
+    cmd.extend(["-f", str(compose_override_path)])
+    if env_file:
+        cmd.extend(["--env-file", env_file])
+
+    cmd.extend(["up", "-d", service_name])
 
     try:
         result = run_fn(
@@ -251,7 +281,7 @@ def _run_compose_recreate(
             capture_output=True,
             text=True,
             timeout=120,
-            cwd=str(compose_dir),
+            cwd=str(repo_root),
         )
         if result.returncode == 0:
             return True, f"compose_recreate_ok: {result.stdout or 'no output'}"
@@ -350,6 +380,9 @@ def run_canary_restart_with_overlay(
     compose_output_dir: Path | None = None,
     docker_available: bool = True,
     apply_mode: str = "MANUAL_L3",
+    compose_file: str = "docker-compose.hermestrader-dryrun.yml",
+    compose_project: str | None = None,
+    env_file: str | None = None,
 ) -> RuntimeExecutionResult:
     """Run the controlled canary restart with overlay.
 
@@ -370,6 +403,12 @@ def run_canary_restart_with_overlay(
         docker_available: If False, skips actual Docker calls (for tests/audit).
         apply_mode: Operating mode. ``AUTONOMOUS_DRY_RUN`` bypasses token gate.
             ``MANUAL_L3`` (default) requires token. ``LIVE_CAPITAL_MODE`` blocks.
+        compose_file: Base compose file name for the fleet stack. Defaults to
+            the R7A canonical ``docker-compose.hermestrader-dryrun.yml``.
+        compose_project: Compose project name (``-p``). Defaults to
+            ``SI_V2_COMPOSE_PROJECT`` or ``hermestrader-dryrun``.
+        env_file: Optional ``--env-file`` path for compose interpolation
+            (runtime config sources, PR #740).
 
     Returns:
         ``RuntimeExecutionResult`` with status and evidence.
@@ -381,6 +420,10 @@ def run_canary_restart_with_overlay(
     # Resolve output dir
     if compose_output_dir is None:
         compose_output_dir = DEFAULT_COMPOSE_OUTPUT_DIR
+
+    # Resolve compose project name (env override or canonical R7A default).
+    if compose_project is None:
+        compose_project = resolve_compose_project()
 
     # -- Gate 1: execute flag -------------------------------------------------
     ok1, reason1 = _check_execute_flag(execute)
@@ -464,6 +507,9 @@ def run_canary_restart_with_overlay(
         override_path,
         str(recreate_plan.compose_service),
         docker_available=docker_available,
+        compose_file=compose_file,
+        compose_project=compose_project,
+        env_file=env_file,
     )
     if not compose_ok:
         return RuntimeExecutionResult(
@@ -472,7 +518,8 @@ def run_canary_restart_with_overlay(
             plan_id=plan_id,
             compose_override_path=compose_override_path,
             rollback_instruction=(
-                f"docker compose -f docker-compose.yml "
+                f"docker compose -p {compose_project} "
+                f"-f {compose_file} "
                 f"up -d {recreate_plan.compose_service}"
             ),
         )
@@ -492,7 +539,8 @@ def run_canary_restart_with_overlay(
             proof=proof,
             compose_override_path=compose_override_path,
             rollback_instruction=(
-                f"docker compose -f docker-compose.yml "
+                f"docker compose -p {compose_project} "
+                f"-f {compose_file} "
                 f"up -d {recreate_plan.compose_service}"
             ),
         )
@@ -507,7 +555,8 @@ def run_canary_restart_with_overlay(
             compose_override_path=compose_override_path,
             rollback_instruction=(
                 f"remove {override_path.name} then run: "
-                f"docker compose -f docker-compose.yml "
+                f"docker compose -p {compose_project} "
+                f"-f {compose_file} "
                 f"up -d {recreate_plan.compose_service}"
             ),
         )
@@ -521,7 +570,8 @@ def run_canary_restart_with_overlay(
         compose_override_path=compose_override_path,
         rollback_instruction=(
             f"remove {override_path.name} then run: "
-            f"docker compose -f docker-compose.yml "
+            f"docker compose -p {compose_project} "
+            f"-f {compose_file} "
             f"up -d {recreate_plan.compose_service}"
         ),
     )
